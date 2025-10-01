@@ -1,0 +1,39 @@
+[package]
+name = "botanix-storage-migrate"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+description = "A library for botanix tables migration from reth to botanix database"
+
+[lints]
+workspace = true
+
+[dependencies]
+
+# botanix
+botanix-storage = { workspace = true }
+
+# reth
+reth-db = { workspace = true, features = ["mdbx"] }
+reth-db-api = { workspace = true }
+reth-primitives = { workspace = true, optional = true }
+alloy-primitives = { workspace = true, features = ["std"] }
+
+tracing = { workspace = true }
+eyre = { workspace = true }
+
+[dev-dependencies]
+# reth deps
+reth-db = { workspace = true, features = ["mdbx", "test-utils"] }
+
+# botanix deps
+botanix-storage = { workspace = true, features = ["test-utils"] }
+botanix-storage-migrate = { workspace = true, features = ["test-utils"] }
+
+tempfile = { workspace = true }
+
+[features]
+test-utils = ["reth-db/test-utils", "botanix-storage/test-utils", "dep:reth-primitives"]

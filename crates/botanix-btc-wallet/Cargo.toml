@@ -1,0 +1,27 @@
+[package]
+name = "botanix-btc-wallet"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+anyhow = "1.0.71"
+async-trait = { workspace = true }
+bitcoin = { workspace = true }
+bitcoincore-rpc = { workspace = true }
+ethers = "2.0.10"
+frost-secp256k1-tr = { workspace = true }
+hex = "0.4.3"
+lazy_static = "1.4.0"
+miniscript = "11.0.0"
+rand = { version = "0.6", features = ["std"] }
+secp256k1 = { version = "0.28", features = ["global-context", "rand", "rand-std", "recovery"] }
+serde = "1.0.171"
+thiserror = "1.0.43"
+tokio = { version = "1.45.0", features = ["full"] }
+tracing = "0.1.40"
+url = { version = "2.2.2", features = ["serde"] }
+
+[dev-dependencies]
+mockall = { workspace = true }

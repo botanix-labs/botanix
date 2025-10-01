@@ -1,0 +1,286 @@
+
+syntax = "proto3";
+
+package btc_server;
+
+import "google/protobuf/timestamp.proto";
+
+service BtcServer {
+
+    rpc HealthCheck(Empty) returns (Empty) {}
+
+    rpc GetPendingPegouts(Empty) returns (GetPendingPegoutsResponse) {}
+
+    rpc GetFinalizedPegoutIds(GetFinalizedPegoutIdsRequest) returns (stream GetFinalizedPegoutIdsResponse) {}
+
+    rpc GetGatewayAddress(GetGatewayAddressRequest) returns(GetGatewayAddressResponse){}
+
+    rpc GetPublicKey(Empty) returns(GetPublicKeyResponse) {}
+
+    rpc GetDkgPayloads(Empty) returns(DkgPayloads) {}
+
+    rpc NewDkgPayload(DkgPayload) returns(DkgPayloads) {}
+
+    // Signing Endpoints
+
+    rpc GetRound1SigningPackage(SigningPackageRequest) returns (SigningPackage) {}
+
+    rpc GetRound2SigningPackage(SigningPackageRequest) returns (SigningPackage) {}
+
+    // Ran by the signer.
+    rpc SignerFinalize(FinalizeSignerRequest) returns (FinalizeSigningResponse) {}
+
+    rpc AbortSigning(Empty) returns (Empty) {}
+
+    // only meant to be used by the cordinator
+    rpc NewRound1SigningPackage(SigningPackage) returns (Empty) {}
+
+    rpc NewRound2SigningPackage(SigningPackage) returns (Empty) {}
+
+    // Meant to be used at anytime to perform utxo selection and create a tx
+    rpc GetPsbt(MakeTxRequest) returns (SigningPackage) {}
+
+    // Meant to be used to transition the signing round to round 2 after round 1
+    // signing commitments have been collected
+    rpc GetToSignPackage(ToSignRequest) returns (SigningPackage) {}
+
+    // Ran by the coordinator.
+    rpc FinalizeSigning(FinalizeSigningRequest) returns (FinalizeSigningResponse) {}
+
+    rpc GetAllUtxos(Empty) returns (GetAllUtxosResponse) {}
+
+    rpc GetWalletState(Empty) returns (WalletStateResponse) {}
+
+    rpc ResetAllUtxos(ResetAllUtxosRequest) returns (Empty) {}
+
+    rpc RecoverMissingUtxos(RecoverMissingUtxosRequest) returns (RecoverMissingUtxosResponse) {}
+
+    rpc GetSigningStatus(GetSigningStatusRequest) returns (GetSigningStatusResponse) {}
+
+    rpc GetSessionIds(GetSessionIdsRequest) returns (GetSessionIdsResponse) {}
+
+    rpc GetTrackedTxs(Empty) returns (GetTrackedTxsResponse) {}
+
+    rpc ResetWalletState(ResetWalletStateRequest) returns (Empty) {}
+
+    rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
+}
+
+message PendingPegout {
+    bytes pegout_id = 1;
+    bytes spk = 2;
+    uint64 amount = 3;
+    uint64 height = 4;
+    uint64 timestamp = 5;
+}
+
+message FinalizedPegout {
+    bytes id = 1;
+    uint64 botanix_block_height = 2;
+    uint64 botanix_block_timestamp = 3;
+}
+
+message GetPendingPegoutsResponse {
+    repeated PendingPegout pending_pegouts = 1;
+}
+
+message GetFinalizedPegoutIdsRequest {
+    uint64 chunk_size = 1;
+}
+
+message GetFinalizedPegoutIdsResponse {
+    repeated FinalizedPegout data = 1;
+    uint64 chunk_index = 2;
+    uint64 total_chunks = 3;
+    bool is_final = 4;
+}
+
+message FinalizeSignerRequest {
+    bytes psbt = 1;
+}
+
+message WalletStateResponse {
+    bytes utxo_root = 1;
+    bytes tracked_tx_root = 2;
+    bytes pending_pegouts_root = 3;
+    bytes wallet_state_commitment = 4;
+}
+
+// TODO: remove if we deprecate reset_all_utxos rpc call
+message ResetAllUtxosRequest {
+    repeated Utxo utxos = 1;
+}
+
+message RecoverMissingUtxosRequest {
+    repeated UtxoToRecover utxos = 1;
+}
+
+message RecoverMissingUtxosResponse {
+    uint64 total_requested = 1;
+    uint64 total_recovered = 2;
+}
+
+message ResetWalletStateRequest {
+    repeated FinalizedPegout finalized_pegout_ids = 1;
+}
+
+message ConsensusCheckpointRequest {
+    // The checkpoint of the best finalized Bitcoin block hash.
+    bytes checkpoint_block_hash = 1;
+    // Pegin transaction utxos
+    repeated Utxo pegins = 2;
+    // Pending pegout requests
+    repeated PendingPegout pending_pegouts = 3;
+}
+
+message ScriptBuf {
+    bytes script = 1; // Represents the Vec<u8> in Rust
+}
+
+message TxOut {
+    // The value of the output, in satoshis.
+    uint64 value = 1;
+    // The script which must be satisfied for the output to be spent.
+    ScriptBuf script_pubkey = 2;
+}
+
+message OutPoint {
+    bytes txid = 1;
+    uint32 vout = 2;
+}
+
+message Utxo {
+    OutPoint outpoint = 1;
+    TxOut output = 2;
+    string eth_address = 3;
+}
+
+message UtxoToRecover {
+    OutPoint outpoint = 1;
+    // empty eth_address for change utxo
+    string eth_address = 2;
+}
+
+message GetAllUtxosResponse {
+    repeated Utxo utxos = 1;
+}
+
+message GetGatewayAddressRequest {
+    // Eth address to tweak by
+    string eth_address = 1;
+}
+
+message MakeTxResponse {
+    string txid = 1;
+    bytes tx = 2;
+}
+
+message GetPublicKeyResponse {
+    // hex encoded
+    string publickey = 1;
+}
+
+message GetGatewayAddressResponse {
+    // hex encoded
+    string publickey = 1;
+    string tweaked_public_key = 2;
+    string gateway_address = 3;
+}
+
+message TxIn {
+    OutPoint previous_outpoint = 1;
+    ScriptBuf script_sig = 2;
+    uint32 sequence = 3;
+    repeated bytes witness = 4;
+}
+
+message Transaction {
+    int32 version = 1;
+    uint32 lock_time = 2;
+    repeated TxIn input = 3;
+    repeated TxOut output = 4;
+}
+
+message TrackedTx {
+    bytes txid = 1;
+    Transaction tx = 2;
+    repeated uint32 pegout_idxs = 3;
+    repeated PendingPegout pegout_requests = 4;
+    repeated uint32 change_idxs = 5;
+    google.protobuf.Timestamp created = 6;
+}
+
+message GetTrackedTxsResponse {
+    repeated TrackedTx tracked_txs = 1;
+}
+
+message Empty {}
+
+// Frost things
+message DkgPayloads {
+    uint64 timeout = 1;
+    repeated DkgPayload payloads = 2;
+}
+
+message DkgPayload {
+    bytes sender = 1;
+    bytes recipient = 2;
+    bytes payload = 3;
+}
+
+message SigningPackageRequest {
+    bytes psbt = 1;
+    bytes signing_session_id = 2;
+}
+
+message SigningPackage {
+    bytes psbt = 1;
+    bytes identifier = 2;
+    bytes signing_session_id = 3;
+}
+
+message Output {
+    string address = 1;
+    uint64 value = 2;
+}
+
+message MakeTxRequest {
+    bytes signing_session_id = 1;
+    // The checkpoint of the best finalized Bitcoin block hash.
+    bytes checkpoint_block_hash = 2;
+}
+
+message ToSignRequest {
+    bytes signing_session_id = 1;
+}
+
+message FinalizeSigningRequest {
+    bytes signing_session_id = 1;
+}
+
+message FinalizeSigningResponse {
+    // Finalized tx which includes witness data
+    bytes psbt = 1;
+}
+
+message GetSigningStatusRequest {
+    bytes signing_session_id = 1;
+}
+
+message GetSigningStatusResponse {
+    SigningStatus status = 1;
+}
+
+message GetSessionIdsRequest {
+    uint32 max_results = 1;
+}
+
+message GetSessionIdsResponse {
+    repeated bytes data = 1;
+}
+
+enum SigningStatus {
+    RUNNING = 0;
+    FINALIZED = 1;
+    FAILED = 2;
+}
