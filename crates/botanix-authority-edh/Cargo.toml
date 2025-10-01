@@ -1,0 +1,26 @@
+[package]
+name = "botanix-authority-edh"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+
+# reth deps
+reth-primitives-traits = { workspace = true }
+
+# botanix deps
+botanix-authority-peg = { workspace = true }
+botanix-btc-wallet = { workspace = true }
+
+# other deps
+alloy-primitives = { workspace = true }
+bitcoin = { workspace = true }
+bitcoincore-rpc = { workspace = true }
+rand = { workspace = true }
+revm-primitives = { workspace = true }
+secp256k1 = { workspace = true, features = ["global-context", "recovery"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }

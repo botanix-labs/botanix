@@ -1,0 +1,200 @@
+[package]
+name = "reth_botanix"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "reth_botanix"
+path = "src/lib.rs"
+
+[[bin]]
+name = "reth-botanix"
+path = "src/main.rs"
+
+[features]
+default = ["jemalloc"]
+jemalloc = ["dep:tikv-jemallocator"]
+dev = [
+    "reth-cli-commands/arbitrary",
+    "reth/dev",
+    "revm/dev",
+]
+
+asm-keccak = [
+    "reth-node-core/asm-keccak",
+    "reth-primitives/asm-keccak",
+    "reth-node-ethereum/asm-keccak",
+]
+
+serde = [
+    "alloy-chains/serde",
+    "alloy-consensus/serde",
+    "alloy-eips/serde",
+    "alloy-primitives/serde",
+    "alloy-rpc-types-engine/serde",
+    "alloy-rpc-types-eth/serde",
+    "bytes/serde",
+    "parking_lot/serde",
+    "reth-eth-wire/serde",
+    "reth-eth-wire-types/serde",
+    "reth-ethereum-forks/serde",
+    "reth-ethereum-primitives/serde",
+    "reth-network/serde",
+    "reth-network-api/serde",
+    "reth-primitives-traits/serde",
+    "reth-revm/serde",
+    "reth-trie-common/serde",
+    "reth-trie-db/serde",
+    "revm/serde",
+    "secp256k1/serde",
+]
+
+client = [
+    "jsonrpsee/client",
+    "jsonrpsee/async-client",
+    "reth-rpc-eth-api/client",
+]
+
+[dependencies]
+
+# reth dependencies
+reth.workspace = true
+reth-cli.workspace = true
+reth-cli-commands.workspace = true
+reth-config.workspace = true
+reth-basic-payload-builder.workspace = true
+reth-db.workspace = true
+reth-db-common.workspace = true
+reth-engine-local.workspace = true
+reth-chainspec.workspace = true
+reth-cli-util.workspace = true
+reth-discv4.workspace = true
+reth-engine-primitives.workspace = true
+reth-ethereum.workspace = true
+reth-ethereum-forks.workspace = true
+reth-ethereum-payload-builder.workspace = true
+reth-ethereum-primitives.workspace = true
+reth-eth-wire.workspace = true
+reth-eth-wire-types.workspace = true
+reth-evm.workspace = true
+reth-evm-ethereum.workspace = true
+reth-node-core.workspace = true
+reth-revm.workspace = true
+reth-network.workspace = true
+reth-network-p2p.workspace = true
+reth-network-api.workspace = true
+reth-node-ethereum.workspace = true
+reth-network-peers.workspace = true
+reth-payload-primitives.workspace = true
+reth-primitives.workspace = true
+reth-primitives-traits.workspace = true
+reth-provider.workspace = true
+reth-rpc-eth-api.workspace = true
+reth-rpc-engine-api.workspace = true
+reth-tracing.workspace = true
+reth-trie-common.workspace = true
+reth-trie-db.workspace = true
+revm.workspace = true
+
+# Botanix dependencies
+botanix-storage.workspace = true
+botanix-activation-manager.workspace = true
+botanix-storage-migrate.workspace = true
+botanix-utils.workspace = true
+botanix-rpc-types.workspace = true
+botanix-authority-rsp.workspace = true
+botanix-authority-peg.workspace = true
+botanix-fs-util.workspace = true
+botanix-btc-wallet.workspace = true
+botanix-authority-metrics.workspace = true
+botanix-bitcoin-checkpoint.workspace = true
+botanix-authority-edh.workspace = true
+botanix-configs.workspace = true
+botanix-hardforks.workspace = true
+botanix-data-parser.workspace = true
+botanix-comet-bft-rpc.workspace = true
+botanix-rpc-config.workspace = true
+botanix-chainspec.workspace = true
+botanix-cli-parsers.workspace = true
+botanix-cli-args.workspace = true
+botanix-rpc-client.workspace = true
+botanix-authority-consensus.workspace = true
+botanix-consensus-common.workspace = true
+botanix-btc-server-client.workspace = true
+btc-server.workspace = true
+
+# Tendermint
+tendermint.workspace = true
+
+# alloy dependencies
+alloy-evm.workspace = true
+alloy-genesis.workspace = true
+alloy-consensus.workspace = true
+alloy-eips.workspace = true
+alloy-network.workspace = true
+alloy-rpc-types.workspace = true
+alloy-rpc-types-eth.workspace = true
+alloy-rpc-types-engine.workspace = true
+alloy-signer.workspace = true
+alloy-chains.workspace = true
+alloy-rlp.workspace = true
+alloy-dyn-abi.workspace = true
+alloy-json-abi.workspace = true
+alloy-primitives.workspace = true
+alloy-sol-macro.workspace = true
+alloy-sol-types.workspace = true
+
+# json rpc
+jsonrpsee.workspace = true
+jsonrpsee-core.workspace = true
+jsonrpsee-types.workspace = true
+
+# misc dependencies
+auto_impl.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+clap.workspace = true
+cfg-if.workspace = true
+derive_more.workspace = true
+eyre.workspace = true
+futures.workspace = true
+lazy_static.workspace = true
+phf.workspace = true
+once_cell.workspace = true
+parity-bytes.workspace = true
+parking_lot.workspace = true
+secp256k1.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+confy.workspace = true
+bitcoin.workspace = true
+bitcoincore-zmq.workspace = true
+bitcoincore-rpc.workspace = true
+
+# tokio
+tokio.workspace = true
+tokio-stream.workspace = true
+
+# precompiles deps
+bls_on_arkworks.workspace = true
+
+cometbft.workspace = true
+cometbft-light-client-verifier.workspace = true
+cometbft-proto.workspace = true
+cometbft-light-client.workspace = true
+
+prost.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+tikv-jemalloc-ctl = "0.6"
+tikv-jemallocator = { version = "0.6", optional = true }
+libc = "0.2"

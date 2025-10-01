@@ -1,0 +1,23 @@
+[package]
+name = "botanix-cli"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+
+[[bin]]
+name = "btx"
+path = "src/main.rs"
+
+[dependencies]
+
+# botanix deps
+botanix-authority-peg = { workspace = true, features = ["secp256k1"] }
+
+# other deps
+anyhow = "1.0.75"
+assert_matches = "1.5"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+hex = "0.4.3"

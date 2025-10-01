@@ -1,0 +1,27 @@
+[book]
+authors = ["reth Core Contributors + Botanix labs"]
+language = "en"
+multilingual = false
+src = "book"
+title = "Botanix Federation book"
+description = "Book describing the Botanix Federation"
+
+[output.html]
+theme = "book/theme"
+git-repository-url = "https://github.com/botanix-labs/macbeth/"
+default-theme = "ayu"
+no-section-label = true
+
+[output.html.fold]
+enable = true
+level = 1
+
+[build]
+build-dir = "target/book"
+
+[preprocessor.template]
+before = ["links"]
+
+[preprocessor.index]
+
+[preprocessor.links]

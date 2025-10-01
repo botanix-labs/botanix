@@ -1,0 +1,37 @@
+[package]
+name = "botanix-db-cleaner"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+exclude = { workspace = true }
+
+[[bin]]
+name = "botanix-db-cleaner"
+path = "src/main.rs"
+
+[dependencies]
+
+# reth deps
+reth-chainspec = { workspace = true }
+reth-db = { workspace = true, features = ["mdbx"] }
+reth-node-core = { workspace = true }
+reth-provider = { workspace = true }
+
+# botanix deps
+botanix-storage = { workspace = true }
+
+# other deps
+anyhow = "1.0.95"
+clap = { version = "4.5", features = ["derive"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { version = "1.45.0", features = ["full"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+alloy-primitives = { workspace = true }
+
+[lints]
+workspace = true
