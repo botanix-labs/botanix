@@ -1,38 +1,37 @@
 pub(crate) mod authority_execution_utils {
-    use botanix_btc_wallet::bitcoind::BitcoindFactory;
-    use botanix_chainspec::BotanixChainSpec;
-    use botanix_storage::models::RuntimeVersion;
-    use reth_chainspec::{ChainSpec, EthereumHardforks};
     use botanix_authority_edh::{
         extra_data_header::{ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION},
         header_ext::HeaderExt,
     };
     use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
+    use botanix_btc_wallet::bitcoind::BitcoindFactory;
+    use botanix_chainspec::BotanixChainSpec;
+    use botanix_storage::models::RuntimeVersion;
+    use reth_chainspec::{ChainSpec, EthereumHardforks};
     use reth_db::{Database, DatabaseEnv};
-    use reth_evm::{ConfigureEvm, eth::EthBlockExecutor, execute::{BlockExecutor, BlockExecutorFactory, BasicBlockExecutor, Executor}};
+    use reth_evm::{eth::EthBlockExecutor, execute::Executor, ConfigureEvm};
     // use reth_evm_ethereum::execute::EthBlockExecutor;
+    use alloy_consensus::{
+        constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
+        EMPTY_OMMER_ROOT_HASH,
+    };
+    use alloy_eips::{
+        eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, eip7685::Requests,
+        BlockHashOrNumber,
+    };
+    use alloy_primitives::{Address, Bloom, Bytes, U256};
     use reth_execution_errors::{
         BlockExecutionError, BlockValidationError, InternalBlockExecutionError,
     };
     use reth_node_builder::NodeTypesWithDBAdapter;
     use reth_node_ethereum::{EthEvmConfig, EthereumNode};
-    use alloy_eips::eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M;
-    use alloy_eips::eip7685::Requests;
-    use reth_primitives_traits::proofs;
-    use alloy_primitives::Address;
-    use alloy_eips::eip4844::calc_excess_blob_gas;
     use reth_primitives::{
-        Block, BlockWithSenders, RecoveredBlock, Header, Receipt,
-        ReceiptWithBloom, TransactionSigned,
+        Block, Header, Receipt, ReceiptWithBloom, RecoveredBlock, TransactionSigned,
     };
-    use alloy_eips::BlockHashOrNumber;
-    use alloy_primitives::{U256, Bloom, Bytes};
-    use alloy_consensus::constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS};
-    use alloy_consensus::EMPTY_OMMER_ROOT_HASH;
+    use reth_primitives_traits::proofs;
     use reth_provider::{
-        BlockExecutionOutput, BlockHashReader, BlockNumReader,
-        DatabaseProviderFactory, DatabaseProviderRO, ExecutionOutcome, HeaderProvider,
-        OriginalValuesKnown, ProviderFactory,
+        BlockExecutionOutput, BlockHashReader, BlockNumReader, DatabaseProviderFactory,
+        DatabaseProviderRO, ExecutionOutcome, HeaderProvider, OriginalValuesKnown, ProviderFactory,
     };
     use reth_revm::{database::StateProviderDatabase, db::State};
     use reth_trie::StateRoot;
@@ -103,8 +102,7 @@ pub(crate) mod authority_execution_utils {
         let senders = TransactionSigned::recover_signers(&block.body, block.body.len())
             .ok_or(BlockExecutionError::Validation(BlockValidationError::SenderRecoveryError))?;
 
-        let block_with_senders =
-            BlockWithSenders::new(block.clone(), senders.clone()).expect("senders are valid");
+        let block_with_senders = RecoveredBlock::<Block>::try_recover(block.clone())?;
 
         tracing::trace!(target: "consensus::authority", transactions=?&block.body, "executing transactions");
 
@@ -373,7 +371,7 @@ pub(crate) mod authority_execution_utils {
     }
 
     pub(crate) fn batch_execute<DB, EF>(
-        blocks: Vec<BlockWithSenders>,
+        blocks: Vec<RecoveredBlock<Block>>,
         database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
         executor_factory: EF,
     ) -> Result<ExecutionOutcome, BlockExecutionError>
@@ -410,7 +408,7 @@ pub(crate) mod authority_execution_utils {
     ///
     /// This returns the poststate from execution and post-block changes, as well as the gas used.
     fn execute<BF, DB>(
-        block: &BlockWithSenders,
+        block: &RecoveredBlock<Block>,
         database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
         _block_fee_recipient_address: Option<Address>,
         bitcoind_factory: &BF,
