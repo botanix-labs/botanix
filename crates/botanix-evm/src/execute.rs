@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
 use botanix_chainspec::BotanixChainSpec;
+use reth_chainspec::ChainSpec;
 use reth_provider::DatabaseProviderRO;
+use revm_database::State;
 
 /// Helper container type for EVM with chain spec.
 #[derive(Debug, Clone)]
 struct EthEvmExecutor<EvmConfig, BF, RethDB, N>
 where
     RethDB: reth_db::Database,
+    N: reth_node_types::NodeTypes,
 {
     /// Botanix chainspec
     botanix_chain_spec: Arc<BotanixChainSpec>,
@@ -27,19 +30,21 @@ where
 /// - Create a new instance of the executor.
 /// - Execute the block.
 #[derive(Debug)]
-pub struct EthBlockExecutor<EvmConfig, DB, BF, RethDB>
+pub struct EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     RethDB: reth_db::Database,
+    N: reth_node_types::NodeTypes,
 {
     /// Chain specific evm config that's used to execute a block.
-    executor: EthEvmExecutor<EvmConfig, BF, RethDB>,
+    executor: EthEvmExecutor<EvmConfig, BF, RethDB, N>,
     /// The state to use for execution
     state: State<DB>,
 }
 
-impl<EvmConfig, DB, BF, RethDB> EthBlockExecutor<EvmConfig, DB, BF, RethDB>
+impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     RethDB: reth_db::Database,
+    N: reth_node_types::NodeTypes,
 {
     /// Creates a new Ethereum block executor.
     pub const fn new(
@@ -48,7 +53,7 @@ where
         state: State<DB>,
         bitcoind_factory: BF,
         bitcoin_network: bitcoin::Network,
-        provider: Arc<DatabaseProviderRO<RethDB>>,
+        provider: Arc<DatabaseProviderRO<RethDB, N>>,
     ) -> Self {
         Self {
             executor: EthEvmExecutor {

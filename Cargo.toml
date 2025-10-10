@@ -195,6 +195,7 @@ reth-network = { git = "https://github.com/botanix-labs/reth", branch="botanix",
 reth-network-p2p = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-network-api = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-node-ethereum = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
+reth-node-types =  { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-network-peers = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-payload-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["secp256k1"] }
@@ -219,6 +220,7 @@ reth-metrics = { git = "https://github.com/botanix-labs/reth", branch="botanix" 
 # revm - exact version to match fork
 revm = "=28.0.1"
 revm-primitives = { version = "20.2.1", features = ["std"] }
+revm-database = { version = "7.0.5", default-features = false }
 
 # Tendermint
 # tendermint = { version = "0.40.1", features = ["clock"] }

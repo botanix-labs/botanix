@@ -12,6 +12,11 @@ exclude.workspace = true
 # Reth dependencies - using botanix fork
 reth-db = { workspace = true }
 reth-provider = { workspace = true }
+reth-node-types = { workspace = true }
+reth-chainspec = { workspace = true }
+
+# REVM dependencies
+revm-database = { workspace = true }
 
 # Botanix
 botanix-chainspec = { workspace = true }

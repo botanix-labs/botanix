@@ -29,7 +29,7 @@ pub(crate) mod authority_execution_utils {
     use reth_primitives_traits::proofs;
     use reth_provider::{
         BlockExecutionOutput, BlockHashReader, BlockNumReader, DatabaseProviderFactory,
-        DatabaseProviderRO, ExecutionOutcome, HeaderProvider, OriginalValuesKnown, ProviderFactory,
+        ExecutionOutcome, HeaderProvider, OriginalValuesKnown, ProviderFactory,
     };
     use reth_revm::{database::StateProviderDatabase, db::State};
     use reth_trie::StateRoot;
@@ -413,7 +413,7 @@ pub(crate) mod authority_execution_utils {
     /// Executes the block with the given block and senders, on the provided [Executor].
     ///
     /// This returns the poststate from execution and post-block changes, as well as the gas used.
-    fn execute<BF, DB>(
+    fn execute<BF, DB, N>(
         block: &RecoveredBlock<Block>,
         database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
         _block_fee_recipient_address: Option<Address>,
@@ -425,6 +425,7 @@ pub(crate) mod authority_execution_utils {
     where
         BF: BitcoindFactory + Clone + Unpin + 'static,
         DB: Database,
+        N: reth_node_types::NodeTypes,
     {
         // We cannot call `execute_and_verify_receipt()` here as we dont know the gas used yet
         // We must set those values on the executor after the execution
@@ -435,14 +436,13 @@ pub(crate) mod authority_execution_utils {
             .history_by_block_hash(block.parent_hash)
             .expect("parent hash exists");
 
-        let blockchain_provider: DatabaseProviderRO<DB> =
-            database_provider.database_provider_ro()?;
+        let blockchain_provider = database_provider.database_provider_ro()?;
 
         let db = State::builder()
             .with_database_boxed(Box::new(StateProviderDatabase::new(state_provider)))
             .with_bundle_update()
             .build();
-        let executor = EthBlockExecutor::<EthEvmConfig, _, BF, DB>::new(
+        let executor = EthBlockExecutor::<EthEvmConfig, _, BF, DB, N>::new(
             chain_spec,
             evm_config,
             db,

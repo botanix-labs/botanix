@@ -72,6 +72,7 @@ reth-execution-errors = { workspace = true }
 reth-network = { workspace = true, features = ["serde"] }
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
 reth-node-core = { workspace = true }
+reth-node-types = { workspace = true }
 reth-node-builder = { workspace = true }
 reth-node-ethereum = { workspace = true }
 reth-payload-builder = { workspace = true }
