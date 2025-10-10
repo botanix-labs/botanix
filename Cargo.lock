@@ -2458,6 +2458,7 @@ dependencies = [
  "botanix-comet-bft-rpc",
  "botanix-consensus-common",
  "botanix-data-parser",
+ "botanix-evm",
  "botanix-storage",
  "btc-server",
  "bytes 1.10.1",
@@ -2826,6 +2827,16 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tracing",
+]
+
+[[package]]
+name = "botanix-evm"
+version = "0.1.0"
+dependencies = [
+ "bitcoin 0.32.7",
+ "botanix-chainspec",
+ "reth-db",
+ "reth-provider",
 ]
 
 [[package]]

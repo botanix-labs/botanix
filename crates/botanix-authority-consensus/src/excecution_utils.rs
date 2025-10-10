@@ -1,4 +1,13 @@
 pub(crate) mod authority_execution_utils {
+    use alloy_consensus::{
+        constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
+        EMPTY_OMMER_ROOT_HASH,
+    };
+    use alloy_eips::{
+        eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, eip7685::Requests,
+        BlockHashOrNumber,
+    };
+    use alloy_primitives::{Address, Bloom, Bytes, U256};
     use botanix_authority_edh::{
         extra_data_header::{ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION},
         header_ext::HeaderExt,
@@ -9,17 +18,6 @@ pub(crate) mod authority_execution_utils {
     use botanix_storage::models::RuntimeVersion;
     use reth_chainspec::{ChainSpec, EthereumHardforks};
     use reth_db::{Database, DatabaseEnv};
-    use reth_evm::{eth::EthBlockExecutor, execute::Executor, ConfigureEvm};
-    // use reth_evm_ethereum::execute::EthBlockExecutor;
-    use alloy_consensus::{
-        constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
-        EMPTY_OMMER_ROOT_HASH,
-    };
-    use alloy_eips::{
-        eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, eip7685::Requests,
-        BlockHashOrNumber,
-    };
-    use alloy_primitives::{Address, Bloom, Bytes, U256};
     use reth_execution_errors::{
         BlockExecutionError, BlockValidationError, InternalBlockExecutionError,
     };
@@ -39,6 +37,7 @@ pub(crate) mod authority_execution_utils {
 
     use crate::comet_bft::abci::BlockWithContext;
     use botanix_activation_manager::NetworkUpgradePayload;
+    use botanix_evm::execute::EthBlockExecutor;
     use std::sync::Arc;
     use tendermint_proto::google::protobuf::Timestamp;
 
@@ -350,9 +349,15 @@ pub(crate) mod authority_execution_utils {
         header.gas_used = gas_used;
         // calculate the state root
         let provider = database_provider.provider()?;
+        // let state_root = provider
+        //     .state_provider_by_block_number(header.number - 1)?
+        //     .state_root(&block_exec_result.state)?;
+
         let state_root = provider
-            .state_provider_by_block_number(header.number - 1)?
-            .state_root(&block_exec_result.state)?;
+            .history_by_block_hash(header.parent_hash)
+            .expect("parent hash exists")
+            .state_root(&block_exec_result.state.into())?;
+
         header.state_root = state_root;
 
         let block_producer_address = header.block_fee_recipient_address().map_err(|_| {
@@ -370,39 +375,40 @@ pub(crate) mod authority_execution_utils {
         Ok(header)
     }
 
-    pub(crate) fn batch_execute<DB, EF>(
-        blocks: Vec<RecoveredBlock<Block>>,
-        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
-        executor_factory: EF,
-    ) -> Result<ExecutionOutcome, BlockExecutionError>
-    where
-        DB: Database,
-        EF: BlockExecutorProvider,
-    {
-        // Assuming blocks are sorted
-        if blocks.is_empty() {
-            return Err(BlockExecutionError::msg("cannot execute empty batch"));
-        }
+    // TODO: refactor - this is only used for snapshot which are not currently in use
+    // pub(crate) fn batch_execute<DB, EF>(
+    //     blocks: Vec<RecoveredBlock<Block>>,
+    //     database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode,
+    // Arc<DatabaseEnv>>>,     executor_factory: EF,
+    // ) -> Result<ExecutionOutcome, BlockExecutionError>
+    // where
+    //     DB: Database,
+    //     EF: BlockExecutorProvider,
+    // {
+    //     // Assuming blocks are sorted
+    //     if blocks.is_empty() {
+    //         return Err(BlockExecutionError::msg("cannot execute empty batch"));
+    //     }
 
-        let starting_block_number = blocks.first().expect("checked above").number;
-        let ending_block_number = blocks.last().expect("checked above").number;
-        let provider = database_provider
-            .provider()?
-            .state_provider_by_block_number(starting_block_number - 1)?;
-        let db = State::builder()
-            .with_database_boxed(Box::new(StateProviderDatabase::new(provider)))
-            .with_bundle_update()
-            .build();
-        let mut executor = executor_factory.batch_executor(db);
+    //     let starting_block_number = blocks.first().expect("checked above").number;
+    //     let ending_block_number = blocks.last().expect("checked above").number;
+    //     let provider = database_provider
+    //         .provider()?
+    //         .state_provider_by_block_number(starting_block_number - 1)?;
+    //     let db = State::builder()
+    //         .with_database_boxed(Box::new(StateProviderDatabase::new(provider)))
+    //         .with_bundle_update()
+    //         .build();
+    //     let mut executor = executor_factory.batch_executor(db);
 
-        executor.set_tip(ending_block_number);
-        // TODO: set prune modes on executor
-        let out = executor.execute_and_verify_batch(
-            blocks.iter().map(|b| BlockExecutionInput::new(b, U256::ZERO)),
-        )?;
+    //     executor.set_tip(ending_block_number);
+    //     // TODO: set prune modes on executor
+    //     let out = executor.execute_and_verify_batch(
+    //         blocks.iter().map(|b| BlockExecutionInput::new(b, U256::ZERO)),
+    //     )?;
 
-        Ok(out)
-    }
+    //     Ok(out)
+    // }
 
     /// Executes the block with the given block and senders, on the provided [Executor].
     ///
@@ -424,14 +430,16 @@ pub(crate) mod authority_execution_utils {
         // We must set those values on the executor after the execution
         // This is only an execution for the block builder, all other executing operations
         // should use `execute_and_verify_receipt`
-        let provider =
-            database_provider.provider()?.state_provider_by_block_number(block.number - 1)?;
+        let state_provider = database_provider
+            .provider()?
+            .history_by_block_hash(block.parent_hash)
+            .expect("parent hash exists");
 
         let blockchain_provider: DatabaseProviderRO<DB> =
             database_provider.database_provider_ro()?;
 
         let db = State::builder()
-            .with_database_boxed(Box::new(StateProviderDatabase::new(provider)))
+            .with_database_boxed(Box::new(StateProviderDatabase::new(state_provider)))
             .with_bundle_update()
             .build();
         let executor = EthBlockExecutor::<EthEvmConfig, _, BF, DB>::new(
@@ -442,8 +450,12 @@ pub(crate) mod authority_execution_utils {
             bitcoin_network,
             Arc::new(blockchain_provider),
         );
-        let input = BlockExecutionInput::new(block, U256::ZERO);
-        let exec_results = executor.execute(input)?;
-        Ok(exec_results)
+        // let input = BlockExecutionInput::new(block, U256::ZERO);
+        // let exec_results = executor.execute(input)?;
+
+        // let exec_results = executor
+        // Ok(exec_results)
+
+        Ok(())
     }
 }

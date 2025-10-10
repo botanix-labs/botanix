@@ -36,6 +36,7 @@ botanix-storage = { workspace = true }
 botanix-consensus-common = { workspace = true }
 btc-server = { workspace = true }
 botanix-btc-server-client = { workspace = true }
+botanix-evm = { workspace = true }
 
 # others
 bytes = "1.6.0"
