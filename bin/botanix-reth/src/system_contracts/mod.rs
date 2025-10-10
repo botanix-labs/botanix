@@ -1,7 +1,6 @@
 #![allow(missing_docs)]
 use crate::{
     chainspec::{botanix::botanix_mainnet, botanix_testnet::botanix_testnet},
-    hardforks::{botanix::BotanixHardfork, BotanixHardforks},
 };
 use abi::{STAKE_HUB_ABI, VALIDATOR_SET_ABI};
 use alloy_consensus::TxLegacy;
@@ -9,6 +8,7 @@ use alloy_dyn_abi::{DynSolValue, JsonAbiExt};
 use alloy_json_abi::JsonAbi;
 use alloy_primitives::{address, hex, Address, BlockNumber, Bytes, Signature, TxKind, U256};
 use botanix_chainspec::constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID};
+use botanix_hardforks::{BotanixHardfork, BotanixHardforks};
 use lazy_static::lazy_static;
 use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_ethereum_forks::Hardforks;

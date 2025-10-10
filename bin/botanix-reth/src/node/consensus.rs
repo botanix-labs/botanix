@@ -1,6 +1,7 @@
-use crate::{hardforks::BotanixHardforks, node::BotanixNode,BotanixBlock, BotanixBlockBody, BotanixPrimitives};
+use crate::{node::BotanixNode, BotanixBlock, BotanixBlockBody, BotanixPrimitives};
 use alloy_consensus::Header;
 use alloy_primitives::B256;
+use botanix_hardforks::BotanixHardforks;
 use reth::{
     api::FullNodeTypes,
     beacon_consensus::EthBeaconConsensus,

@@ -3,14 +3,13 @@
 //! This crate provides the main entry point for running a Botanix Reth node with Botanix support.
 
 use std::sync::Arc;
-use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}};
+use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}, parser::BotanixChainSpecParser};
 use botanix_cli_args::{chain::{get_chain_from_federation_config, BotanixNetwork}, BotanixArgs};
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use eyre::Ok;
 use reth::{args::{NetworkArgs, RpcServerArgs}, cli::{Cli, Commands}};
 use reth_botanix::{
-    chainspec::parser::BotanixChainSpecParser,
     node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config},
 };
 use reth_cli_commands::NodeCommand;

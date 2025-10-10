@@ -3,8 +3,8 @@ use crate::{
         api::{BotanixContext, BotanixEvm},
         transaction::BotanixTxEnv,
     },
-    hardforks::botanix::BotanixHardfork,
 };
+use botanix_hardforks::BotanixHardfork;
 use reth_evm::{precompiles::PrecompilesMap, Database, EvmEnv, EvmFactory};
 use revm::{
     context::result::{EVMError, HaltReason},

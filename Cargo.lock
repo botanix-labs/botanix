@@ -2855,6 +2855,7 @@ dependencies = [
  "reth-cli",
  "reth-ethereum-forks",
  "reth-primitives-traits",
+ "revm",
  "serde",
  "serde_json",
  "shellexpand",

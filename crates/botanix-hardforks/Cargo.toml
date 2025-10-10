@@ -5,6 +5,10 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 license = { workspace = true }
 
+[lib]
+name = "botanix_hardforks"
+path = "src/mod.rs"
+
 [dependencies]
 
 # reth deps
@@ -12,6 +16,7 @@ reth-chainspec = { workspace = true }
 reth-cli = { workspace = true }
 reth-ethereum-forks = { workspace = true }
 reth-primitives-traits = { workspace = true }
+revm = { workspace = true }
 
 # ethereum
 alloy-chains = { workspace = true, features = ["serde", "rlp"] }
