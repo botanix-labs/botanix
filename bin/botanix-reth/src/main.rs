@@ -10,7 +10,7 @@ use clap::Parser;
 use eyre::Ok;
 use reth::{args::{NetworkArgs, RpcServerArgs}, cli::{Cli, Commands}};
 use reth_botanix::{
-    node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config},
+    node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_rpc},
 };
 use reth_cli_commands::NodeCommand;
 use reth_node_core::version::version_metadata;
@@ -151,6 +151,11 @@ fn main() -> eyre::Result<()> {
                 bitcoind_client,
                 &bitcoind_cfg,
                 &chain,
+            ).await?;
+
+            // Setup the RPC server
+            setup_rpc(
+                blockchain_provider.clone(),
             ).await?;
 
             // build the node
