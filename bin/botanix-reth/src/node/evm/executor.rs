@@ -22,7 +22,7 @@ use alloy_evm::{
 use alloy_primitives::{keccak256, uint, Address, BlockNumber, Bytes, TxKind, U256};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
-use botanix_hardforks::BotanixHardforks;
+use botanix_chainspec::BotanixHardforks;
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_evm::{
     block::{BlockValidationError, CommitChanges},

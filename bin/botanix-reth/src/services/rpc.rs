@@ -1,28 +1,22 @@
 
-use std::{path::Path, sync::Arc};
-use botanix_hardforks::BotanixHardforks;
+use std::{net::SocketAddr, sync::Arc};
 use futures::TryFutureExt;
 use botanix_chainspec::BotanixChainSpec;
 use reth::{args::RpcServerArgs, tasks::TaskExecutor};
 use reth_ethereum::{
-    chainspec::ChainSpecBuilder,
-    consensus::EthBeaconConsensus,
     network::api::noop::NoopNetwork,
-    node::{api::NodeTypesWithDBAdapter, EthEvmConfig, EthereumNode},
+    node::api::NodeTypesWithDBAdapter,
     pool::noop::NoopTransactionPool,
     provider::{
-        db::{mdbx::DatabaseArguments, open_db_read_only, ClientVersion, DatabaseEnv},
-        providers::{BlockchainProvider, StaticFileProvider},
-        ProviderFactory,
+        db::DatabaseEnv,
+        providers::BlockchainProvider,
     },
     rpc::{
         builder::{RethRpcModule, RpcModuleBuilder, RpcServerConfig, TransportRpcModuleConfig},
         EthApiBuilder,
     },
-    tasks::TokioTaskExecutor,
 };
-
-use crate::{node::{evm::config::BotanixEvmConfig, BotanixNode}, services::rpc_impl::MyRpcExt};
+use crate::{node::{evm::config::BotanixEvmConfig, BotanixNode}, services::rpc_impl::{MyRpcExt, MyRpcExtApiServer}};
 
 pub async fn setup_rpc(
     provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
@@ -55,10 +49,28 @@ pub async fn setup_rpc(
     server.merge_configured(custom_rpc.into_rpc())?;
 
     // Start the server & keep it alive
-    let server_args = RpcServerConfig::http(Default::default())
-    .with_http_address("0.0.0.0:8545".parse()?);
+    let mut server_config = RpcServerConfig::default();
 
-    let launch_rpc = server_args.start(&server).map_ok(|handle| {
+    // Configure HTTP if enabled
+    if rpc_server_args.http {
+        let http_socket_addr = SocketAddr::new(
+            rpc_server_args.http_addr,
+            rpc_server_args.http_port,
+        );
+        server_config = server_config.with_http_address(http_socket_addr);
+    }
+
+    if rpc_server_args.ws {
+        let ws_socket_addr = SocketAddr::new(
+            rpc_server_args.ws_addr,
+            rpc_server_args.ws_port,
+        );
+        server_config = server_config.with_ws_address(ws_socket_addr);
+    }
+
+    server_config = server_config.with_ipc_endpoint(rpc_server_args.ipcpath.clone());
+
+    let launch_rpc = server_config.start(&server).map_ok(|handle| {
         if let Some(path) = handle.ipc_endpoint() {
             tracing::info!(target: "reth::cli", %path, "RPC IPC server started");
         }

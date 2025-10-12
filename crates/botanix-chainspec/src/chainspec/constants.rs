@@ -3,13 +3,11 @@ use alloy_eips::eip1559::{DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR, DEFAULT_ELAST
 use alloy_genesis::Genesis;
 use alloy_primitives::{b256, B256, U256};
 use askama::Template;
-use botanix_hardforks::BotanixHardfork;
 use once_cell::sync::Lazy;
 use reth_chainspec::{make_genesis_header, BaseFeeParams, BaseFeeParamsKind, ChainSpec, Head};
 use reth_primitives_traits::{SealedHeader};
 use std::sync::Arc;
-
-use crate::BotanixChainSpec;
+use crate::{BotanixChainSpec, BotanixHardfork};
 
 /// Botanix Mainnet genesis hash:
 /// `0x0210ae550e730d0e18f96896b80caad6f59dcc0b83b67421975716d155d027c6`
@@ -48,7 +46,7 @@ pub struct BotanixMainnetGenesisConfig<'a> {
 
 /// The Botanix Testnet
 pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
-    let genesis = serde_json::from_str(include_str!("../genesis/botanix_testnet.json"))
+    let genesis = serde_json::from_str(include_str!("../../genesis/botanix_testnet.json"))
             .expect("Can't deserialize Botanix Testnet genesis json");
     let hardforks = BotanixHardfork::botanix_testnet();
     let genesis_header = SealedHeader::new(
@@ -82,7 +80,7 @@ pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
 
 /// The Botanix Mainnet
 pub static BOTANIX_MAINNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
-    let genesis = serde_json::from_str(include_str!("../genesis/botanix_mainnet.json"))
+    let genesis = serde_json::from_str(include_str!("../../genesis/botanix_mainnet.json"))
             .expect("Can't deserialize Botanix Mainnet genesis json");
     let hardforks = BotanixHardfork::botanix_mainnet();
     let genesis_header = SealedHeader::new(

@@ -4,7 +4,7 @@ use crate::{
         transaction::BotanixTxEnv,
     },
 };
-use botanix_hardforks::BotanixHardfork;
+use botanix_chainspec::BotanixHardfork;
 use reth_evm::{precompiles::PrecompilesMap, Database, EvmEnv, EvmFactory};
 use revm::{
     context::result::{EVMError, HaltReason},

@@ -117,7 +117,6 @@ botanix-authority-metrics.workspace = true
 botanix-bitcoin-checkpoint.workspace = true
 botanix-authority-edh.workspace = true
 botanix-configs.workspace = true
-botanix-hardforks.workspace = true
 botanix-data-parser.workspace = true
 botanix-comet-bft-rpc.workspace = true
 botanix-rpc-config.workspace = true

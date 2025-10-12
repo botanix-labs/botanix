@@ -6,7 +6,7 @@ use crate::{
     node::BotanixNode,
 };
 use alloy_primitives::{Address, Bytes};
-use botanix_hardforks::BotanixHardfork;
+use botanix_chainspec::BotanixHardfork;
 use config::BotanixEvmConfig;
 use reth::{
     api::FullNodeTypes,

@@ -14,6 +14,7 @@ reth-ethereum-forks = { workspace = true }
 reth-primitives-traits = { workspace = true }
 reth-network-peers = { workspace = true }
 reth-evm = { workspace = true }
+revm = { workspace = true }
 
 # ethereum
 alloy-chains = { workspace = true, features = ["serde", "rlp"] }
@@ -26,7 +27,6 @@ alloy-hardforks = { workspace = true }
 
 # other deps
 askama = { workspace = true }
-botanix-hardforks = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 derive_more = { workspace = true }
 eyre = { workspace = true }
