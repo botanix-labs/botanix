@@ -5,7 +5,7 @@ use alloy_primitives::{b256, B256, U256};
 use askama::Template;
 use botanix_hardforks::BotanixHardfork;
 use once_cell::sync::Lazy;
-use reth_chainspec::{make_genesis_header, BaseFeeParams, BaseFeeParamsKind, ChainSpec};
+use reth_chainspec::{make_genesis_header, BaseFeeParams, BaseFeeParamsKind, ChainSpec, Head};
 use reth_primitives_traits::{SealedHeader};
 use std::sync::Arc;
 
@@ -152,4 +152,20 @@ pub fn create_botanix_config_with_genesis(
         epoch_length,
     };
     botanix_spec
+}
+
+/// Dummy Head for Botanix Testnet
+pub fn botanix_testnet_head() -> Head {
+    Head {
+        number: 57_638_970,
+        hash: BOTANIX_TESTNET_GENESIS,
+        difficulty: U256::from(2),
+        total_difficulty: U256::from(115_030_996),
+        timestamp: 1752059605,
+    }
+}
+
+/// Returns the canonical head for Botanix Mainnet.
+pub fn botanix_mainnet_head() -> Head {
+    Head { number: 40_000_000, timestamp: 1751250600, ..Default::default() }
 }

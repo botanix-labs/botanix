@@ -13,6 +13,7 @@ reth-cli = { workspace = true }
 reth-ethereum-forks = { workspace = true }
 reth-primitives-traits = { workspace = true }
 reth-network-peers = { workspace = true }
+reth-evm = { workspace = true }
 
 # ethereum
 alloy-chains = { workspace = true, features = ["serde", "rlp"] }

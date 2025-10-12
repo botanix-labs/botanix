@@ -10,7 +10,7 @@ use clap::Parser;
 use eyre::Ok;
 use reth::{args::{NetworkArgs, RpcServerArgs}, cli::{Cli, Commands}};
 use reth_botanix::{
-    node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_rpc},
+    node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_rpc},
 };
 use reth_cli_commands::NodeCommand;
 use reth_node_core::version::version_metadata;
@@ -47,8 +47,8 @@ fn main() -> eyre::Result<()> {
             std::process::exit(0);
         }
     };
-    let network_args: NetworkArgs = node_cmd.network.clone();
-    let rpc_args: RpcServerArgs = node_cmd.rpc.clone();
+    let network_args = node_cmd.network.clone();
+    let rpc_server_args = node_cmd.rpc.clone();
     let datadir_args = node_cmd.datadir.clone();
     let chain = node_cmd.chain.clone();
     let db_args = node_cmd.db.clone();
@@ -108,7 +108,7 @@ fn main() -> eyre::Result<()> {
             }
 
             // Create bitcoind client
-            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, &poa_cfg).await?;
+            let (bitcoind_client, bitcoind_client_factory) = setup_bitcoind_client(&bitcoind_cfg, &poa_cfg).await?;
 
             // Migrate the db if needed
             let (reth_database, botanix_database) = init_and_migrate_db(
@@ -146,16 +146,13 @@ fn main() -> eyre::Result<()> {
                 &mut reth_cfg,
             )?;
 
+            let _botanix_provider = create_botanix_provider(&bitcoind_cfg, &bitcoind_client_factory)?;
+
             // Setup bitcoin checkpoints synchronizer
             let (checkpoints_synchronizer, bitcoin_zmq_block_hash_stream) = setup_bitcoin_checkpoints(
                 bitcoind_client,
                 &bitcoind_cfg,
                 &chain,
-            ).await?;
-
-            // Setup the RPC server
-            setup_rpc(
-                blockchain_provider.clone(),
             ).await?;
 
             // build the node
@@ -164,6 +161,14 @@ fn main() -> eyre::Result<()> {
             // launch the node
             let reth::builder::NodeHandle { node, node_exit_future } =
                 builder.node(node).launch().await?;
+
+            // Setup the RPC server
+            setup_rpc(
+                blockchain_provider.clone(),
+                &rpc_server_args,
+                &node.task_executor,
+                Arc::clone(&chain_spec_arc),
+            ).await?;
 
             // launch the bitcoin checkpoints synchronizer task
             node.task_executor.spawn_critical(

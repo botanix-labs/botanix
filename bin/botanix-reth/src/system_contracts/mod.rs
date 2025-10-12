@@ -1,13 +1,11 @@
 #![allow(missing_docs)]
-use crate::{
-    chainspec::{botanix::botanix_mainnet, botanix_testnet::botanix_testnet},
-};
+use botanix_chainspec::constants::{BOTANIX_MAINNET, BOTANIX_TESTNET};
 use abi::{STAKE_HUB_ABI, VALIDATOR_SET_ABI};
 use alloy_consensus::TxLegacy;
 use alloy_dyn_abi::{DynSolValue, JsonAbiExt};
 use alloy_json_abi::JsonAbi;
 use alloy_primitives::{address, hex, Address, BlockNumber, Bytes, Signature, TxKind, U256};
-use botanix_chainspec::constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID};
+use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}};
 use botanix_hardforks::{BotanixHardfork, BotanixHardforks};
 use lazy_static::lazy_static;
 use reth_chainspec::{ChainSpec, EthChainSpec};
@@ -188,9 +186,9 @@ lazy_static! {
 
     /// mainnet system contracts: hardfork -> address -> Bytecode
     pub(crate) static ref BOTANIX_MAINNET_CONTRACTS: HashMap<String, HashMap<Address, Option<Bytecode>>> =
-        read_all_system_contracts(&botanix_mainnet());
+        read_all_system_contracts(&*BOTANIX_MAINNET.inner_arc());
     pub(crate) static ref BOTANIX_TESTNET_CONTRACTS: HashMap<String, HashMap<Address, Option<Bytecode>>> =
-        read_all_system_contracts(&botanix_testnet());
+        read_all_system_contracts(&*BOTANIX_TESTNET.inner_arc());
 
 
 
@@ -398,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_get_system_contract_code() {
-        let res = get_system_contract_codes(&botanix_mainnet(), BotanixHardfork::Jalapeno.name()).unwrap();
+        let res = get_system_contract_codes(  &*BOTANIX_MAINNET, BotanixHardfork::Jalapeno.name()).unwrap();
         assert!(!res.is_empty());
 
         let bytes = res.get(&STAKE_HUB_CONTRACT).unwrap();

@@ -1,7 +1,7 @@
 use std::{ops::Deref, sync::Arc};
 use alloy_genesis::Genesis;
-use alloy_primitives::{B256, U256};
-use botanix_hardforks::BotanixHardfork;
+use alloy_primitives::{Address, B256, U256};
+use botanix_hardforks::{BotanixHardfork, BotanixHardforks};
 use reth_network_peers::NodeRecord;
 use core::fmt::{Debug, Display};
 use alloy_consensus::Header;
@@ -9,12 +9,12 @@ use alloy_chains::NamedChain;
 use alloy_hardforks::Hardfork;
 use reth_ethereum_forks::ForkCondition;
 use reth_chainspec::{
-    BaseFeeParams, ChainSpec, DepositContract,
-    EthChainSpec, EthereumHardforks, ForkFilter, ForkId, Hardforks, Head,
+    BaseFeeParams, ChainSpec, DepositContract, EthChainSpec, EthereumHardfork, EthereumHardforks, ForkFilter, ForkId, Hardforks, Head
 };
+use reth_evm::eth::spec::EthExecutorSpec;
 use alloy_eips::{eip1559::{INITIAL_BASE_FEE as EIP1559_INITIAL_BASE_FEE}, eip7840::BlobParams};
 
-use crate::constants::{BOTANIX_INITIAL_BASE_FEE, BOTANIX_TESTNET};
+use crate::constants::{botanix_mainnet_head, botanix_testnet_head, BOTANIX_INITIAL_BASE_FEE, BOTANIX_TESTNET};
 pub mod constants;
 pub mod parser;
 
@@ -207,8 +207,49 @@ impl Hardforks for BotanixChainSpec {
     }
 }
 
+impl EthereumHardforks for BotanixChainSpec {
+    fn ethereum_fork_activation(&self, fork: EthereumHardfork) -> ForkCondition {
+        self.inner.ethereum_fork_activation(fork)
+    }
+}
+
+impl BotanixHardforks for BotanixChainSpec {
+    fn botanix_fork_activation(&self, fork: BotanixHardfork) -> ForkCondition {
+        self.fork(fork)
+    }
+}
+
+// impl BotanixHardforks for Arc<BotanixChainSpec> {
+//     fn botanix_fork_activation(&self, fork: BotanixHardfork) -> ForkCondition {
+//         self.as_ref().botanix_fork_activation(fork)
+//     }
+// }
+
+impl EthExecutorSpec for BotanixChainSpec {
+    fn deposit_contract_address(&self) -> Option<Address> {
+        None
+    }
+}
+
+impl BotanixChainSpec {
+    /// Get the head information for this chain spec
+    pub fn head(&self) -> Head {
+        match self.inner.chain().id() {
+            BOTANIX_MAINNET_CHAIN_ID => botanix_mainnet_head(),
+            BOTANIX_TESTNET_CHAIN_ID => botanix_testnet_head(),
+            _ => botanix_mainnet_head(),
+        }
+    }
+}
+
 impl From<ChainSpec> for BotanixChainSpec {
     fn from(value: ChainSpec) -> Self {
         Self { inner: value, ..Default::default() }
+    }
+}
+
+impl From<BotanixChainSpec> for ChainSpec {
+    fn from(value: BotanixChainSpec) -> Self {
+        value.inner
     }
 }

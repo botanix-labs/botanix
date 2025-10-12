@@ -7,7 +7,7 @@ use jsonrpsee::proc_macros::rpc;
 /// trait interface for a custom rpc namespace: `myrpcExt`
 ///
 /// This defines an additional namespace where all methods are configured as trait functions.
-#[rpc(server, namespace = "myrpcExt")]
+#[rpc(server, namespace = "rpcImplExt")]
 pub trait MyRpcExtApi {
     /// Returns block 0.
     #[method(name = "customMethod")]
