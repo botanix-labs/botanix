@@ -12439,6 +12439,7 @@ dependencies = [
  "bitcoincore-zmq",
  "bls_on_arkworks",
  "botanix-activation-manager",
+ "botanix-authority-consensus",
  "botanix-authority-edh",
  "botanix-authority-metrics",
  "botanix-authority-peg",
