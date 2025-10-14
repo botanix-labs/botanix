@@ -2653,7 +2653,7 @@ dependencies = [
  "askama",
  "botanix-hardforks",
  "clap",
- "derive_more 0.99.20",
+ "derive_more 2.0.1",
  "eyre",
  "once_cell",
  "reth-chainspec",
@@ -2835,11 +2835,17 @@ name = "botanix-evm"
 version = "0.1.0"
 dependencies = [
  "bitcoin 0.32.7",
+ "botanix-btc-wallet",
  "botanix-chainspec",
+ "derive_more 2.0.1",
  "reth-chainspec",
  "reth-db",
+ "reth-evm",
  "reth-node-types",
+ "reth-primitives",
+ "reth-primitives-traits",
  "reth-provider",
+ "reth-storage-errors",
  "revm-database",
 ]
 
@@ -2863,7 +2869,7 @@ dependencies = [
  "alloy-serde",
  "askama",
  "clap",
- "derive_more 0.99.20",
+ "derive_more 2.0.1",
  "eyre",
  "once_cell",
  "reth-chainspec",
@@ -3821,12 +3827,6 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
-name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
@@ -4353,10 +4353,8 @@ version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6edb4b64a43d977b8e99788fe3a04d483834fba1215a7e02caa415b626497f7f"
 dependencies = [
- "convert_case 0.4.0",
  "proc-macro2",
  "quote",
- "rustc_version 0.4.1",
  "syn 2.0.104",
 ]
 
@@ -12508,7 +12506,7 @@ dependencies = [
  "cometbft-light-client-verifier",
  "cometbft-proto",
  "confy",
- "derive_more 0.99.20",
+ "derive_more 2.0.1",
  "eyre",
  "futures",
  "jsonrpsee",

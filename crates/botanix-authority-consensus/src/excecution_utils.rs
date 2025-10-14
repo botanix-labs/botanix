@@ -7,7 +7,7 @@ pub(crate) mod authority_execution_utils {
         eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, eip7685::Requests,
         BlockHashOrNumber,
     };
-    use alloy_primitives::{Address, Bloom, Bytes, U256};
+    use alloy_primitives::{Address, Bloom, Bytes};
     use botanix_authority_edh::{
         extra_data_header::{ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION},
         header_ext::HeaderExt,
@@ -347,17 +347,13 @@ pub(crate) mod authority_execution_utils {
             proofs::calculate_receipt_root(&receipts_with_bloom)
         };
         header.gas_used = gas_used;
+
         // calculate the state root
         let provider = database_provider.provider()?;
-        // let state_root = provider
-        //     .state_provider_by_block_number(header.number - 1)?
-        //     .state_root(&block_exec_result.state)?;
-
         let state_root = provider
             .history_by_block_hash(header.parent_hash)
             .expect("parent hash exists")
             .state_root(&block_exec_result.state.into())?;
-
         header.state_root = state_root;
 
         let block_producer_address = header.block_fee_recipient_address().map_err(|_| {
@@ -450,12 +446,8 @@ pub(crate) mod authority_execution_utils {
             bitcoin_network,
             Arc::new(blockchain_provider),
         );
-        // let input = BlockExecutionInput::new(block, U256::ZERO);
-        // let exec_results = executor.execute(input)?;
+        let exec_results = executor.execute(&block)?;
 
-        // let exec_results = executor
-        // Ok(exec_results)
-
-        Ok(())
+        Ok(exec_results)
     }
 }

@@ -270,7 +270,7 @@ async-trait = "0.1"
 bytes = "1.5"
 clap = { version = "4.4", features = ["derive"] }
 cfg-if = { version = "1.0", default-features = false }
-derive_more = "0.99"
+derive_more = { version = "2.0.1", features = ["full"] }
 eyre = "0.6"
 futures = "0.3"
 lazy_static = "1.4.0"
