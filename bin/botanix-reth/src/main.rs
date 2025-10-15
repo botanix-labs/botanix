@@ -167,6 +167,7 @@ fn main() -> eyre::Result<()> {
                 blockchain_provider.clone(),
                 &rpc_server_args,
                 &node.task_executor,
+                &node.pool,
                 Arc::clone(&chain_spec_arc),
                 botanix_provider.clone(),
             ).await?;

@@ -3,6 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use botanix_rpc_config::botanix_config::Botanix;
 use futures::TryFutureExt;
 use botanix_chainspec::BotanixChainSpec;
+use reth::api::FullNodeComponents;
 use reth::{args::RpcServerArgs, tasks::TaskExecutor};
 use reth::consensus::noop::NoopConsensus;
 use reth_ethereum::{
@@ -24,12 +25,13 @@ pub async fn setup_and_run_rpc(
     provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     rpc_server_args: &RpcServerArgs,
     task_executor: &TaskExecutor,
+    pool: &FullNodeComponents<BotanixNode, Arc<DatabaseEnv>>::Pool,
     chain_spec: Arc<BotanixChainSpec>,
     botanix_provider: Botanix,
 ) -> eyre::Result<()> {
     let rpc_builder = RpcModuleBuilder::default()
         .with_provider(provider.clone())
-        .with_noop_pool()
+        .with_pool(pool.clone())
         .with_noop_network()
         .with_executor(Box::new(task_executor.clone()))
         .with_consensus(NoopConsensus::default())
