@@ -1,6 +1,6 @@
 //! Hard forks of Botanix protocol.
 #![allow(unused)]
-use botanix::BotanixHardfork;
+pub use botanix::BotanixHardfork;
 use reth_chainspec::{EthereumHardforks, ForkCondition};
 
 pub mod botanix;

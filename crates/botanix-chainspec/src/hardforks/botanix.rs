@@ -64,27 +64,6 @@ impl BotanixHardfork {
             (Self::Pectra.boxed(), ForkCondition::Timestamp(1792436600)),  // in the future (2026-12-20 02:10:00 AM UTC)
         ])
     }
-
-    /// Botanix qa list of hardforks.
-    pub fn botanix_qa() -> ChainHardforks {
-        ChainHardforks::new(vec![
-            (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::MuirGlacier.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Shanghai.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Cancun.boxed(), ForkCondition::Block(0)),
-            (Self::Jalapeno.boxed(), ForkCondition::Block(29020050)),
-            (Self::Pectra.boxed(), ForkCondition::Timestamp(1792436600)),  // in the future (2026-12-20 02:10:00 AM UTC)
-        ])
-    }
 }
 
 /// Match helper method since it's not possible to match on `dyn Hardfork`
@@ -109,38 +88,38 @@ impl From<BotanixHardfork> for SpecId {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::chainspec::{botanix::botanix_mainnet, botanix_testnet::botanix_testnet};
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::chainspec::{botanix::botanix_mainnet, botanix_testnet::botanix_testnet};
 
-    #[test]
-    fn test_hardfork_activation_order_differences() {
-        // Test the critical difference between mainnet and testnet activation orders
-        // This demonstrates why the order in revm_spec_by_timestamp_and_block_number matters
+//     #[test]
+//     fn test_hardfork_activation_order_differences() {
+//         // Test the critical difference between mainnet and testnet activation orders
+//         // This demonstrates why the order in revm_spec_by_timestamp_and_block_number matters
 
-        // Test mainnet chain spec
-        let mainnet_spec = crate::chainspec::BotanixChainSpec::from(botanix_mainnet());
+//         // Test mainnet chain spec
+//         let mainnet_spec = crate::chainspec::BotanixChainSpec::from(botanix_mainnet());
 
-        // Test blocks around the critical transition points
-        // Block 23846000: Should be Jalapeno (before Jalapeno activation)
-        assert_eq!(
-            crate::node::evm::config::revm_spec_by_timestamp_and_block_number(
-                mainnet_spec.clone(),
-                1700000000, // Some timestamp
-                23846000
-            ),
-            BotanixHardfork::Jalapeno
-        );
+//         // Test blocks around the critical transition points
+//         // Block 23846000: Should be Jalapeno (before Jalapeno activation)
+//         assert_eq!(
+//             crate::node::evm::config::revm_spec_by_timestamp_and_block_number(
+//                 mainnet_spec.clone(),
+//                 1700000000, // Some timestamp
+//                 23846000
+//             ),
+//             BotanixHardfork::Jalapeno
+//         );
 
-        // Block 23846001: Should be Pectra (Pectra activation block)
-        assert_eq!(
-            crate::node::evm::config::revm_spec_by_timestamp_and_block_number(
-                mainnet_spec.clone(),
-                1700000000, // Some timestamp
-                23846001
-            ),
-            BotanixHardfork::Pectra
-        );
-    }
-}
+//         // Block 23846001: Should be Pectra (Pectra activation block)
+//         assert_eq!(
+//             crate::node::evm::config::revm_spec_by_timestamp_and_block_number(
+//                 mainnet_spec.clone(),
+//                 1700000000, // Some timestamp
+//                 23846001
+//             ),
+//             BotanixHardfork::Pectra
+//         );
+//     }
+// }

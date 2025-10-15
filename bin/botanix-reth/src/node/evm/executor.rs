@@ -4,7 +4,6 @@ use super::patch::{
 use crate::{
     consensus::{MAX_SYSTEM_REWARD, SYSTEM_ADDRESS, SYSTEM_REWARD_PERCENT},
     evm::transaction::BotanixTxEnv,
-    hardforks::BotanixHardforks,
     system_contracts::{
         get_upgrade_system_contracts, is_system_transaction, SystemContract, STAKE_HUB_CONTRACT,
         SYSTEM_REWARD_CONTRACT,
@@ -23,6 +22,7 @@ use alloy_evm::{
 use alloy_primitives::{keccak256, uint, Address, BlockNumber, Bytes, TxKind, U256};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
+use botanix_chainspec::BotanixHardforks;
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_evm::{
     block::{BlockValidationError, CommitChanges},

@@ -28,7 +28,6 @@ members = [
     "crates/botanix-bitcoin-checkpoint",
     "crates/botanix-authority-edh",
     "crates/botanix-configs",
-    "crates/botanix-hardforks",
     "crates/botanix-data-parser",
     "crates/botanix-comet-bft-rpc",
     "crates/botanix-rpc-config",
@@ -144,7 +143,6 @@ botanix-authority-metrics = { path = "crates/botanix-authority-metrics" }
 botanix-bitcoin-checkpoint = { path = "crates/botanix-bitcoin-checkpoint" }
 botanix-authority-edh ={ path = "crates/botanix-authority-edh" }
 botanix-configs = { path = "crates/botanix-configs" }
-botanix-hardforks = { path = "crates/botanix-hardforks" }
 botanix-data-parser = { path = "crates/botanix-data-parser" }
 botanix-comet-bft-rpc = { path = "crates/botanix-comet-bft-rpc" }
 botanix-rpc-config = { path = "crates/botanix-rpc-config" }

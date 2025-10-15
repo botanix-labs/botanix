@@ -3,14 +3,11 @@ use alloy_eips::eip1559::{DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR, DEFAULT_ELAST
 use alloy_genesis::Genesis;
 use alloy_primitives::{b256, B256, U256};
 use askama::Template;
-use botanix_hardforks::BotanixHardfork;
 use once_cell::sync::Lazy;
-use reth_chainspec::{BaseFeeParams, BaseFeeParamsKind, ChainSpec, EthereumHardfork};
+use reth_chainspec::{make_genesis_header, BaseFeeParams, BaseFeeParamsKind, ChainSpec, Head};
 use reth_primitives_traits::{SealedHeader};
 use std::sync::Arc;
-use alloy_consensus::Header;
-
-use crate::BotanixChainSpec;
+use crate::{BotanixChainSpec, BotanixHardfork};
 
 /// Botanix Mainnet genesis hash:
 /// `0x0210ae550e730d0e18f96896b80caad6f59dcc0b83b67421975716d155d027c6`
@@ -49,16 +46,19 @@ pub struct BotanixMainnetGenesisConfig<'a> {
 
 /// The Botanix Testnet
 pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
-    let genesis_header = SealedHeader::<Header>::new(Header::default(), BOTANIX_TESTNET_GENESIS);
+    let genesis = serde_json::from_str(include_str!("../../genesis/botanix_testnet.json"))
+            .expect("Can't deserialize Botanix Testnet genesis json");
+    let hardforks = BotanixHardfork::botanix_testnet();
+    let genesis_header = SealedHeader::new(
+            make_genesis_header(&genesis, &hardforks),
+            BOTANIX_TESTNET_GENESIS,
+    );
     let mut spec = ChainSpec {
         chain: Chain::from_id(BOTANIX_TESTNET_CHAIN_ID),
-        genesis: serde_json::from_str(include_str!("../genesis/botanix_testnet.json"))
-            .expect("Can't deserialize Botanix Testnet genesis json"),
+        genesis,
         genesis_header,
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
-        hardforks: BotanixHardfork::botanix()
-            .map(|(bot_hf, fk)| (EthereumHardfork::from(bot_hf), fk))
-            .into(),
+        hardforks,
         deposit_contract: None, // only relevant for PoS chains
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(), DEFAULT_ELASTICITY_MULTIPLIER.into())),
         prune_delete_limit: 20000,
@@ -80,19 +80,22 @@ pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
 
 /// The Botanix Mainnet
 pub static BOTANIX_MAINNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
-    let genesis_header = SealedHeader::<Header>::new(Header::default(), BOTANIX_MAINNET_GENESIS);
+    let genesis = serde_json::from_str(include_str!("../../genesis/botanix_mainnet.json"))
+            .expect("Can't deserialize Botanix Mainnet genesis json");
+    let hardforks = BotanixHardfork::botanix_mainnet();
+    let genesis_header = SealedHeader::new(
+            make_genesis_header(&genesis, &hardforks),
+            BOTANIX_MAINNET_GENESIS,
+    );
     let mut spec = ChainSpec {
         chain: Chain::from_id(BOTANIX_MAINNET_CHAIN_ID),
-        genesis: serde_json::from_str(include_str!("../genesis/botanix_mainnet.json"))
-            .expect("Can't deserialize Botanix Mainnet genesis json"),
+        genesis,
         genesis_header,
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
-        hardforks: BotanixHardfork::botanix()
-            .map(|(bot_hf, fk)| (EthereumHardfork::from(bot_hf), fk))
-            .into(),
+        hardforks,
         deposit_contract: None, // only relevant for PoS chains
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(), DEFAULT_ELASTICITY_MULTIPLIER.into())),
-        prune_delete_limit: 20000,
+        prune_delete_limit: 3500,
         blob_params: Default::default(),
     };
     spec.genesis.config.dao_fork_support = false;
@@ -119,15 +122,17 @@ pub fn create_botanix_config_with_genesis(
     lst_fee_receiver: String,
     epoch_length: u64,
 ) -> BotanixChainSpec {
-    let genesis_header = SealedHeader::<Header>::new(Header::default(), genesis_hash.unwrap_or_default());
+    let hardforks = BotanixHardfork::botanix_testnet();
+    let genesis_header = SealedHeader::new(
+            make_genesis_header(&genesis, &hardforks),
+            genesis_hash.unwrap_or(BOTANIX_TESTNET_GENESIS),
+    );
     let chainspec = ChainSpec {
         chain: Chain::from_id(chain_id),
         genesis,
         genesis_header,
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
-        hardforks: BotanixHardfork::botanix()
-            .map(|(bot_hf, fk)| (EthereumHardfork::from(bot_hf), fk))
-            .into(),
+        hardforks,
         deposit_contract: None, // Only relevant for PoS chains
         base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(), DEFAULT_ELASTICITY_MULTIPLIER.into())),
         prune_delete_limit: 1700,
@@ -145,4 +150,22 @@ pub fn create_botanix_config_with_genesis(
         epoch_length,
     };
     botanix_spec
+}
+
+// TODO: fix this
+/// Dummy Head for Botanix Testnet
+pub fn botanix_testnet_head() -> Head {
+    Head {
+        number: 57_638_970,
+        hash: BOTANIX_TESTNET_GENESIS,
+        difficulty: U256::from(2),
+        total_difficulty: U256::from(115_030_996),
+        timestamp: 1752059605,
+    }
+}
+
+// TODO: fix this
+/// Returns the canonical head for Botanix Mainnet.
+pub fn botanix_mainnet_head() -> Head {
+    Head { number: 40_000_000, timestamp: 1751250600, ..Default::default() }
 }

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::hardforks::botanix::BotanixHardfork;
+use botanix_chainspec::BotanixHardfork;
 use cfg_if::cfg_if;
 use once_cell::race::OnceBox;
 use revm::{
