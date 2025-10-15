@@ -1,5 +1,4 @@
 use crate::{
-    chainspec::BotanixChainSpec,
     node::{
         engine_api::{
             builder::BotanixEngineApiBuilder,
@@ -11,6 +10,7 @@ use crate::{
     },
     BotanixBlock, BotanixBlockBody,
 };
+use botanix_chainspec::BotanixChainSpec;
 use consensus::BotanixConsensusBuilder;
 use engine::BotanixPayloadServiceBuilder;
 use evm::BotanixExecutorBuilder;

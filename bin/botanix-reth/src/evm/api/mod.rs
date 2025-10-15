@@ -1,8 +1,7 @@
 use std::ops::{Deref, DerefMut};
-
-use crate::{evm::transaction::BotanixTxEnv, hardforks::botanix::BotanixHardfork};
-
+use crate::evm::transaction::BotanixTxEnv;
 use super::precompiles::BotanixPrecompiles;
+use botanix_chainspec::BotanixHardfork;
 use reth_evm::{precompiles::PrecompilesMap, Database, EvmEnv};
 use revm::{
     context::{BlockEnv, CfgEnv, Evm as EvmCtx, FrameStack, JournalTr},

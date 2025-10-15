@@ -77,7 +77,7 @@ reth-chainspec.workspace = true
 reth-cli-util.workspace = true
 reth-discv4.workspace = true
 reth-engine-primitives.workspace = true
-reth-ethereum.workspace = true
+reth-ethereum = { workspace = true, features = ["test-utils", "node", "provider", "pool", "network", "rpc"] }
 reth-ethereum-forks.workspace = true
 reth-ethereum-payload-builder.workspace = true
 reth-ethereum-primitives.workspace = true
@@ -117,7 +117,6 @@ botanix-authority-metrics.workspace = true
 botanix-bitcoin-checkpoint.workspace = true
 botanix-authority-edh.workspace = true
 botanix-configs.workspace = true
-botanix-hardforks.workspace = true
 botanix-data-parser.workspace = true
 botanix-comet-bft-rpc.workspace = true
 botanix-rpc-config.workspace = true

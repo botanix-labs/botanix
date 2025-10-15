@@ -2649,7 +2649,6 @@ dependencies = [
  "alloy-primitives",
  "alloy-serde",
  "askama",
- "botanix-hardforks",
  "clap",
  "derive_more 0.99.20",
  "eyre",
@@ -2657,8 +2656,10 @@ dependencies = [
  "reth-chainspec",
  "reth-cli",
  "reth-ethereum-forks",
+ "reth-evm",
  "reth-network-peers",
  "reth-primitives-traits",
+ "revm",
  "serde",
  "serde_json",
  "shellexpand",
@@ -2835,29 +2836,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.12",
-]
-
-[[package]]
-name = "botanix-hardforks"
-version = "0.1.0"
-dependencies = [
- "alloy-chains",
- "alloy-eips",
- "alloy-genesis",
- "alloy-primitives",
- "alloy-serde",
- "askama",
- "clap",
- "derive_more 0.99.20",
- "eyre",
- "once_cell",
- "reth-chainspec",
- "reth-cli",
- "reth-ethereum-forks",
- "reth-primitives-traits",
- "serde",
- "serde_json",
- "shellexpand",
 ]
 
 [[package]]
@@ -12477,7 +12455,6 @@ dependencies = [
  "botanix-consensus-common",
  "botanix-data-parser",
  "botanix-fs-util",
- "botanix-hardforks",
  "botanix-rpc-client",
  "botanix-rpc-config",
  "botanix-rpc-types",

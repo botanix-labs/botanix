@@ -201,8 +201,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::chainspec::botanix::botanix_mainnet;
-
     use super::*;
     use alloy_primitives::{B256, U128};
     use alloy_rpc_types::engine::PayloadStatus;

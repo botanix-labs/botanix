@@ -1,8 +1,9 @@
-use crate::{chainspec::BotanixChainSpec, hardforks::BotanixHardforks, BotanixBlock, BotanixPrimitives};
+use crate::{BotanixBlock, BotanixPrimitives};
 use alloy_consensus::BlockHeader;
 use alloy_eips::eip4895::Withdrawal;
 use alloy_primitives::B256;
 use alloy_rpc_types_engine::PayloadError;
+use botanix_chainspec::{BotanixChainSpec, BotanixHardforks};
 use reth::{
     api::{FullNodeComponents, NodeTypes},
     builder::{

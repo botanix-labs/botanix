@@ -3,10 +3,10 @@ use crate::{
         api::{BotanixContext, BotanixEvm},
         transaction::BotanixTxEnv,
     },
-    hardforks::botanix::BotanixHardfork,
     node::BotanixNode,
 };
 use alloy_primitives::{Address, Bytes};
+use botanix_chainspec::BotanixHardfork;
 use config::BotanixEvmConfig;
 use reth::{
     api::FullNodeTypes,

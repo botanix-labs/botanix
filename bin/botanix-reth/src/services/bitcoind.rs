@@ -6,7 +6,7 @@ use eyre::{Context, Ok};
 pub async fn setup_bitcoind_client(
     bitcoind_cfg: &BitcoindArgs,
     poa_cfg: &PoaNodeArgs
-) -> eyre::Result<BitcoindClient> {
+) -> eyre::Result<(BitcoindClient, BitcoindClientFactory)> {
     let mut bitcoind_config: BitcoindConfig = bitcoind_cfg.clone().into();
     // prioritize the bitcoind config path from cli args
     if let Some(bitcoind_config_path) = &poa_cfg.bitcoind_config_path {
@@ -22,5 +22,5 @@ pub async fn setup_bitcoind_client(
 
     // create bitcoind client and make sure its synced
     let bitcoind_client = bitcoind_factory.build_and_connect().wrap_err_with(|| { format!("Could build and connect to bitcoind at {}", bitcoind_config.url)})?;
-    Ok(bitcoind_client)
+    Ok((bitcoind_client, bitcoind_factory))
 }
