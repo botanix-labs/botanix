@@ -2845,6 +2845,7 @@ dependencies = [
  "reth-chainspec",
  "reth-db",
  "reth-evm",
+ "reth-execution-errors",
  "reth-node-types",
  "reth-primitives",
  "reth-primitives-traits",

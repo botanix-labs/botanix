@@ -11,6 +11,7 @@ use reth_evm::{
         },
     },
 };
+use reth_execution_errors::trie::StateRootError;
 use reth_primitives::{GotExpected, GotExpectedBoxed, InvalidTransactionError};
 use reth_primitives_traits::constants::MINIMUM_GAS_LIMIT;
 use reth_storage_errors::provider::ProviderError;
@@ -32,7 +33,7 @@ impl From<reth_evm::execute::BlockExecutionError> for BlockExecutionError {
 }
 
 /// Transaction validation errors
-#[derive(Clone, Debug, Display, Eq, PartialEq)]
+#[derive(Clone, Debug, Display)]
 pub enum BlockValidationError {
     /// EVM error with transaction hash and message
     #[display("EVM reported invalid transaction ({hash}): {error}")]
