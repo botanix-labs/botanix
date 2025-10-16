@@ -2835,7 +2835,10 @@ dependencies = [
 name = "botanix-evm"
 version = "0.1.0"
 dependencies = [
+ "alloy-eips",
  "bitcoin 0.32.7",
+ "botanix-authority-edh",
+ "botanix-authority-peg",
  "botanix-btc-wallet",
  "botanix-chainspec",
  "derive_more 2.0.1",
@@ -2848,6 +2851,7 @@ dependencies = [
  "reth-provider",
  "reth-storage-errors",
  "revm-database",
+ "tracing",
 ]
 
 [[package]]

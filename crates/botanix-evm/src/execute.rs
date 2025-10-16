@@ -1,15 +1,39 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
+use alloy_eips::eip7685::Requests;
+use botanix_authority_edh::header_ext::HeaderExt;
+use botanix_authority_peg::{
+    consensus_package::BotanixConsensusPackage,
+    peg_contract::{PeginData, PegoutWithId},
+};
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_chainspec::BotanixChainSpec;
-use reth_chainspec::ChainSpec;
-use reth_evm::execute::Executor;
+use reth_chainspec::{ChainSpec, EthereumHardforks};
+use reth_evm::{
+    execute::Executor,
+    revm::primitives::{alloy_primitives::BlockNumber, U256},
+    ConfigureEvm, Database, Evm, EvmEnvFor,
+};
 use reth_node_types::NodePrimitives;
-use reth_primitives::RecoveredBlock;
-use reth_provider::{BlockExecutionOutput, DatabaseProviderRO};
-use revm_database::State;
+use reth_primitives::{Header, Receipt, RecoveredBlock, SealedHeader};
 
-use crate::error::BlockExecutionError;
+use reth_primitives_traits::AlloyBlockHeader;
+use reth_provider::{BlockExecutionOutput, DatabaseProviderRO, ProviderError};
+use revm_database::{DatabaseCommit, State};
+use tracing::error;
+
+use crate::error::{BlockExecutionError, BlockValidationError};
+
+/// Helper type for the output of executing a block.
+#[derive(Debug, Clone)]
+struct EthExecuteOutput {
+    receipts: Vec<Receipt>,
+    requests: Requests,
+    gas_used: u64,
+    total_block_fees: u128,
+    pegins: Vec<PeginData>,
+    pegouts: Vec<PegoutWithId>,
+}
 
 /// Helper container type for EVM with chain spec.
 #[derive(Debug, Clone)]
@@ -90,12 +114,155 @@ where
     }
 }
 
+impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+where
+    EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
+    DB: Database<Error: Into<ProviderError> + Display>,
+    BF: BitcoindFactory + Clone + Unpin + 'static,
+    RethDB: reth_db::Database,
+    N: reth_node_types::NodeTypes,
+{
+    /// Execute a single block and apply the state changes to the internal state.
+    ///
+    /// Returns the receipts of the transactions in the block, the total gas used and the list of
+    /// EIP-7685 [requests](Request).
+    ///
+    /// Returns an error if execution fails.
+    fn execute_without_verification(
+        &mut self,
+        block: &RecoveredBlock<<N::Primitives as NodePrimitives>::Block>,
+    ) -> Result<EthExecuteOutput, BlockExecutionError>
+    where
+        <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
+    {
+        // 1. prepare state on new block
+        self.on_new_block(block.number());
+
+        let header: &SealedHeader<<N::Primitives as NodePrimitives>::BlockHeader> =
+            block.sealed_header();
+        let edh = header.deserialize_extra_data_header().map_err(|_| {
+            BlockExecutionError::Validation(BlockValidationError::ExtraDataSerializeError)
+        })?;
+
+        let botanix_consensus_pkg = header
+            .botanix_consensus_package(
+                self.executor.bitcoin_network,
+                self.executor.bitcoind_factory.clone(),
+            )
+            .map_err(|e| {
+                error!("Failed to get botanix consensus package: {:?}", e);
+                BlockExecutionError::Validation(BlockValidationError::BotanixConsensusPkgError(e))
+            })?;
+
+        let block_fee_recipient_address = edh.block_fee_recipient_address;
+
+        // 2. configure the evm and execute
+        let env = self.evm_env_for_block(block.header());
+        let output: EthExecuteOutput = {
+            let evm = self.executor.evm_config.evm_with_env(&mut self.state, env);
+            self.executor.execute_state_transitions(
+                block,
+                evm,
+                botanix_consensus_pkg,
+                self.executor.provider.clone(),
+            )?
+        };
+
+        // 3. apply post execution changes
+        self.post_execution(
+            block,
+            total_difficulty,
+            Some(output.total_block_fees),
+            block_fee_recipient_address,
+        )?;
+
+        Ok(output)
+    }
+
+    /// Apply settings before a new block is executed.
+    pub(crate) fn on_new_block(&mut self, block_number: BlockNumber) {
+        // Set state clear flag if the block is after the Spurious Dragon hardfork.
+        let state_clear_flag =
+            self.botanix_chain_spec().is_spurious_dragon_active_at_block(block_number);
+        self.state.set_state_clear_flag(state_clear_flag);
+    }
+
+    /// Configures a new evm configuration and block environment for the given block.
+    ///
+    /// # Caution
+    ///
+    /// This does not initialize the tx environment.
+    fn evm_env_for_block(
+        &self,
+        header: &<EvmConfig::Primitives as NodePrimitives>::BlockHeader,
+    ) -> EvmEnvFor<EvmConfig>
+    where
+        EvmConfig: ConfigureEvm,
+    {
+        // let mut cfg = CfgEnvWithHandlerCfg::new(Default::default(), Default::default());
+        // let mut block_env = BlockEnv::default();
+        // self.executor.evm_config.fill_cfg_and_block_env(
+        //     &mut cfg,
+        //     &mut block_env,
+        //     self.chain_spec(),
+        //     header,
+        //     total_difficulty,
+        // );
+
+        // EnvWithHandlerCfg::new_with_cfg_env(cfg, block_env, Default::default())
+
+        self.executor.evm_config.evm_env(header)
+    }
+}
+
+impl<EvmConfig, BF, RethDB, N> EthEvmExecutor<EvmConfig, BF, RethDB, N>
+where
+    EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
+    BF: BitcoindFactory + Clone + Unpin + 'static,
+    RethDB: reth_db::Database,
+    N: reth_node_types::NodeTypes,
+{
+    /// Executes the transactions in the block and returns the receipts of the transactions in the
+    /// block, the total gas used and the list of EIP-7685 [requests](Request).
+    /// As well as pegins and pegouts
+    ///
+    /// This applies the pre-execution and post-execution changes that require an [EVM](Evm), and
+    /// executes the transactions.
+    ///
+    /// # Note
+    ///
+    /// It does __not__ apply post-execution changes that do not require an [EVM](Evm), for that see
+    /// [`EthBlockExecutor::post_execution`].
+    fn execute_state_transitions<E>(
+        &self,
+        block: &RecoveredBlock<<N::Primitives as NodePrimitives>::Block>,
+        mut evm: E,
+        botanix_consensus_pkg: BotanixConsensusPackage,
+        provider: Arc<DatabaseProviderRO<RethDB, N>>,
+    ) -> Result<EthExecuteOutput, BlockExecutionError>
+    where
+        E: reth_evm::Evm,
+        E::DB: DatabaseCommit,
+    {
+        // Apply pre execution changes
+        let mut system_caller =
+            reth_evm::system_calls::SystemCaller::new(self.botanix_chain_spec.inner());
+        system_caller.apply_pre_execution_changes(block.header(), &mut evm)?;
+
+        // TODO: execute transactions and handle botanix-specific logic
+
+        todo!("Complete execute_state_transitions implementation")
+    }
+}
+
 impl<EvmConfig, DB, BF, RethDB, N> Executor<DB> for EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
-    DB: reth_db::Database + revm_database::Database<Error: Sync + Send + 'static>,
+    EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
+    DB: Database<Error: Into<ProviderError> + Display>,
     RethDB: reth_db::Database,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     N: reth_node_types::NodeTypes,
+    <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
 {
     type Error = BlockExecutionError;
 
@@ -111,9 +278,8 @@ where
         block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionOutput<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     {
-        let BlockExecutionInput { block, total_difficulty } = block.sealed_block();
         let EthExecuteOutput { receipts, requests, gas_used, total_block_fees, pegins, pegouts } =
-            self.execute_without_verification(block, total_difficulty)?;
+            self.execute_without_verification(block)?;
 
         // TODO NOTE: we need to merge keep the reverts for the bundle retention
         self.state.merge_transitions(BundleRetention::Reverts);

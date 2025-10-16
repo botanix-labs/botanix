@@ -22,14 +22,23 @@ reth-evm = { workspace = true }
 # REVM dependencies
 revm-database = { workspace = true }
 
+# alloy dependencies
+alloy-eips.workspace = true
+
 # Botanix
-botanix-chainspec = { workspace = true }
+botanix-authority-peg = { workspace = true }
 botanix-btc-wallet = { workspace = true }
+botanix-chainspec = { workspace = true }
+botanix-authority-edh = { workspace = true }
+
 # Bitcoin
 bitcoin = { workspace = true }
 
 # Misc
 derive_more = { workspace = true }
+
+# tracing
+tracing = { workspace = true }
 
 [lints]
 workspace = true

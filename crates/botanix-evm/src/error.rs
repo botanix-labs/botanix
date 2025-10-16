@@ -1,10 +1,14 @@
+use botanix_authority_edh::header_ext::BotanixConsensusPackageError;
 /// `BlockExecutor` Errors
 use derive_more::Display;
 use reth_evm::{
-    block::{BlockValidationError, InternalBlockExecutionError},
-    revm::primitives::{
-        alloy_primitives::{BlockHash, BlockNumber, Bloom},
-        B256,
+    block::InternalBlockExecutionError,
+    revm::{
+        context::result::EVMError,
+        primitives::{
+            alloy_primitives::{BlockHash, BlockNumber, Bloom},
+            B256,
+        },
     },
 };
 use reth_primitives::{GotExpected, GotExpectedBoxed, InvalidTransactionError};
@@ -19,6 +23,141 @@ pub enum BlockExecutionError {
     Consensus(ConsensusError),
     /// Internal, i.e. non consensus or validation related Block Executor Errors
     Internal(InternalBlockExecutionError),
+}
+
+impl From<reth_evm::execute::BlockExecutionError> for BlockExecutionError {
+    fn from(err: reth_evm::execute::BlockExecutionError) -> Self {
+        BlockExecutionError::Internal(InternalBlockExecutionError::Other(err.to_string().into()))
+    }
+}
+
+/// Transaction validation errors
+#[derive(Clone, Debug, Display, Eq, PartialEq)]
+pub enum BlockValidationError {
+    /// EVM error with transaction hash and message
+    #[display("EVM reported invalid transaction ({hash}): {error}")]
+    EVM {
+        /// The hash of the transaction
+        hash: B256,
+        /// The EVM error.
+        error: Box<EVMError<ProviderError>>,
+    },
+    /// Error when recovering the sender for a transaction
+    #[display("failed to recover sender for transaction")]
+    SenderRecoveryError,
+    /// Error when incrementing balance in post execution
+    #[display("incrementing balance in post execution failed")]
+    IncrementBalanceFailed,
+    /// Error when the state root does not match the expected value.
+    // #[from(ignore)]
+    StateRoot(StateRootError),
+    /// Error when transaction gas limit exceeds available block gas
+    #[display(
+        "transaction gas limit {transaction_gas_limit} is more than blocks available gas {block_available_gas}"
+    )]
+    TransactionGasLimitMoreThanAvailableBlockGas {
+        /// The transaction's gas limit
+        transaction_gas_limit: u64,
+        /// The available block gas
+        block_available_gas: u64,
+    },
+    /// Error for pre-merge block
+    #[display("block {hash} is pre merge")]
+    BlockPreMerge {
+        /// The hash of the block
+        hash: B256,
+    },
+    /// Error for missing total difficulty
+    #[display("missing total difficulty for block {hash}")]
+    MissingTotalDifficulty {
+        /// The hash of the block
+        hash: B256,
+    },
+    /// Error for EIP-4788 when parent beacon block root is missing
+    #[display("EIP-4788 parent beacon block root missing for active Cancun block")]
+    MissingParentBeaconBlockRoot,
+    /// Error for Cancun genesis block when parent beacon block root is not zero
+    #[display(
+        "the parent beacon block root is not zero for Cancun genesis block: {parent_beacon_block_root}"
+    )]
+    CancunGenesisParentBeaconBlockRootNotZero {
+        /// The beacon block root
+        parent_beacon_block_root: B256,
+    },
+    /// EVM error during [EIP-4788] beacon root contract call.
+    ///
+    /// [EIP-4788]: https://eips.ethereum.org/EIPS/eip-4788
+    #[display(
+        "failed to apply beacon root contract call at {parent_beacon_block_root}: {message}"
+    )]
+    BeaconRootContractCall {
+        /// The beacon block root
+        parent_beacon_block_root: Box<B256>,
+        /// The error message.
+        message: String,
+    },
+
+    /// Missing aggregate public key
+    #[display("Missing aggregate public key")]
+    MissingAggregatePublicKey(),
+
+    /// Poa specific error when Extra data header is invalid
+    #[display("Invalid extra header")]
+    InvalidExtraData,
+
+    /// Poa specific error when Extra data header is failed to deserialize\
+    /// TODO specify which serilaize/deserialize error
+    #[display("Failed to serialize extra header")]
+    ExtraDataSerializeError,
+
+    /// Bitcoin recent header is not available
+    #[display("Bitcoin recent header is not available")]
+    BitcoinRecentHeaderNotAvailable,
+
+    /// Poa specific error when we  Failed to fetch the block producer address
+    #[display("Failed to fetch the block producer address")]
+    FailedToFetchBlockProducerAddress,
+
+    /// Failed to deserialize previous block header
+    #[display("Failed to deserialize previous block header")]
+    FailedToDeserializePreviousBlockHeader,
+
+    /// Error when witness data is missing for a pegout psbt
+    #[display("Missing witness data for pegout psbt")]
+    MissingWitnessData,
+    /// Poa specific error when EDH authorities fail validation
+    #[display("Invalid authorities in EDH")]
+    InvalidExtraDataAuthorities,
+
+    /// Provider error during the [EIP-2935] block hash account loading.
+    ///
+    /// [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
+    BlockHashAccountLoadingFailed(ProviderError),
+    /// EVM error during withdrawal requests contract call [EIP-7002]
+    ///
+    /// [EIP-7002]: https://eips.ethereum.org/EIPS/eip-7002
+    #[display("failed to apply withdrawal requests contract call: {message}")]
+    WithdrawalRequestsContractCall {
+        /// The error message.
+        message: String,
+    },
+    /// EVM error during consolidation requests contract call [EIP-7251]
+    ///
+    /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
+    #[display("failed to apply consolidation requests contract call: {message}")]
+    ConsolidationRequestsContractCall {
+        /// The error message.
+        message: String,
+    },
+    /// Error when decoding deposit requests from receipts [EIP-6110]
+    ///
+    /// [EIP-6110]: https://eips.ethereum.org/EIPS/eip-6110
+    #[display("failed to decode deposit requests from receipts: {_0}")]
+    DepositRequestDecode(String),
+
+    /// Error when creating a Botanix consensus package
+    #[display("Failed to construct Botanix Consensus Pkg")]
+    BotanixConsensusPkgError(BotanixConsensusPackageError),
 }
 
 // TODO: this enum has a mix of concerns and should be broken into separate enums
