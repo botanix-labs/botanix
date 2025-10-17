@@ -1,25 +1,28 @@
 use std::{fmt::Display, sync::Arc};
 
+use alloy_consensus::transaction::{Recovered, Transaction};
 use alloy_eips::eip7685::Requests;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::{
     consensus_package::BotanixConsensusPackage,
-    peg_contract::{PeginData, PegoutWithId},
+    peg_contract::{PeginData, PegoutData, PegoutWithId},
 };
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_chainspec::BotanixChainSpec;
 use reth_chainspec::{ChainSpec, EthereumHardforks};
 use reth_evm::{
     execute::Executor,
-    revm::primitives::{alloy_primitives::BlockNumber, U256},
-    ConfigureEvm, Database, Evm, EvmEnvFor,
+    revm::primitives::{alloy_primitives::BlockNumber, hex},
+    ConfigureEvm, Database as RethDatabase, Evm, EvmEnvFor,
 };
+use reth_execution_errors::InternalBlockExecutionError;
 use reth_node_types::NodePrimitives;
-use reth_primitives::{Header, Receipt, RecoveredBlock, SealedHeader};
+use reth_primitives::{Receipt, RecoveredBlock, SealedHeader};
 
-use reth_primitives_traits::AlloyBlockHeader;
+use reth_primitives_traits::{AlloyBlockHeader, BlockBody, SignedTransaction};
 use reth_provider::{BlockExecutionOutput, DatabaseProviderRO, ProviderError};
-use revm_database::{DatabaseCommit, State};
+use reth_revm::context::result::{EVMError, ResultAndState};
+use revm_database::{BundleRetention, Database as RevmDatabase, DatabaseCommit, State};
 use tracing::error;
 
 use crate::error::{BlockExecutionError, BlockValidationError};
@@ -117,7 +120,7 @@ where
 impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
-    DB: Database<Error: Into<ProviderError> + Display>,
+    DB: RethDatabase<Error: Into<ProviderError> + Display>,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
@@ -169,12 +172,12 @@ where
         };
 
         // 3. apply post execution changes
-        self.post_execution(
-            block,
-            total_difficulty,
-            Some(output.total_block_fees),
-            block_fee_recipient_address,
-        )?;
+        // self.post_execution(
+        //     block,
+        //     total_difficulty,
+        //     Some(output.total_block_fees),
+        //     block_fee_recipient_address,
+        // )?;
 
         Ok(output)
     }
@@ -242,23 +245,353 @@ where
     ) -> Result<EthExecuteOutput, BlockExecutionError>
     where
         E: reth_evm::Evm,
-        E::DB: DatabaseCommit,
+        E::DB: DatabaseCommit + RevmDatabase,
+        E::Tx: reth_evm::FromRecoveredTx<<N::Primitives as NodePrimitives>::SignedTx>,
+        <N::Primitives as NodePrimitives>::BlockBody:
+            BlockBody<Transaction = <N::Primitives as NodePrimitives>::SignedTx>,
     {
         // Apply pre execution changes
         let mut system_caller =
             reth_evm::system_calls::SystemCaller::new(self.botanix_chain_spec.inner());
         system_caller.apply_pre_execution_changes(block.header(), &mut evm)?;
 
+        // execute transactions
+        let mut total_pegins: Vec<PeginData> = vec![];
+        let mut total_pegouts: Vec<PegoutWithId> = vec![];
+
+        let mut total_block_fees = 0_u128;
+        let mut cumulative_gas_used = 0;
+        let base_fee = block.base_fee_per_gas();
+        let mut receipts: Vec<Receipt> = Vec::with_capacity(block.body().transactions().len());
+
+        for (sender, transaction) in block.senders().iter().zip(block.body().transactions()) {
+            // The sum of the transaction’s gas limit, Tg, and the gas utilized in this block prior,
+            // must be no greater than the block’s gasLimit.
+            let block_available_gas = block.header().gas_limit() - cumulative_gas_used;
+            if transaction.gas_limit() > block_available_gas {
+                return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
+                    transaction_gas_limit: transaction.gas_limit(),
+                    block_available_gas,
+                }
+                .into());
+            }
+
+            // self.evm_config.fill_tx_env(evm.tx_mut(), transaction, *sender);
+
+            // Store original sender account info before transaction execution.
+            // This is used later to partially revert the state if botanix specific validation
+            // fails.
+            // If the sender is not found in the state, we need to error because there is no balance
+            // to subtract from. This shouldn't happen because the tx would have failed.
+            let sender_db_error =
+                BlockExecutionError::Internal(InternalBlockExecutionError::Other(
+                    format!("DB error getting sender: {}", hex::encode(sender)).into(),
+                ));
+            let sender_not_found =
+                BlockExecutionError::Internal(InternalBlockExecutionError::Other(
+                    format!("Sender not found in state: {}", hex::encode(sender)).into(),
+                ));
+            let mut original_sender_info: reth_revm::state::AccountInfo = evm
+                .db_mut()
+                .basic(*sender)
+                .map_err(|_| sender_db_error)?
+                .ok_or(sender_not_found)?;
+
+            // Execute transaction.
+            let recovered_tx: Recovered<<N::Primitives as NodePrimitives>::SignedTx> =
+                Recovered::new_unchecked(transaction.clone(), *sender);
+            let tx_hash = transaction.tx_hash();
+            let ResultAndState { mut result, mut state } =
+                evm.transact(recovered_tx).map_err(move |err| {
+                    BlockExecutionError::Internal(InternalBlockExecutionError::Other(
+                        format!("EVM error for transaction {}: {}", tx_hash, err).into(),
+                    ))
+                })?;
+
+            // calculate the total transaction fee
+            let mut transaction_fee = transaction
+                .clone()
+                .effective_tip_per_gas(base_fee.unwrap_or_default()) // TODO: is this right??
+                .expect("base fee exists");
+            // Include the base fee so it's not burned
+            transaction_fee += base_fee.unwrap_or(0) as u128;
+            total_block_fees += transaction_fee * u128::from(result.gas_used());
+
+            // append gas used
+            cumulative_gas_used += result.gas_used();
+
+            // ***** Botanix specific checks ******
+            let mut pegins: Vec<PeginData> = vec![];
+            let mut pegouts: Vec<PegoutData> = vec![];
+
+            // let new_result = {
+            //     if result.is_success() {
+            //         match self.botanix_mint_contract_checks(
+            //             &result,
+            //             &botanix_consensus_pkg,
+            //             transaction.hash,
+            //             provider.clone(),
+            //         ) {
+            //             Ok((new_pegins, new_pegouts)) => {
+            //                 pegins.extend(new_pegins);
+            //                 pegouts.extend(new_pegouts);
+            //                 result
+            //             }
+            //             Err(e) => {
+            //                 info!("Botanix Minting contract event validation failed: {:?}", e);
+
+            //                 // Capture gas used from the initially successful execution
+            //                 let gas_used = result.gas_used();
+
+            //                 // Determine the total gas cost: gas_used * effective_gas_price
+            //                 // Base fee is needed for effective_gas_price calculation
+            //                 let effective_gas_price = transaction.effective_gas_price(base_fee);
+            //                 let total_gas_cost =
+            //                     U256::from(gas_used) * U256::from(effective_gas_price);
+
+            //                 // Get the new nonce. This should be original nonce + 1
+            //                 let new_nonce = state
+            //                     .get(sender)
+            //                     .ok_or(BlockExecutionError::Internal(
+            //                         InternalBlockExecutionError::Other(
+            //                             format!(
+            //                                 "Sender not found in state: {}",
+            //                                 hex::encode(sender)
+            //                             )
+            //                             .into(),
+            //                         ),
+            //                     ))?
+            //                     .info
+            //                     .nonce;
+
+            //                 // Clear ALL state changes introduced by the transaction.
+            //                 // State is the diff of the previous state and the new state after
+            // the                 // transaction.
+            //                 state.clear();
+
+            //                 // Now, re-apply *only* the total gas cost and nonce change to the
+            //                 // pre-transaction state.
+            //                 original_sender_info.nonce = new_nonce;
+            //                 // There shouldn't be an underflow because the tx would have failed
+            // if                 // the sender didn't have enough balance.
+            //                 original_sender_info.balance = original_sender_info
+            //                     .balance
+            //                     .checked_sub(total_gas_cost)
+            //                     .ok_or(BlockExecutionError::Internal(
+            //                         InternalBlockExecutionError::Other(
+            //                             "Sender balance underflow".to_string().into(),
+            //                         ),
+            //                     ))?;
+
+            //                 // Re-insert the sender's account with the original info but updated
+            //                 // nonce and balance (reflecting only gas cost).
+            //                 // Create new diff with only above changes.
+            //                 let reverted_account = Account {
+            //                     info: original_sender_info,
+            //                     storage: HashMap::new(), // Storage changes remain reverted.
+            //                     status: revm_primitives::AccountStatus::Touched, // Mark as
+            // touched                 };
+            //                 state.insert(*sender, reverted_account);
+
+            //                 // Return a revert result, indicating failure but consuming gas and
+            //                 // incrementing nonce.
+            //                 ExecutionResult::Revert {
+            //                     gas_used, // Still report the gas used
+            //                     output: Default::default(),
+            //                 }
+            //             }
+            //         }
+            //     } else {
+            //         result
+            //     }
+            // };
+
+            // result = new_result;
+        }
+
         // TODO: execute transactions and handle botanix-specific logic
 
         todo!("Complete execute_state_transitions implementation")
+    }
+
+    /// Performs additional checks on mint contract transactions.
+    #[tracing::instrument(
+        level = "trace",
+        skip(self, result, botanix_consensus_pkg, provider),
+        fields(
+            bitcoin_checkpoint_hash = %botanix_consensus_pkg.bitcoin_checkpoint.0.block_hash(),
+            bitcoin_checkpoint_height = botanix_consensus_pkg.bitcoin_checkpoint.1,
+        )
+    )]
+    fn botanix_mint_contract_checks(
+        &self,
+        result: &ExecutionResult,
+        botanix_consensus_pkg: &BotanixConsensusPackage,
+        tx_hash: TxHash,
+        provider: Arc<DatabaseProviderRO<RethDB>>,
+    ) -> Result<(Vec<PeginData>, Vec<PegoutWithId>), MintContractError> {
+        let consensus_pkg = botanix_consensus_pkg;
+        let btc_network = consensus_pkg.btc_network;
+
+        tracing::trace!("botanix_consensus_package={:?}", botanix_consensus_pkg);
+
+        // Check pegins.
+        let mut pegins = vec![];
+        let mut pegouts = vec![];
+        for log in result.logs() {
+            let pegin_data = match try_parse_mint_event(log)? {
+                None => continue,
+                Some(p) => p,
+            };
+
+            tracing::trace!(?pegin_data, "validate pegin data for tx {}", tx_hash);
+
+            // Get the reference block hash from the pegin metadata.
+            // This is used to avoid the growing list of headers in the pegin metadata
+            // by using a bitcoin checkpoint that is close to the pegin block height.
+            // The reference block hash is only provided for version v1.
+            let mut bitcoin_checkpoint = consensus_pkg.bitcoin_checkpoint;
+            let (version, ref_block_hash) = if let Some(meta) = pegin_data.meta.first() {
+                match (meta.version(), meta.ref_block_hash()) {
+                    (1, None) => {
+                        return Err(MintContractError::InvalidPeginData {
+                            error: "Reference block hash cannot be found".to_string(),
+                            revert_address: pegin_data.account,
+                            revert_amount: pegin_data.amount,
+                        })
+                    }
+                    (1, Some(hash)) => {
+                        match provider.find_block_by_hash(hash, reth_provider::BlockSource::Any) {
+                            Ok(Some(block)) => {
+                                let header = block.header;
+                                let package = header
+                                    .botanix_consensus_package(
+                                        self.bitcoin_network,
+                                        self.bitcoind_factory.clone(),
+                                    )
+                                    .map_err(|_| MintContractError::InvalidPeginData {
+                                        error: "Failed to get botanix consensus package"
+                                            .to_string(),
+                                        revert_address: pegin_data.account,
+                                        revert_amount: pegin_data.amount,
+                                    })?;
+                                bitcoin_checkpoint = package.bitcoin_checkpoint;
+
+                                tracing::debug!(
+                                    pegin_meta_version = meta.version(),
+                                    ref_eth_block_hash = %hash,
+                                    overridden_btc_checkpoint_hash = %bitcoin_checkpoint.0.block_hash(),
+                                    overridden_btc_checkpoint_height = %bitcoin_checkpoint.1,
+                                    "overridden bitcoin checkpoint for V1 pegin via ref_block_hash"
+                                );
+                            }
+                            Ok(None) => {
+                                return Err(MintContractError::InvalidPeginData {
+                                    error: "No block found for reference block hash".to_string(),
+                                    revert_address: pegin_data.account,
+                                    revert_amount: pegin_data.amount,
+                                })
+                            }
+                            Err(_) => panic!("Database error fetching reference block hash"),
+                        };
+                    }
+                    (0, Some(_)) => {
+                        return Err(MintContractError::InvalidPeginData {
+                            error: "Not expecting reference block hash in proof version 0"
+                                .to_string(),
+                            revert_address: pegin_data.account,
+                            revert_amount: pegin_data.amount,
+                        })
+                    }
+                    _ => {}
+                };
+                (meta.version(), meta.ref_block_hash())
+            } else {
+                return Err(MintContractError::InvalidPeginData {
+                    error: "No proofs found in pegin data".to_string(),
+                    revert_address: pegin_data.account,
+                    revert_amount: pegin_data.amount,
+                });
+            };
+
+            for meta in &pegin_data.meta {
+                if meta.version() != version {
+                    return Err(MintContractError::InvalidPeginData {
+                        error: "Proofs have mismatching versions".to_string(),
+                        revert_address: pegin_data.account,
+                        revert_amount: pegin_data.amount,
+                    });
+                }
+
+                if meta.ref_block_hash() != ref_block_hash {
+                    return Err(MintContractError::InvalidPeginData {
+                        error: "Proofs have mismatching reference block hashes".to_string(),
+                        revert_address: pegin_data.account,
+                        revert_amount: pegin_data.amount,
+                    });
+                }
+            }
+
+            // the pegin height must be equal or less than the required block depth (checkpoint)
+            if pegin_data.bitcoin_block_height > bitcoin_checkpoint.1 {
+                return Err(MintContractError::InvalidPeginData {
+                    error: format!(
+                        "pegin height {} greater than checkpoint of {}",
+                        pegin_data.bitcoin_block_height, bitcoin_checkpoint.1,
+                    ),
+                    revert_address: pegin_data.account,
+                    revert_amount: pegin_data.amount,
+                });
+            }
+            let aggregate_public_key = consensus_pkg.aggregate_public_key;
+            match pegin_data.validate(&bitcoin_checkpoint, &aggregate_public_key) {
+                Ok(aggregate_value) => {
+                    if pegin_data.amount >= aggregate_value {
+                        return Err(MintContractError::InvalidPeginData {
+                            error: format!(
+                                "pegin amount should be less than aggregate value: \
+                                    pegin aggregate value: {}; pegin amount: {}",
+                                aggregate_value, pegin_data.amount,
+                            ),
+                            revert_address: pegin_data.account,
+                            revert_amount: pegin_data.amount,
+                        });
+                    }
+
+                    tracing::debug!(validated_aggregate_value = %aggregate_value, "pegin data validation succeeded");
+                }
+                Err(e) => {
+                    tracing::debug!(error = ?e, ?pegin_data, "pegin data validation failed: {e}");
+                    return Err(MintContractError::InvalidPeginData {
+                        error: format!("pegin validation failed: {}", e),
+                        revert_address: pegin_data.account,
+                        revert_amount: pegin_data.amount,
+                    });
+                }
+            }
+
+            pegins.push(pegin_data);
+        }
+
+        // Check pegouts
+        for (index, log) in result.logs().iter().enumerate() {
+            if let Some(pegout_data) = try_parse_burn_event(log, btc_network)? {
+                let mut tx_hash_array = [0u8; 32];
+                tx_hash_array.copy_from_slice(tx_hash.as_slice());
+                let pegout_id = PegoutId::new(tx_hash_array, index as u32);
+                let pegout_with_id = PegoutWithId { data: pegout_data, id: pegout_id };
+                pegouts.push(pegout_with_id);
+            }
+        }
+
+        Ok((pegins, pegouts))
     }
 }
 
 impl<EvmConfig, DB, BF, RethDB, N> Executor<DB> for EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
-    DB: Database<Error: Into<ProviderError> + Display>,
+    DB: RethDatabase<Error: Into<ProviderError> + Display>,
     RethDB: reth_db::Database,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     N: reth_node_types::NodeTypes,

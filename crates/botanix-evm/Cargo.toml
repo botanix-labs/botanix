@@ -19,11 +19,13 @@ reth-primitives = { workspace = true, features = ["secp256k1"] }
 reth-primitives-traits = { workspace = true }
 reth-storage-errors = { workspace = true }
 reth-evm = { workspace = true }
+reth-revm = { workspace = true }
 
 # REVM dependencies
 revm-database = { workspace = true }
 
 # alloy dependencies
+alloy-consensus.workspace = true
 alloy-eips.workspace = true
 
 # Botanix

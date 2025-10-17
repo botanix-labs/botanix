@@ -32,6 +32,12 @@ impl From<reth_evm::execute::BlockExecutionError> for BlockExecutionError {
     }
 }
 
+impl From<BlockValidationError> for BlockExecutionError {
+    fn from(err: BlockValidationError) -> Self {
+        BlockExecutionError::Validation(err)
+    }
+}
+
 /// Transaction validation errors
 #[derive(Clone, Debug, Display)]
 pub enum BlockValidationError {
