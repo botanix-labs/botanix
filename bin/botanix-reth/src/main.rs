@@ -168,6 +168,7 @@ fn main() -> eyre::Result<()> {
                 &rpc_server_args,
                 &node.task_executor,
                 &node.pool,
+                &node.network,
                 Arc::clone(&chain_spec_arc),
                 botanix_provider.clone(),
             ).await?;

@@ -26,13 +26,14 @@ pub async fn setup_and_run_rpc(
     rpc_server_args: &RpcServerArgs,
     task_executor: &TaskExecutor,
     pool: &FullNodeComponents<BotanixNode, Arc<DatabaseEnv>>::Pool,
+    network: &FullNodeComponents<BotanixNode, Arc<DatabaseEnv>>::Network,
     chain_spec: Arc<BotanixChainSpec>,
     botanix_provider: Botanix,
 ) -> eyre::Result<()> {
     let rpc_builder = RpcModuleBuilder::default()
         .with_provider(provider.clone())
         .with_pool(pool.clone())
-        .with_noop_network()
+        .with_network(network.clone())
         .with_executor(Box::new(task_executor.clone()))
         .with_consensus(NoopConsensus::default())
         .with_evm_config(BotanixEvmConfig::new(chain_spec.clone()));

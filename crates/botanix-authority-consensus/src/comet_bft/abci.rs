@@ -6,6 +6,7 @@ use botanix_storage::models::RuntimeVersion;
 use reth_chain_state::ExecutedBlock;
 use reth_chainspec::ChainSpec;
 use reth_db::{Database, DatabaseEnv};
+use reth_node_builder::{NodeTypesWithDB, NodeTypesWithDBAdapter};
 // use reth_provider::{
 //     providers::BlockchainProvider2, BlockWriter, CanonChainTracker, ExecutionOutcome,
 // };
@@ -34,7 +35,7 @@ use reth_payload_builder::EthPayloadBuilderAttributes;
 use alloy_primitives::{Address, BlockHash, BlockNumber, B256, U256};
 use reth_primitives::{SealedBlock, BlockWithSenders};
 use reth_provider::{
-    BlockReaderIdExt, CanonChainTracker, CanonStateNotification, Chain, ProviderError, ProviderFactory, StateProviderFactory
+    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateNotification, Chain, ProviderError, ProviderFactory, StateProviderFactory
 };
 use reth_revm::primitives::FixedBytes;
 use alloy_rpc_types_engine::PayloadAttributes;
@@ -221,6 +222,8 @@ pub struct BlockWithContext {
     pub trie_updates: TrieUpdates,
 }
 
+type BotanixNodeTypes = NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>;
+
 /// ABCI client builder
 #[derive(Clone)]
 pub struct ABCIClientBuilder<EF, BF, RDB, BDB> {
@@ -234,12 +237,12 @@ pub struct ABCIClientBuilder<EF, BF, RDB, BDB> {
     compressor: DataParser,
     task_executor: TaskExecutor,
     abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-    provider_factory: ProviderFactory<Arc<DatabaseEnv>>,
+    provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
     snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
     snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
     snapshot_format: u32,
     block_fee_recipient_address: Option<alloy_primitives::Address>,
-    blockchain_db: BlockchainProvider2<Arc<DatabaseEnv>>,
+    blockchain_db: BlockchainProvider<BotanixNodeTypes>,
 }
 
 impl<EF, BF, RDB, BDB> ABCIClientBuilder<EF, BF, RDB, BDB>
@@ -261,7 +264,7 @@ where
         task_executor: TaskExecutor,
         compressor: DataParser,
         abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-        provider_factory: ProviderFactory<Arc<DatabaseEnv>>,
+        provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
         snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
         snapshot_format: u32,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
@@ -275,7 +278,7 @@ where
             .flatten()
             .unwrap_or_else(|| storage.chain_spec.inner().sealed_genesis_header());
         let blockchain_db =
-            BlockchainProvider2::with_latest(provider_factory.clone(), latest_sealed_header)
+            BlockchainProvider::with_latest(provider_factory.clone(), latest_sealed_header)
                 .expect("blockchain db to exist");
 
         Self {
@@ -381,7 +384,7 @@ struct BlockCache {
 }
 
 #[derive(Clone)]
-pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool, DB> {
+pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool> {
     storage: Storage<EF, BF, RDB, DBD>,
     pool: Pool,
     activation_manager: ActivationManager<VoteWatcher, Address>,
@@ -395,25 +398,24 @@ pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool, DB> {
     metrics: Arc<AuthorityMetrics>,
     task_executor: TaskExecutor,
     // TODO: We already have provider factory in Storage
-    reth_provider_factory: ProviderFactory<DB>,
+    reth_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
     compressor: DataParser,
     snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
     snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
     snapshot_format: u32,
     block_fee_recipient_address: Option<alloy_primitives::Address>,
     // TODO: We already have it in Storage
-    blockchain_db: BlockchainProvider2<DB>,
+    blockchain_db: BlockchainProvider<BotanixNodeTypes>,
     is_testnet: bool,
 }
 
-impl<EF, BF, RDB, DBD, Pool, DB> ABCIClient<EF, BF, RDB, DBD, Pool, DB>
+impl<EF, BF, RDB, DBD, Pool> ABCIClient<EF, BF, RDB, DBD, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
     DBD: SnapshotReader + SnapshotWriter + Clone + 'static,
     EF: BlockExecutorProvider + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
-    DB: Database + Clone + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -428,12 +430,12 @@ where
         metrics: Arc<AuthorityMetrics>,
         compressor: DataParser,
         task_executor: TaskExecutor,
-        provider_factory: ProviderFactory<DB>,
+        provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
         snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
         snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
         snapshot_format: u32,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
-        blockchain_db: BlockchainProvider2<DB>,
+        blockchain_db: BlockchainProvider<BotanixNodeTypes>,
     ) -> Self {
         // Saving the last 5 blocks that were proposed
         let block_cache = Arc::new(RwLock::new(BlockCache {
@@ -2407,9 +2409,9 @@ pub struct ABCIDriver<DatabaseRW> {
     driver_rx: Arc<Mutex<tokio::sync::mpsc::Receiver<ABCIDriverMessage>>>,
     // TODO: BlockchainProvider2 already contains ProviderFactory so we can get it from there
     //  instead of duplicating it here
-    reth_database_provider_factory: ProviderFactory<DatabaseRW, ChainSpec>,
+    reth_database_provider_factory: ProviderFactory<DatabaseRW>,
     botanix_database_provider_factory: BotanixProviderFactory<DatabaseRW>,
-    blockchain_provider: BlockchainProvider2<DatabaseRW>,
+    blockchain_provider: BlockchainProvider<DatabaseRW>,
 }
 
 impl<DatabaseRW> ABCIDriver<DatabaseRW>
@@ -2419,9 +2421,9 @@ where
     /// Create a new ABCI drivers
     pub fn new(
         driver_rx: tokio::sync::mpsc::Receiver<ABCIDriverMessage>,
-        reth_database_provider_factory: ProviderFactory<DatabaseRW, ChainSpec>,
+        reth_database_provider_factory: ProviderFactory<DatabaseRW>,
         botanix_database_provider_factory: BotanixProviderFactory<DatabaseRW>,
-        blockchain_provider: BlockchainProvider2<DatabaseRW>,
+        blockchain_provider: BlockchainProvider<DatabaseRW>,
     ) -> Self {
         Self {
             driver_rx: Arc::new(Mutex::new(driver_rx)),
@@ -2632,11 +2634,11 @@ mod tests {
     type ABCIClientType<DB = Arc<DatabaseEnv>> = ABCIClient<
         MockExecutorProvider,
         MockBitcoindFactory,
-        BlockchainProvider2<DB>,
+        BlockchainProvider<DB>,
         BotanixProviderFactory<DB>,
         RethPool<
             TransactionValidationTaskExecutor<
-                EthTransactionValidator<BlockchainProvider2<DB>, EthPooledTransaction>,
+                EthTransactionValidator<BlockchainProvider<DB>, EthPooledTransaction>,
             >,
             reth_transaction_pool::CoinbaseTipOrdering<EthPooledTransaction>,
             InMemoryBlobStore,
@@ -2663,7 +2665,7 @@ mod tests {
         let _ = init_genesis(factory.clone()).expect("to init genesis");
 
         let reth_provider =
-            BlockchainProvider2::new(factory.clone()).expect("to create blockchain provider");
+            BlockchainProvider::new(factory.clone()).expect("to create blockchain provider");
 
         let botanix_db = Arc::try_unwrap(create_test_rw_db()).unwrap().into_inner_db();
         let botanix_provider_factory = BotanixProviderFactory::new(Arc::new(botanix_db));
