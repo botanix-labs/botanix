@@ -22,7 +22,7 @@ pub fn init_and_migrate_db(
     datadir: &DatadirArgs,
     chain_arc: Arc<BotanixChainSpec>,
     db: &DatabaseArgs
-) -> eyre::Result<((Arc<DatabaseEnv>, Arc<DatabaseEnv>))> {
+) -> eyre::Result<(Arc<DatabaseEnv>, Arc<DatabaseEnv>)> {
     let data_dir = datadir.datadir.unwrap_or_chain_default(chain_arc.chain(), datadir.clone());
     let reth_db_path = data_dir.db();
     let botanix_db_path = data_dir.data_dir().join(BOTANIX_DB_PATH);

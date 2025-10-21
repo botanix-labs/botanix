@@ -19,20 +19,24 @@ use reth_ethereum::{
         EthApiBuilder,
     },
 };
+use reth_network::NetworkInfo;
+use reth_transaction_pool::TransactionPool;
 use crate::{node::{evm::config::BotanixEvmConfig, BotanixNode}, services::myrpc_ext::{MyRpcExt, MyRpcExtApiServer}};
 
+/// Sets up and runs the RPC server for the Botanix node, wiring providers,
+/// network and transaction pool, configuring transports (HTTP/WS/IPC), and
+/// starting the server; returns an error if server startup fails.
 pub async fn setup_and_run_rpc(
     provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     rpc_server_args: &RpcServerArgs,
     task_executor: &TaskExecutor,
-    pool: &FullNodeComponents<BotanixNode, Arc<DatabaseEnv>>::Pool,
     chain_spec: Arc<BotanixChainSpec>,
     botanix_provider: Botanix,
 ) -> eyre::Result<()> {
     let rpc_builder = RpcModuleBuilder::default()
         .with_provider(provider.clone())
-        .with_pool(pool.clone())
-        .with_noop_network()
+        .with_pool(NoopTransactionPool::default())
+        .with_network(NoopNetwork::default())
         .with_executor(Box::new(task_executor.clone()))
         .with_consensus(NoopConsensus::default())
         .with_evm_config(BotanixEvmConfig::new(chain_spec.clone()));
@@ -89,7 +93,7 @@ pub async fn setup_and_run_rpc(
         handle
     });
 
-    launch_rpc.await?;
+    let _ = launch_rpc.await?;
 
     Ok(())
 }

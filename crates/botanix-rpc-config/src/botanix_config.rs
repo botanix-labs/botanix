@@ -11,6 +11,8 @@ use thiserror::Error;
 use tracing::error;
 use url::Url;
 
+use crate::impl_to_rpc_result;
+
 /// Settings for the [`BotanixConfig`]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BotanixConfig {
@@ -133,6 +135,10 @@ impl fmt::Display for BtcFeeRateRPCError {
         }
     }
 }
+
+impl_to_rpc_result!(BtcFeeRateRPCError);
+impl_to_rpc_result!(MerkleProofRPCError);
+impl_to_rpc_result!(GatewayAddressRPCError);
 
 /// Botanix config
 #[derive(Clone, Debug, Default)]

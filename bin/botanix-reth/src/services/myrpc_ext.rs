@@ -1,10 +1,10 @@
 use botanix_rpc_client::botanix::EthBotanixApi;
-use botanix_rpc_config::botanix_config::Botanix;
+use botanix_rpc_config::{botanix_config::Botanix, result::ToRpcResult};
 use botanix_rpc_types::types::GatewayAddress;
 use alloy_primitives::{Address, Bytes, U256};
 use jsonrpsee_core::RpcResult;
 // Reth block related imports
-use reth_ethereum::{provider::BlockReaderIdExt, rpc::eth::EthResult};
+use reth_ethereum::provider::BlockReaderIdExt;
 
 // Rpc related imports
 use jsonrpsee::proc_macros::rpc;
@@ -47,19 +47,28 @@ where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static,
 {   
     async fn aggregate_public_key(&self) -> RpcResult<PublicKey> {
-        self.botanix.aggregate_public_key().await.to_rpc_result()
+        self.botanix.get_aggregate_public_key(&self.provider).await.to_rpc_result()
     }
     
     async fn get_gateway_address(&self, eth_address: Address) ->  RpcResult<Option<GatewayAddress>> {
-        self.botanix.get_gateway_address(eth_address, &self.provider).await.to_rpc_result()
+         let (address, public_key) = self.botanix.get_gateway_address(eth_address, &self.provider).await.to_rpc_result()?;
+         Ok(Some(GatewayAddress { gateway_address: address.to_string(), aggregate_public_key: public_key.to_string(), eth_address: eth_address }) )
     }
 
     async fn get_merkle_proof(&self, txid: String, block_hash:String) -> RpcResult<Bytes> {
-        self.botanix.get_merkle_proof(txid, block_hash).await.to_rpc_result()
+        self.botanix
+        .get_merkle_proof(txid, block_hash)
+        .await
+        .map(Bytes::from)
+        .to_rpc_result()
     }
 
     async fn get_btc_fee_rate(&self) ->  RpcResult<Option<U256>> {
-        self.botanix.get_btc_fee_rate().await.to_rpc_result()
+        self.botanix
+        .get_btc_fee_rate()
+        .await
+        .map(Some)
+        .to_rpc_result()
     }
 }
 
