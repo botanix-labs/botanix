@@ -14,7 +14,7 @@ use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
-    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_and_run_rpc}, BotanixPrimitives
+    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_and_run_rpc},
 };
 use reth::providers::HeaderProvider;
 use reth_cli_commands::NodeCommand;
@@ -23,7 +23,7 @@ use reth_network::{NetworkConfigBuilder, NetworkManager};
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_core::version::version_metadata;
 use reth_node_metrics::{chain::ChainSpecInfo, hooks::Hooks, server::{MetricServer, MetricServerConfig}, version::VersionInfo};
-use reth_provider::{providers::BlockchainProvider, BlockHashReader, BlockNumReader, StageCheckpointReader};
+use reth_provider::{providers::BlockchainProvider, BlockHashReader, StageCheckpointReader};
 use reth_stages::StageId;
 use alloy_eip2124::Head;
 
@@ -62,7 +62,6 @@ fn main() -> eyre::Result<()> {
     let network_args = node_cmd.network.clone();
     let rpc_server_args = node_cmd.rpc.clone();
     let datadir_args = node_cmd.datadir.clone();
-    let chain = node_cmd.chain.clone();
     let db_args = node_cmd.db.clone();
     let metrics_args = node_cmd.metrics.clone();
 
@@ -256,91 +255,90 @@ fn main() -> eyre::Result<()> {
             let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
 
             // =========================================FROST TASK (WIP)=================================================
-            // let (frost_task, abci_client_builder, snapshot_manager, wallet_sync) =
-            //     match AuthorityConsensusBuilder::try_new(
-            //         chain_spec_arc.clone(),
-            //         blockchain_db.clone(),
-            //         activation_manager,
-            //         btc_server_factory,
-            //         bitcoin_checkpoints.clone(),
-            //         frost_setup_result.secret_key,
-            //         network_handle.clone(),
-            //         frost_handle,
-            //         task_executor,
-            //         frost_setup_result.frost_config,
-            //         bitcoind_cfg.btc_network,
-            //         frost_setup_result.genesis_authorities.clone(),
-            //         frost_setup_result.authorities_socket_addresses,
-            //         executor_factory.clone(),
-            //         bitcoind_factory.clone(),
-            //         botanix_evm_config,
-            //         cometbft_rpc_factory,
-            //         RandomSourceProvider::new(),
-            //         driver_tx,
-            //         state_sync_cfg.clone(),
-            //         reth_provider_factory.clone(),
-            //         botanix_db_provider_factory,
-            //         poa_cfg.block_fee_recipient_address,
-            //         bitcoind_client,
-            //     ) {
-            //         std::result::Result::Ok(consensus) => consensus.build::<BtcServerExtendedClient>().await,
-            //         std::result::Result::Err(e) => {
-            //             return Err(eyre::eyre!("AuthorityConsensusBuilderError : {:?}", e));
-            //         }
-            //     };
+            let (frost_task, abci_client_builder, snapshot_manager, wallet_sync) =
+                match AuthorityConsensusBuilder::try_new(
+                    chain_spec_arc.clone(),
+                    blockchain_provider.clone(),
+                    activation_manager,
+                    btc_server_factory,
+                    bitcoin_checkpoints.clone(),
+                    frost_setup_result.secret_key,
+                    network_handle.clone(),
+                    frost_handle,
+                    task_executor.clone(),
+                    frost_setup_result.frost_config,
+                    bitcoind_cfg.btc_network,
+                    frost_setup_result.genesis_authorities.clone(),
+                    frost_setup_result.authorities_socket_addresses,
+                    bitcoind_factory.clone(),
+                    botanix_evm_config,
+                    cometbft_rpc_factory,
+                    RandomSourceProvider::new(),
+                    driver_tx,
+                    state_sync_cfg.clone(),
+                    reth_provider_factory.clone(),
+                    botanix_db_provider_factory,
+                    poa_cfg.block_fee_recipient_address,
+                    bitcoind_client,
+                ) {
+                    std::result::Result::Ok(consensus) => consensus.build::<BtcServerExtendedClient>().await,
+                    std::result::Result::Err(e) => {
+                        return Err(eyre::eyre!("AuthorityConsensusBuilderError : {:?}", e));
+                    }
+                };
 
-            //     if let Some(mut snapshot_manager) = snapshot_manager {
-            //         tracing::info!("Snapshot manager is enabled.");
-            //         node.task_executor.spawn_critical(
-            //             "Snapshot Manager",
-            //             Box::pin(async move {
-            //                 if let Err(e) = snapshot_manager.run().await {
-            //                     tracing::error!(target: "reth::cli", "Snapshot Manager Error: {:?}", e);
-            //                 }
-            //             }),
-            //         );
-            //     }
+                if let Some(mut snapshot_manager) = snapshot_manager {
+                    tracing::info!("Snapshot manager is enabled.");
+                    node.task_executor.spawn_critical(
+                        "Snapshot Manager",
+                        Box::pin(async move {
+                            if let Err(e) = snapshot_manager.run().await {
+                                tracing::error!(target: "reth::cli", "Snapshot Manager Error: {:?}", e);
+                            }
+                        }),
+                    );
+                }
 
-            //     if let Some(wallet_sync) = wallet_sync {
-            //         node.task_executor.spawn_critical(
-            //             "Wallet Sync",
-            //             Box::pin(async move {
-            //                 if let Err(e) = wallet_sync.sync_wallet_state().await {
-            //                     tracing::error!(target: "reth::cli", "Wallet Sync Error: {:?}", e);
-            //                 }
-            //             }),
-            //         );
-            //     }
+                if let Some(wallet_sync) = wallet_sync {
+                    node.task_executor.spawn_critical(
+                        "Wallet Sync",
+                        Box::pin(async move {
+                            if let Err(e) = wallet_sync.sync_wallet_state().await {
+                                tracing::error!(target: "reth::cli", "Wallet Sync Error: {:?}", e);
+                            }
+                        }),
+                    );
+                }
 
-            //     if poa_cfg.federation_mode {
-            //         node.task_executor.spawn_critical(
-            //             "Frost Task",
-            //             Box::pin(async move {
-            //                 frost_task.expect("frost task exists").start_task(abci_started_rx).await;
-            //             }),
-            //         );
-            //     }
+                if poa_cfg.federation_mode {
+                    node.task_executor.spawn_critical(
+                        "Frost Task",
+                        Box::pin(async move {
+                            frost_task.expect("frost task exists").start_task(abci_started_rx).await;
+                        }),
+                    );
+                }
 
-            //     // NOTE: the node will block here until DKG has completed
-            //     let abci_client_builder = abci_client_builder.expect("abci client builder exists");
-            //     let fut = || async {
-            //         abci_client_builder
-            //             .start_server(
-            //                 &node.task_executor.clone(),
-            //                 node.pool.clone(),
-            //                 poa_cfg.abci_host.to_string(),
-            //                 poa_cfg.abci_port,
-            //             )
-            //             .await
-            //     };
+                // NOTE: the node will block here until DKG has completed
+                let abci_client_builder = abci_client_builder.expect("abci client builder exists");
+                let fut = || async {
+                    abci_client_builder
+                        .start_server(
+                            &node.task_executor.clone(),
+                            node.pool.clone(),
+                            poa_cfg.abci_host.to_string(),
+                            poa_cfg.abci_port,
+                        )
+                        .await
+                };
 
-            //     match retry_exec("abci_server_start", fut, 3, Duration::from_secs(2)).await {
-            //         std::result::Result::Ok(()) => {}
-            //         std::result::Result::Err(err) => {
-            //             tracing::error!(target: "reth::cli", "Failed to connect to abci client: {}", err);
-            //             return Err(eyre::eyre!("Failed to connect to abci client: {}", err));
-            //         }
-            //     };
+                match retry_exec("abci_server_start", fut, 3, Duration::from_secs(2)).await {
+                    std::result::Result::Ok(()) => {}
+                    std::result::Result::Err(err) => {
+                        tracing::error!(target: "reth::cli", "Failed to connect to abci client: {}", err);
+                        return Err(eyre::eyre!("Failed to connect to abci client: {}", err));
+                    }
+                };
 
             // ==========================================================================================
 
@@ -369,9 +367,9 @@ fn main() -> eyre::Result<()> {
             }
 
             // launch the network manager task
-            node.task_executor.spawn_critical("network", network_manager);
+            node.task_executor.spawn_critical("network p2p", network_manager);
             node.task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
-            node.task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
+            //node.task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
 
             // launch the bitcoin checkpoints synchronizer task
             node.task_executor.spawn_critical(
@@ -381,6 +379,7 @@ fn main() -> eyre::Result<()> {
             tracing::info!(target: "reth::cli", "Spawned async bitcoin task for block headers");
 
             // send the signal that abci driver can start
+            abci_started_tx.send(()).expect("abci started tx");
             let (tx, rx) = tokio::sync::oneshot::channel();
             node.task_executor.spawn_critical(
                 "abci driver",

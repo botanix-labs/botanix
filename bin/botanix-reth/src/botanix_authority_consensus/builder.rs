@@ -30,8 +30,7 @@ use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_ethereum::{EthEvmConfig, EthereumNode};
 use alloy_primitives::Address;
 use reth_provider::{
-    BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions, ProviderFactory,
-    StateProviderFactory,
+    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions, ProviderFactory, StateProviderFactory
 };
 use reth_tasks::TaskExecutor;
 use std::{
@@ -41,9 +40,9 @@ use tracing::{info, warn};
 
 /// Builder type for configuring the setup
 #[allow(dead_code)]
-pub struct AuthorityConsensusBuilder<EF, BF, RDB, BDB, ToFrostMan, Source> {
+pub struct AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source> {
     consensus: AuthorityConsensus,
-    storage: Storage<EF, BF, RDB, BDB>,
+    storage: Storage<BF, RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     btc_server_factory: Option<GrpcClientFactory>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
@@ -71,8 +70,8 @@ pub enum AuthorityConsensusBuilderError {
 }
 
 // ===== impl AuthorityConsensusBuilder =====
-impl<EF, BF, RDB, BDB, ToFrostMan, Source>
-    AuthorityConsensusBuilder<EF, BF, RDB, BDB, ToFrostMan, Source>
+impl<BF, RDB, BDB, ToFrostMan, Source>
+    AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source>
 where
     ToFrostMan: ToFrostManager + Clone + 'static + Send + Sync,
     RDB: BlockReaderIdExt
@@ -90,7 +89,6 @@ where
         + RuntimeTransitionsReadWrite
         + Clone
         + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Source: RandomSource,
 {
@@ -110,7 +108,6 @@ where
         btc_network: bitcoin::Network,
         genesis_authorities: Vec<secp256k1::PublicKey>,
         authority_socket_addresses: Vec<SocketAddr>,
-        executor_factory: EF,
         bitcoind_factory: BF,
         evm_config: BotanixEvmConfig,
         cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
@@ -196,7 +193,6 @@ where
             evm_config,
             chain_spec.clone(),
             bitcoind_factory,
-            executor_factory,
             reth_provider.clone(),
             botanix_provider_factory.clone(),
         );
@@ -228,10 +224,10 @@ where
     pub async fn build<BtcServerClient>(
         self,
     ) -> (
-        Option<FrostTask<EF, BF, RDB, BDB, ToFrostMan, Source, BtcServerClient>>,
-        Option<ABCIClientBuilder<EF, BF, RDB, BDB>>,
-        Option<SnapshotManager<EF, BF, RDB, BDB>>,
-        Option<WalletStateSyncEngine<EF, BF, RDB, BDB, ToFrostMan, BtcServerClient>>,
+        Option<FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient>>,
+        Option<ABCIClientBuilder<BF, RDB, BDB>>,
+        Option<SnapshotManager<BF, RDB, BDB>>,
+        Option<WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>>,
     )
     where
         BtcServerClient: BtcServerExtendedApi + Clone + Send + Sync + 'static,

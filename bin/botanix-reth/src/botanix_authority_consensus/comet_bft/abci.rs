@@ -227,8 +227,8 @@ type BotanixNodeTypes = NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>;
 
 /// ABCI client builder
 #[derive(Clone)]
-pub struct ABCIClientBuilder<EF, BF, RDB, BDB> {
-    storage: Storage<EF, BF, RDB, BDB>,
+pub struct ABCIClientBuilder<BF, RDB, BDB> {
+    storage: Storage<BF, RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     authority_consensus: AuthorityConsensus,
@@ -246,16 +246,15 @@ pub struct ABCIClientBuilder<EF, BF, RDB, BDB> {
     blockchain_db: BlockchainProvider<BotanixNodeTypes>,
 }
 
-impl<EF, BF, RDB, BDB> ABCIClientBuilder<EF, BF, RDB, BDB>
+impl<BF, RDB, BDB> ABCIClientBuilder<BF, RDB, BDB>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        storage: Storage<EF, BF, RDB, BDB>,
+        storage: Storage<BF, RDB, BDB>,
         activation_manager: ActivationManager<VoteWatcher, Address>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         authority_consensus: AuthorityConsensus,
@@ -387,8 +386,8 @@ struct BlockCache {
 }
 
 #[derive(Clone)]
-pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool> {
-    storage: Storage<EF, BF, RDB, DBD>,
+pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
+    storage: Storage<BF, RDB, DBD>,
     pool: Pool,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
@@ -412,17 +411,16 @@ pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool> {
     is_testnet: bool,
 }
 
-impl<EF, BF, RDB, DBD, Pool> ABCIClient<EF, BF, RDB, DBD, Pool>
+impl<BF, RDB, DBD, Pool> ABCIClient<BF, RDB, DBD, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
     DBD: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        storage: Storage<EF, BF, RDB, DBD>,
+        storage: Storage<BF, RDB, DBD>,
         pool: Pool,
         activation_manager: ActivationManager<VoteWatcher, Address>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
@@ -620,11 +618,10 @@ where
     }
 }
 
-impl<EF, BF, RDB, BDB, Pool> ABCIClient<EF, BF, RDB, BDB, Pool,>
+impl<BF, RDB, BDB, Pool> ABCIClient<BF, RDB, BDB, Pool,>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {
@@ -658,11 +655,10 @@ where
     }
 }
 
-impl<EF, BF, RDB, BDB, Pool> Application for ABCIClient<EF, BF, RDB, BDB, Pool>
+impl<BF, RDB, BDB, Pool> Application for ABCIClient<BF, RDB, BDB, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {

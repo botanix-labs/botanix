@@ -84,8 +84,8 @@ pub trait WalletStateSync {
 type WalletStateSyncResponseCycle = Arc<RwLock<Option<Uuid>>>;
 #[derive(Clone)]
 /// Engine for synchronizing wallet state
-pub struct WalletStateSyncEngine<EF, BF, RDB, BDB, ToFrostMan, BtcServerClient> {
-    storage: Storage<EF, BF, RDB, BDB>,
+pub struct WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient> {
+    storage: Storage<BF, RDB, BDB>,
     btc_server: BtcServerClient,
     to_frost_manager: ToFrostMan,
     data_parser: DataParser,
@@ -94,18 +94,17 @@ pub struct WalletStateSyncEngine<EF, BF, RDB, BDB, ToFrostMan, BtcServerClient> 
     current_response_cycle: WalletStateSyncResponseCycle,
 }
 
-impl<EF, BF, RDB, BDB, ToFrostMan, BtcServerClient>
-    WalletStateSyncEngine<EF, BF, RDB, BDB, ToFrostMan, BtcServerClient>
+impl<BF, RDB, BDB, ToFrostMan, BtcServerClient>
+    WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>
 where
     BF: BitcoindFactory + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     ToFrostMan: ToFrostManager + Sync + Clone + 'static,
     RDB: BlockReaderIdExt + CanonStateSubscriptions + Clone + 'static,
     BDB: WalletStateSyncWriter + WalletStateSyncReader + Clone + 'static,
     BtcServerClient: BtcServerExtendedApi + Clone,
 {
     pub(crate) fn new(
-        storage: Storage<EF, BF, RDB, BDB>,
+        storage: Storage<BF, RDB, BDB>,
         btc_server: BtcServerClient,
         to_frost_manager: ToFrostMan,
         task_executor: TaskExecutor,
@@ -183,11 +182,10 @@ async fn hydrate_minimum_superset(
     Ok(hydrated_superset_map)
 }
 
-impl<EF, BF, RDB, BDB, ToFrostMan, BtcServerClient> WalletStateSync
-    for WalletStateSyncEngine<EF, BF, RDB, BDB, ToFrostMan, BtcServerClient>
+impl<BF, RDB, BDB, ToFrostMan, BtcServerClient> WalletStateSync
+    for WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>
 where
     BF: BitcoindFactory + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     ToFrostMan: ToFrostManager + Clone + Sync + 'static,
     RDB: BlockReaderIdExt + CanonStateSubscriptions + Clone + 'static,
     BDB: WalletStateSyncWriter + WalletStateSyncReader + Clone + 'static,

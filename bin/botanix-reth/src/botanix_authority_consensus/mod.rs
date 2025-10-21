@@ -158,7 +158,7 @@ impl HeaderValidator for AuthorityConsensus {
 /// All this struct does is provide a rwlock wrapper around the storage inner
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
-pub(crate) struct Storage<EF, BF, RDB, BDB> {
+pub(crate) struct Storage<BF, RDB, BDB> {
     /// Reth Database Provider Factory
     pub(crate) reth_database: RDB,
     /// Botanix Database Provider Factory
@@ -180,13 +180,11 @@ pub(crate) struct Storage<EF, BF, RDB, BDB> {
     pub(crate) bitcoind_factory: BF,
     /// Chain spec
     pub(crate) chain_spec: Arc<BotanixChainSpec>,
-    /// Executor Factory
-    pub(crate) executor_factory: EF,
     // The inner storage, everything here is rw locked
     pub(crate) inner: Arc<RwLock<StorageInner>>,
 }
 
-impl<EF, BF, RDB: Clone, BDB: Clone> Storage<EF, BF, RDB, BDB> {
+impl<BF, RDB: Clone, BDB: Clone> Storage<BF, RDB, BDB> {
     /// Create a new instance of the storage
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -199,7 +197,6 @@ impl<EF, BF, RDB: Clone, BDB: Clone> Storage<EF, BF, RDB, BDB> {
         evm_config: BotanixEvmConfig,
         chain_spec: Arc<BotanixChainSpec>,
         bitcoind_factory: BF,
-        executor_factory: EF,
         reth_database: RDB,
         botanix_database_factory: BDB,
     ) -> Self {
@@ -216,7 +213,6 @@ impl<EF, BF, RDB: Clone, BDB: Clone> Storage<EF, BF, RDB, BDB> {
             evm_config,
             chain_spec,
             bitcoind_factory,
-            executor_factory,
             inner: Arc::new(RwLock::new(storage_inner)),
         }
     }
