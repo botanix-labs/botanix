@@ -1,28 +1,38 @@
 use std::{fmt::Display, sync::Arc};
 
-use alloy_consensus::transaction::{Recovered, Transaction};
+use alloy_consensus::{
+    transaction::{Recovered, Transaction},
+    Header,
+};
 use alloy_eips::eip7685::Requests;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::{
     consensus_package::BotanixConsensusPackage,
+    mint_validation::{try_parse_burn_event, try_parse_mint_event, MintContractError},
     peg_contract::{PeginData, PegoutData, PegoutWithId},
 };
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_chainspec::BotanixChainSpec;
+use btcserverlib::pegout_id::PegoutId;
 use reth_chainspec::{ChainSpec, EthereumHardforks};
 use reth_evm::{
-    execute::Executor,
     revm::primitives::{alloy_primitives::BlockNumber, hex},
-    ConfigureEvm, Database as RethDatabase, Evm, EvmEnvFor,
+    ConfigureEvm, Database as RethDatabase, EvmEnvFor,
 };
 use reth_execution_errors::InternalBlockExecutionError;
 use reth_node_types::NodePrimitives;
 use reth_primitives::{Receipt, RecoveredBlock, SealedHeader};
 
-use reth_primitives_traits::{AlloyBlockHeader, BlockBody, SignedTransaction};
-use reth_provider::{BlockExecutionOutput, DatabaseProviderRO, ProviderError};
-use reth_revm::context::result::{EVMError, ResultAndState};
-use revm_database::{BundleRetention, Database as RevmDatabase, DatabaseCommit, State};
+use reth_primitives_traits::{AlloyBlockHeader, Block, BlockBody, SignedTransaction};
+use reth_provider::{BlockExecutionResult, BlockReader, DatabaseProviderRO, ProviderError};
+use reth_revm::{
+    context::result::{EVMError, ExecutionResult, ResultAndState},
+    primitives::alloy_primitives::TxHash,
+};
+use revm_database::{
+    states::bundle_state::{BundleRetention, BundleState},
+    Database as RevmDatabase, DatabaseCommit, State,
+};
 use tracing::error;
 
 use crate::error::{BlockExecutionError, BlockValidationError};
@@ -36,6 +46,34 @@ struct EthExecuteOutput {
     total_block_fees: u128,
     pegins: Vec<PeginData>,
     pegouts: Vec<PegoutWithId>,
+}
+
+/// [`BlockExecutionResult`] combined with state and botanix-specific data.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    derive_more::AsRef,
+    derive_more::AsMut,
+    derive_more::Deref,
+    derive_more::DerefMut,
+)]
+pub struct BotanixBlockExecutionOutput<T> {
+    /// All the receipts of the transactions in the block.
+    #[as_ref]
+    #[as_mut]
+    #[deref]
+    #[deref_mut]
+    pub result: BlockExecutionResult<T>,
+    /// The changed state of the block after execution.
+    pub state: BundleState,
+    /// Total block fees
+    pub total_block_fees: u128,
+    /// Pegins
+    pub pegins: Vec<PeginData>,
+    /// Pegouts
+    pub pegouts: Vec<PegoutWithId>,
 }
 
 /// Helper container type for EVM with chain spec.
@@ -428,8 +466,12 @@ where
         result: &ExecutionResult,
         botanix_consensus_pkg: &BotanixConsensusPackage,
         tx_hash: TxHash,
-        provider: Arc<DatabaseProviderRO<RethDB>>,
-    ) -> Result<(Vec<PeginData>, Vec<PegoutWithId>), MintContractError> {
+        provider: Arc<DatabaseProviderRO<RethDB, N>>,
+    ) -> Result<(Vec<PeginData>, Vec<PegoutWithId>), MintContractError>
+    where
+        N: reth_provider::providers::NodeTypesForProvider,
+        <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
+    {
         let consensus_pkg = botanix_consensus_pkg;
         let btc_network = consensus_pkg.btc_network;
 
@@ -463,7 +505,7 @@ where
                     (1, Some(hash)) => {
                         match provider.find_block_by_hash(hash, reth_provider::BlockSource::Any) {
                             Ok(Some(block)) => {
-                                let header = block.header;
+                                let header = block.header();
                                 let package = header
                                     .botanix_consensus_package(
                                         self.bitcoin_network,
@@ -588,7 +630,7 @@ where
     }
 }
 
-impl<EvmConfig, DB, BF, RethDB, N> Executor<DB> for EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
     DB: RethDatabase<Error: Into<ProviderError> + Display>,
@@ -597,124 +639,31 @@ where
     N: reth_node_types::NodeTypes,
     <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
 {
-    type Error = BlockExecutionError;
-
-    type Primitives = N::Primitives;
-
     /// Executes the block and commits the changes to the internal state.
     ///
     /// Returns the receipts of the transactions in the block.
     ///
     /// Returns an error if the block could not be executed or failed verification.
-    fn execute(
+    pub fn execute(
         mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-    ) -> Result<BlockExecutionOutput<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
-    {
+        block: &RecoveredBlock<<N::Primitives as NodePrimitives>::Block>,
+    ) -> Result<
+        BotanixBlockExecutionOutput<<N::Primitives as NodePrimitives>::Receipt>,
+        BlockExecutionError,
+    > {
         let EthExecuteOutput { receipts, requests, gas_used, total_block_fees, pegins, pegouts } =
             self.execute_without_verification(block)?;
 
         // TODO NOTE: we need to merge keep the reverts for the bundle retention
         self.state.merge_transitions(BundleRetention::Reverts);
-        Ok(BlockExecutionOutput {
-            state: self.state.take_bundle(),
-            receipts,
-            requests,
-            gas_used,
+        let state = self.state.take_bundle();
+
+        Ok(BotanixBlockExecutionOutput {
+            result: BlockExecutionResult { receipts, requests, gas_used },
+            state,
             total_block_fees,
             pegins,
             pegouts,
         })
-    }
-
-    fn execute_one(
-        &mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-    ) -> Result<
-        reth_provider::BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>,
-        Self::Error,
-    > {
-        todo!()
-    }
-
-    fn execute_one_with_state_hook<F>(
-        &mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-        state_hook: F,
-    ) -> Result<
-        reth_provider::BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>,
-        Self::Error,
-    >
-    where
-        F: reth_evm::OnStateHook + 'static,
-    {
-        todo!()
-    }
-
-    fn into_state(self) -> State<DB> {
-        todo!()
-    }
-
-    fn size_hint(&self) -> usize {
-        todo!()
-    }
-
-    fn execute_batch<'a, I>(
-        mut self,
-        blocks: I,
-    ) -> Result<
-        reth_provider::ExecutionOutcome<<Self::Primitives as NodePrimitives>::Receipt>,
-        Self::Error,
-    >
-    where
-        I: IntoIterator<Item = &'a RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>>,
-    {
-        let mut results = Vec::new();
-        let mut first_block = None;
-        for block in blocks {
-            if first_block.is_none() {
-                first_block = Some(block.header().number());
-            }
-            results.push(self.execute_one(block)?);
-        }
-
-        Ok(reth_provider::ExecutionOutcome::from_blocks(
-            first_block.unwrap_or_default(),
-            self.into_state().take_bundle(),
-            results,
-        ))
-    }
-
-    fn execute_with_state_closure<F>(
-        mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-        mut f: F,
-    ) -> Result<
-        reth_provider::BlockExecutionOutput<<Self::Primitives as NodePrimitives>::Receipt>,
-        Self::Error,
-    >
-    where
-        F: FnMut(&State<DB>),
-    {
-        let result = self.execute_one(block)?;
-        let mut state = self.into_state();
-        f(&state);
-        Ok(reth_provider::BlockExecutionOutput { state: state.take_bundle(), result })
-    }
-
-    fn execute_with_state_hook<F>(
-        mut self,
-        block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
-        state_hook: F,
-    ) -> Result<
-        reth_provider::BlockExecutionOutput<<Self::Primitives as NodePrimitives>::Receipt>,
-        Self::Error,
-    >
-    where
-        F: reth_evm::OnStateHook + 'static,
-    {
-        let result = self.execute_one_with_state_hook(block, state_hook)?;
-        let mut state = self.into_state();
-        Ok(reth_provider::BlockExecutionOutput { state: state.take_bundle(), result })
     }
 }

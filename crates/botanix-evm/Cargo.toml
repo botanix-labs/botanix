@@ -37,6 +37,9 @@ botanix-authority-edh = { workspace = true }
 # Bitcoin
 bitcoin = { workspace = true }
 
+# BTC Server
+btc-server = { workspace = true }
+
 # Misc
 derive_more = { workspace = true }
 

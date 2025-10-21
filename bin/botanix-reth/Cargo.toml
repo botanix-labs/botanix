@@ -138,6 +138,7 @@ botanix-rpc-client.workspace = true
 botanix-consensus-common.workspace = true
 botanix-btc-server-client.workspace = true
 btc-server.workspace = true
+botanix-evm = { workspace = true }
 
 # Tendermint
 tendermint.workspace = true
