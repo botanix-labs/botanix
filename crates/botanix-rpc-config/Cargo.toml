@@ -17,6 +17,9 @@ botanix-btc-wallet = { workspace = true }
 
 # other deps
 alloy-primitives = { workspace = true }
+alloy-eips = { workspace = true }
+alloy-rpc-types-engine = { workspace = true }
+jsonrpsee-core = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 btc-server = { path = "../../bin/btc-server" }

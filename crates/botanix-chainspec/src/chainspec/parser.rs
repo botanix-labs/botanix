@@ -1,4 +1,4 @@
-use crate::constants::{BOTANIX_MAINNET, BOTANIX_TESTNET};
+use crate::{constants::{BOTANIX_MAINNET, BOTANIX_TESTNET}, BotanixChainSpec};
 use alloy_genesis::Genesis;
 use clap::{builder::TypedValueParser, error::Result, Arg, Command};
 use reth_chainspec::ChainSpec;
@@ -11,7 +11,7 @@ use std::{ffi::OsStr, fs, path::PathBuf, sync::Arc};
 pub struct BotanixChainSpecParser;
 
 impl ChainSpecParser for BotanixChainSpecParser {
-    type ChainSpec = ChainSpec;
+    type ChainSpec = BotanixChainSpec;
 
     const SUPPORTED_CHAINS: &'static [&'static str] = &["botanix-mainnet", "botanix-testnet"];
 
@@ -24,10 +24,10 @@ impl ChainSpecParser for BotanixChainSpecParser {
 ///
 /// The value parser matches either a known chain, the path
 /// to a json file, or a json formatted string in-memory. The json needs to be a Genesis struct.
-fn chain_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error> {
+fn chain_value_parser(s: &str) -> eyre::Result<Arc<BotanixChainSpec>, eyre::Error> {
     match s {
-        "botanix-mainnet" => Ok(BOTANIX_MAINNET.inner_arc()),
-        "botanix-testnet" => Ok(BOTANIX_TESTNET.inner_arc()),
+        "botanix-mainnet" => Ok(BOTANIX_MAINNET.clone()),
+        "botanix-testnet" => Ok(BOTANIX_TESTNET.clone()),
         _ => {
             // try to read json from path first
             let raw = match fs::read_to_string(PathBuf::from(shellexpand::full(s)?.into_owned())) {
@@ -45,13 +45,18 @@ fn chain_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error> {
             // both serialized Genesis and ChainSpec structs supported
             let genesis: Genesis = serde_json::from_str(&raw)?;
 
-            Ok(Arc::new(genesis.into()))
+            // Convert Genesis to BotanixChainSpec
+            // First convert to ChainSpec, then wrap in BotanixChainSpec
+            let chain_spec: ChainSpec = genesis.into();
+            let botanix_chain_spec = BotanixChainSpec::from(chain_spec);
+            
+            Ok(Arc::new(botanix_chain_spec))
         }
     }
 }
 
 impl TypedValueParser for BotanixChainSpecParser {
-    type Value = Arc<ChainSpec>;
+    type Value = Arc<BotanixChainSpec>;
 
     fn parse_ref(
         &self,

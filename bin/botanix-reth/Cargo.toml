@@ -69,10 +69,13 @@ reth.workspace = true
 reth-cli.workspace = true
 reth-cli-commands.workspace = true
 reth-config.workspace = true
+reth-consensus = { workspace = true }
+reth-consensus-common = { workspace = true }
 reth-basic-payload-builder.workspace = true
 reth-db.workspace = true
 reth-db-common.workspace = true
 reth-engine-local.workspace = true
+reth-execution-types.workspace = true
 reth-chainspec.workspace = true
 reth-cli-util.workspace = true
 reth-discv4.workspace = true
@@ -102,6 +105,14 @@ reth-tracing.workspace = true
 reth-trie-common.workspace = true
 reth-trie-db.workspace = true
 revm.workspace = true
+reth-chain-state = { workspace = true }
+reth-ethereum-consensus = { workspace = true }
+reth-execution-errors = { workspace = true }
+reth-node-builder = { workspace = true }
+reth-payload-builder = { workspace = true }
+reth-tasks = { workspace = true }
+reth-transaction-pool = { workspace = true, features = ["test-utils"] }
+reth-trie = { workspace = true }
 
 # Botanix dependencies
 botanix-storage.workspace = true
@@ -124,7 +135,6 @@ botanix-chainspec.workspace = true
 botanix-cli-parsers.workspace = true
 botanix-cli-args.workspace = true
 botanix-rpc-client.workspace = true
-botanix-authority-consensus.workspace = true
 botanix-consensus-common.workspace = true
 botanix-btc-server-client.workspace = true
 btc-server.workspace = true
@@ -192,6 +202,27 @@ cometbft-proto.workspace = true
 cometbft-light-client.workspace = true
 
 prost.workspace = true
+
+# others
+displaydoc = "0.2"
+ethabi = "18.0.0"
+frost-secp256k1-tr = { workspace = true }
+futures-util = { workspace = true }
+hex = "0.4.3"
+schnellru = { workspace = true }
+tendermint-abci = { workspace = true }
+tendermint-proto = { workspace = true }
+tendermint-rpc = { workspace = true }
+tonic = { workspace = true }
+uuid = { version = "1.8.0", features = ["v4"] }
+
+[dev-dependencies]
+botanix-storage = { workspace = true, features = ["test-utils"] }
+rand = { workspace = true }
+reth-cli-runner = { workspace = true }
+reth-db-common = { workspace = true }
+reth-evm = { workspace = true, features = ["test-utils"] }
+
 
 [target.'cfg(unix)'.dependencies]
 tikv-jemalloc-ctl = "0.6"

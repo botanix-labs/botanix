@@ -2,6 +2,7 @@
 
 /// Consensus module for consensus-related logic.
 pub mod consensus;
+pub mod botanix_authority_consensus;
 
 mod evm;
 

@@ -35,7 +35,6 @@ members = [
     "crates/botanix-cli-parsers",
     "crates/botanix-cli-args",
     "crates/botanix-rpc-client",
-    "crates/botanix-authority-consensus",
     "crates/botanix-consensus-common",
 ]
 default-members = ["bin/botanix-reth"]
@@ -150,7 +149,6 @@ botanix-chainspec = { path = "crates/botanix-chainspec" }
 botanix-cli-parsers = { path = "crates/botanix-cli-parsers" }
 botanix-cli-args = { path = "crates/botanix-cli-args" }
 botanix-rpc-client = { path = "crates/botanix-rpc-client" }
-botanix-authority-consensus = { path = "crates/botanix-authority-consensus" }
 botanix-consensus-common = { path = "crates/botanix-consensus-common" }
 
 # reth dependencies - using botanix fork
@@ -171,6 +169,7 @@ reth-db-api = { git = "https://github.com/botanix-labs/reth",  branch="botanix" 
 reth-engine-local = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-chainspec = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-consensus = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
+reth-execution-types = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
 reth-cli-util = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-discv4 = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
 reth-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }

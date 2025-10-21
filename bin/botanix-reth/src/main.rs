@@ -8,11 +8,12 @@ use botanix_cli_args::{chain::{get_chain_from_federation_config, BotanixNetwork}
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use eyre::Ok;
-use reth::{args::{NetworkArgs, RpcServerArgs}, cli::{Cli, Commands}};
+use reth::cli::{Cli, Commands};
 use reth_botanix::{
     node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_and_run_rpc},
 };
 use reth_cli_commands::NodeCommand;
+
 use reth_node_core::version::version_metadata;
 
 // We use jemalloc for performance reasons
@@ -75,7 +76,7 @@ fn main() -> eyre::Result<()> {
             let state_sync_cfg = args.state_sync.clone();
 
             // Reth Config
-            let reth_cfg = load_reth_config(&args.poa, &network_args)?;
+            let mut reth_cfg = load_reth_config(&args.poa, &network_args)?;
 
             // Testnet and Devnet should result in the same chain spec
             let botanix_network = BotanixNetwork::from_args(poa_cfg.is_testnet, poa_cfg.is_devnet)?;
@@ -122,7 +123,7 @@ fn main() -> eyre::Result<()> {
                 chain_spec_arc.clone(),
                 &datadir_args,
                 reth_database.clone()
-            );
+            )?;
 
             // Create and connect to btc signining server if in federation mode
             let mut btc_server_client = create_btc_server_client(&poa_cfg, &bitcoind_cfg).await?;
@@ -137,7 +138,7 @@ fn main() -> eyre::Result<()> {
 
             // Create frost manager
             let frost_config = setup_frost(
-                &chain,
+                &chain_spec,
                 &datadir_args,
                 &poa_cfg,
                 &network_args,
@@ -152,7 +153,7 @@ fn main() -> eyre::Result<()> {
             let (checkpoints_synchronizer, bitcoin_zmq_block_hash_stream) = setup_bitcoin_checkpoints(
                 bitcoind_client,
                 &bitcoind_cfg,
-                &chain,
+                &chain_spec,
             ).await?;
 
             // build the node
@@ -167,8 +168,6 @@ fn main() -> eyre::Result<()> {
                 blockchain_provider.clone(),
                 &rpc_server_args,
                 &node.task_executor,
-                &node.pool,
-                &node.network,
                 Arc::clone(&chain_spec_arc),
                 botanix_provider.clone(),
             ).await?;
