@@ -185,6 +185,7 @@ reth-evm = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-evm-ethereum = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-execution-errors = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
 reth-node-core = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
+reth-node-metrics = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-node-builder = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
 reth-revm = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-network = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
@@ -209,6 +210,7 @@ reth-trie-common = { git = "https://github.com/botanix-labs/reth", branch="botan
 reth-trie-db = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-trie = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
 reth-storage-api = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
+reth-stages = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
 reth-storage-errors = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
 reth-metrics = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 
@@ -226,6 +228,7 @@ tendermint = { git = "https://github.com/bnb-chain/tendermint-rs-parlia", rev = 
 
 # alloy dependencies - match working standalone version
 alloy-evm = "=0.18.2"
+alloy-eip2124 = "=0.2.0"
 alloy-genesis = "=1.0.23"
 alloy-consensus = "=1.0.23"
 alloy-eips = "=1.0.23"

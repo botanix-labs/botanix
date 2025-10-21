@@ -36,8 +36,11 @@ pub trait MyRpcExtApi {
 }
 
 /// The type that implements `myrpcExt` rpc namespace trait
+#[derive(Debug)]
 pub struct MyRpcExt<Provider> {
+    /// The Ethereum provider used to read blocks.
     pub provider: Provider,
+    /// Botanix client and configuration.
     pub botanix: Botanix,
 }
 

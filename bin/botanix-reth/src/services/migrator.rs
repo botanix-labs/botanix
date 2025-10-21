@@ -2,7 +2,7 @@ use std::{fs, sync::Arc,};
 use botanix_chainspec::{BotanixChainSpec};
 use botanix_storage_migrate::{is_migration_needed, migrate_botanix_tables};
 use eyre::{Context, Ok};
-use reth::{args::{DatabaseArgs, DatadirArgs}};
+use reth::{args::{DatabaseArgs, DatadirArgs}, prometheus_exporter::install_prometheus_recorder};
 use reth_db::DatabaseEnv;
 
 const BOTANIX_DB_PATH: &str = "botanix_db";
@@ -23,6 +23,11 @@ pub fn init_and_migrate_db(
     chain_arc: Arc<BotanixChainSpec>,
     db: &DatabaseArgs
 ) -> eyre::Result<(Arc<DatabaseEnv>, Arc<DatabaseEnv>)> {
+
+    // Register the prometheus recorder before creating the database,
+    // because database init needs it to register metrics.
+    let _prometheus_handle = install_prometheus_recorder();
+
     let data_dir = datadir.datadir.unwrap_or_chain_default(chain_arc.chain(), datadir.clone());
     let reth_db_path = data_dir.db();
     let botanix_db_path = data_dir.data_dir().join(BOTANIX_DB_PATH);

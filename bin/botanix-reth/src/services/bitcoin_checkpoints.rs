@@ -25,7 +25,7 @@ pub async fn setup_bitcoin_checkpoints(
     bitcoind_client: BitcoindClient,
     bitcoind_cfg: &BitcoindArgs,
     chain: &BotanixChainSpec,
-) -> eyre::Result<(BitcoinCheckpointsChainSynchronizer, BitcoinHashBlockStream)> {
+) -> eyre::Result<(BitcoinCheckpointsChainSynchronizer, BitcoinHashBlockStream, Arc<BitcoinCheckpointsChain>)> {
     tracing::info!(target: "reth::cli", "Waiting for bitcoind client to sync...");
 
     match tokio::time::timeout(Duration::from_secs(60), bitcoind_client.get_rpc_client_dyn().wait_until_synced()).await {
@@ -109,5 +109,5 @@ pub async fn setup_bitcoin_checkpoints(
         Box::new(stream)
     };
 
-    Ok((checkpoints_synchronizer, bitcoin_zmq_block_hash_stream))
+    Ok((checkpoints_synchronizer, bitcoin_zmq_block_hash_stream, bitcoin_checkpoints))
 }

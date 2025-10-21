@@ -38,6 +38,8 @@ mod signing;
 pub mod snapshot_manager;
 pub mod utils;
 pub use builder::AuthorityConsensusBuilder;
+
+use crate::node::evm::config::BotanixEvmConfig;
 pub mod test_utils;
 pub mod wallet_state_sync;
 
@@ -173,7 +175,7 @@ pub(crate) struct Storage<EF, BF, RDB, BDB> {
     /// Authority socket addresses pulled from federation config
     pub(crate) authority_socket_addresses: Vec<SocketAddr>,
     /// Evm config
-    pub(crate) evm_config: EthEvmConfig,
+    pub(crate) evm_config: BotanixEvmConfig,
     /// Bitcoind Factory
     pub(crate) bitcoind_factory: BF,
     /// Chain spec
@@ -194,7 +196,7 @@ impl<EF, BF, RDB: Clone, BDB: Clone> Storage<EF, BF, RDB, BDB> {
         btc_network: bitcoin::Network,
         aggregate_public_key: Option<secp256k1::PublicKey>,
         authority_socket_addresses: Vec<SocketAddr>,
-        evm_config: EthEvmConfig,
+        evm_config: BotanixEvmConfig,
         chain_spec: Arc<BotanixChainSpec>,
         bitcoind_factory: BF,
         executor_factory: EF,

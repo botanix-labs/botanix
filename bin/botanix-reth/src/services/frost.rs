@@ -2,12 +2,22 @@ use std::net::SocketAddr;
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::{frost_args::FrostArgs, poa_node::PoaNodeArgs, state_sync::StateSyncArgs};
 use botanix_configs::federation::load_federation_config_toml;
-use reth::{args::{DatadirArgs, NetworkArgs}, builder::NodeConfig};
+use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
 use reth_discv4::NodeRecord;
 use reth_network::frost::manager::FrostConfig;
 use reth_network_peers::pk2id;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
+
+/// Result of setting up the Frost configuration for a node, containing the optional FrostConfig,
+/// the socket addresses of federation authorities, the node's secret key, and the genesis authorities.
+#[derive(Debug)]
+pub struct FrostConfigSetupResult {
+    pub frost_config: Option<FrostConfig>,
+    pub authorities_socket_addresses: Vec<SocketAddr>,
+    pub secret_key: SecretKey,
+    pub genesis_authorities: Vec<PublicKey>,
+}
 
 /// Sets up the Frost configuration for a node, returning `Some(FrostConfig)` if the node is a federation node,
 /// or `None` otherwise. Returns an error if the minimum number of signers is greater than the maximum.
@@ -25,7 +35,7 @@ pub fn setup_frost(
     frost_args: &FrostArgs,
     state_sync: &StateSyncArgs,
     reth_config: &mut reth_config::Config,
-) -> eyre::Result<Option<FrostConfig>> {
+) -> eyre::Result<FrostConfigSetupResult> {
 
     if frost_args.min_signers > frost_args.max_signers {
         return Err(eyre::eyre!("min_signers should be less than or equal to max_signers"));
@@ -69,7 +79,7 @@ pub fn setup_frost(
 
     // add trusted peers from auths
     add_trusted_peers_from_authorities(
-        secret_key,
+        &secret_key,
         federation_authorities.clone(),
         reth_config,
     );
@@ -97,11 +107,17 @@ pub fn setup_frost(
     } else {
         None
     };
-    Ok(frost_config)
+
+    Ok(FrostConfigSetupResult {
+        frost_config,
+        authorities_socket_addresses,
+        secret_key,
+        genesis_authorities,
+    })
 }
 
 fn add_trusted_peers_from_authorities(
-    secret_key: SecretKey,
+    secret_key: &SecretKey,
     authorities: Vec<(PublicKey, SocketAddr)>,
     reth_config: &mut reth_config::Config,
 ) {

@@ -1,16 +1,16 @@
-use crate::botanix_authority_consensus::{
+use crate::{botanix_authority_consensus::{
     comet_bft::abci::{ABCIClientBuilder, ABCIDriverMessage},
     frost_task::FrostTask,
     snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},
     wallet_state_sync::WalletStateSyncEngine,
     AuthorityConsensus, Storage,
-};
+}, node::{evm::config::BotanixEvmConfig, BotanixNode}};
 use botanix_activation_manager::{ActivationManager, VoteWatcher};
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
-use botanix_btc_wallet::bitcoind::BitcoindFactory;
+use botanix_btc_wallet::bitcoind::{BitcoindClient, BitcoindFactory};
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::state_sync::StateSyncArgs;
 use botanix_comet_bft_rpc::{Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory};
@@ -41,7 +41,7 @@ use tracing::{info, warn};
 
 /// Builder type for configuring the setup
 #[allow(dead_code)]
-pub struct AuthorityConsensusBuilder<EF, BF, RDB, BDB, BD, ToFrostMan, Source> {
+pub struct AuthorityConsensusBuilder<EF, BF, RDB, BDB, ToFrostMan, Source> {
     consensus: AuthorityConsensus,
     storage: Storage<EF, BF, RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
@@ -55,10 +55,10 @@ pub struct AuthorityConsensusBuilder<EF, BF, RDB, BDB, BD, ToFrostMan, Source> {
     random_source_provider: Source,
     metrics: Arc<AuthorityMetrics>,
     abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-    reth_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+    reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     state_sync: StateSyncArgs,
     block_fee_recipient_address: Option<alloy_primitives::Address>,
-    bitcoind_client: BD,
+    bitcoind_client: BitcoindClient,
 }
 
 /// Errors that can occur when building an authority consensus.
@@ -71,8 +71,8 @@ pub enum AuthorityConsensusBuilderError {
 }
 
 // ===== impl AuthorityConsensusBuilder =====
-impl<EF, BF, RDB, BDB, BD, ToFrostMan, Source>
-    AuthorityConsensusBuilder<EF, BF, RDB, BDB, BD, ToFrostMan, Source>
+impl<EF, BF, RDB, BDB, ToFrostMan, Source>
+    AuthorityConsensusBuilder<EF, BF, RDB, BDB, ToFrostMan, Source>
 where
     ToFrostMan: ToFrostManager + Clone + 'static + Send + Sync,
     RDB: BlockReaderIdExt
@@ -92,7 +92,6 @@ where
         + 'static,
     EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
-    BD: botanix_btc_wallet::bitcoind::BitcoindRpc + Send + Sync + 'static,
     Source: RandomSource,
 {
     /// Creates a new builder instance to configure all parts.
@@ -113,15 +112,15 @@ where
         authority_socket_addresses: Vec<SocketAddr>,
         executor_factory: EF,
         bitcoind_factory: BF,
-        evm_config: EthEvmConfig,
+        evm_config: BotanixEvmConfig,
         cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
         random_source_provider: Source,
         abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
         state_sync: StateSyncArgs,
-        reth_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+        reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         botanix_provider_factory: BDB,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
-        bitcoind_client: BD,
+        bitcoind_client: BitcoindClient,
     ) -> Result<Self, AuthorityConsensusBuilderError> {
         // only a federation node has a btc_server
         let is_fed_node = btc_server_factory.is_some();
@@ -373,7 +372,7 @@ where
                             }
                         }
                         // Health check for bitcoind
-                        match bitcoind_client.is_synced().await {
+                        match bitcoind_client.get_rpc_client_dyn().is_synced().await {
                             Ok(status) => {
                                 tracing::info!(target: "reth::authority", "Bitcoind server is healthy");
                                 if status { metrics.bitcoind_connection_status.set(1) } else { metrics.bitcoind_connection_status.set(0) };
