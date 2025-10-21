@@ -2424,7 +2424,7 @@ pub struct ABCIDriver {
     //  instead of duplicating it here
     reth_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
     botanix_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
-    blockchain_provider: BlockchainProvider<BotanixNodeTypes>,
+    blockchain_provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
 }
 
 impl ABCIDriver {
@@ -2433,7 +2433,7 @@ impl ABCIDriver {
         driver_rx: tokio::sync::mpsc::Receiver<ABCIDriverMessage>,
         reth_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
         botanix_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
-        blockchain_provider: BlockchainProvider<BotanixNodeTypes>,
+        blockchain_provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     ) -> Self {
         Self {
             driver_rx: Arc::new(Mutex::new(driver_rx)),

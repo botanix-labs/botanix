@@ -3,17 +3,21 @@
 //! This crate provides the main entry point for running a Botanix Reth node with Botanix support.
 
 use std::sync::Arc;
+use botanix_authority_rsp::RandomSourceProvider;
+use botanix_btc_server_client::BtcServerExtendedClient;
 use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}, parser::BotanixChainSpecParser};
 use botanix_cli_args::{chain::{get_chain_from_federation_config, BotanixNetwork}, BotanixArgs};
+use botanix_storage::BotanixProviderFactory;
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
-    node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_and_run_rpc},
+    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_and_run_rpc}
 };
 use reth_cli_commands::NodeCommand;
 
+use reth_db::DatabaseEnv;
 use reth_node_core::version::version_metadata;
 
 // We use jemalloc for performance reasons
@@ -118,6 +122,9 @@ fn main() -> eyre::Result<()> {
                 &db_args
             )?;
 
+            let reth_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>>::new(reth_database.clone());
+            let botanix_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>>::new(botanix_database.clone());
+
             // Create a blockchain provider
             let blockchain_provider = create_blockchain_provider(
                 chain_spec_arc.clone(),
@@ -171,6 +178,50 @@ fn main() -> eyre::Result<()> {
                 Arc::clone(&chain_spec_arc),
                 botanix_provider.clone(),
             ).await?;
+
+
+        let (driver_tx, driver_rx) = tokio::sync::mpsc::channel(1);
+        let mut abci_driver = ABCIDriver::new(
+            driver_rx,
+            reth_db_provider_factory.clone(),
+            botanix_db_provider_factory.clone(),
+            blockchain_provider.clone(),
+        );
+
+        let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
+        // let (frost_task, abci_client_builder, snapshot_manager, wallet_sync) =
+        //     match AuthorityConsensusBuilder::try_new(
+        //         Arc::clone(&chain_arc.clone()),
+        //         blockchain_db.clone(),
+        //         activation_manager,
+        //         btc_server_factory.clone(),
+        //         bitcoin_checkpoints.clone(),
+        //         secret_key,
+        //         network_handle.clone(),
+        //         frost_handle,
+        //         executor.clone(),
+        //         frost_config,
+        //         node_config.rpc.btc_network,
+        //         genesis_authorities.clone(),
+        //         authorities_socket_addresses,
+        //         executor_factory.clone(),
+        //         bitcoind_factory.clone(),
+        //         evm_config,
+        //         cometbft_rpc_factory,
+        //         RandomSourceProvider::new(),
+        //         driver_tx,
+        //         node_config.clone().state_sync,
+        //         reth_provider_factory.clone(),
+        //         botanix_database_provider_factory,
+        //         *block_fee_recipient_address,
+        //         bitcoind_client,
+        //     ) {
+        //         Ok(consensus) => consensus.build::<BtcServerExtendedClient>().await,
+        //         Err(e) => {
+        //             return Err(eyre::eyre!("AuthorityConsensusBuilderError : {:?}", e));
+        //         }
+        //     };
+
 
             // launch the bitcoin checkpoints synchronizer task
             node.task_executor.spawn_critical(
