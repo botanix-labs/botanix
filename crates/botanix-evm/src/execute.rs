@@ -2,14 +2,14 @@ use std::{fmt::Display, sync::Arc};
 
 use alloy_consensus::{
     transaction::{Recovered, Transaction},
-    Header,
+    TxType,
 };
 use alloy_eips::eip7685::Requests;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::{
     consensus_package::BotanixConsensusPackage,
     mint_validation::{try_parse_burn_event, try_parse_mint_event, MintContractError},
-    peg_contract::{PeginData, PegoutData, PegoutWithId},
+    peg_contract::{PeginData, PegoutWithId},
 };
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_chainspec::BotanixChainSpec;
@@ -26,14 +26,15 @@ use reth_primitives::{Receipt, RecoveredBlock, SealedHeader};
 use reth_primitives_traits::{AlloyBlockHeader, Block, BlockBody, SignedTransaction};
 use reth_provider::{BlockExecutionResult, BlockReader, DatabaseProviderRO, ProviderError};
 use reth_revm::{
-    context::result::{EVMError, ExecutionResult, ResultAndState},
-    primitives::alloy_primitives::TxHash,
+    context::result::{ExecutionResult, ResultAndState},
+    primitives::{alloy_primitives::TxHash, U256},
+    state::{Account, AccountStatus},
 };
 use revm_database::{
     states::bundle_state::{BundleRetention, BundleState},
     Database as RevmDatabase, DatabaseCommit, State,
 };
-use tracing::error;
+use tracing::{error, info};
 
 use crate::error::{BlockExecutionError, BlockValidationError};
 
@@ -175,6 +176,7 @@ where
     ) -> Result<EthExecuteOutput, BlockExecutionError>
     where
         <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
+        N: reth_provider::providers::NodeTypesForProvider,
     {
         // 1. prepare state on new block
         self.on_new_block(block.number());
@@ -285,8 +287,8 @@ where
         E: reth_evm::Evm,
         E::DB: DatabaseCommit + RevmDatabase,
         E::Tx: reth_evm::FromRecoveredTx<<N::Primitives as NodePrimitives>::SignedTx>,
-        <N::Primitives as NodePrimitives>::BlockBody:
-            BlockBody<Transaction = <N::Primitives as NodePrimitives>::SignedTx>,
+        <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
+        N: reth_provider::providers::NodeTypesForProvider,
     {
         // Apply pre execution changes
         let mut system_caller =
@@ -302,7 +304,9 @@ where
         let base_fee = block.base_fee_per_gas();
         let mut receipts: Vec<Receipt> = Vec::with_capacity(block.body().transactions().len());
 
-        for (sender, transaction) in block.senders().iter().zip(block.body().transactions()) {
+        for (tx_index, (sender, transaction)) in
+            block.senders().iter().zip(block.body().transactions()).enumerate()
+        {
             // The sum of the transaction’s gas limit, Tg, and the gas utilized in this block prior,
             // must be no greater than the block’s gasLimit.
             let block_available_gas = block.header().gas_limit() - cumulative_gas_used;
@@ -313,8 +317,6 @@ where
                 }
                 .into());
             }
-
-            // self.evm_config.fill_tx_env(evm.tx_mut(), transaction, *sender);
 
             // Store original sender account info before transaction execution.
             // This is used later to partially revert the state if botanix specific validation
@@ -359,97 +361,163 @@ where
             cumulative_gas_used += result.gas_used();
 
             // ***** Botanix specific checks ******
-            let mut pegins: Vec<PeginData> = vec![];
-            let mut pegouts: Vec<PegoutData> = vec![];
+            let mut pegins = vec![];
+            let mut pegouts = vec![];
 
-            // let new_result = {
-            //     if result.is_success() {
-            //         match self.botanix_mint_contract_checks(
-            //             &result,
-            //             &botanix_consensus_pkg,
-            //             transaction.hash,
-            //             provider.clone(),
-            //         ) {
-            //             Ok((new_pegins, new_pegouts)) => {
-            //                 pegins.extend(new_pegins);
-            //                 pegouts.extend(new_pegouts);
-            //                 result
-            //             }
-            //             Err(e) => {
-            //                 info!("Botanix Minting contract event validation failed: {:?}", e);
+            let new_result = {
+                if result.is_success() {
+                    match self.botanix_mint_contract_checks(
+                        &result,
+                        &botanix_consensus_pkg,
+                        *transaction.tx_hash(),
+                        provider.clone(),
+                    ) {
+                        Ok((new_pegins, new_pegouts)) => {
+                            pegins.extend(new_pegins);
+                            pegouts.extend(new_pegouts);
+                            result
+                        }
+                        Err(e) => {
+                            info!("Botanix Minting contract event validation failed: {:?}", e);
 
-            //                 // Capture gas used from the initially successful execution
-            //                 let gas_used = result.gas_used();
+                            // Capture gas used from the initially successful execution
+                            let gas_used = result.gas_used();
 
-            //                 // Determine the total gas cost: gas_used * effective_gas_price
-            //                 // Base fee is needed for effective_gas_price calculation
-            //                 let effective_gas_price = transaction.effective_gas_price(base_fee);
-            //                 let total_gas_cost =
-            //                     U256::from(gas_used) * U256::from(effective_gas_price);
+                            // Determine the total gas cost: gas_used * effective_gas_price
+                            // Base fee is needed for effective_gas_price calculation
+                            let effective_gas_price = transaction.effective_gas_price(base_fee);
+                            let total_gas_cost =
+                                U256::from(gas_used) * U256::from(effective_gas_price);
 
-            //                 // Get the new nonce. This should be original nonce + 1
-            //                 let new_nonce = state
-            //                     .get(sender)
-            //                     .ok_or(BlockExecutionError::Internal(
-            //                         InternalBlockExecutionError::Other(
-            //                             format!(
-            //                                 "Sender not found in state: {}",
-            //                                 hex::encode(sender)
-            //                             )
-            //                             .into(),
-            //                         ),
-            //                     ))?
-            //                     .info
-            //                     .nonce;
+                            // Get the new nonce. This should be original nonce + 1
+                            let new_nonce = state
+                                .get(sender)
+                                .ok_or(BlockExecutionError::Internal(
+                                    InternalBlockExecutionError::Other(
+                                        format!(
+                                            "Sender not found in state: {}",
+                                            hex::encode(sender)
+                                        )
+                                        .into(),
+                                    ),
+                                ))?
+                                .info
+                                .nonce;
 
-            //                 // Clear ALL state changes introduced by the transaction.
-            //                 // State is the diff of the previous state and the new state after
-            // the                 // transaction.
-            //                 state.clear();
+                            // Clear ALL state changes introduced by the transaction.
+                            // State is the diff of the previous state and the new state after the
+                            // transaction.
+                            state.clear();
 
-            //                 // Now, re-apply *only* the total gas cost and nonce change to the
-            //                 // pre-transaction state.
-            //                 original_sender_info.nonce = new_nonce;
-            //                 // There shouldn't be an underflow because the tx would have failed
-            // if                 // the sender didn't have enough balance.
-            //                 original_sender_info.balance = original_sender_info
-            //                     .balance
-            //                     .checked_sub(total_gas_cost)
-            //                     .ok_or(BlockExecutionError::Internal(
-            //                         InternalBlockExecutionError::Other(
-            //                             "Sender balance underflow".to_string().into(),
-            //                         ),
-            //                     ))?;
+                            // Now, re-apply *only* the total gas cost and nonce change to the
+                            // pre-transaction state.
+                            original_sender_info.nonce = new_nonce;
+                            // There shouldn't be an underflow because the tx would have failed if
+                            // the sender didn't have enough balance.
+                            original_sender_info.balance = original_sender_info
+                                .balance
+                                .checked_sub(total_gas_cost)
+                                .ok_or(BlockExecutionError::Internal(
+                                    InternalBlockExecutionError::Other(
+                                        "Sender balance underflow".to_string().into(),
+                                    ),
+                                ))?;
 
-            //                 // Re-insert the sender's account with the original info but updated
-            //                 // nonce and balance (reflecting only gas cost).
-            //                 // Create new diff with only above changes.
-            //                 let reverted_account = Account {
-            //                     info: original_sender_info,
-            //                     storage: HashMap::new(), // Storage changes remain reverted.
-            //                     status: revm_primitives::AccountStatus::Touched, // Mark as
-            // touched                 };
-            //                 state.insert(*sender, reverted_account);
+                            // Re-insert the sender's account with the original info but updated
+                            // nonce and balance (reflecting only gas cost).
+                            // Create new diff with only above changes.
+                            let reverted_account = Account {
+                                info: original_sender_info,
+                                storage: Default::default(), // Storage changes remain reverted.
+                                status: AccountStatus::Touched, // Mark as touched
+                                transaction_id: tx_index,    /* TODO: confirm tx_index is correct
+                                                              * here */
+                            };
+                            state.insert(*sender, reverted_account);
 
-            //                 // Return a revert result, indicating failure but consuming gas and
-            //                 // incrementing nonce.
-            //                 ExecutionResult::Revert {
-            //                     gas_used, // Still report the gas used
-            //                     output: Default::default(),
-            //                 }
-            //             }
-            //         }
-            //     } else {
-            //         result
-            //     }
-            // };
+                            // Return a revert result, indicating failure but consuming gas and
+                            // incrementing nonce.
+                            ExecutionResult::Revert {
+                                gas_used, // Still report the gas used
+                                output: Default::default(),
+                            }
+                        }
+                    }
+                } else {
+                    result
+                }
+            };
 
-            // result = new_result;
+            result = new_result;
+
+            evm.db_mut().commit(state);
+
+            // Push transaction changeset and calculate header bloom filter for receipt.
+            let tx_type = tx_type(transaction);
+
+            receipts.push(
+                #[allow(clippy::needless_update)] // side-effect of optimism fields
+                Receipt {
+                    tx_type,
+                    // Success flag was added in `EIP-658: Embedding transaction status code in
+                    // receipts`.
+                    success: result.is_success(),
+                    cumulative_gas_used,
+                    // convert to reth log
+                    logs: result.into_logs(),
+                    ..Default::default()
+                },
+            );
+            total_pegins.extend(pegins);
+            total_pegouts.extend(pegouts);
         }
 
-        // TODO: execute transactions and handle botanix-specific logic
+        Ok(EthExecuteOutput {
+            receipts,
+            requests: Requests::new(vec![]), // this is only used for ethereum validators
+            gas_used: cumulative_gas_used,
+            total_block_fees,
+            pegins: total_pegins,
+            pegouts: total_pegouts,
+        })
+    }
 
-        todo!("Complete execute_state_transitions implementation")
+    /// Apply post execution state changes that do not require an [EVM](Evm), such as: block
+    /// rewards, withdrawals, and irregular DAO hardfork state change
+    pub fn post_execution(
+        &mut self,
+        block: &BlockWithSenders,
+        total_difficulty: U256,
+        total_block_fees: Option<u128>,
+        block_fee_recipient_address: Address,
+    ) -> Result<(), BlockExecutionError> {
+        let mut balance_increments = post_block_balance_increments(
+            self.chain_spec(),
+            block,
+            total_difficulty,
+            total_block_fees,
+            Some(block_fee_recipient_address),
+        );
+
+        // Irregular state change at Ethereum DAO hardfork
+        if self.chain_spec().fork(EthereumHardfork::Dao).transitions_at_block(block.number) {
+            // drain balances from hardcoded addresses.
+            let drained_balance: u128 = self
+                .state
+                .drain_balances(DAO_HARDKFORK_ACCOUNTS)
+                .map_err(|_| BlockValidationError::IncrementBalanceFailed)?
+                .into_iter()
+                .sum();
+
+            // return balance to DAO beneficiary.
+            *balance_increments.entry(DAO_HARDFORK_BENEFICIARY).or_default() += drained_balance;
+        }
+        // increment balances
+        self.state
+            .increment_balances(balance_increments)
+            .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
+
+        Ok(())
     }
 
     /// Performs additional checks on mint contract transactions.
@@ -461,9 +529,9 @@ where
             bitcoin_checkpoint_height = botanix_consensus_pkg.bitcoin_checkpoint.1,
         )
     )]
-    fn botanix_mint_contract_checks(
+    fn botanix_mint_contract_checks<HR>(
         &self,
-        result: &ExecutionResult,
+        result: &ExecutionResult<HR>,
         botanix_consensus_pkg: &BotanixConsensusPackage,
         tx_hash: TxHash,
         provider: Arc<DatabaseProviderRO<RethDB, N>>,
@@ -665,5 +733,21 @@ where
             pegins,
             pegouts,
         })
+    }
+}
+
+/// Determines the transaction type by checking EIP standards.
+/// Checks in order of precedence (newest to oldest) to ensure correct classification.
+fn tx_type<T: Transaction>(transaction: &T) -> TxType {
+    if transaction.is_eip7702() {
+        TxType::Eip7702
+    } else if transaction.is_eip4844() {
+        TxType::Eip4844
+    } else if transaction.is_eip1559() {
+        TxType::Eip1559
+    } else if transaction.is_eip2930() {
+        TxType::Eip2930
+    } else {
+        TxType::Legacy
     }
 }
