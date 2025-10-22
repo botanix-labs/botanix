@@ -2761,6 +2761,7 @@ dependencies = [
  "botanix-authority-peg",
  "botanix-btc-wallet",
  "botanix-chainspec",
+ "botanix-consensus-common",
  "btc-server",
  "derive_more 2.0.1",
  "reth-chainspec",

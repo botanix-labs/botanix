@@ -5,3 +5,9 @@
 pub mod error;
 /// Module containing the EVM executor implementation.
 pub mod execute;
+
+/// Utility functions for transaction handling and classification.
+pub mod utils;
+
+/// Module for state management and manipulation within the EVM context.
+pub mod state;

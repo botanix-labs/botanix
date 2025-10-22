@@ -1,9 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
-use alloy_consensus::{
-    transaction::{Recovered, Transaction},
-    TxType,
-};
+use alloy_consensus::transaction::{Recovered, Transaction};
 use alloy_eips::eip7685::Requests;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::{
@@ -14,7 +11,7 @@ use botanix_authority_peg::{
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_chainspec::BotanixChainSpec;
 use btcserverlib::pegout_id::PegoutId;
-use reth_chainspec::{ChainSpec, EthereumHardforks};
+use reth_chainspec::{ChainSpec, EthereumHardfork, EthereumHardforks};
 use reth_evm::{
     revm::primitives::{alloy_primitives::BlockNumber, hex},
     ConfigureEvm, Database as RethDatabase, EvmEnvFor,
@@ -27,7 +24,7 @@ use reth_primitives_traits::{AlloyBlockHeader, Block, BlockBody, SignedTransacti
 use reth_provider::{BlockExecutionResult, BlockReader, DatabaseProviderRO, ProviderError};
 use reth_revm::{
     context::result::{ExecutionResult, ResultAndState},
-    primitives::{alloy_primitives::TxHash, U256},
+    primitives::{alloy_primitives::TxHash, Address, U256},
     state::{Account, AccountStatus},
 };
 use revm_database::{
@@ -36,7 +33,11 @@ use revm_database::{
 };
 use tracing::{error, info};
 
-use crate::error::{BlockExecutionError, BlockValidationError};
+use crate::{
+    error::{BlockExecutionError, BlockValidationError},
+    state::post_block_balance_increments,
+    utils::tx_type,
+};
 
 /// Helper type for the output of executing a block.
 #[derive(Debug, Clone)]
@@ -117,6 +118,7 @@ impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N
 where
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
+    DB: RevmDatabase,
 {
     /// Creates a new Ethereum block executor.
     pub const fn new(
@@ -153,6 +155,27 @@ where
     #[allow(unused)]
     fn state_mut(&mut self) -> &mut State<DB> {
         &mut self.state
+    }
+
+    /// Apply post execution state changes that do not require an [EVM](Evm), such as: block
+    /// rewards, withdrawals, and irregular DAO hardfork state change
+    pub fn post_execution(
+        &mut self,
+        total_block_fees: Option<u128>,
+        block_fee_recipient_address: Address,
+    ) -> Result<(), BlockExecutionError> {
+        let balance_increments = post_block_balance_increments(
+            self.botanix_chain_spec(),
+            total_block_fees,
+            Some(block_fee_recipient_address),
+        );
+
+        // increment balances
+        self.state
+            .increment_balances(balance_increments)
+            .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
+
+        Ok(())
     }
 }
 
@@ -212,12 +235,7 @@ where
         };
 
         // 3. apply post execution changes
-        // self.post_execution(
-        //     block,
-        //     total_difficulty,
-        //     Some(output.total_block_fees),
-        //     block_fee_recipient_address,
-        // )?;
+        self.post_execution(Some(output.total_block_fees), block_fee_recipient_address)?;
 
         Ok(output)
     }
@@ -482,44 +500,6 @@ where
         })
     }
 
-    /// Apply post execution state changes that do not require an [EVM](Evm), such as: block
-    /// rewards, withdrawals, and irregular DAO hardfork state change
-    pub fn post_execution(
-        &mut self,
-        block: &BlockWithSenders,
-        total_difficulty: U256,
-        total_block_fees: Option<u128>,
-        block_fee_recipient_address: Address,
-    ) -> Result<(), BlockExecutionError> {
-        let mut balance_increments = post_block_balance_increments(
-            self.chain_spec(),
-            block,
-            total_difficulty,
-            total_block_fees,
-            Some(block_fee_recipient_address),
-        );
-
-        // Irregular state change at Ethereum DAO hardfork
-        if self.chain_spec().fork(EthereumHardfork::Dao).transitions_at_block(block.number) {
-            // drain balances from hardcoded addresses.
-            let drained_balance: u128 = self
-                .state
-                .drain_balances(DAO_HARDKFORK_ACCOUNTS)
-                .map_err(|_| BlockValidationError::IncrementBalanceFailed)?
-                .into_iter()
-                .sum();
-
-            // return balance to DAO beneficiary.
-            *balance_increments.entry(DAO_HARDFORK_BENEFICIARY).or_default() += drained_balance;
-        }
-        // increment balances
-        self.state
-            .increment_balances(balance_increments)
-            .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
-
-        Ok(())
-    }
-
     /// Performs additional checks on mint contract transactions.
     #[tracing::instrument(
         level = "trace",
@@ -704,8 +684,9 @@ where
     DB: RethDatabase<Error: Into<ProviderError> + Display>,
     RethDB: reth_db::Database,
     BF: BitcoindFactory + Clone + Unpin + 'static,
-    N: reth_node_types::NodeTypes,
+    N: reth_node_types::NodeTypes + reth_provider::providers::NodeTypesForProvider,
     <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
+    <N::Primitives as NodePrimitives>::Receipt: From<Receipt>,
 {
     /// Executes the block and commits the changes to the internal state.
     ///
@@ -727,27 +708,15 @@ where
         let state = self.state.take_bundle();
 
         Ok(BotanixBlockExecutionOutput {
-            result: BlockExecutionResult { receipts, requests, gas_used },
+            result: BlockExecutionResult {
+                receipts: receipts.into_iter().map(|r| r.into()).collect(),
+                requests,
+                gas_used
+            },
             state,
             total_block_fees,
             pegins,
             pegouts,
         })
-    }
-}
-
-/// Determines the transaction type by checking EIP standards.
-/// Checks in order of precedence (newest to oldest) to ensure correct classification.
-fn tx_type<T: Transaction>(transaction: &T) -> TxType {
-    if transaction.is_eip7702() {
-        TxType::Eip7702
-    } else if transaction.is_eip4844() {
-        TxType::Eip4844
-    } else if transaction.is_eip1559() {
-        TxType::Eip1559
-    } else if transaction.is_eip2930() {
-        TxType::Eip2930
-    } else {
-        TxType::Legacy
     }
 }

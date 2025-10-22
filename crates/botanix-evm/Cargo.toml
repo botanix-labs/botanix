@@ -33,6 +33,7 @@ botanix-authority-peg = { workspace = true }
 botanix-btc-wallet = { workspace = true }
 botanix-chainspec = { workspace = true }
 botanix-authority-edh = { workspace = true }
+botanix-consensus-common = { workspace = true }
 
 # Bitcoin
 bitcoin = { workspace = true }
