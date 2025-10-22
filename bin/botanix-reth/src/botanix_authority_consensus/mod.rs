@@ -38,6 +38,8 @@ mod signing;
 pub mod snapshot_manager;
 pub mod utils;
 pub use builder::AuthorityConsensusBuilder;
+
+use crate::node::evm::config::BotanixEvmConfig;
 pub mod test_utils;
 pub mod wallet_state_sync;
 
@@ -156,7 +158,7 @@ impl HeaderValidator for AuthorityConsensus {
 /// All this struct does is provide a rwlock wrapper around the storage inner
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
-pub(crate) struct Storage<EF, BF, RDB, BDB> {
+pub(crate) struct Storage<BF, RDB, BDB> {
     /// Reth Database Provider Factory
     pub(crate) reth_database: RDB,
     /// Botanix Database Provider Factory
@@ -173,18 +175,16 @@ pub(crate) struct Storage<EF, BF, RDB, BDB> {
     /// Authority socket addresses pulled from federation config
     pub(crate) authority_socket_addresses: Vec<SocketAddr>,
     /// Evm config
-    pub(crate) evm_config: EthEvmConfig,
+    pub(crate) evm_config: BotanixEvmConfig,
     /// Bitcoind Factory
     pub(crate) bitcoind_factory: BF,
     /// Chain spec
     pub(crate) chain_spec: Arc<BotanixChainSpec>,
-    /// Executor Factory
-    pub(crate) executor_factory: EF,
     // The inner storage, everything here is rw locked
     pub(crate) inner: Arc<RwLock<StorageInner>>,
 }
 
-impl<EF, BF, RDB: Clone, BDB: Clone> Storage<EF, BF, RDB, BDB> {
+impl<BF, RDB: Clone, BDB: Clone> Storage<BF, RDB, BDB> {
     /// Create a new instance of the storage
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -194,10 +194,9 @@ impl<EF, BF, RDB: Clone, BDB: Clone> Storage<EF, BF, RDB, BDB> {
         btc_network: bitcoin::Network,
         aggregate_public_key: Option<secp256k1::PublicKey>,
         authority_socket_addresses: Vec<SocketAddr>,
-        evm_config: EthEvmConfig,
+        evm_config: BotanixEvmConfig,
         chain_spec: Arc<BotanixChainSpec>,
         bitcoind_factory: BF,
-        executor_factory: EF,
         reth_database: RDB,
         botanix_database_factory: BDB,
     ) -> Self {
@@ -214,7 +213,6 @@ impl<EF, BF, RDB: Clone, BDB: Clone> Storage<EF, BF, RDB, BDB> {
             evm_config,
             chain_spec,
             bitcoind_factory,
-            executor_factory,
             inner: Arc::new(RwLock::new(storage_inner)),
         }
     }

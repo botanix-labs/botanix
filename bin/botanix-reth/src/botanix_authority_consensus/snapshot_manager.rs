@@ -122,8 +122,8 @@ pub trait SnapshotRunnable {
 
 /// Snapshot manager is responsible for persisting snapshot chunks to disk
 #[allow(dead_code)]
-pub struct SnapshotManager<EF, BF, RDB, BDB> {
-    storage: Storage<EF, BF, RDB, BDB>,
+pub struct SnapshotManager<BF, RDB, BDB> {
+    storage: Storage<BF, RDB, BDB>,
     compressor: DataParser,
     snapshots_to_keep: u64,
     snapshot_message_format: u32,
@@ -134,17 +134,16 @@ pub struct SnapshotManager<EF, BF, RDB, BDB> {
     cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
 }
 
-impl<EF, BF, RDB, BDB> SnapshotManager<EF, BF, RDB, BDB>
+impl<BF, RDB, BDB> SnapshotManager<BF, RDB, BDB>
 where
     BF: BitcoindFactory + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     RDB: BlockReaderIdExt + CanonStateSubscriptions + Clone + 'static,
     BDB: SnapshotWriter + SnapshotReader + Clone + 'static,
 {
     /// Constructor
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        storage: Storage<EF, BF, RDB, BDB>,
+        storage: Storage<BF, RDB, BDB>,
         compressor: DataParser,
         snapshots_to_keep: u64,
         snapshot_message_format: u32,
@@ -294,10 +293,9 @@ where
     }
 }
 
-impl<EF, BF, RDB, BDB> SnapshotRunnable for SnapshotManager<EF, BF, RDB, BDB>
+impl<BF, RDB, BDB> SnapshotRunnable for SnapshotManager<BF, RDB, BDB>
 where
     BF: BitcoindFactory + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     RDB: BlockReaderIdExt + CanonStateSubscriptions + Clone + 'static,
     BDB: SnapshotWriter + SnapshotReader + Clone + 'static,
 {
@@ -428,10 +426,9 @@ where
     }
 }
 
-impl<EF, BF, RDB, BDB> SnapshotManager<EF, BF, RDB, BDB>
+impl<BF, RDB, BDB> SnapshotManager<BF, RDB, BDB>
 where
     BF: BitcoindFactory + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     RDB: BlockReaderIdExt + CanonStateSubscriptions + Clone + 'static,
     BDB: SnapshotWriter + SnapshotReader + Clone + 'static,
 {

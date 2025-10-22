@@ -11,3 +11,4 @@ pub mod rpc;
 pub mod myrpc_ext;
 pub mod botanix_provider;
 pub mod poa;
+pub mod cometbft;
