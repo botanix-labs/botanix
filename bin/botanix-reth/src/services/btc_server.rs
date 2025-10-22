@@ -5,7 +5,7 @@ use btcserverlib::util::retry_exec;
 use eyre::Ok;
 
 /// Creates and connects a BTC server client if federation mode is enabled, otherwise returns None.
-pub async fn create_btc_server_client(poa_cfg: &PoaNodeArgs, bitcoind_cfg: &BitcoindArgs) -> eyre::Result<Option<BtcServerExtendedClient>> {
+pub async fn create_btc_server_client(poa_cfg: &PoaNodeArgs, bitcoind_cfg: &BitcoindArgs) -> eyre::Result<Option<(GrpcClientFactory, BtcServerExtendedClient)>> {
     match poa_cfg.federation_mode {
         true => {
             let btc_server_factory = GrpcClientFactory::new(
@@ -32,7 +32,7 @@ pub async fn create_btc_server_client(poa_cfg: &PoaNodeArgs, bitcoind_cfg: &Bitc
             })?;
             tracing::info!(target: "reth::cli", "Btc server authenticated");
 
-            return Ok(Some(btc_server_client));
+            return Ok(Some((btc_server_factory, btc_server_client)));
         },
         false => {
             return Ok(None);

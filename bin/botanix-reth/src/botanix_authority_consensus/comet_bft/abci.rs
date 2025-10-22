@@ -227,8 +227,8 @@ type BotanixNodeTypes = NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>;
 
 /// ABCI client builder
 #[derive(Clone)]
-pub struct ABCIClientBuilder<EF, BF, RDB, BDB> {
-    storage: Storage<EF, BF, RDB, BDB>,
+pub struct ABCIClientBuilder<BF, RDB, BDB> {
+    storage: Storage<BF, RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     authority_consensus: AuthorityConsensus,
@@ -238,7 +238,7 @@ pub struct ABCIClientBuilder<EF, BF, RDB, BDB> {
     compressor: DataParser,
     task_executor: TaskExecutor,
     abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-    provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+    provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
     snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
     snapshot_format: u32,
@@ -246,16 +246,15 @@ pub struct ABCIClientBuilder<EF, BF, RDB, BDB> {
     blockchain_db: BlockchainProvider<BotanixNodeTypes>,
 }
 
-impl<EF, BF, RDB, BDB> ABCIClientBuilder<EF, BF, RDB, BDB>
+impl<BF, RDB, BDB> ABCIClientBuilder<BF, RDB, BDB>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        storage: Storage<EF, BF, RDB, BDB>,
+        storage: Storage<BF, RDB, BDB>,
         activation_manager: ActivationManager<VoteWatcher, Address>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         authority_consensus: AuthorityConsensus,
@@ -265,7 +264,7 @@ where
         task_executor: TaskExecutor,
         compressor: DataParser,
         abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-        provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+        provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
         snapshot_format: u32,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
@@ -387,8 +386,8 @@ struct BlockCache {
 }
 
 #[derive(Clone)]
-pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool> {
-    storage: Storage<EF, BF, RDB, DBD>,
+pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
+    storage: Storage<BF, RDB, DBD>,
     pool: Pool,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
@@ -401,7 +400,7 @@ pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool> {
     metrics: Arc<AuthorityMetrics>,
     task_executor: TaskExecutor,
     // TODO: We already have provider factory in Storage
-    reth_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+    reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, //BotanixProviderFactory<Arc<DatabaseEnv>>,
     compressor: DataParser,
     snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
     snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
@@ -412,17 +411,16 @@ pub(crate) struct ABCIClient<EF, BF, RDB, DBD, Pool> {
     is_testnet: bool,
 }
 
-impl<EF, BF, RDB, DBD, Pool> ABCIClient<EF, BF, RDB, DBD, Pool>
+impl<BF, RDB, DBD, Pool> ABCIClient<BF, RDB, DBD, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
     DBD: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        storage: Storage<EF, BF, RDB, DBD>,
+        storage: Storage<BF, RDB, DBD>,
         pool: Pool,
         activation_manager: ActivationManager<VoteWatcher, Address>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
@@ -433,7 +431,7 @@ where
         metrics: Arc<AuthorityMetrics>,
         compressor: DataParser,
         task_executor: TaskExecutor,
-        provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+        provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
         snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
         snapshot_format: u32,
@@ -620,11 +618,10 @@ where
     }
 }
 
-impl<EF, BF, RDB, BDB, Pool> ABCIClient<EF, BF, RDB, BDB, Pool,>
+impl<BF, RDB, BDB, Pool> ABCIClient<BF, RDB, BDB, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {
@@ -658,11 +655,10 @@ where
     }
 }
 
-impl<EF, BF, RDB, BDB, Pool> Application for ABCIClient<EF, BF, RDB, BDB, Pool>
+impl<BF, RDB, BDB, Pool> Application for ABCIClient<BF, RDB, BDB, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    EF: ConfigureEvm + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {

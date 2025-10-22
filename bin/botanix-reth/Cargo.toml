@@ -104,11 +104,13 @@ reth-rpc-engine-api.workspace = true
 reth-tracing.workspace = true
 reth-trie-common.workspace = true
 reth-trie-db.workspace = true
+reth-stages.workspace = true
 revm.workspace = true
 reth-chain-state = { workspace = true }
 reth-ethereum-consensus = { workspace = true }
 reth-execution-errors = { workspace = true }
 reth-node-builder = { workspace = true }
+reth-node-metrics = { workspace = true }
 reth-payload-builder = { workspace = true }
 reth-tasks = { workspace = true }
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
@@ -145,6 +147,7 @@ tendermint.workspace = true
 
 # alloy dependencies
 alloy-evm.workspace = true
+alloy-eip2124.workspace = true
 alloy-genesis.workspace = true
 alloy-consensus.workspace = true
 alloy-eips.workspace = true
