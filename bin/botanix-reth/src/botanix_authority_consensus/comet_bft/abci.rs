@@ -618,7 +618,7 @@ where
     }
 }
 
-impl<BF, RDB, BDB, Pool> ABCIClient<BF, RDB, BDB, Pool,>
+impl<BF, RDB, BDB, Pool> ABCIClient<BF, RDB, BDB, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
