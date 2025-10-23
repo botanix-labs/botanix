@@ -89,6 +89,7 @@ reth-eth-wire-types.workspace = true
 reth-evm.workspace = true
 reth-evm-ethereum.workspace = true
 reth-node-core.workspace = true
+reth-node-types.workspace = true
 reth-revm.workspace = true
 reth-network.workspace = true
 reth-network-p2p.workspace = true

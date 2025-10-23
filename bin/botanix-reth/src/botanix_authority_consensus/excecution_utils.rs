@@ -1,7 +1,7 @@
 pub(crate) mod authority_execution_utils {
     use alloy_consensus::{
         constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
-        EMPTY_OMMER_ROOT_HASH,
+        BlockBody, EMPTY_OMMER_ROOT_HASH,
     };
     use alloy_eips::{
         eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, eip7685::Requests,
@@ -18,25 +18,26 @@ pub(crate) mod authority_execution_utils {
     use botanix_storage::models::RuntimeVersion;
     use reth_chainspec::{ChainSpec, EthereumHardforks};
     use reth_db::{Database, DatabaseEnv};
-    use reth_execution_errors::{
-        BlockExecutionError, BlockValidationError, InternalBlockExecutionError,
-    };
+    use reth_ethereum::Block;
+    use reth_execution_errors::InternalBlockExecutionError;
     use reth_node_builder::NodeTypesWithDBAdapter;
     use reth_node_ethereum::{EthEvmConfig, EthereumNode};
-    use reth_primitives::{
-        Block, Header, Receipt, ReceiptWithBloom, RecoveredBlock, TransactionSigned,
-    };
+    use reth_node_types::Block as BlockTrait;
+    use reth_primitives::{Header, Receipt, ReceiptWithBloom, RecoveredBlock, TransactionSigned};
     use reth_primitives_traits::proofs;
     use reth_provider::{
-        BlockExecutionOutput, BlockHashReader, BlockNumReader, DatabaseProviderFactory,
-        ExecutionOutcome, HeaderProvider, OriginalValuesKnown, ProviderFactory,
+        BlockHashReader, BlockNumReader, DatabaseProviderFactory, ExecutionOutcome, HeaderProvider,
+        OriginalValuesKnown, ProviderFactory,
     };
     use reth_revm::{database::StateProviderDatabase, db::State};
     use reth_trie::StateRoot;
     use reth_trie_db::DatabaseStateRoot;
 
     use botanix_activation_manager::NetworkUpgradePayload;
-    use botanix_evm::execute::EthBlockExecutor;
+    use botanix_evm::{
+        error::{BlockExecutionError, BlockValidationError},
+        execute::{BotanixBlockExecutionOutput, EthBlockExecutor},
+    };
     use std::sync::Arc;
     use tendermint_proto::google::protobuf::Timestamp;
 
@@ -98,17 +99,23 @@ pub(crate) mod authority_execution_utils {
             }
         }
 
-        let mut block = Block { header, body: transactions };
-        let senders = TransactionSigned::recover_signers(&block.body, block.body.len())
-            .ok_or(BlockExecutionError::Validation(BlockValidationError::SenderRecoveryError))?;
+        // Create a block with no ommers or withdrawals as these are not used in authority consensus
+        let mut block = Block {
+            header,
+            body: BlockBody { transactions, ommers: Default::default(), withdrawals: None },
+        };
 
-        let block_with_senders = RecoveredBlock::<Block>::try_recover(block.clone())?;
+        let recovered_block =
+            RecoveredBlock::<Block>::try_recover(block.clone()).map_err(|_| {
+                // Internally, try_recover() calls try_recover_signers()
+                BlockExecutionError::Validation(BlockValidationError::SignerRecoveryError)
+            })?;
 
         tracing::trace!(target: "consensus::authority", transactions=?&block.body, "executing transactions");
 
         tracing::info!(target: "consensus::authority", "block_fee_recipient_address: {:?}", block_fee_recipient_address);
         let block_exec_output = execute(
-            &block_with_senders,
+            &recovered_block,
             database_provider,
             Some(*block_fee_recipient_address),
             bitcoind_factory,
@@ -118,7 +125,7 @@ pub(crate) mod authority_execution_utils {
         )?;
 
         let completed_header = complete_header(
-            block_with_senders.header().clone(),
+            recovered_block.header().clone(),
             &block_exec_output,
             block_exec_output.gas_used,
             *bitcoin_checkpoint_block_hash,
@@ -126,21 +133,24 @@ pub(crate) mod authority_execution_utils {
             agg_pk,
         )?;
 
-        // Replace header with the one that is completed
+        // Replace header with the one that is completed and create new recovered block
         block.header = completed_header.clone();
-        let sealed_block_with_senders =
-            block.seal_slow().try_seal_with_senders().expect("same senders are passed above");
+        let recovered_block =
+            RecoveredBlock::<Block>::try_recover(block.clone()).map_err(|_| {
+                // Internally, try_recover() calls try_recover_signers()
+                BlockExecutionError::Validation(BlockValidationError::SignerRecoveryError)
+            })?;
+
         let sealed_block_with_peg = SealedBlockWithPeg::new(
-            sealed_block_with_senders,
+            recovered_block,
             block_exec_output.pegins,
             block_exec_output.pegouts,
         );
 
         let exec_outcome = ExecutionOutcome::new(
             block_exec_output.state,
-            block_exec_output.receipts.into(),
+            vec![block_exec_output.receipts],
             completed_header.number,
-            // TODO: does authority consensus need to check against this?
             vec![],
         );
         let hashed_state = exec_outcome.hash_state_slow();
@@ -183,7 +193,7 @@ pub(crate) mod authority_execution_utils {
                     .exec_outcome
                     .bundle
                     .clone()
-                    .into_plain_state(OriginalValuesKnown::No);
+                    .to_plain_state(OriginalValuesKnown::No);
 
                 tracing::trace!(
                     target: "block_with_context",
@@ -418,7 +428,7 @@ pub(crate) mod authority_execution_utils {
         bitcoin_network: bitcoin::Network,
         chain_spec: Arc<BotanixChainSpec>,
         evm_config: EthEvmConfig,
-    ) -> Result<BlockExecutionOutput<Receipt>, BlockExecutionError>
+    ) -> Result<BotanixBlockExecutionOutput<Receipt>, BlockExecutionError>
     where
         BF: BitcoindFactory + Clone + Unpin + 'static,
         DB: Database,

@@ -17,8 +17,9 @@ use reth_primitives_traits::constants::MINIMUM_GAS_LIMIT;
 use reth_storage_errors::provider::ProviderError;
 
 #[derive(Debug, Display)]
+/// `BlockExecutor` Errors
 pub enum BlockExecutionError {
-    /// Validatidisplayr, transparently wrapping [`BlockValidationError`]
+    /// Validation error, transparently wrapping [`BlockValidationError`]
     Validation(BlockValidationError),
     /// Consensus error, transparently wrapping [`ConsensusError`]
     Consensus(ConsensusError),
@@ -28,13 +29,19 @@ pub enum BlockExecutionError {
 
 impl From<reth_evm::execute::BlockExecutionError> for BlockExecutionError {
     fn from(err: reth_evm::execute::BlockExecutionError) -> Self {
-        BlockExecutionError::Internal(InternalBlockExecutionError::Other(err.to_string().into()))
+        Self::Internal(InternalBlockExecutionError::Other(err.to_string().into()))
     }
 }
 
 impl From<BlockValidationError> for BlockExecutionError {
     fn from(err: BlockValidationError) -> Self {
-        BlockExecutionError::Validation(err)
+        Self::Validation(err)
+    }
+}
+
+impl From<ProviderError> for BlockExecutionError {
+    fn from(error: ProviderError) -> Self {
+        Self::Internal(InternalBlockExecutionError::Other(Box::new(error)))
     }
 }
 
@@ -49,9 +56,9 @@ pub enum BlockValidationError {
         /// The EVM error.
         error: Box<EVMError<ProviderError>>,
     },
-    /// Error when recovering the sender for a transaction
-    #[display("failed to recover sender for transaction")]
-    SenderRecoveryError,
+    /// Error when recovering the signer for a transaction
+    #[display("failed to recover signer for transaction")]
+    SignerRecoveryError,
     /// Error when incrementing balance in post execution
     #[display("incrementing balance in post execution failed")]
     IncrementBalanceFailed,

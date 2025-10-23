@@ -11,7 +11,7 @@ use botanix_authority_peg::{
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_chainspec::BotanixChainSpec;
 use btcserverlib::pegout_id::PegoutId;
-use reth_chainspec::{ChainSpec, EthereumHardfork, EthereumHardforks};
+use reth_chainspec::{ChainSpec, EthereumHardforks};
 use reth_evm::{
     revm::primitives::{alloy_primitives::BlockNumber, hex},
     ConfigureEvm, Database as RethDatabase, EvmEnvFor,
@@ -711,7 +711,7 @@ where
             result: BlockExecutionResult {
                 receipts: receipts.into_iter().map(|r| r.into()).collect(),
                 requests,
-                gas_used
+                gas_used,
             },
             state,
             total_block_fees,
