@@ -21,7 +21,7 @@ use reth_ethereum::{
 };
 use reth_network::NetworkInfo;
 use reth_transaction_pool::TransactionPool;
-use crate::{node::{evm::config::BotanixEvmConfig, BotanixNode}, services::myrpc_ext::{MyRpcExt, MyRpcExtApiServer}};
+use crate::{node::{evm::config::BotanixEvmConfig, BotanixNode}, services::rpc::botanixrpc_ext::{BotanixRpcExt, BotanixRpcExtApiServer}};
 
 /// Sets up and runs the RPC server for the Botanix node, wiring providers,
 /// network and transaction pool, configuring transports (HTTP/WS/IPC), and
@@ -55,7 +55,7 @@ pub async fn setup_and_run_rpc(
     let mut server = rpc_builder.build(module_config, eth_api);
 
     // Add a custom rpc namespace
-    let custom_rpc = MyRpcExt { provider, botanix: botanix_provider };
+    let custom_rpc = BotanixRpcExt { provider, botanix: botanix_provider };
     server.merge_configured(custom_rpc.into_rpc())?;
 
     // Start the server & keep it alive

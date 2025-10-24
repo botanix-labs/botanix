@@ -12,12 +12,12 @@ use secp256k1::PublicKey;
 
 use crate::BotanixBlock;
 
-/// trait interface for a custom rpc namespace: `myrpcExt`
+/// trait interface for a custom rpc namespace: `botanixrpcExt`
 ///
 /// This defines an additional namespace where all methods are configured as trait functions.
-#[rpc(server, namespace = "myrpcExt")]
+#[rpc(server, namespace = "botanixrpcExt")]
 #[async_trait::async_trait]
-pub trait MyRpcExtApi {
+pub trait BotanixRpcExtApi {
     /// Returns the frost aggregated public key.
     #[method(name = "aggregatePublicKey")]
     async fn aggregate_public_key(&self) -> RpcResult<PublicKey>;
@@ -35,9 +35,9 @@ pub trait MyRpcExtApi {
     async fn get_btc_fee_rate(&self) -> RpcResult<Option<U256>>;
 }
 
-/// The type that implements `myrpcExt` rpc namespace trait
+/// The type that implements `botanixrpcExt` rpc namespace trait
 #[derive(Debug)]
-pub struct MyRpcExt<Provider> {
+pub struct BotanixRpcExt<Provider> {
     /// The Ethereum provider used to read blocks.
     pub provider: Provider,
     /// Botanix client and configuration.
@@ -45,7 +45,7 @@ pub struct MyRpcExt<Provider> {
 }
 
 #[async_trait::async_trait]
-impl<Provider> MyRpcExtApiServer for MyRpcExt<Provider>
+impl<Provider> BotanixRpcExtApiServer for BotanixRpcExt<Provider>
 where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static,
 {   
@@ -75,7 +75,7 @@ where
     }
 }
 
-impl<Provider> EthBotanixApi for MyRpcExt<Provider> where
+impl<Provider> EthBotanixApi for BotanixRpcExt<Provider> where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static, {
     fn provider(&self) -> impl BlockReaderIdExt {
         self.provider.clone()

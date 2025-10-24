@@ -9,23 +9,16 @@ use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CH
 use botanix_cli_args::{chain::{get_chain_from_federation_config, BotanixNetwork}, BotanixArgs};
 use botanix_storage::BotanixProviderFactory;
 use botanix_utils::panic_hook::set_panic_hook;
-use btcserverlib::version::{CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP, VERGEN_GIT_SHA};
 use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
-    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_and_run_rpc},
+    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, metrics::run_metrics_service, migrator::init_and_migrate_db, network_builder::lookup_head, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::rpc::setup_and_run_rpc},
 };
-use reth::providers::HeaderProvider;
 use reth_cli_commands::NodeCommand;
 use reth_db::DatabaseEnv;
 use reth_network::{NetworkConfigBuilder, NetworkManager};
-use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_core::version::version_metadata;
-use reth_node_metrics::{chain::ChainSpecInfo, hooks::Hooks, server::{MetricServer, MetricServerConfig}, version::VersionInfo};
-use reth_provider::{providers::BlockchainProvider, BlockHashReader, StageCheckpointReader};
-use reth_stages::StageId;
-use alloy_eip2124::Head;
 
 // We use jemalloc for performance reasons
 #[cfg(all(feature = "jemalloc", unix))]
@@ -343,28 +336,7 @@ fn main() -> eyre::Result<()> {
             // ==========================================================================================
 
             // add metrics if necessary
-            if let Some(metrics_listener_address) = metrics_args {
-                // start the metrics server
-                let hooks = Hooks::builder().build();
-                tracing::info!(target: "reth::cli", "Starting metrics endpoint at {}", metrics_listener_address.to_string());
-                let config = MetricServerConfig::new(
-                    metrics_listener_address,
-                    VersionInfo {
-                        version: CARGO_PKG_VERSION,
-                        build_timestamp: VERGEN_BUILD_TIMESTAMP,
-                        cargo_features: "VERGEN_CARGO_FEATURES",
-                        git_sha: VERGEN_GIT_SHA,
-                        target_triple: "VERGEN_CARGO_TARGET_TRIPLE",
-                        build_profile: "BUILD_PROFILE_NAME",
-                    },
-                    ChainSpecInfo {
-                        name: chain_spec.chain().id().to_string(),
-                    },
-                    task_executor.clone(),
-                    hooks,
-                );
-                MetricServer::new(config).serve().await?;
-            }
+            run_metrics_service(metrics_args, &node.task_executor, chain_spec_arc).await?;
 
             // launch the network manager task
             node.task_executor.spawn_critical("network p2p", network_manager);
@@ -411,35 +383,4 @@ fn main() -> eyre::Result<()> {
     )?;
 
     Ok(())
-}
-
-fn lookup_head(blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>) -> Head {
-        let head = blockchain_provider
-        .get_stage_checkpoint(StageId::Finish)
-        .expect("get stage point")
-        .unwrap_or_default()
-        .block_number;
-
-    let header = blockchain_provider
-        .header_by_number(head)
-        .expect("missing header by number, database corrupt")
-        .expect("the header for the latest block is missing, database is corrupt");
-
-    let total_difficulty = blockchain_provider
-        .header_td_by_number(head)
-        .expect("missing header by number, database corrupt")
-        .expect("the total difficulty for the latest block is missing, database is corrupt");
-
-    let hash = blockchain_provider
-        .block_hash(head)
-        .expect("is some")
-        .expect("the hash for the latest block is missing, database is corrupt");
-
-    Head {
-        number: head,
-        hash,
-        difficulty: header.difficulty,
-        total_difficulty,
-        timestamp: header.timestamp,
-    }
 }
