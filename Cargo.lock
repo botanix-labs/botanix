@@ -2571,7 +2571,7 @@ dependencies = [
  "alloy-serde",
  "askama",
  "clap",
- "derive_more 0.99.20",
+ "derive_more 2.0.1",
  "eyre",
  "once_cell",
  "reth-chainspec",
@@ -2747,6 +2747,34 @@ dependencies = [
  "serde_json",
  "tokio",
  "toml 0.8.23",
+ "tracing",
+]
+
+[[package]]
+name = "botanix-evm"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "bitcoin 0.32.7",
+ "botanix-authority-edh",
+ "botanix-authority-peg",
+ "botanix-btc-wallet",
+ "botanix-chainspec",
+ "botanix-consensus-common",
+ "btc-server",
+ "derive_more 2.0.1",
+ "reth-chainspec",
+ "reth-db",
+ "reth-evm",
+ "reth-execution-errors",
+ "reth-node-types",
+ "reth-primitives",
+ "reth-primitives-traits",
+ "reth-provider",
+ "reth-revm",
+ "reth-storage-errors",
+ "revm-database",
  "tracing",
 ]
 
@@ -3708,12 +3736,6 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
-name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
@@ -4240,10 +4262,8 @@ version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6edb4b64a43d977b8e99788fe3a04d483834fba1215a7e02caa415b626497f7f"
 dependencies = [
- "convert_case 0.4.0",
  "proc-macro2",
  "quote",
- "rustc_version 0.4.1",
  "syn 2.0.104",
 ]
 
@@ -12378,6 +12398,7 @@ dependencies = [
  "botanix-configs",
  "botanix-consensus-common",
  "botanix-data-parser",
+ "botanix-evm",
  "botanix-fs-util",
  "botanix-rpc-client",
  "botanix-rpc-config",
@@ -12394,7 +12415,7 @@ dependencies = [
  "cometbft-light-client-verifier",
  "cometbft-proto",
  "confy",
- "derive_more 0.99.20",
+ "derive_more 2.0.1",
  "displaydoc",
  "ethabi",
  "eyre",
@@ -12448,6 +12469,7 @@ dependencies = [
  "reth-node-core",
  "reth-node-ethereum",
  "reth-node-metrics",
+ "reth-node-types",
  "reth-payload-builder",
  "reth-payload-primitives",
  "reth-primitives",
@@ -12503,9 +12525,9 @@ dependencies = [
 
 [[package]]
 name = "revm-bytecode"
-version = "6.2.1"
+version = "6.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d800e6c2119457ded5b0af71634eb2468040bf97de468eee5a730272a106da0"
+checksum = "66c52031b73cae95d84cd1b07725808b5fd1500da3e5e24574a3b2dc13d9f16d"
 dependencies = [
  "bitvec",
  "phf",
@@ -12564,9 +12586,9 @@ dependencies = [
 
 [[package]]
 name = "revm-database"
-version = "7.0.4"
+version = "7.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40000c7d917c865f6c232a78581b78e70c43f52db17282bd1b52d4f0565bc8a2"
+checksum = "39a276ed142b4718dcf64bc9624f474373ed82ef20611025045c3fb23edbef9c"
 dependencies = [
  "alloy-eips",
  "revm-bytecode",
@@ -12578,9 +12600,9 @@ dependencies = [
 
 [[package]]
 name = "revm-database-interface"
-version = "7.0.4"
+version = "7.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4ccea7a168cba1196b1e57dd3e22c36047208c135f600f8e58cbe7d49957dba"
+checksum = "8c523c77e74eeedbac5d6f7c092e3851dbe9c7fec6f418b85992bd79229db361"
 dependencies = [
  "auto_impl",
  "either",
@@ -12710,9 +12732,9 @@ dependencies = [
 
 [[package]]
 name = "revm-state"
-version = "7.0.4"
+version = "7.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9d7f39ea56df3bfbb3c81c99b1f028d26f205b6004156baffbf1a4f84b46cfa"
+checksum = "1f64fbacb86008394aaebd3454f9643b7d5a782bd251135e17c5b33da592d84d"
 dependencies = [
  "bitflags 2.9.1",
  "revm-bytecode",

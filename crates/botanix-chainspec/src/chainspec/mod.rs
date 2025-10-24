@@ -1,19 +1,25 @@
-use std::{ops::Deref, sync::Arc};
-use alloy_genesis::Genesis;
-use alloy_primitives::{Address, B256, U256};
-use reth_network_peers::NodeRecord;
-use core::fmt::{Debug, Display};
-use alloy_consensus::Header;
 use alloy_chains::NamedChain;
+use alloy_consensus::Header;
+use alloy_eips::{eip1559::INITIAL_BASE_FEE as EIP1559_INITIAL_BASE_FEE, eip7840::BlobParams};
+use alloy_genesis::Genesis;
 use alloy_hardforks::Hardfork;
-use reth_ethereum_forks::ForkCondition;
+use alloy_primitives::{Address, B256, U256};
+use core::fmt::{Debug, Display};
 use reth_chainspec::{
-    BaseFeeParams, ChainSpec, DepositContract, EthChainSpec, EthereumHardfork, EthereumHardforks, ForkFilter, ForkId, Hardforks, Head
+    BaseFeeParams, ChainSpec, DepositContract, EthChainSpec, EthereumHardfork, EthereumHardforks,
+    ForkFilter, ForkId, Hardforks, Head,
 };
+use reth_ethereum_forks::ForkCondition;
 use reth_evm::eth::spec::EthExecutorSpec;
-use alloy_eips::{eip1559::{INITIAL_BASE_FEE as EIP1559_INITIAL_BASE_FEE}, eip7840::BlobParams};
+use reth_network_peers::NodeRecord;
+use std::{ops::Deref, sync::Arc};
 
-use crate::{constants::{botanix_mainnet_head, botanix_testnet_head, BOTANIX_INITIAL_BASE_FEE, BOTANIX_TESTNET}, BotanixHardfork, BotanixHardforks};
+use crate::{
+    constants::{
+        botanix_mainnet_head, botanix_testnet_head, BOTANIX_INITIAL_BASE_FEE, BOTANIX_TESTNET,
+    },
+    BotanixHardfork, BotanixHardforks,
+};
 pub mod constants;
 pub mod parser;
 
@@ -88,7 +94,7 @@ impl Deref for BotanixChainSpec {
 
 impl BotanixChainSpec {
     pub fn inner(&self) -> &ChainSpec {
-        &**self
+        self
     }
 
     pub fn inner_arc(&self) -> Arc<ChainSpec> {
@@ -113,7 +119,6 @@ impl BotanixChainSpec {
         (self.inner.fork(BotanixHardfork::Jalapeno).active_at_block(0)).then_some(genesis_base_fee)
     }
 }
-
 
 impl EthChainSpec for BotanixChainSpec {
     type Header = Header;
@@ -182,7 +187,6 @@ impl EthChainSpec for BotanixChainSpec {
         false
     }
 }
-
 
 impl Hardforks for BotanixChainSpec {
     fn fork<H: Hardfork>(&self, fork: H) -> ForkCondition {

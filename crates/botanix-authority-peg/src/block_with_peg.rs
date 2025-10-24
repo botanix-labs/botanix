@@ -1,11 +1,11 @@
 use super::peg_contract::{PeginData, PegoutWithId};
-use reth_primitives::SealedBlockWithSenders;
+use reth_primitives::{Block, RecoveredBlock};
 
 /// Sealed block with pegin and pegout data
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SealedBlockWithPeg {
     /// Sealed block with senders
-    block: SealedBlockWithSenders,
+    block: RecoveredBlock<Block>,
     /// Pegins
     pegins: Vec<PeginData>,
     /// Pegouts
@@ -15,7 +15,7 @@ pub struct SealedBlockWithPeg {
 impl SealedBlockWithPeg {
     /// Create a new `SealedBlockWithPeg`
     pub const fn new(
-        block: SealedBlockWithSenders,
+        block: RecoveredBlock<Block>,
         pegins: Vec<PeginData>,
         pegouts: Vec<PegoutWithId>,
     ) -> Self {
@@ -23,7 +23,7 @@ impl SealedBlockWithPeg {
     }
 
     /// Returns the block
-    pub const fn block(&self) -> &SealedBlockWithSenders {
+    pub const fn block(&self) -> &RecoveredBlock<Block> {
         &self.block
     }
 

@@ -89,6 +89,7 @@ reth-eth-wire-types.workspace = true
 reth-evm.workspace = true
 reth-evm-ethereum.workspace = true
 reth-node-core.workspace = true
+reth-node-types.workspace = true
 reth-revm.workspace = true
 reth-network.workspace = true
 reth-network-p2p.workspace = true
@@ -140,6 +141,7 @@ botanix-rpc-client.workspace = true
 botanix-consensus-common.workspace = true
 botanix-btc-server-client.workspace = true
 btc-server.workspace = true
+botanix-evm = { workspace = true }
 
 # Tendermint
 tendermint.workspace = true
