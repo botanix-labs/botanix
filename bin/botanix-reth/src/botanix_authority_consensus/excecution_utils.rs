@@ -1,13 +1,13 @@
 pub(crate) mod authority_execution_utils {
     use alloy_consensus::{
         constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
-        BlockBody, EMPTY_OMMER_ROOT_HASH,
+        BlockBody, Transaction, EMPTY_OMMER_ROOT_HASH,
     };
     use alloy_eips::{
         eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, eip7685::Requests,
         BlockHashOrNumber,
     };
-    use alloy_primitives::{Address, Bloom, Bytes};
+    use alloy_primitives::{Address, Bloom, Bytes, B64};
     use botanix_authority_edh::{
         extra_data_header::{ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION},
         header_ext::HeaderExt,
@@ -30,7 +30,8 @@ pub(crate) mod authority_execution_utils {
         OriginalValuesKnown, ProviderFactory,
     };
     use reth_revm::{database::StateProviderDatabase, db::State};
-    use reth_trie::StateRoot;
+    use reth_trie::{HashedPostState, StateRoot};
+    use reth_trie_common::KeccakKeyHasher;
     use reth_trie_db::DatabaseStateRoot;
 
     use botanix_activation_manager::NetworkUpgradePayload;
@@ -48,7 +49,7 @@ pub(crate) mod authority_execution_utils {
     /// This returns bundle state, block, and gas used.
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip_all, level = "trace")]
-    pub(crate) fn build_and_execute<BF, DB>(
+    pub(crate) fn build_and_execute<BF, DB, N>(
         transactions: Vec<TransactionSigned>,
         chain_spec: Arc<BotanixChainSpec>,
         runtime_version: RuntimeVersion,
@@ -65,7 +66,8 @@ pub(crate) mod authority_execution_utils {
     ) -> Result<BlockWithContext, BlockExecutionError>
     where
         BF: BitcoindFactory + Clone + Unpin + 'static,
-        DB: Database,
+        DB: Database<TX = reth_db::mdbx::tx::Tx<reth_db::mdbx::RO>>,
+        N: reth_node_types::NodeTypes,
     {
         let start_execution_time = std::time::Instant::now();
 
@@ -80,7 +82,7 @@ pub(crate) mod authority_execution_utils {
         );
 
         // Construct block and header
-        let mut header = build_header_template(
+        let mut header = build_header_template::<DB>(
             &transactions,
             database_provider,
             bitcoin_checkpoint_block_hash,
@@ -114,7 +116,7 @@ pub(crate) mod authority_execution_utils {
         tracing::trace!(target: "consensus::authority", transactions=?&block.body, "executing transactions");
 
         tracing::info!(target: "consensus::authority", "block_fee_recipient_address: {:?}", block_fee_recipient_address);
-        let block_exec_output = execute(
+        let block_exec_output = execute::<BF, DB>(
             &recovered_block,
             database_provider,
             Some(*block_fee_recipient_address),
@@ -124,7 +126,7 @@ pub(crate) mod authority_execution_utils {
             evm_config,
         )?;
 
-        let completed_header = complete_header(
+        let completed_header = complete_header::<DB>(
             recovered_block.header().clone(),
             &block_exec_output,
             block_exec_output.gas_used,
@@ -143,17 +145,17 @@ pub(crate) mod authority_execution_utils {
 
         let sealed_block_with_peg = SealedBlockWithPeg::new(
             recovered_block,
-            block_exec_output.pegins,
-            block_exec_output.pegouts,
+            block_exec_output.pegins.clone(),
+            block_exec_output.pegouts.clone(),
         );
 
         let exec_outcome = ExecutionOutcome::new(
-            block_exec_output.state,
-            vec![block_exec_output.receipts],
+            block_exec_output.state.clone(),
+            vec![block_exec_output.receipts.clone()],
             completed_header.number,
             vec![],
         );
-        let hashed_state = exec_outcome.hash_state_slow();
+        let hashed_state = exec_outcome.hash_state_slow::<KeccakKeyHasher>();
         let (_state_root, trie_updates) = StateRoot::overlay_root_with_updates(
             database_provider.provider()?.tx_ref(),
             hashed_state.clone(),
@@ -230,12 +232,12 @@ pub(crate) mod authority_execution_utils {
     ) -> Result<Header, BlockExecutionError> {
         let client = database_provider.provider()?;
         let best_block = client.best_block_number().map_err(|e| {
-            BlockExecutionError::Internal(InternalBlockExecutionError::LatestBlock(e))
+            BlockExecutionError::Internal(InternalBlockExecutionError::Other(Box::new(e)))
         })?;
         let best_hash = client
             .block_hash(best_block)
             .map_err(|e| {
-                BlockExecutionError::Internal(InternalBlockExecutionError::LatestBlock(e))
+                BlockExecutionError::Internal(InternalBlockExecutionError::Other(Box::new(e)))
             })?
             .unwrap_or_else(|| {
                 panic!("best block hash not found for block number: {}", best_block);
@@ -251,12 +253,11 @@ pub(crate) mod authority_execution_utils {
                 parent.next_block_base_fee(chain_spec.base_fee_params_at_timestamp(timestamp))
             });
 
-        // copied from `build_header_template` in autoseal
         let blob_gas_used = if chain_spec.is_cancun_active_at_timestamp(timestamp) {
             let mut sum_blob_gas_used = 0;
             for tx in transactions {
-                if let Some(blob_tx) = tx.transaction.as_eip4844() {
-                    sum_blob_gas_used += blob_tx.blob_gas();
+                if let Some(blob_gas) = tx.blob_gas_used() {
+                    sum_blob_gas_used += blob_gas;
                 }
             }
             Some(sum_blob_gas_used)
@@ -288,7 +289,7 @@ pub(crate) mod authority_execution_utils {
             gas_used: 0,
             timestamp,
             mix_hash: Default::default(),
-            nonce: 0,
+            nonce: B64::ZERO,
             base_fee_per_gas,
             blob_gas_used,
             excess_blob_gas: None,
@@ -297,7 +298,6 @@ pub(crate) mod authority_execution_utils {
             requests_hash: None,
         };
 
-        // copied from `build_header_template` in autoseal
         if chain_spec.is_cancun_active_at_timestamp(timestamp) {
             let parent = client.header(&best_hash).expect("header to be found");
             header.parent_beacon_block_root =
@@ -333,7 +333,7 @@ pub(crate) mod authority_execution_utils {
     #[allow(clippy::too_many_arguments)]
     fn complete_header<DB: Database>(
         mut header: Header,
-        block_exec_result: &BlockExecutionOutput<Receipt>,
+        block_exec_result: &BotanixBlockExecutionOutput<Receipt>,
         gas_used: u64,
         recent_block_hash: bitcoin::BlockHash,
         database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
@@ -341,20 +341,18 @@ pub(crate) mod authority_execution_utils {
     ) -> Result<Header, BlockExecutionError> {
         let exec_outcome = ExecutionOutcome::new(
             block_exec_result.state.clone(),
-            block_exec_result.receipts.clone().into(),
+            vec![block_exec_result.receipts.clone()],
             header.number,
-            vec![Requests::new(block_exec_result.requests.clone())],
+            vec![],
         );
         let receipts = exec_outcome.receipts_by_block(header.number);
         header.receipts_root = if receipts.is_empty() {
             EMPTY_RECEIPTS
         } else {
-            let receipts_with_bloom = receipts
-                .iter()
-                .map(|r| (*r).clone().expect("receipts have not been pruned").into())
-                .collect::<Vec<ReceiptWithBloom>>();
+            let receipts_with_bloom =
+                receipts.iter().map(ReceiptWithBloom::from).collect::<Vec<_>>();
             header.logs_bloom =
-                receipts_with_bloom.iter().fold(Bloom::ZERO, |bloom, r| bloom | r.bloom);
+                receipts_with_bloom.iter().fold(Bloom::ZERO, |bloom, r| bloom | r.logs_bloom);
             proofs::calculate_receipt_root(&receipts_with_bloom)
         };
         header.gas_used = gas_used;
@@ -364,7 +362,9 @@ pub(crate) mod authority_execution_utils {
         let state_root = provider
             .history_by_block_hash(header.parent_hash)
             .expect("parent hash exists")
-            .state_root(&block_exec_result.state.into())?;
+            .state_root(HashedPostState::from_bundle_state::<KeccakKeyHasher>(
+                block_exec_result.state.state(),
+            ))?;
         header.state_root = state_root;
 
         let block_producer_address = header.block_fee_recipient_address().map_err(|_| {
@@ -420,7 +420,7 @@ pub(crate) mod authority_execution_utils {
     /// Executes the block with the given block and senders, on the provided [Executor].
     ///
     /// This returns the poststate from execution and post-block changes, as well as the gas used.
-    fn execute<BF, DB, N>(
+    fn execute<BF, DB>(
         block: &RecoveredBlock<Block>,
         database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
         _block_fee_recipient_address: Option<Address>,
@@ -432,24 +432,23 @@ pub(crate) mod authority_execution_utils {
     where
         BF: BitcoindFactory + Clone + Unpin + 'static,
         DB: Database,
-        N: reth_node_types::NodeTypes,
     {
         // We cannot call `execute_and_verify_receipt()` here as we dont know the gas used yet
         // We must set those values on the executor after the execution
         // This is only an execution for the block builder, all other executing operations
         // should use `execute_and_verify_receipt`
-        let state_provider = database_provider
-            .provider()?
+        let provider = database_provider.provider()?;
+        let state_provider = provider
             .history_by_block_hash(block.parent_hash)
             .expect("parent hash exists");
 
         let blockchain_provider = database_provider.database_provider_ro()?;
 
         let db = State::builder()
-            .with_database_boxed(Box::new(StateProviderDatabase::new(state_provider)))
+            .with_database(StateProviderDatabase::new(state_provider))
             .with_bundle_update()
             .build();
-        let executor = EthBlockExecutor::<EthEvmConfig, _, BF, DB, N>::new(
+        let executor = EthBlockExecutor::<EthEvmConfig, _, BF, Arc<DatabaseEnv>, NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>::new(
             chain_spec,
             evm_config,
             db,
