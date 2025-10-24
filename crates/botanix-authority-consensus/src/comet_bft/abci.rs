@@ -21,25 +21,26 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
+use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
 use reth_consensus::{Consensus, ConsensusError, InvalidAggregatedPublicKeyError};
-use botanix_consensus_common::utils::unix_timestamp;
 //use reth_ethereum_payload_builder::e
-// use reth_ethereum_payload_builder::{default_ethereum_payload_builder, EthereumBuilderConfig, EthereumPayloadBuilder};
-// use reth_evm::execute::BlockExecutorProvider;
+// use reth_ethereum_payload_builder::{default_ethereum_payload_builder, EthereumBuilderConfig,
+// EthereumPayloadBuilder}; use reth_evm::execute::BlockExecutorProvider;
+use alloy_primitives::{Address, BlockHash, BlockNumber, B256, U256};
+use alloy_rpc_types_engine::PayloadAttributes;
+use alloy_rpc_types_eth::BlockId;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
 use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
 use reth_payload_builder::EthPayloadBuilderAttributes;
-use alloy_primitives::{Address, BlockHash, BlockNumber, B256, U256};
-use reth_primitives::{SealedBlock, BlockWithSenders};
+use reth_primitives::{BlockWithSenders, SealedBlock};
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateNotification, Chain, ProviderError, ProviderFactory, StateProviderFactory
+    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateNotification,
+    Chain, ProviderError, ProviderFactory, StateProviderFactory,
 };
 use reth_revm::primitives::FixedBytes;
-use alloy_rpc_types_engine::PayloadAttributes;
-use alloy_rpc_types_eth::BlockId;
 use reth_tasks::{TaskExecutor, TaskSpawner};
 use reth_transaction_pool::TransactionPool;
 use schnellru::{ByLength, LruMap};
@@ -500,10 +501,7 @@ where
         let payload_builder_attributes =
             EthPayloadBuilderAttributes::new(best_block.hash(), payload_attributes);
 
-        Ok(PayloadConfig::new(
-            Arc::new(best_block),
-            payload_builder_attributes,
-        ))
+        Ok(PayloadConfig::new(Arc::new(best_block), payload_builder_attributes))
     }
 
     pub(crate) fn non_deterministic_data(
@@ -1513,7 +1511,8 @@ where
         // TODO: finish
         // let evm_config = EvmConfig;
         // let p = EthereumBuilderConfig;
-        // let x = EthereumPayloadBuilder::new(client, self.pool.clone(), evm_config, builder_config)
+        // let x = EthereumPayloadBuilder::new(client, self.pool.clone(), evm_config,
+        // builder_config)
 
         match default_ethereum_payload_builder(self.storage.evm_config, build_args) {
             Ok(res) => {
@@ -2458,7 +2457,9 @@ where
                         let executed_block = ExecutedBlock {
                             recovered_block: Arc::new(sealed_block_with_senders.block().clone()),
                             // x: Arc::new(sealed_block_with_senders.senders.clone()),
-                            execution_output: Arc::new(sealed_block_with_context.exec_outcome.clone()),
+                            execution_output: Arc::new(
+                                sealed_block_with_context.exec_outcome.clone(),
+                            ),
                             hashed_state: Arc::new(hashed_state.clone()),
                             // x: Arc::new(trie_updates.clone()),
                         };
@@ -2599,6 +2600,7 @@ mod tests {
 
     use super::*;
     use crate::Storage;
+    use alloy_consensus::EnvKzgSettings;
     use bitcoin::{
         block::{BlockHash, Header, Version},
         hashes::Hash,
@@ -2621,7 +2623,6 @@ mod tests {
     use reth_node_core::{args::TxPoolArgs, cli::config::RethTransactionPoolConfig};
     use reth_node_ethereum::EthEvmConfig;
     use reth_provider::providers::StaticFileProvider;
-    use alloy_consensus::EnvKzgSettings;
     use reth_tasks::TaskManager;
     use reth_transaction_pool::{
         blobstore::InMemoryBlobStore, test_utils::TransactionGenerator, EthPooledTransaction,

@@ -22,7 +22,7 @@ use alloy_eips::BlockHashOrNumber;
 use std::ops::{RangeBounds, RangeInclusive};
 
 /// A mock provider for testing purposes.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct MockProvider {
     /// The timestamp used for mock headers
     pub timestamp: u64,
@@ -181,7 +181,7 @@ impl TransactionsProvider for MockProvider {
         unimplemented!();
     }
     
-    fn transaction_by_id_unhashed(&self, id:TxNumber) -> ProviderResult<Option<Self::Transaction> >  {
+    fn transaction_by_id_unhashed(&self, _id: TxNumber) -> ProviderResult<Option<Self::Transaction> >  {
         unimplemented!();
     }
 }

@@ -3,13 +3,11 @@ use std::{net::SocketAddr, sync::Arc};
 use botanix_rpc_config::botanix_config::Botanix;
 use futures::TryFutureExt;
 use botanix_chainspec::BotanixChainSpec;
-use reth::api::FullNodeComponents;
 use reth::{args::RpcServerArgs, tasks::TaskExecutor};
 use reth::consensus::noop::NoopConsensus;
 use reth_ethereum::{
     network::api::noop::NoopNetwork,
     node::api::NodeTypesWithDBAdapter,
-    pool::noop::NoopTransactionPool,
     provider::{
         db::DatabaseEnv,
         providers::BlockchainProvider,
@@ -19,8 +17,7 @@ use reth_ethereum::{
         EthApiBuilder,
     },
 };
-use reth_network::NetworkInfo;
-use reth_transaction_pool::TransactionPool;
+use crate::services::network_builder::{BotanixNetworkHandle, BotanixPool};
 use crate::{node::{evm::config::BotanixEvmConfig, BotanixNode}, services::rpc::botanixrpc_ext::{BotanixRpcExt, BotanixRpcExtApiServer}};
 
 /// Sets up and runs the RPC server for the Botanix node, wiring providers,
@@ -32,10 +29,11 @@ pub async fn setup_and_run_rpc(
     task_executor: &TaskExecutor,
     chain_spec: Arc<BotanixChainSpec>,
     botanix_provider: Botanix,
+    pool: BotanixPool,
 ) -> eyre::Result<()> {
     let rpc_builder = RpcModuleBuilder::default()
         .with_provider(provider.clone())
-        .with_pool(NoopTransactionPool::default())
+        .with_pool(pool.clone())
         .with_network(NoopNetwork::default())
         .with_executor(Box::new(task_executor.clone()))
         .with_consensus(NoopConsensus::default())
@@ -43,7 +41,7 @@ pub async fn setup_and_run_rpc(
 
     let eth_api = EthApiBuilder::new(
         provider.clone(),
-        NoopTransactionPool::default(),
+        pool,
         NoopNetwork::default(),
         BotanixEvmConfig::new(chain_spec),
     )

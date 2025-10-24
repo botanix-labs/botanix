@@ -13,34 +13,35 @@
 
 //! A [Consensus] implementation of Clique Proof of Authority (POA)
 //! that authoritymatically seals blocks.
+use alloy_consensus::EMPTY_OMMER_ROOT_HASH;
+use alloy_primitives::{Address, U256};
 use async_trait as _;
 use botanix_authority_edh::{header_ext::HeaderExt, nums_secp256k1_pk};
 use botanix_chainspec::BotanixChainSpec;
-use bytes as _;
-use displaydoc as _;
-use reth_chainspec::{EthereumHardfork, EthereumHardforks};
-use reth_consensus::{
-    Consensus, ConsensusError, InvalidAggregatedPublicKeyError, FullConsensus, HeaderValidator,
-};
 use botanix_consensus_common::{
     utils::validate_chain_version,
     validation::{
-        validate_4844_header_standalone, validate_against_parent_4844, validate_against_parent_eip1559_base_fee, validate_against_parent_hash_number, validate_against_parent_timestamp, validate_block_pre_execution, validate_header_base_fee, validate_header_gas
+        validate_4844_header_standalone, validate_against_parent_4844,
+        validate_against_parent_eip1559_base_fee, validate_against_parent_hash_number,
+        validate_against_parent_timestamp, validate_block_pre_execution, validate_header_base_fee,
+        validate_header_gas,
     },
 };
+use bytes as _;
+use displaydoc as _;
+use reth_chainspec::{EthereumHardfork, EthereumHardforks};
+use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator};
 use reth_ethereum_consensus::validate_block_post_execution;
 use reth_network_peers as _;
 use reth_node_core as _;
 use reth_node_ethereum::EthEvmConfig;
-use reth_primitives::{BlockWithSenders, RecoveredBlock, Block, Header, SealedBlock, SealedHeader};
+use reth_primitives::{Block, Header, SealedBlock, SealedHeader};
 use reth_primitives_traits::constants::MINIMUM_GAS_LIMIT;
-use alloy_consensus::EMPTY_OMMER_ROOT_HASH;
-use alloy_primitives::{Address, U256};
 use reth_provider::BlockExecutionResult;
 use serde_json as _;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tracing::{error, warn};
+use tracing::warn;
 mod builder;
 
 // /// Comet BFT abci and consensus driver
@@ -125,10 +126,13 @@ impl AuthorityConsensus {
 }
 
 impl Consensus<reth_primitives::Block> for AuthorityConsensus {
-
     type Error = ConsensusError;
-    
-    fn validate_body_against_header(&self, body: &Block::Body, header: &SealedHeader<Header>) -> Result<(),Self::Error>  {
+
+    fn validate_body_against_header(
+        &self,
+        body: &Block::Body,
+        header: &SealedHeader<Header>,
+    ) -> Result<(), Self::Error> {
         todo!()
     }
 
@@ -153,7 +157,6 @@ impl FullConsensus<BlockWithSenders> for AuthorityConsensus {
 }
 
 impl HeaderValidator for AuthorityConsensus {
-
     fn validate_header(&self, header: &SealedHeader) -> Result<(), ConsensusError> {
         validate_header_gas(header)?;
         validate_header_base_fee(header, &self.chain_spec.inner())?;
@@ -295,16 +298,16 @@ pub(crate) struct StorageInner {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use alloy_consensus::constants::MAXIMUM_EXTRA_DATA_SIZE;
+    use alloy_eips::merge::ALLOWED_FUTURE_BLOCK_TIME_SECONDS;
+    use alloy_primitives::Bytes;
     use botanix_authority_edh::extra_data_header::{ExtraDataHeader, CHAIN_VERSION};
     use botanix_authority_rsp::{RandomSource, RandomSourceProvider};
     use botanix_chainspec::constants::BOTANIX_TESTNET;
-    use reth_consensus::InvalidAggregatedPublicKeyError;
     use botanix_consensus_common::utils::is_inturn;
-    use alloy_primitives::Bytes;
-    use alloy_eips::merge::ALLOWED_FUTURE_BLOCK_TIME_SECONDS;
-    use alloy_consensus::constants::MAXIMUM_EXTRA_DATA_SIZE;
+    use reth_consensus::InvalidAggregatedPublicKeyError;
     use std::str::FromStr;
-    use super::*;
 
     #[allow(dead_code)]
     const EDH_DEFAULT_SIGHASH: &str =

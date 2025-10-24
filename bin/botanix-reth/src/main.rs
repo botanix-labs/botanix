@@ -3,6 +3,8 @@
 //! This crate provides the main entry point for running a Botanix Reth node with Botanix support.
 
 use std::{sync::Arc, time::Duration};
+use alloy_consensus::{EthereumTxEnvelope, TxEip4844WithSidecar};
+use alloy_eips::eip7594::BlobTransactionSidecarVariant;
 use botanix_authority_rsp::RandomSourceProvider;
 use botanix_btc_server_client::BtcServerExtendedClient;
 use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}, parser::BotanixChainSpecParser};
@@ -13,12 +15,16 @@ use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
-    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, metrics::run_metrics_service, migrator::init_and_migrate_db, network_builder::lookup_head, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::rpc::setup_and_run_rpc},
+    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, network::BotanixNewBlock, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, metrics::run_metrics_service, migrator::init_and_migrate_db, network_builder::{lookup_head, setup_network_builder}, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::rpc::setup_and_run_rpc}, BotanixPrimitives,
 };
 use reth_cli_commands::NodeCommand;
 use reth_db::DatabaseEnv;
-use reth_network::{NetworkConfigBuilder, NetworkManager};
+use reth_eth_wire::BasicNetworkPrimitives;
+use reth_network::{NetworkConfigBuilder, NetworkHandle, NetworkManager};
 use reth_node_core::version::version_metadata;
+use reth_node_types::NodeTypesWithDBAdapter;
+use reth_provider::providers::BlockchainProvider;
+use reth_transaction_pool::{blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator, TransactionValidationTaskExecutor};
 
 // We use jemalloc for performance reasons
 #[cfg(all(feature = "jemalloc", unix))]
@@ -177,48 +183,22 @@ fn main() -> eyre::Result<()> {
                 &node.task_executor,
                 Arc::clone(&chain_spec_arc),
                 botanix_provider.clone(),
+                node.pool.clone(),
             ).await?;
 
-
-            // ================================================
-            let secret_key = frost_setup_result.secret_key.clone();
-            let data_dir = datadir_args.datadir.unwrap_or_chain_default(chain_spec_arc.chain, datadir_args.clone());
-            let default_peers_path = data_dir.known_peers();
-            let head = lookup_head(&blockchain_provider);
-
-            let mut network_cfg_builder: NetworkConfigBuilder = network_args
-                .network_config(&reth_cfg, chain_spec_arc.clone(), secret_key, default_peers_path)
-                .with_task_executor(Box::new(node.task_executor.clone()))
-                .set_head(head)
-                .listener_addr(std::net::SocketAddr::new(
-                    network_args.addr,
-                    network_args.port,
-                ))
-                .discovery_addr(std::net::SocketAddr::new(
-                    network_args.addr,
-                    network_args.port,
-                ));
-
-            // Optionally disable discovery if needed
-            if network_args.trusted_only {
-                network_cfg_builder = network_cfg_builder.disable_discovery();
-            }
-
-            // Set network mode to Authority if this is a validator/authority node
-            if poa_cfg.federation_mode {
-                network_cfg_builder = network_cfg_builder
-                    .network_mode(reth_network::config::NetworkMode::Authority);
-            }
-            let network_config = network_cfg_builder.build(reth_provider_factory.clone());
-
-            // Create the network manager and get the handle
             let (network_handle, network_manager, tx_pool_p2p, eth_request_handler_p2p, frost_p2p) =
-                NetworkManager::builder(network_config)
-                    .await?
-                    .frost(frost_setup_result.frost_config.clone())
-                    .request_handler(reth_provider_factory.clone())
-                    .transactions(node.pool.clone(), Default::default())
-                    .split_with_handle();
+            setup_network_builder(
+                &frost_setup_result,
+                &reth_provider_factory,
+                &blockchain_provider,
+                &reth_cfg,
+                &chain_spec_arc.inner_arc(),
+                &poa_cfg,
+                &network_args,
+                &datadir_args,
+                node.task_executor.clone(),
+                node.pool.clone(),
+            ).await?;
 
             // Start all the p2p tasks
             let frost_handle = if poa_cfg.federation_mode {
@@ -229,8 +209,6 @@ fn main() -> eyre::Result<()> {
             } else {
                 None
             };
-
-            // ================================================================
 
             let (driver_tx, driver_rx) = tokio::sync::mpsc::channel(1);
             let mut abci_driver = ABCIDriver::new(
@@ -247,7 +225,6 @@ fn main() -> eyre::Result<()> {
             let btc_server_factory = btc_server_client.unzip().0;
             let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
 
-            // =========================================FROST TASK (WIP)=================================================
             let (frost_task, abci_client_builder, snapshot_manager, wallet_sync) =
                 match AuthorityConsensusBuilder::try_new(
                     chain_spec_arc.clone(),
@@ -332,8 +309,6 @@ fn main() -> eyre::Result<()> {
                         return Err(eyre::eyre!("Failed to connect to abci client: {}", err));
                     }
                 };
-
-            // ==========================================================================================
 
             // add metrics if necessary
             run_metrics_service(metrics_args, &node.task_executor, chain_spec_arc).await?;

@@ -3,6 +3,7 @@ use alloy_primitives::{address, Address, BlockNumber, B256};
 use reth_provider::{BlockNumReader, ProviderError};
 use std::cmp::Ordering;
 
+/// The system account address used by the reward contract.
 pub const SYSTEM_ADDRESS: Address = address!("0xfffffffffffffffffffffffffffffffffffffffe");
 /// The reward percent to system
 pub const SYSTEM_REWARD_PERCENT: usize = 4;

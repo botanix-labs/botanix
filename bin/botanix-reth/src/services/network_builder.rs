@@ -2,59 +2,66 @@ use std::sync::Arc;
 use crate::{
     node::BotanixNode, services::frost::FrostConfigSetupResult
 };
+use alloy_consensus::{EthereumTxEnvelope, TxEip4844WithSidecar};
+use alloy_eips::eip7594::BlobTransactionSidecarVariant;
 use botanix_cli_args::poa_node::PoaNodeArgs;
 use reth::{args::{DatadirArgs, NetworkArgs}, providers::HeaderProvider};
 use reth_chainspec::ChainSpec;
 use reth_config::Config;
 use reth_db::DatabaseEnv;
-use reth_network::{NetworkConfigBuilder, NetworkManager};
-use reth_node_builder::{components::PoolBuilder, NodeTypesWithDBAdapter};
-use reth_provider::{providers::BlockchainProvider, BlockHashReader, StageCheckpointReader};
+use reth_eth_wire::{BasicNetworkPrimitives, NewBlock};
+use reth_ethereum::EthPrimitives;
+use reth_network::{eth_requests::EthRequestHandler, frost::manager::FrostManager, transactions::TransactionsManager, NetworkConfigBuilder, NetworkHandle, NetworkManager};
+use reth_node_builder::NodeTypesWithDBAdapter;
+use reth_provider::{providers::BlockchainProvider, BlockHashReader, ProviderFactory, StageCheckpointReader};
 use reth_stages::StageId;
 use alloy_eip2124::Head;
 use reth_tasks::TaskExecutor;
-use reth_transaction_pool::TransactionPool;
+use reth_transaction_pool::{blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator, TransactionValidationTaskExecutor};
+
+pub type BotanixPool = reth::transaction_pool::Pool<TransactionValidationTaskExecutor<EthTransactionValidator<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, EthPooledTransaction>>, CoinbaseTipOrdering<EthPooledTransaction>, DiskFileBlobStore>;
+pub type BotanixNetworkHandle = NetworkHandle<BasicNetworkPrimitives<EthPrimitives, EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, NewBlock>>;
+pub type BotanixNetworkManager = NetworkManager<BasicNetworkPrimitives<EthPrimitives, EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, NewBlock>>;
+pub type BotanixTxPoolP2P = TransactionsManager<reth_transaction_pool::Pool<TransactionValidationTaskExecutor<EthTransactionValidator<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, EthPooledTransaction>>, CoinbaseTipOrdering<EthPooledTransaction>, DiskFileBlobStore>, BasicNetworkPrimitives<EthPrimitives, alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, reth_eth_wire::NewBlock>>;
+pub type BotanixEthRequestHandlerP2P = EthRequestHandler<ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, BasicNetworkPrimitives<EthPrimitives, alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, reth_eth_wire::NewBlock>>;
+pub type FrostP2P = Option<FrostManager<BasicNetworkPrimitives<EthPrimitives, EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, NewBlock>>>;
 
 /// Look up the current chain head from the given blockchain provider.
 ///
 /// Returns an `alloy_eip2124::Head` with the head number, hash, difficulty,
 /// total difficulty and timestamp retrieved from the provider.
-pub fn lookup_head(blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>) -> Head {
+pub fn lookup_head(blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>) ->  eyre::Result<Head> {
         let head = blockchain_provider
-        .get_stage_checkpoint(StageId::Finish)
-        .expect("get stage point")
+        .get_stage_checkpoint(StageId::Finish)?
         .unwrap_or_default()
         .block_number;
 
     let header = blockchain_provider
-        .header_by_number(head)
-        .expect("missing header by number, database corrupt")
-        .expect("the header for the latest block is missing, database is corrupt");
+        .header_by_number(head)?
+        .ok_or_else(|| eyre::eyre!("missing header for block {}", head))?;
 
     let total_difficulty = blockchain_provider
-        .header_td_by_number(head)
-        .expect("missing header by number, database corrupt")
-        .expect("the total difficulty for the latest block is missing, database is corrupt");
+        .header_td_by_number(head)?
+        .ok_or_else(|| eyre::eyre!("missing total difficulty for block {}", head))?;
 
     let hash = blockchain_provider
-        .block_hash(head)
-        .expect("is some")
-        .expect("the hash for the latest block is missing, database is corrupt");
+        .block_hash(head)?
+        .ok_or_else(|| eyre::eyre!("missing hash for block {}", head))?;
 
-    Head {
+    Ok(Head {
         number: head,
         hash,
         difficulty: header.difficulty,
         total_difficulty,
         timestamp: header.timestamp,
-    }
+    })
 }
 
 
+/// Sets up the P2P network for the node and returns the network handle and manager.
 pub async fn setup_network_builder(
         frost_setup_result: &FrostConfigSetupResult,
-        node: &BotanixNode,
-        reth_provider_factory: Arc<reth_provider::ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>>,
+        reth_provider_factory: &reth_provider::ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         reth_cfg: &Config,
         chain_spec_arc: &Arc<ChainSpec>,
@@ -62,12 +69,12 @@ pub async fn setup_network_builder(
         network_args: &NetworkArgs,
         datadir_args: &DatadirArgs,
         task_executor: TaskExecutor,
-        pool: Pool<BotanixNode, Arc<DatabaseEnv>>,
-) -> eyre::Result<()> {
+        pool: BotanixPool,
+) -> eyre::Result<(BotanixNetworkHandle, BotanixNetworkManager, BotanixTxPoolP2P, BotanixEthRequestHandlerP2P, FrostP2P)> {
     let secret_key = frost_setup_result.secret_key.clone();
     let data_dir = datadir_args.datadir.unwrap_or_chain_default(chain_spec_arc.chain, datadir_args.clone());
     let default_peers_path = data_dir.known_peers();
-    let head = lookup_head(&blockchain_provider);
+    let head = lookup_head(&blockchain_provider)?;
 
     let mut network_cfg_builder: NetworkConfigBuilder = network_args
         .network_config(&reth_cfg, chain_spec_arc.clone(), secret_key, default_peers_path)
@@ -103,6 +110,5 @@ pub async fn setup_network_builder(
             .transactions(pool, Default::default())
             .split_with_handle();
 
-    // Ok((network_handle, network_manager, tx_pool_p2p, eth_request_handler_p2p, frost_p2p))
-    Ok(())
+    Ok((network_handle, network_manager, tx_pool_p2p, eth_request_handler_p2p, frost_p2p))
 }

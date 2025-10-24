@@ -119,7 +119,7 @@ use crate::botanix_authority_consensus::{
         RequestProcessProposalTruncatedDebug, ResponseLoadSnapshotChunkTruncatedDebug,
         ResponsePrepareProposalTruncatedDebug,
     },
-    excecution_utils::authority_execution_utils::{batch_execute, build_and_execute},
+    excecution_utils::authority_execution_utils::build_and_execute,
     snapshot_manager::{SnapshotManagerError, SnapshotManagerStateLock},
     utils::{
         get_staged_pegins_from_pegin_meta, get_staged_pegouts_from_pegout_data,

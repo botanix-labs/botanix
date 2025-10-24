@@ -1,13 +1,24 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
+use botanix_activation_manager::ActivationManager;
+use botanix_authority_rsp::RandomSourceProvider;
+use botanix_btc_server_client::BtcServerExtendedClient;
+use botanix_btc_wallet::bitcoind::{BitcoindClient, BitcoindFactory};
 use botanix_chainspec::BotanixChainSpec;
-use botanix_cli_args::{frost_args::FrostArgs, poa_node::PoaNodeArgs, state_sync::StateSyncArgs};
+use botanix_cli_args::{bitcoind::BitcoindArgs, frost_args::FrostArgs, poa_node::PoaNodeArgs, state_sync::StateSyncArgs};
+use botanix_comet_bft_rpc::CometBftRpcFactory;
 use botanix_configs::federation::load_federation_config_toml;
 use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
+use reth_db::DatabaseEnv;
 use reth_discv4::NodeRecord;
 use reth_network::frost::manager::FrostConfig;
 use reth_network_peers::pk2id;
+use reth_node_types::NodeTypesWithDBAdapter;
+use reth_provider::providers::BlockchainProvider;
+use reth_tasks::TaskExecutor;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
+
+use crate::{botanix_authority_consensus::{snapshot_manager::SnapshotManager, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{evm::config::BotanixEvmConfig, BotanixNode}, services::network_builder::BotanixNetworkHandle};
 
 /// Result of setting up the Frost configuration for a node, containing the optional FrostConfig,
 /// the socket addresses of federation authorities, the node's secret key, and the genesis authorities.

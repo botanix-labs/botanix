@@ -34,7 +34,14 @@ pub async fn run_metrics_service(metrics_args: Option<SocketAddr>, task_executor
             task_executor.clone(),
             hooks,
         );
-        MetricServer::new(config).serve().await?;
+        task_executor.spawn_critical(
+            "metrics server",
+            Box::pin(async move {
+                if let Err(err) = MetricServer::new(config).serve().await {
+                    tracing::error!(target: "reth::cli", %err, "Metrics server crashed");
+                }
+            }),
+        );
     }
     Ok(())
 }
