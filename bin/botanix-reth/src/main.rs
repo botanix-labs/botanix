@@ -3,29 +3,28 @@
 //! This crate provides the main entry point for running a Botanix Reth node with Botanix support.
 
 use std::{sync::Arc, time::Duration};
+use alloy_consensus::{EthereumTxEnvelope, TxEip4844WithSidecar};
+use alloy_eips::eip7594::BlobTransactionSidecarVariant;
 use botanix_authority_rsp::RandomSourceProvider;
 use botanix_btc_server_client::BtcServerExtendedClient;
 use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}, parser::BotanixChainSpecParser};
 use botanix_cli_args::{chain::{get_chain_from_federation_config, BotanixNetwork}, BotanixArgs};
 use botanix_storage::BotanixProviderFactory;
 use botanix_utils::panic_hook::set_panic_hook;
-use btcserverlib::version::{CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP, VERGEN_GIT_SHA};
 use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
-    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, migrator::init_and_migrate_db, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::setup_and_run_rpc},
+    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, network::BotanixNewBlock, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, metrics::run_metrics_service, migrator::init_and_migrate_db, network_builder::{lookup_head, setup_network_builder}, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::rpc::setup_and_run_rpc}, BotanixPrimitives,
 };
-use reth::providers::HeaderProvider;
 use reth_cli_commands::NodeCommand;
 use reth_db::DatabaseEnv;
-use reth_network::{NetworkConfigBuilder, NetworkManager};
-use reth_node_builder::NodeTypesWithDBAdapter;
+use reth_eth_wire::BasicNetworkPrimitives;
+use reth_network::{NetworkConfigBuilder, NetworkHandle, NetworkManager};
 use reth_node_core::version::version_metadata;
-use reth_node_metrics::{chain::ChainSpecInfo, hooks::Hooks, server::{MetricServer, MetricServerConfig}, version::VersionInfo};
-use reth_provider::{providers::BlockchainProvider, BlockHashReader, StageCheckpointReader};
-use reth_stages::StageId;
-use alloy_eip2124::Head;
+use reth_node_types::NodeTypesWithDBAdapter;
+use reth_provider::providers::BlockchainProvider;
+use reth_transaction_pool::{blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator, TransactionValidationTaskExecutor};
 
 // We use jemalloc for performance reasons
 #[cfg(all(feature = "jemalloc", unix))]
@@ -184,48 +183,22 @@ fn main() -> eyre::Result<()> {
                 &node.task_executor,
                 Arc::clone(&chain_spec_arc),
                 botanix_provider.clone(),
+                node.pool.clone(),
             ).await?;
 
-
-            // ================================================
-            let secret_key = frost_setup_result.secret_key.clone();
-            let data_dir = datadir_args.datadir.unwrap_or_chain_default(chain_spec_arc.chain, datadir_args.clone());
-            let default_peers_path = data_dir.known_peers();
-            let head = lookup_head(&blockchain_provider);
-
-            let mut network_cfg_builder: NetworkConfigBuilder = network_args
-                .network_config(&reth_cfg, chain_spec_arc.clone(), secret_key, default_peers_path)
-                .with_task_executor(Box::new(node.task_executor.clone()))
-                .set_head(head)
-                .listener_addr(std::net::SocketAddr::new(
-                    network_args.addr,
-                    network_args.port,
-                ))
-                .discovery_addr(std::net::SocketAddr::new(
-                    network_args.addr,
-                    network_args.port,
-                ));
-
-            // Optionally disable discovery if needed
-            if network_args.trusted_only {
-                network_cfg_builder = network_cfg_builder.disable_discovery();
-            }
-
-            // Set network mode to Authority if this is a validator/authority node
-            if poa_cfg.federation_mode {
-                network_cfg_builder = network_cfg_builder
-                    .network_mode(reth_network::config::NetworkMode::Authority);
-            }
-            let network_config = network_cfg_builder.build(reth_provider_factory.clone());
-
-            // Create the network manager and get the handle
             let (network_handle, network_manager, tx_pool_p2p, eth_request_handler_p2p, frost_p2p) =
-                NetworkManager::builder(network_config)
-                    .await?
-                    .frost(frost_setup_result.frost_config.clone())
-                    .request_handler(reth_provider_factory.clone())
-                    .transactions(node.pool.clone(), Default::default())
-                    .split_with_handle();
+            setup_network_builder(
+                &frost_setup_result,
+                &reth_provider_factory,
+                &blockchain_provider,
+                &reth_cfg,
+                &chain_spec_arc.inner_arc(),
+                &poa_cfg,
+                &network_args,
+                &datadir_args,
+                node.task_executor.clone(),
+                node.pool.clone(),
+            ).await?;
 
             // Start all the p2p tasks
             let frost_handle = if poa_cfg.federation_mode {
@@ -236,8 +209,6 @@ fn main() -> eyre::Result<()> {
             } else {
                 None
             };
-
-            // ================================================================
 
             let (driver_tx, driver_rx) = tokio::sync::mpsc::channel(1);
             let mut abci_driver = ABCIDriver::new(
@@ -254,7 +225,6 @@ fn main() -> eyre::Result<()> {
             let btc_server_factory = btc_server_client.unzip().0;
             let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
 
-            // =========================================FROST TASK (WIP)=================================================
             let (frost_task, abci_client_builder, snapshot_manager, wallet_sync) =
                 match AuthorityConsensusBuilder::try_new(
                     chain_spec_arc.clone(),
@@ -340,31 +310,8 @@ fn main() -> eyre::Result<()> {
                     }
                 };
 
-            // ==========================================================================================
-
             // add metrics if necessary
-            if let Some(metrics_listener_address) = metrics_args {
-                // start the metrics server
-                let hooks = Hooks::builder().build();
-                tracing::info!(target: "reth::cli", "Starting metrics endpoint at {}", metrics_listener_address.to_string());
-                let config = MetricServerConfig::new(
-                    metrics_listener_address,
-                    VersionInfo {
-                        version: CARGO_PKG_VERSION,
-                        build_timestamp: VERGEN_BUILD_TIMESTAMP,
-                        cargo_features: "VERGEN_CARGO_FEATURES",
-                        git_sha: VERGEN_GIT_SHA,
-                        target_triple: "VERGEN_CARGO_TARGET_TRIPLE",
-                        build_profile: "BUILD_PROFILE_NAME",
-                    },
-                    ChainSpecInfo {
-                        name: chain_spec.chain().id().to_string(),
-                    },
-                    task_executor.clone(),
-                    hooks,
-                );
-                MetricServer::new(config).serve().await?;
-            }
+            run_metrics_service(metrics_args, &node.task_executor, chain_spec_arc).await?;
 
             // launch the network manager task
             node.task_executor.spawn_critical("network p2p", network_manager);
@@ -411,35 +358,4 @@ fn main() -> eyre::Result<()> {
     )?;
 
     Ok(())
-}
-
-fn lookup_head(blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>) -> Head {
-        let head = blockchain_provider
-        .get_stage_checkpoint(StageId::Finish)
-        .expect("get stage point")
-        .unwrap_or_default()
-        .block_number;
-
-    let header = blockchain_provider
-        .header_by_number(head)
-        .expect("missing header by number, database corrupt")
-        .expect("the header for the latest block is missing, database is corrupt");
-
-    let total_difficulty = blockchain_provider
-        .header_td_by_number(head)
-        .expect("missing header by number, database corrupt")
-        .expect("the total difficulty for the latest block is missing, database is corrupt");
-
-    let hash = blockchain_provider
-        .block_hash(head)
-        .expect("is some")
-        .expect("the hash for the latest block is missing, database is corrupt");
-
-    Head {
-        number: head,
-        hash,
-        difficulty: header.difficulty,
-        total_difficulty,
-        timestamp: header.timestamp,
-    }
 }
