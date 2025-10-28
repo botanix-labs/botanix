@@ -1,9 +1,6 @@
 #![allow(clippy::owned_cow)]
 use crate::{
-    consensus::ParliaConsensus,
     node::{
-        engine_api::payload::BotanixPayloadTypes,
-        network::block_import::{handle::ImportHandle, service::ImportService, BotanixBlockImport},
         primitives::{BotanixBlobTransactionSidecar, BotanixPrimitives},
         BotanixNode,
     },
@@ -16,20 +13,16 @@ use reth::{
     builder::{components::NetworkBuilder, BuilderContext},
     transaction_pool::{PoolTransaction, TransactionPool},
 };
-use reth_chainspec::EthChainSpec;
 use reth_discv4::Discv4Config;
-use reth_engine_primitives::BeaconConsensusEngineHandle;
 use reth_eth_wire::{BasicNetworkPrimitives, NewBlock, NewBlockPayload};
 use reth_ethereum_primitives::PooledTransactionVariant;
 use reth_network::{NetworkConfig, NetworkHandle, NetworkManager};
 use reth_network_api::PeersInfo;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::info;
 
-pub mod block_import;
-pub mod bootnodes;
 pub mod handshake;
+
 pub(crate) mod upgrade_status;
 
 /// Botanix `NewBlock` message value.
@@ -140,11 +133,8 @@ pub type BotanixNetworkPrimitives =
     BasicNetworkPrimitives<BotanixPrimitives, PooledTransactionVariant, BotanixNewBlock>;
 
 /// A basic Botanix network builder.
-#[derive(Debug)]
-pub struct BotanixNetworkBuilder {
-    pub(crate) engine_handle_rx:
-        Arc<Mutex<Option<oneshot::Receiver<BeaconConsensusEngineHandle<BotanixPayloadTypes>>>>>,
-}
+#[derive(Debug, Default)]
+pub struct BotanixNetworkBuilder {}
 
 impl BotanixNetworkBuilder {
     /// Returns the [`NetworkConfig`] that contains the settings to launch the p2p network.
@@ -157,39 +147,12 @@ impl BotanixNetworkBuilder {
     where
         Node: FullNodeTypes<Types = BotanixNode>,
     {
-        let Self { engine_handle_rx } = self;
-
         let network_builder = ctx.network_config_builder()?;
         let mut discv4 = Discv4Config::builder();
-
-        if let Some(boot_nodes) = ctx.chain_spec().bootnodes() {
-            discv4.add_boot_nodes(boot_nodes);
-        }
         discv4.lookup_interval(Duration::from_millis(500));
 
-        let (to_import, from_network) = mpsc::unbounded_channel();
-        let (to_network, import_outcome) = mpsc::unbounded_channel();
-
-        let handle = ImportHandle::new(to_import, import_outcome);
-        let consensus = Arc::new(ParliaConsensus { provider: ctx.provider().clone() });
-
-        ctx.task_executor().spawn_critical("block import", async move {
-            let handle = engine_handle_rx
-                .lock()
-                .await
-                .take()
-                .expect("node should only be launched once")
-                .await
-                .unwrap();
-
-            ImportService::new(consensus, handle, from_network, to_network).await.unwrap();
-        });
-
         let network_builder = network_builder
-            .boot_nodes(ctx.chain_spec().bootnodes().unwrap_or_default())
             .set_head(ctx.chain_spec().head())
-            .with_pow()
-            .block_import(Box::new(BotanixBlockImport::new(handle)))
             .discovery(discv4)
             .eth_rlpx_handshake(Arc::new(BotanixHandshake::default()));
 

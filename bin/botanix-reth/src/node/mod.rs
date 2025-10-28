@@ -60,7 +60,8 @@ pub struct BotanixNode {
 }
 
 impl BotanixNode {
-    /// Creates a new `BotanixNode` and returns it along with a sender for the consensus engine handle.
+    /// Creates a new `BotanixNode` and returns it along with a sender for the consensus engine
+    /// handle.
     pub fn new() -> (Self, oneshot::Sender<BeaconConsensusEngineHandle<BotanixPayloadTypes>>) {
         let (tx, rx) = oneshot::channel();
         (Self { engine_handle_rx: Arc::new(Mutex::new(Some(rx))) }, tx)
@@ -87,7 +88,7 @@ impl BotanixNode {
             .pool(EthereumPoolBuilder::default())
             .executor(BotanixExecutorBuilder::default())
             .payload(BotanixPayloadServiceBuilder::default())
-            .network(BotanixNetworkBuilder { engine_handle_rx: self.engine_handle_rx.clone() })
+            .network(BotanixNetworkBuilder::default())
             .consensus(BotanixConsensusBuilder::default())
     }
 }
