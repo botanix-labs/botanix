@@ -53,20 +53,8 @@ pub type BotanixNodeAddOns<N> = RpcAddOns<
 >;
 
 /// Type configuration for a regular Botanix node.
-#[derive(Debug, Clone)]
-pub struct BotanixNode {
-    engine_handle_rx:
-        Arc<Mutex<Option<oneshot::Receiver<BeaconConsensusEngineHandle<BotanixPayloadTypes>>>>>,
-}
-
-impl BotanixNode {
-    /// Creates a new `BotanixNode` and returns it along with a sender for the consensus engine
-    /// handle.
-    pub fn new() -> (Self, oneshot::Sender<BeaconConsensusEngineHandle<BotanixPayloadTypes>>) {
-        let (tx, rx) = oneshot::channel();
-        (Self { engine_handle_rx: Arc::new(Mutex::new(Some(rx))) }, tx)
-    }
-}
+#[derive(Debug, Default, Clone)]
+pub struct BotanixNode {}
 
 impl BotanixNode {
     /// Builds and returns the components builder for the BotanixNode.

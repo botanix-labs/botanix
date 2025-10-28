@@ -2,20 +2,49 @@
 //!
 //! This crate provides the main entry point for running a Botanix Reth node with Botanix support.
 
-use std::{sync::Arc, time::Duration};
 use alloy_consensus::{EthereumTxEnvelope, TxEip4844WithSidecar};
 use alloy_eips::eip7594::BlobTransactionSidecarVariant;
 use botanix_authority_rsp::RandomSourceProvider;
 use botanix_btc_server_client::BtcServerExtendedClient;
-use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}, parser::BotanixChainSpecParser};
-use botanix_cli_args::{chain::{get_chain_from_federation_config, BotanixNetwork}, BotanixArgs};
+use botanix_chainspec::{
+    constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID},
+    parser::BotanixChainSpecParser,
+};
+use botanix_cli_args::{
+    chain::{get_chain_from_federation_config, BotanixNetwork},
+    BotanixArgs,
+};
 use botanix_storage::BotanixProviderFactory;
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
-    botanix_authority_consensus::{comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{consensus::BotanixConsensus, evm::config::BotanixEvmConfig, network::BotanixNewBlock, BotanixNode}, services::{activation_manager::setup_activation_manager, bitcoin_checkpoints::setup_bitcoin_checkpoints, bitcoind::setup_bitcoind_client, botanix_provider::create_botanix_provider, btc_server::create_btc_server_client, cometbft::create_cometbft_factory, frost::setup_frost, metrics::run_metrics_service, migrator::init_and_migrate_db, network_builder::{lookup_head, setup_network_builder}, provider::create_blockchain_provider, recover_utxos::recover_missing_utxos, reth::load_reth_config, rpc::rpc::setup_and_run_rpc}, BotanixPrimitives,
+    botanix_authority_consensus::{
+        comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec,
+        wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder,
+    },
+    node::{
+        consensus::BotanixConsensus, evm::config::BotanixEvmConfig, network::BotanixNewBlock,
+        BotanixNode,
+    },
+    services::{
+        activation_manager::setup_activation_manager,
+        bitcoin_checkpoints::setup_bitcoin_checkpoints,
+        bitcoind::setup_bitcoind_client,
+        botanix_provider::create_botanix_provider,
+        btc_server::create_btc_server_client,
+        cometbft::create_cometbft_factory,
+        frost::setup_frost,
+        metrics::run_metrics_service,
+        migrator::init_and_migrate_db,
+        network_builder::{lookup_head, setup_network_builder},
+        provider::create_blockchain_provider,
+        recover_utxos::recover_missing_utxos,
+        reth::load_reth_config,
+        rpc::rpc::setup_and_run_rpc,
+    },
+    BotanixPrimitives,
 };
 use reth_cli_commands::NodeCommand;
 use reth_db::DatabaseEnv;
@@ -24,7 +53,11 @@ use reth_network::{NetworkConfigBuilder, NetworkHandle, NetworkManager};
 use reth_node_core::version::version_metadata;
 use reth_node_types::NodeTypesWithDBAdapter;
 use reth_provider::providers::BlockchainProvider;
-use reth_transaction_pool::{blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator, TransactionValidationTaskExecutor};
+use reth_transaction_pool::{
+    blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction,
+    EthTransactionValidator, TransactionValidationTaskExecutor,
+};
+use std::{sync::Arc, time::Duration};
 
 // We use jemalloc for performance reasons
 #[cfg(all(feature = "jemalloc", unix))]
@@ -170,7 +203,7 @@ fn main() -> eyre::Result<()> {
             ).await?;
 
             // build the node
-            let (node, engine_handle_tx) = BotanixNode::new();
+            let node = BotanixNode::default();
 
             // launch the node
             let reth::builder::NodeHandle { node, node_exit_future } =
@@ -348,9 +381,6 @@ fn main() -> eyre::Result<()> {
             let (_sync_metrics_tx, sync_metrics_rx) = tokio::sync::mpsc::unbounded_channel();
             let sync_metrics_listener = reth_stages::MetricsListener::new(sync_metrics_rx);
             node.task_executor.spawn_critical("stages metrics listener task", sync_metrics_listener);
-
-            // Send notification to beacon engine
-            engine_handle_tx.send(node.beacon_engine_handle.clone()).unwrap();
 
             // Block and wait for node termination
             node_exit_future.await
