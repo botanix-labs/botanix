@@ -37,7 +37,6 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 arbitrary = { workspace = true }
-botanix-storage = { path = ".", features = ["test-utils"] }
 proptest = { workspace = true }
 proptest-arbitrary-interop = { workspace = true }
 reth-primitives = { workspace = true, features = ["arbitrary"] }

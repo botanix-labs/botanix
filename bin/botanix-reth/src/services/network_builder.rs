@@ -1,40 +1,72 @@
-use std::sync::Arc;
 use crate::{
-    node::BotanixNode, services::frost::FrostConfigSetupResult
+    node::{network::BotanixNetworkPrimitives, BotanixNode},
+    services::frost::FrostConfigSetupResult,
 };
-use alloy_consensus::{EthereumTxEnvelope, TxEip4844WithSidecar};
-use alloy_eips::eip7594::BlobTransactionSidecarVariant;
+use alloy_eip2124::Head;
 use botanix_cli_args::poa_node::PoaNodeArgs;
-use reth::{args::{DatadirArgs, NetworkArgs}, providers::HeaderProvider};
+use reth::{
+    args::{DatadirArgs, NetworkArgs},
+    providers::HeaderProvider,
+};
 use reth_chainspec::ChainSpec;
 use reth_config::Config;
 use reth_db::DatabaseEnv;
-use reth_eth_wire::{BasicNetworkPrimitives, NewBlock};
-use reth_ethereum::EthPrimitives;
-use reth_network::{eth_requests::EthRequestHandler, frost::manager::FrostManager, transactions::TransactionsManager, NetworkConfigBuilder, NetworkHandle, NetworkManager};
+use reth_network::{
+    eth_requests::EthRequestHandler, frost::manager::FrostManager,
+    transactions::TransactionsManager, NetworkConfigBuilder, NetworkHandle, NetworkManager,
+};
 use reth_node_builder::NodeTypesWithDBAdapter;
-use reth_provider::{providers::BlockchainProvider, BlockHashReader, ProviderFactory, StageCheckpointReader};
+use reth_provider::{
+    providers::BlockchainProvider, BlockHashReader, ProviderFactory, StageCheckpointReader,
+};
 use reth_stages::StageId;
-use alloy_eip2124::Head;
 use reth_tasks::TaskExecutor;
-use reth_transaction_pool::{blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator, TransactionValidationTaskExecutor};
+use reth_transaction_pool::{
+    blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction,
+    EthTransactionValidator, TransactionValidationTaskExecutor,
+};
+use std::sync::Arc;
 
-pub type BotanixPool = reth::transaction_pool::Pool<TransactionValidationTaskExecutor<EthTransactionValidator<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, EthPooledTransaction>>, CoinbaseTipOrdering<EthPooledTransaction>, DiskFileBlobStore>;
-pub type BotanixNetworkHandle = NetworkHandle<BasicNetworkPrimitives<EthPrimitives, EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, NewBlock>>;
-pub type BotanixNetworkManager = NetworkManager<BasicNetworkPrimitives<EthPrimitives, EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, NewBlock>>;
-pub type BotanixTxPoolP2P = TransactionsManager<reth_transaction_pool::Pool<TransactionValidationTaskExecutor<EthTransactionValidator<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, EthPooledTransaction>>, CoinbaseTipOrdering<EthPooledTransaction>, DiskFileBlobStore>, BasicNetworkPrimitives<EthPrimitives, alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, reth_eth_wire::NewBlock>>;
-pub type BotanixEthRequestHandlerP2P = EthRequestHandler<ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, BasicNetworkPrimitives<EthPrimitives, alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, reth_eth_wire::NewBlock>>;
-pub type FrostP2P = Option<FrostManager<BasicNetworkPrimitives<EthPrimitives, EthereumTxEnvelope<TxEip4844WithSidecar<BlobTransactionSidecarVariant>>, NewBlock>>>;
+pub type BotanixPool = reth::transaction_pool::Pool<
+    TransactionValidationTaskExecutor<
+        EthTransactionValidator<
+            BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+            EthPooledTransaction,
+        >,
+    >,
+    CoinbaseTipOrdering<EthPooledTransaction>,
+    DiskFileBlobStore,
+>;
+pub type BotanixNetworkHandle = NetworkHandle<BotanixNetworkPrimitives>;
+pub type BotanixNetworkManager = NetworkManager<BotanixNetworkPrimitives>;
+pub type BotanixTxPoolP2P = TransactionsManager<
+    reth_transaction_pool::Pool<
+        TransactionValidationTaskExecutor<
+            EthTransactionValidator<
+                BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+                EthPooledTransaction,
+            >,
+        >,
+        CoinbaseTipOrdering<EthPooledTransaction>,
+        DiskFileBlobStore,
+    >,
+    BotanixNetworkPrimitives,
+>;
+pub type BotanixEthRequestHandlerP2P = EthRequestHandler<
+    ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+    BotanixNetworkPrimitives,
+>;
+pub type FrostP2P = Option<FrostManager<BotanixNetworkPrimitives>>;
 
 /// Look up the current chain head from the given blockchain provider.
 ///
 /// Returns an `alloy_eip2124::Head` with the head number, hash, difficulty,
 /// total difficulty and timestamp retrieved from the provider.
-pub fn lookup_head(blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>) ->  eyre::Result<Head> {
-        let head = blockchain_provider
-        .get_stage_checkpoint(StageId::Finish)?
-        .unwrap_or_default()
-        .block_number;
+pub fn lookup_head(
+    blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+) -> eyre::Result<Head> {
+    let head =
+        blockchain_provider.get_stage_checkpoint(StageId::Finish)?.unwrap_or_default().block_number;
 
     let header = blockchain_provider
         .header_by_number(head)?
@@ -57,37 +89,44 @@ pub fn lookup_head(blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapt
     })
 }
 
-
 /// Sets up the P2P network for the node and returns the network handle and manager.
 pub async fn setup_network_builder(
-        frost_setup_result: &FrostConfigSetupResult,
-        reth_provider_factory: &reth_provider::ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
-        blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
-        reth_cfg: &Config,
-        chain_spec_arc: &Arc<ChainSpec>,
-        poa_cfg: &PoaNodeArgs,
-        network_args: &NetworkArgs,
-        datadir_args: &DatadirArgs,
-        task_executor: TaskExecutor,
-        pool: BotanixPool,
-) -> eyre::Result<(BotanixNetworkHandle, BotanixNetworkManager, BotanixTxPoolP2P, BotanixEthRequestHandlerP2P, FrostP2P)> {
+    frost_setup_result: &FrostConfigSetupResult,
+    reth_provider_factory: &reth_provider::ProviderFactory<
+        NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>, // TODO: do we need a BotanixNode?
+    >,
+    blockchain_provider: &BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+    reth_cfg: &Config,
+    chain_spec_arc: &Arc<ChainSpec>,
+    poa_cfg: &PoaNodeArgs,
+    network_args: &NetworkArgs,
+    datadir_args: &DatadirArgs,
+    task_executor: TaskExecutor,
+    pool: BotanixPool,
+) -> eyre::Result<(
+    BotanixNetworkHandle,
+    BotanixNetworkManager,
+    BotanixTxPoolP2P,
+    BotanixEthRequestHandlerP2P,
+    FrostP2P,
+)> {
     let secret_key = frost_setup_result.secret_key.clone();
-    let data_dir = datadir_args.datadir.unwrap_or_chain_default(chain_spec_arc.chain, datadir_args.clone());
+    let data_dir =
+        datadir_args.datadir.unwrap_or_chain_default(chain_spec_arc.chain, datadir_args.clone());
     let default_peers_path = data_dir.known_peers();
     let head = lookup_head(&blockchain_provider)?;
 
-    let mut network_cfg_builder: NetworkConfigBuilder = network_args
-        .network_config(&reth_cfg, chain_spec_arc.clone(), secret_key, default_peers_path)
+    let mut network_cfg_builder: NetworkConfigBuilder<BotanixNetworkPrimitives> = network_args
+        .network_config::<BotanixNetworkPrimitives>(
+            &reth_cfg,
+            chain_spec_arc.clone(),
+            secret_key,
+            default_peers_path,
+        )
         .with_task_executor(Box::new(task_executor))
         .set_head(head)
-        .listener_addr(std::net::SocketAddr::new(
-            network_args.addr,
-            network_args.port,
-        ))
-        .discovery_addr(std::net::SocketAddr::new(
-            network_args.addr,
-            network_args.port,
-        ));
+        .listener_addr(std::net::SocketAddr::new(network_args.addr, network_args.port))
+        .discovery_addr(std::net::SocketAddr::new(network_args.addr, network_args.port));
 
     // Optionally disable discovery if needed
     if network_args.trusted_only {
@@ -96,8 +135,8 @@ pub async fn setup_network_builder(
 
     // Set network mode to Authority if this is a validator/authority node
     if poa_cfg.federation_mode {
-        network_cfg_builder = network_cfg_builder
-            .network_mode(reth_network::config::NetworkMode::Authority);
+        network_cfg_builder =
+            network_cfg_builder.network_mode(reth_network::config::NetworkMode::Authority);
     }
     let network_config = network_cfg_builder.build(reth_provider_factory.clone());
 

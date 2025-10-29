@@ -31,7 +31,6 @@ reth-db = { workspace = true, features = ["mdbx", "test-utils"] }
 
 # botanix deps
 botanix-storage = { workspace = true, features = ["test-utils"] }
-botanix-storage-migrate = { workspace = true, features = ["test-utils"] }
 
 tempfile = { workspace = true }
 
