@@ -2,8 +2,6 @@
 //!
 //! This crate provides the main entry point for running a Botanix Reth node with Botanix support.
 
-use alloy_consensus::{EthereumTxEnvelope, TxEip4844WithSidecar};
-use alloy_eips::eip7594::BlobTransactionSidecarVariant;
 use botanix_authority_rsp::RandomSourceProvider;
 use botanix_btc_server_client::BtcServerExtendedClient;
 use botanix_chainspec::{
@@ -25,7 +23,7 @@ use reth_botanix::{
         wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder,
     },
     node::{
-        consensus::BotanixConsensus, evm::config::BotanixEvmConfig, network::BotanixNewBlock,
+        consensus::BotanixConsensus, evm::config::BotanixEvmConfig, 
         BotanixNode,
     },
     services::{
@@ -197,6 +195,7 @@ fn main() -> eyre::Result<()> {
             let node = BotanixNode::default();
 
             // launch the node
+            // TODO: this launches the Engine API which we don't use since we use CometBFT
             let reth::builder::NodeHandle { node, node_exit_future } =
                 builder.node(node).launch().await?;
 
@@ -210,7 +209,8 @@ fn main() -> eyre::Result<()> {
                 node.pool.clone(),
             ).await?;
 
-            let (network_handle, network_manager, tx_pool_p2p, eth_request_handler_p2p, frost_p2p) =
+            let (network_handle, network_manager, tx_pool_p2p, 
+eth_request_handler_p2p, frost_p2p) =
             setup_network_builder(
                 &frost_setup_result,
                 &reth_provider_factory,

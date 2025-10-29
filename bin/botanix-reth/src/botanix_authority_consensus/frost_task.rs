@@ -1,11 +1,14 @@
-use crate::botanix_authority_consensus::{
-    signing::SigningStateMachine,
-    utils::{
-        get_pending_pegouts_from_pegout_data, get_pending_pegouts_from_staged_pegouts,
-        get_utxos_from_pegin_meta, get_utxos_from_staged_pegins, is_poa_epoch, retry_exec,
-        validate_psbt_by_ids,
+use crate::{
+    botanix_authority_consensus::{
+        signing::SigningStateMachine,
+        utils::{
+            get_pending_pegouts_from_pegout_data, get_pending_pegouts_from_staged_pegouts,
+            get_utxos_from_pegin_meta, get_utxos_from_staged_pegins, is_poa_epoch, retry_exec,
+            validate_psbt_by_ids,
+        },
+        Storage,
     },
-    Storage,
+    node::network::BotanixNetworkPrimitives,
 };
 use alloy_primitives::B256;
 use bitcoin::consensus::Encodable;
@@ -71,7 +74,7 @@ pub(crate) enum FinalizedPegoutIdsSyncSerializationError {
 #[allow(dead_code)]
 pub struct FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     /// Network Handler
-    pub(crate) network_handle: NetworkHandle,
+    pub(crate) network_handle: NetworkHandle<BotanixNetworkPrimitives>,
     /// Frost network Handler
     pub(crate) frost_handle: ToFrostMan,
     /// Frost configuration
@@ -121,7 +124,7 @@ where
     pub(crate) fn new(
         chain_spec: Arc<BotanixChainSpec>,
         btc_server: BtcServerClient,
-        network_handle: NetworkHandle,
+        network_handle: NetworkHandle<BotanixNetworkPrimitives>,
         frost_handle: ToFrostMan,
         config: FrostConfig,
         storage: Storage<BF, RDB, BDB>,

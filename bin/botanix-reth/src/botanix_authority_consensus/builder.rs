@@ -7,7 +7,7 @@ use crate::{
         wallet_state_sync::WalletStateSyncEngine,
         AuthorityConsensus, Storage,
     },
-    node::{evm::config::BotanixEvmConfig, BotanixNode},
+    node::{evm::config::BotanixEvmConfig, network::BotanixNetworkPrimitives, BotanixNode},
 };
 use botanix_activation_manager::{ActivationManager, VoteWatcher};
 use botanix_authority_edh::header_ext::HeaderExt;
@@ -23,27 +23,24 @@ use botanix_cli_args::state_sync::StateSyncArgs;
 use botanix_comet_bft_rpc::{Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_data_parser::{DataParser, SerializationType};
 use botanix_storage::{
-    BotanixProviderFactory, RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
-    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader, WalletStateSyncWriter,
+    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter, StagedHeaderReader,
+    StagedHeaderWriter, WalletStateSyncReader, WalletStateSyncWriter,
 };
 use reth_db::DatabaseEnv;
 // use reth_evm::execute::BlockExecutorProvider;
 use alloy_primitives::Address;
-use reth_evm::ConfigureEvm;
 use reth_network::{
     frost::manager::{FrostConfig, ToFrostManager},
     NetworkHandle,
 };
 use reth_node_builder::NodeTypesWithDBAdapter;
-use reth_node_ethereum::{EthEvmConfig, EthereumNode};
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions,
-    ProviderFactory, StateProviderFactory,
+    BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions, ProviderFactory,
+    StateProviderFactory,
 };
 use reth_tasks::TaskExecutor;
 use std::{
     net::SocketAddr,
-    str::FromStr,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -57,7 +54,7 @@ pub struct AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source> {
     activation_manager: ActivationManager<VoteWatcher, Address>,
     btc_server_factory: Option<GrpcClientFactory>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
-    network_handle: NetworkHandle,
+    network_handle: NetworkHandle<BotanixNetworkPrimitives>,
     frost_handle: Option<ToFrostMan>,
     task_executor: TaskExecutor,
     frost_config: Option<FrostConfig>,
@@ -111,7 +108,7 @@ where
         btc_server_factory: Option<GrpcClientFactory>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         sk: secp256k1::SecretKey,
-        network_handle: NetworkHandle,
+        network_handle: NetworkHandle<BotanixNetworkPrimitives>,
         frost_handle: Option<ToFrostMan>,
         task_executor: TaskExecutor,
         frost_config: Option<FrostConfig>,
