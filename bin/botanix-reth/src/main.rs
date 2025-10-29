@@ -44,19 +44,10 @@ use reth_botanix::{
         reth::load_reth_config,
         rpc::rpc::setup_and_run_rpc,
     },
-    BotanixPrimitives,
 };
 use reth_cli_commands::NodeCommand;
 use reth_db::DatabaseEnv;
-use reth_eth_wire::BasicNetworkPrimitives;
-use reth_network::{NetworkConfigBuilder, NetworkHandle, NetworkManager};
 use reth_node_core::version::version_metadata;
-use reth_node_types::NodeTypesWithDBAdapter;
-use reth_provider::providers::BlockchainProvider;
-use reth_transaction_pool::{
-    blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction,
-    EthTransactionValidator, TransactionValidationTaskExecutor,
-};
 use std::{sync::Arc, time::Duration};
 
 // We use jemalloc for performance reasons
@@ -349,7 +340,7 @@ fn main() -> eyre::Result<()> {
             // launch the network manager task
             node.task_executor.spawn_critical("network p2p", network_manager);
             node.task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
-            //node.task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
+            node.task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
 
             // launch the bitcoin checkpoints synchronizer task
             node.task_executor.spawn_critical(

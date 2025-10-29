@@ -1,26 +1,34 @@
-use crate::{botanix_authority_consensus::{
-    comet_bft::abci::{ABCIClientBuilder, ABCIDriverMessage},
-    frost_task::FrostTask,
-    snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},
-    wallet_state_sync::WalletStateSyncEngine,
-    AuthorityConsensus, Storage,
-}, node::{evm::config::BotanixEvmConfig, BotanixNode}};
+use crate::{
+    botanix_authority_consensus::{
+        comet_bft::abci::{ABCIClientBuilder, ABCIDriverMessage},
+        frost_task::FrostTask,
+        snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},
+        utils::{is_poa_epoch, seal_slow},
+        wallet_state_sync::WalletStateSyncEngine,
+        AuthorityConsensus, Storage,
+    },
+    node::{evm::config::BotanixEvmConfig, BotanixNode},
+};
 use botanix_activation_manager::{ActivationManager, VoteWatcher};
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
+use botanix_btc_server_client::{
+    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
+};
 use botanix_btc_wallet::bitcoind::{BitcoindClient, BitcoindFactory};
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::state_sync::StateSyncArgs;
 use botanix_comet_bft_rpc::{Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_data_parser::{DataParser, SerializationType};
 use botanix_storage::{
-    BotanixProviderFactory, RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter, StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader, WalletStateSyncWriter
+    BotanixProviderFactory, RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
+    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader, WalletStateSyncWriter,
 };
-use botanix_btc_server_client::{BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory};
 use reth_db::DatabaseEnv;
 // use reth_evm::execute::BlockExecutorProvider;
+use alloy_primitives::Address;
 use reth_evm::ConfigureEvm;
 use reth_network::{
     frost::manager::{FrostConfig, ToFrostManager},
@@ -28,13 +36,16 @@ use reth_network::{
 };
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_ethereum::{EthEvmConfig, EthereumNode};
-use alloy_primitives::Address;
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions, ProviderFactory, StateProviderFactory
+    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions,
+    ProviderFactory, StateProviderFactory,
 };
 use reth_tasks::TaskExecutor;
 use std::{
-    net::SocketAddr, str::FromStr, sync::{Arc, RwLock}, time::Duration
+    net::SocketAddr,
+    str::FromStr,
+    sync::{Arc, RwLock},
+    time::Duration,
 };
 use tracing::{info, warn};
 
@@ -70,11 +81,10 @@ pub enum AuthorityConsensusBuilderError {
 }
 
 // ===== impl AuthorityConsensusBuilder =====
-impl<BF, RDB, BDB, ToFrostMan, Source>
-    AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source>
+impl<BF, RDB, BDB, ToFrostMan, Source> AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source>
 where
     ToFrostMan: ToFrostManager + Clone + 'static + Send + Sync,
-    RDB: BlockReaderIdExt
+    RDB: BlockReaderIdExt<Header = alloy_consensus::Header>
         + StateProviderFactory
         + Clone
         + CanonChainTracker
@@ -114,7 +124,9 @@ where
         random_source_provider: Source,
         abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
         state_sync: StateSyncArgs,
-        reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+        reth_provider_factory: ProviderFactory<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >,
         botanix_provider_factory: BDB,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
         bitcoind_client: BitcoindClient,
@@ -133,37 +145,37 @@ where
             }
         }
 
-        // let mut latest_header = reth_provider
-        //     .latest_header()
-        //     .ok()
-        //     .flatten()
-        //     .unwrap_or_else(|| chain_spec.inner().sealed_genesis_header());
-        // let mut headers = vec![latest_header.clone()];
+        let mut latest_header = reth_provider
+            .latest_header()
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| chain_spec.inner().sealed_genesis_header());
+        let mut headers = vec![latest_header.clone()];
 
-        // while !latest_header.header().is_poa_epoch(chain_spec.epoch_length) {
-        //     let parent_hash = latest_header.parent_hash;
+        while !is_poa_epoch(latest_header.header().number, chain_spec.epoch_length) {
+            let parent_hash = latest_header.parent_hash;
 
-        //     if let Some(new_header) = reth_provider.header(&parent_hash).ok().flatten() {
-        //         let old_latest_header =
-        //             std::mem::replace(&mut latest_header, new_header.seal_slow());
-        //         headers.push(old_latest_header);
-        //     } else {
-        //         return Err(AuthorityConsensusBuilderError::FailedToRetrieveEopchHeader);
-        //     }
-        // }
+            if let Some(new_header) = reth_provider.header(&parent_hash).ok().flatten() {
+                let old_latest_header =
+                    std::mem::replace(&mut latest_header, seal_slow(&new_header));
+                headers.push(old_latest_header);
+            } else {
+                return Err(AuthorityConsensusBuilderError::FailedToRetrieveEopchHeader);
+            }
+        }
 
-        // let agg_pk = {
-        //     if latest_header.number > 0 {
-        //         Some(
-        //             latest_header
-        //                 .get_aggregate_public_key()
-        //                 .expect("latest header is greater than genesis"),
-        //         )
-        //     } else {
-        //         None
-        //     }
-        // };
-        // info!("Aggregate public key: {:?}", agg_pk);
+        let agg_pk = {
+            if latest_header.number > 0 {
+                Some(
+                    latest_header
+                        .get_aggregate_public_key()
+                        .expect("latest header is greater than genesis"),
+                )
+            } else {
+                None
+            }
+        };
+        info!("Aggregate public key: {:?}", agg_pk);
 
         // authority length represents a non federation node since it would be out of bounds
         // this prevents the node from signing blocks although there are other checks to stop this
@@ -188,13 +200,13 @@ where
             btc_network,
             // Aggregate pk to be filled out by the dkg state machine if we are still on genesis
             // block
-            secp256k1::PublicKey::from_str("02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5").ok(),
+            agg_pk,
             authority_socket_addresses,
             evm_config,
             chain_spec.clone(),
             bitcoind_factory,
-            reth_provider.clone(),
-            botanix_provider_factory.clone(),
+            reth_provider,
+            botanix_provider_factory,
         );
 
         Ok(Self {
@@ -347,7 +359,7 @@ where
 
         // run a background health monitoring task for the btc server, comet and bitcoind
         if is_fed_node {
-            let mut btc_server_client = btc_server_client.clone();
+            let mut btc_server_client = btc_server_client;
             let cbft_rpc_provider = cometbft_rpc_factory.build_and_connect().unwrap();
             let metrics = Arc::clone(&metrics);
             task_executor.spawn_critical(

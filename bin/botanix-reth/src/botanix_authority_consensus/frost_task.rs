@@ -2,14 +2,19 @@ use crate::botanix_authority_consensus::{
     signing::SigningStateMachine,
     utils::{
         get_pending_pegouts_from_pegout_data, get_pending_pegouts_from_staged_pegouts,
-        get_utxos_from_pegin_meta, get_utxos_from_staged_pegins, retry_exec, validate_psbt_by_ids,
+        get_utxos_from_pegin_meta, get_utxos_from_staged_pegins, is_poa_epoch, retry_exec,
+        validate_psbt_by_ids,
     },
     Storage,
 };
+use alloy_primitives::B256;
 use bitcoin::consensus::Encodable;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
+use botanix_btc_server_client::{
+    BtcServerExtendedApi, ConsensusCheckpointRequest, GrpcClientError, PendingPegout, Utxo,
+};
 use botanix_chainspec::BotanixChainSpec;
 use botanix_comet_bft_rpc::{Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_data_parser::{
@@ -17,9 +22,6 @@ use botanix_data_parser::{
     DataParser, Error as DataParserError,
 };
 use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
-use botanix_btc_server_client::{
-    BtcServerExtendedApi, ConsensusCheckpointRequest, GrpcClientError, PendingPegout, Utxo,
-};
 use btcserverlib::wallet::psbt::frost_id_from_bytes;
 use futures::{pin_mut, StreamExt};
 use reth_network::{
@@ -34,7 +36,6 @@ use reth_network::{
     NetworkHandle,
 };
 use reth_primitives::Header;
-use alloy_primitives::B256;
 use reth_provider::{
     BlockReaderIdExt, CanonStateNotification, CanonStateSubscriptions, StateProviderFactory,
 };
@@ -340,9 +341,9 @@ where
 
         // Check if this is an epoch block and if we are the coordinator. If
         // yes, initiate signing session.
-        // if !header.is_poa_epoch(self.storage.chain_spec.epoch_length) {
-        //     return;
-        // }
+        if !is_poa_epoch(header.number, self.storage.chain_spec.epoch_length) {
+            return;
+        }
 
         if !self.signing_state_machine.is_coordinator() {
             info!(
@@ -354,18 +355,23 @@ where
         }
 
         // Create psbt and send init signing message.
-        let psbt_payload =
-            match crate::botanix_authority_consensus::utils::get_psbt(&mut self.btc_server, &header_hash, cp_block_hash).await {
-                Ok(p) => p,
-                Err(e) => {
-                    error!(
-                        target: "consensus::authority::frost_task::handle_canon_state_commit",
-                        "Failed to get psbt {:?}", e
-                    );
+        let psbt_payload = match crate::botanix_authority_consensus::utils::get_psbt(
+            &mut self.btc_server,
+            &header_hash,
+            cp_block_hash,
+        )
+        .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                error!(
+                    target: "consensus::authority::frost_task::handle_canon_state_commit",
+                    "Failed to get psbt {:?}", e
+                );
 
-                    return;
-                }
-            };
+                return;
+            }
+        };
 
         // Validate psbt.
         let psbt = match bitcoin::Psbt::deserialize(psbt_payload.psbt.as_slice()) {
@@ -440,7 +446,9 @@ where
 
         // Calling get pk
         // Attempt to get the aggregate public key and store in storage
-        if let Ok(public_key) = self.btc_server.get_public_key(botanix_btc_server_client::Empty {}).await {
+        if let Ok(public_key) =
+            self.btc_server.get_public_key(botanix_btc_server_client::Empty {}).await
+        {
             info!(target: "consensus::authority::frost_task::start_task", " received aggregate public key from dkg state machine {:?}", public_key);
             if let Ok(secp_pk) = secp256k1::PublicKey::from_slice(
                 hex::decode(public_key.publickey)
@@ -539,7 +547,8 @@ where
 
             // Receive canon state notifications
             // while let Ok(notification) = canon_state_notifs.try_recv() {
-            //     info!(target: "consensus::authority::frost_task::start_task", "canon state notification received for block number {:?}", notification.tip().number);
+            //     info!(target: "consensus::authority::frost_task::start_task", "canon state
+            // notification received for block number {:?}", notification.tip().number);
             //     match notification {
             //         CanonStateNotification::Commit { new, pegins, pegouts } => {
             //             let tip = new.tip();
