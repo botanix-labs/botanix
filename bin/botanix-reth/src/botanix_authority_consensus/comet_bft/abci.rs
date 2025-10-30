@@ -1,5 +1,6 @@
 //! The purpose of this module is to provide a bridge between the CometBFT and the EVM application
 //! state
+use alloy_consensus::BlockHeader;
 use alloy_rpc_types_engine::ForkchoiceState;
 use botanix_chainspec::constants::BOTANIX_TESTNET_CHAIN_ID;
 use botanix_storage::models::RuntimeVersion;
@@ -21,25 +22,26 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
+use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
 use reth_consensus::{Consensus, ConsensusError, InvalidAggregatedPublicKeyError};
-use botanix_consensus_common::utils::unix_timestamp;
 //use reth_ethereum_payload_builder::e
-// use reth_ethereum_payload_builder::{default_ethereum_payload_builder, EthereumBuilderConfig, EthereumPayloadBuilder};
-// use reth_evm::execute::BlockExecutorProvider;
+// use reth_ethereum_payload_builder::{default_ethereum_payload_builder, EthereumBuilderConfig,
+// EthereumPayloadBuilder}; use reth_evm::execute::BlockExecutorProvider;
+use alloy_primitives::{Address, BlockHash, BlockNumber, B256, U256};
+use alloy_rpc_types_engine::PayloadAttributes;
+use alloy_rpc_types_eth::BlockId;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
 use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
 use reth_payload_builder::EthPayloadBuilderAttributes;
-use alloy_primitives::{Address, BlockHash, BlockNumber, B256, U256};
-use reth_primitives::{SealedBlock, BlockWithSenders};
+use reth_primitives::{BlockWithSenders, SealedBlock};
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateNotification, Chain, ExecutionOutcome, ProviderError, ProviderFactory, StateProviderFactory
+    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateNotification,
+    Chain, ExecutionOutcome, ProviderError, ProviderFactory, StateProviderFactory,
 };
 use reth_revm::primitives::FixedBytes;
-use alloy_rpc_types_engine::PayloadAttributes;
-use alloy_rpc_types_eth::BlockId;
 use reth_tasks::{TaskExecutor, TaskSpawner};
 use reth_transaction_pool::TransactionPool;
 use schnellru::{ByLength, LruMap};
@@ -59,7 +61,12 @@ use tendermint_proto::{
     },
 };
 
-use crate::{botanix_authority_consensus::comet_bft::non_deterministic_data::{NonDeterministicData, RUNTIME_VERSION_GENESIS}, node::BotanixNode};
+use crate::{
+    botanix_authority_consensus::comet_bft::non_deterministic_data::{
+        NonDeterministicData, RUNTIME_VERSION_GENESIS,
+    },
+    node::BotanixNode,
+};
 
 /// Runtime version 0.1 that Botanix launched with.
 pub const RUNTIME_VERSION_V1: RuntimeVersion = RUNTIME_VERSION_GENESIS;
@@ -294,7 +301,8 @@ where
         //     provider_factory,
         //     compressor,
         //     snapshot_manager_state_lock,
-        //     snapshot_sync_state_lock: Some(Arc::new(RwLock::new(SnapshotSyncStateLock::default()))),
+        //     snapshot_sync_state_lock:
+        // Some(Arc::new(RwLock::new(SnapshotSyncStateLock::default()))),
         //     snapshot_format,
         //     block_fee_recipient_address,
         //     blockchain_db,
@@ -400,7 +408,7 @@ pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
     metrics: Arc<AuthorityMetrics>,
     task_executor: TaskExecutor,
     // TODO: We already have provider factory in Storage
-    reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, //BotanixProviderFactory<Arc<DatabaseEnv>>,
+    reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, /* BotanixProviderFactory<Arc<DatabaseEnv>>, */
     compressor: DataParser,
     snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
     snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
@@ -706,38 +714,37 @@ where
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#info
     #[instrument(level = "trace", ret, skip(self, request))]
     fn info(&self, request: RequestInfo) -> ResponseInfo {
-        // trace!("request={:?}", request);
+        trace!("request={:?}", request);
 
-        // let client = self.storage.reth_database.clone();
+        let client = self.storage.reth_database.clone();
 
-        // let latest_header = match client.latest_header() {
-        //     Ok(Some(header)) => header,
-        //     Ok(None) => {
-        //         error!("No latest header found");
-        //         return ResponseInfo { data: String::default(), ..Default::default() };
-        //     }
-        //     Err(e) => {
-        //         error!("Error getting latest header: {:?}", e);
-        //         return ResponseInfo { data: String::default(), ..Default::default() };
-        //     }
-        // };
+        let latest_header = match client.latest_header() {
+            Ok(Some(header)) => header,
+            Ok(None) => {
+                error!("No latest header found");
+                return ResponseInfo { data: String::default(), ..Default::default() };
+            }
+            Err(e) => {
+                error!("Error getting latest header: {:?}", e);
+                return ResponseInfo { data: String::default(), ..Default::default() };
+            }
+        };
 
-        // let last_block_app_hash = match self.application_hash(&client) {
-        //     Ok(application_hash) => application_hash,
-        //     Err(e) => {
-        //         error!("Error getting application hash: {:?}", e);
-        //         return ResponseInfo { data: String::default(), ..Default::default() };
-        //     }
-        // };
+        let last_block_app_hash = match self.application_hash(&client) {
+            Ok(application_hash) => application_hash,
+            Err(e) => {
+                error!("Error getting application hash: {:?}", e);
+                return ResponseInfo { data: String::default(), ..Default::default() };
+            }
+        };
 
-        // ResponseInfo {
-        //     data: String::default(),
-        //     version: VERSION.to_string(),
-        //     app_version: 1,
-        //     last_block_height: latest_header.number as i64,
-        //     last_block_app_hash,
-        // }
-        unimplemented!()
+        ResponseInfo {
+            data: String::default(),
+            version: VERSION.to_string(),
+            app_version: 1,
+            last_block_height: latest_header.number() as i64,
+            last_block_app_hash,
+        }
     }
 
     /// https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#listsnapshots
@@ -823,8 +830,8 @@ where
         //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
         // }
 
-        // // some other node is offering us a snapshot - we need to validate here if we want to accept
-        // // it
+        // // some other node is offering us a snapshot - we need to validate here if we want to
+        // accept // it
         // if request.app_hash.is_empty() {
         //     warn!("Received empty app hash in offer_snapshot request, rejecting snapshot");
         //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
@@ -840,9 +847,9 @@ where
         // };
 
         // if application_hash == request.app_hash {
-        //     warn!("Application hash matches, snapshot must have already been applied, rejecting snapshot");
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        // }
+        //     warn!("Application hash matches, snapshot must have already been applied, rejecting
+        // snapshot");     return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 }; }
 
         // if snapshot.format != self.snapshot_format {
         //     warn!("Received snapshot format is not supported, rejecting snapshot");
@@ -901,8 +908,8 @@ where
         // // check that the latest header is less than the snapshot height
         // if latest_header.header().number > snapshot.height {
         //     warn!(
-        //         "Latest header height {:?} is greater than snapshot height {:?}, rejecting snapshot",
-        //         latest_header.header().number, snapshot.height
+        //         "Latest header height {:?} is greater than snapshot height {:?}, rejecting
+        // snapshot",         latest_header.header().number, snapshot.height
         //     );
         //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
         // }
@@ -921,9 +928,9 @@ where
         //         snapshot_sync_state_lock_height.get_snapshot_height();
         //     if snapshot_sync_state_lock_height >= snapshot.height {
         //         warn!(
-        //                 "Offered Snapshot height {:?} is less than or equal to the last locked snapshot height {:?}, rejecting snapshot",
-        //                 snapshot.height, snapshot_sync_state_lock_height
-        //             );
+        //                 "Offered Snapshot height {:?} is less than or equal to the last locked
+        // snapshot height {:?}, rejecting snapshot",                 snapshot.height,
+        // snapshot_sync_state_lock_height             );
         //         return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
         //     }
         // }
@@ -1321,8 +1328,8 @@ where
 
         // if let Err(e) = provider.commit() {
         //     error!(
-        //         "Error committing db after appending blocks with state {:?} in the db. error = {:?}",
-        //         last_snapshot_sync_id, e
+        //         "Error committing db after appending blocks with state {:?} in the db. error =
+        // {:?}",         last_snapshot_sync_id, e
         //     );
         //     return ResponseApplySnapshotChunk {
         //         result: ApplySnapshotResult::RetrySnapshot as i32,
@@ -1360,7 +1367,8 @@ where
         //         .remove_persisted_blocks(block_height - 1);
 
         //     let chain =
-        //         Chain::new(vec![sealed_block_with_senders].into_iter(), exec_outcome.clone(), None);
+        //         Chain::new(vec![sealed_block_with_senders].into_iter(), exec_outcome.clone(),
+        // None);
 
         //     // Note: we are not parsing the block for pegins and pegouts here.
         //     // This is safe for rpc nodes but not for the federation nodes especially the
@@ -1400,7 +1408,8 @@ where
         // let block_time = request.time.expect("block time is not set in the request");
 
         // let max_tx_bytes: usize =
-        //     request.max_tx_bytes.try_into().expect("Invalid request proposal max_tx_bytes value");
+        //     request.max_tx_bytes.try_into().expect("Invalid request proposal max_tx_bytes
+        // value");
 
         // // Activation Manager: decide whether we should build for the current or
         // // upgraded runtime version.
@@ -1414,8 +1423,8 @@ where
 
         // // Construct the NDD version 2 with a runtime version indicator
         // // and an (optional) network upgrade payload.
-        // let non_deterministic_data = match self.non_deterministic_data(use_version, upgrade_vote) {
-        //     Ok(ndd) => ndd,
+        // let non_deterministic_data = match self.non_deterministic_data(use_version, upgrade_vote)
+        // {     Ok(ndd) => ndd,
         //     Err(e) => {
         //         panic!(
         //             "Error creating non-deterministic data for proposal on height {}: {:?}",
@@ -1445,8 +1454,8 @@ where
         // {
         //     Ok(bytes) => bytes,
         //     Err(e) => {
-        //         panic!("Error serializing non-deterministic data bytes for proposal on height {}: {:?}", request.height, e);
-        //     }
+        //         panic!("Error serializing non-deterministic data bytes for proposal on height {}:
+        // {:?}", request.height, e);     }
         // };
 
         // // NDD goes to a block as the first transaction
@@ -1456,9 +1465,9 @@ where
         // if non_deterministic_data_bytes_len > max_tx_bytes {
         //     // We should panic bc there is a critical bug and there should be a chain halt.
         //     panic!(
-        //         "Non-deterministic data size to propose for height {}: {} exceeds the max tx bytes allowed size {}",
-        //         request.height, non_deterministic_data_bytes_len, max_tx_bytes
-        //     );
+        //         "Non-deterministic data size to propose for height {}: {} exceeds the max tx
+        // bytes allowed size {}",         request.height, non_deterministic_data_bytes_len,
+        // max_tx_bytes     );
         // };
 
         // let max_tx_bytes = max_tx_bytes - non_deterministic_data_bytes_len;
@@ -1518,16 +1527,17 @@ where
         // // TODO: finish
         // // let evm_config = EvmConfig;
         // // let p = EthereumBuilderConfig;
-        // // let x = EthereumPayloadBuilder::new(client, self.pool.clone(), evm_config, builder_config)
+        // // let x = EthereumPayloadBuilder::new(client, self.pool.clone(), evm_config,
+        // builder_config)
 
         // match default_ethereum_payload_builder(self.storage.evm_config, build_args) {
         //     Ok(res) => {
         //         match res {
-        //             reth_basic_payload_builder::BuildOutcome::Aborted { fees, cached_reads: _ } => {
-        //                 // TODO: Aborted why, shall we just propose NDD?
+        //             reth_basic_payload_builder::BuildOutcome::Aborted { fees, cached_reads: _ }
+        // => {                 // TODO: Aborted why, shall we just propose NDD?
         //                 panic!(
-        //                     "aborted payload building because resulted in worse block wrt. fees {} for height {}", fees, request.height
-        //                 );
+        //                     "aborted payload building because resulted in worse block wrt. fees
+        // {} for height {}", fees, request.height                 );
         //             }
         //             reth_basic_payload_builder::BuildOutcome::Cancelled => {
         //                 // TODO: Canceled why, shall we just propose NDD?
@@ -1551,8 +1561,8 @@ where
         //                     .map(|tx| prost::bytes::Bytes::copy_from_slice(tx))
         //                     .collect::<_>();
 
-        //                 // insert non-deterministic data tx at index 0 so historical sync will pass
-        //                 // verification
+        //                 // insert non-deterministic data tx at index 0 so historical sync will
+        // pass                 // verification
 
         //                 txs.insert(0, non_deterministic_data_bytes);
 
@@ -1583,8 +1593,8 @@ where
         //         }
         //     }
         //     Err(e) => {
-        //         panic!("error building payload for proposal on height {}: {:?}", request.height, e);
-        //     }
+        //         panic!("error building payload for proposal on height {}: {:?}", request.height,
+        // e);     }
         // }
 
         unimplemented!()
@@ -1626,8 +1636,8 @@ where
         //             let app_hash = match self.application_hash(&self.storage.reth_database) {
         //                 Ok(app_hash) => app_hash,
         //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}", e);
-        //                 }
+        //                     panic!("failed to get application hash on process proposal: {:?}",
+        // e);                 }
         //             };
 
         //             warn!(
@@ -1667,8 +1677,8 @@ where
         //             let app_hash = match self.application_hash(&self.storage.reth_database) {
         //                 Ok(app_hash) => app_hash,
         //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}", e);
-        //                 }
+        //                     panic!("failed to get application hash on process proposal: {:?}",
+        // e);                 }
         //             };
 
         //             warn!(
@@ -1706,8 +1716,8 @@ where
         //             let app_hash = match self.application_hash(&self.storage.reth_database) {
         //                 Ok(app_hash) => app_hash,
         //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}", e);
-        //                 }
+        //                     panic!("failed to get application hash on process proposal: {:?}",
+        // e);                 }
         //             };
 
         //             warn!(
@@ -1730,8 +1740,8 @@ where
 
         // // Only NDD versions starting from 1 are supported for block production so validate
         // // `block_fee_recipient_address` exists
-        // let block_fee_recipient_address = match non_deterministic_data.block_fee_recipient_address()
-        // {
+        // let block_fee_recipient_address = match
+        // non_deterministic_data.block_fee_recipient_address() {
         //     Some(address) => address,
         //     None => {
         //         warn!("Block fee recipient address is not set in process proposal");
@@ -1741,8 +1751,8 @@ where
         //             let app_hash = match self.application_hash(&self.storage.reth_database) {
         //                 Ok(app_hash) => app_hash,
         //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}", e);
-        //                 }
+        //                     panic!("failed to get application hash on process proposal: {:?}",
+        // e);                 }
         //             };
 
         //             warn!(
@@ -1762,12 +1772,12 @@ where
         // };
 
         // // check non-deterministic data: btc block hash and aggregate public key
-        // if !self.bitcoin_checkpoints.contains_by_hash(non_deterministic_data.bitcoin_block_hash()) {
-        //     warn!(
+        // if !self.bitcoin_checkpoints.contains_by_hash(non_deterministic_data.
+        // bitcoin_block_hash()) {     warn!(
         //         checkpoints_chain = %self.bitcoin_checkpoints,
         //         proposed_checkpoint_hash = %non_deterministic_data.bitcoin_block_hash(),
-        //         "A proposed bitcoin checkpoint is not a part of local checkpoint chain. Most probably a proposer's or local bitcoin node is out of sync."
-        //     );
+        //         "A proposed bitcoin checkpoint is not a part of local checkpoint chain. Most
+        // probably a proposer's or local bitcoin node is out of sync."     );
 
         //     if tracing::enabled!(tracing::Level::WARN) {
         //         let execution_time = execution_start_time.elapsed().as_secs_f32();
@@ -1831,8 +1841,8 @@ where
         //             let app_hash = match self.application_hash(&self.storage.reth_database) {
         //                 Ok(app_hash) => app_hash,
         //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}", e);
-        //                 }
+        //                     panic!("failed to get application hash on process proposal: {:?}",
+        // e);                 }
         //             };
 
         //             warn!(
@@ -1883,8 +1893,8 @@ where
         //         }
         //     }
         //     OnProcessProposalDecision::RejectBlock { version, conditions: _ } => {
-        //         warn!("process_proposal: Rejecting block using Botanix runtime version: {version}");
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
+        //         warn!("process_proposal: Rejecting block using Botanix runtime version:
+        // {version}");         return ResponseProcessProposal { status: VERIFY_REJECT };
         //     }
         // }
 
@@ -1892,8 +1902,8 @@ where
         // // - botanix consensus package created on the fly and compared to the incoming block EDH
         // // - mint validation checks
         // // - state trie calculated for header
-        // // This means no additional validation is needed when the ABCI driver inserts the block into
-        // // the canonical chain
+        // // This means no additional validation is needed when the ABCI driver inserts the block
+        // into // the canonical chain
         // match build_and_execute(
         //     txs,
         //     self.storage.chain_spec.clone(),
@@ -1982,13 +1992,13 @@ where
 
         //                 if tracing::enabled!(tracing::Level::WARN) {
         //                     let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //                     let app_hash = match self.application_hash(&self.storage.reth_database)
-        //                     {
+        //                     let app_hash = match
+        // self.application_hash(&self.storage.reth_database)                     {
         //                         Ok(app_hash) => app_hash,
         //                         Err(e) => {
         //                             panic!(
-        //                                 "failed to get application hash on process proposal: {:?}",
-        //                                 e
+        //                                 "failed to get application hash on process proposal:
+        // {:?}",                                 e
         //                             );
         //                         }
         //                     };
@@ -2017,8 +2027,8 @@ where
         //             let app_hash = match self.application_hash(&self.storage.reth_database) {
         //                 Ok(app_hash) => app_hash,
         //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}", e);
-        //                 }
+        //                     panic!("failed to get application hash on process proposal: {:?}",
+        // e);                 }
         //             };
 
         //             warn!(
@@ -2095,8 +2105,8 @@ where
         //             }
         //         };
 
-        //         // NDD V0 (no block_fee_recipient_address) is supported only for historical sync on
-        //         // testnet
+        //         // NDD V0 (no block_fee_recipient_address) is supported only for historical sync
+        // on         // testnet
         //         let block_fee_recipient_address = match non_deterministic_data
         //             .block_fee_recipient_address()
         //         {
@@ -2114,14 +2124,15 @@ where
         //                     .0,
         //                 );
 
-        //                 debug!(%address, "use a proposer address as the block fee recipient address (testnet)");
+        //                 debug!(%address, "use a proposer address as the block fee recipient
+        // address (testnet)");
 
         //                 address
         //             }
         //             None => {
         //                 panic!(
-        //                     "Block fee recipient address is not set in finalize block for mainnet"
-        //                 );
+        //                     "Block fee recipient address is not set in finalize block for
+        // mainnet"                 );
         //             }
         //         };
 
@@ -2149,7 +2160,8 @@ where
         //         let network_upgrade_payload =
         //             non_deterministic_data.network_upgrade_payload().copied();
 
-        //         debug!("finalize_block: Finalizing block with runtime version: {runtime_version}");
+        //         debug!("finalize_block: Finalizing block with runtime version:
+        // {runtime_version}");
 
         //         let floor_base_fee_per_gas = match runtime_version {
         //             // Historic
@@ -2183,7 +2195,8 @@ where
         //             block_time,
         //         ) {
         //             Ok(block_with_context) => {
-        //                 block_cache_write.cache.insert(cbft_block_hash, block_with_context.clone());
+        //                 block_cache_write.cache.insert(cbft_block_hash,
+        // block_with_context.clone());
 
         //                 debug!(
         //                     cbft_block_hash = hex::encode(cbft_block_hash),
@@ -2223,9 +2236,9 @@ where
         //         // Continue...
         //     }
         //     OnFinalizeBlockDecision::RejectBlockDeadEnd { version } => {
-        //         error!("finalize_block: Rejecting finalized block with Botanix runtime version: {version}");
-        //         panic!("finalize_block: Rejecting Botanix upgrade '{version}' - can no longer proceed...");
-        //     }
+        //         error!("finalize_block: Rejecting finalized block with Botanix runtime version:
+        // {version}");         panic!("finalize_block: Rejecting Botanix upgrade
+        // '{version}' - can no longer proceed...");     }
         // }
 
         // // Metrics
@@ -2280,16 +2293,16 @@ where
         // };
 
         // let first_exec_tx_result =
-        //     ExecTxResult { code: SUCCESS, data: non_deterministic_data_tx, ..Default::default() };
-        // exec_results.push(first_exec_tx_result);
+        //     ExecTxResult { code: SUCCESS, data: non_deterministic_data_tx, ..Default::default()
+        // }; exec_results.push(first_exec_tx_result);
 
         // for _tx in block_with_context.sealed_block_with_peg.block().body().transactions() {
         //     // https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#transaction-results
         //     exec_results.push(ExecTxResult {
         //         code: SUCCESS,
         //         // From https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#gas
-        //         // In v0.34.x and earlier versions, CometBFT does not enforce anything about Gas in
-        //         // consensus, only in the mempool. ... The GasUsed field is ignored
+        //         // In v0.34.x and earlier versions, CometBFT does not enforce anything about Gas
+        // in         // consensus, only in the mempool. ... The GasUsed field is ignored
         //         // by CometBFT. CometBFT's genesis.json should have max_gas set to
         //         // -1 as to not enforce any gas limit restrictions Gas and other
         //         // block resource limits are enforced by the EVM/Reth
@@ -2429,7 +2442,9 @@ impl ABCIDriver {
         driver_rx: tokio::sync::mpsc::Receiver<ABCIDriverMessage>,
         reth_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
         botanix_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
-        blockchain_provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+        blockchain_provider: BlockchainProvider<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >,
     ) -> Self {
         Self {
             driver_rx: Arc::new(Mutex::new(driver_rx)),
@@ -2454,17 +2469,20 @@ impl ABCIDriver {
                         // )
                         // .entered();
 
-                        // let sealed_block_with_peg = sealed_block_with_context.sealed_block_with_peg;
+                        // let sealed_block_with_peg =
+                        // sealed_block_with_context.sealed_block_with_peg;
                         // let new_header = sealed_block_with_peg.block().header().clone();
                         // let block_height = sealed_block_with_peg.block().number;
                         // let sealed_block_with_senders = sealed_block_with_peg.block().to_owned();
-                        // let hashed_state = sealed_block_with_context.exec_outcome.hash_state_slow();
+                        // let hashed_state =
+                        // sealed_block_with_context.exec_outcome.hash_state_slow();
                         // let trie_updates = sealed_block_with_context.trie_updates;
 
                         // let executed_block = ExecutedBlock {
                         //     recovered_block: Arc::new(sealed_block_with_senders.block().clone()),
                         //     // x: Arc::new(sealed_block_with_senders.senders.clone()),
-                        //     execution_output: Arc::new(sealed_block_with_context.exec_outcome.clone()),
+                        //     execution_output:
+                        // Arc::new(sealed_block_with_context.exec_outcome.clone()),
                         //     hashed_state: Arc::new(hashed_state.clone()),
                         //     // x: Arc::new(trie_updates.clone()),
                         // };
@@ -2504,8 +2522,8 @@ impl ABCIDriver {
                         // // 1. Panic in case any of the commits failed
                         // // 2. Reth process is restarted, that lead CometBFT to restart
                         // // 3. Reth send previous block height CometBFT tries to replay the block
-                        // // 4. If botanix database commit failed (it goes first), then we are at the
-                        // //    previous block state for both databases
+                        // // 4. If botanix database commit failed (it goes first), then we are at
+                        // the //    previous block state for both databases
                         // // 5. If reth database commit failed then we should have staged header in
                         // //    the botanix database but reth database in previous block state
                         // // 6. This is totally fine because `insert_staged_header` is idempotent
@@ -2516,9 +2534,9 @@ impl ABCIDriver {
                         //     .unwrap_or_else(|e| panic!("can't get botanix rw provider: {e}"));
 
                         // let reth_db_rw =
-                        //     self.reth_database_provider_factory.provider_rw().unwrap_or_else(|e| {
-                        //         panic!("Error getting database rw provider: {:?}", e);
-                        //     });
+                        //     self.reth_database_provider_factory.provider_rw().unwrap_or_else(|e|
+                        // {         panic!("Error getting database rw
+                        // provider: {:?}", e);     });
 
                         // // Update botanix database with the new header and pegins/pegouts
 
@@ -2585,8 +2603,8 @@ impl ABCIDriver {
                         // );
 
                         // if let Err(e) = commit_tx.send(()) {
-                        //     error!("Failed to send await on channel for ABCIDriverMessage::CommitBlock message {e:?}");
-                        // }
+                        //     error!("Failed to send await on channel for
+                        // ABCIDriverMessage::CommitBlock message {e:?}"); }
                     }
                     ABCIDriverMessage::Exit => {
                         break;
@@ -2644,8 +2662,8 @@ impl ABCIDriver {
 //         BotanixProviderFactory<Arc<DatabaseEnv>>,
 //         RethPool<
 //             TransactionValidationTaskExecutor<
-//                 EthTransactionValidator<BlockchainProvider<Arc<DatabaseEnv>>, EthPooledTransaction>,
-//             >,
+//                 EthTransactionValidator<BlockchainProvider<Arc<DatabaseEnv>>,
+// EthPooledTransaction>,             >,
 //             reth_transaction_pool::CoinbaseTipOrdering<EthPooledTransaction>,
 //             InMemoryBlobStore,
 //         >,
@@ -2665,8 +2683,8 @@ impl ABCIDriver {
 //         let factory = ProviderFactory::new(
 //             Arc::new(reth_db),
 //             spec.inner_arc(),
-//             StaticFileProvider::read_write(reth_static_path).expect("to create provider factory"),
-//         );
+//             StaticFileProvider::read_write(reth_static_path).expect("to create provider
+// factory"),         );
 //         let _ = init_genesis(factory.clone()).expect("to init genesis");
 
 //         let reth_provider =
@@ -2703,7 +2721,8 @@ impl ABCIDriver {
 //                 .build_with_tasks(task_executor.clone(), blob_store.clone());
 
 //         let transaction_pool =
-//             RethPool::eth_pool(validator.clone(), blob_store, TxPoolArgs::default().pool_config());
+//             RethPool::eth_pool(validator.clone(), blob_store,
+// TxPoolArgs::default().pool_config());
 
 //         let activation_manager =
 //             ActivationManagerBuilder::new(VoteWatcher::default(), RUNTIME_VERSION_V1)
@@ -2788,8 +2807,8 @@ impl ABCIDriver {
 //         let _response_app_hash_hex = hex::encode(response.app_hash.to_vec().as_slice());
 //         assert_eq!(
 //             response.app_hash.to_vec(),
-//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap genesis hash").0.to_vec()
-//         );
+//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap genesis
+// hash").0.to_vec()         );
 //     }
 
 //     #[test]
@@ -2803,11 +2822,11 @@ impl ABCIDriver {
 //         assert_eq!(response.version, VERSION.to_string());
 //         assert_eq!(response.app_version, 1);
 //         assert_eq!(response.last_block_height, 0);
-//         let _response_app_hash_hex = hex::encode(response.last_block_app_hash.to_vec().as_slice());
-//         assert_eq!(
+//         let _response_app_hash_hex =
+// hex::encode(response.last_block_app_hash.to_vec().as_slice());         assert_eq!(
 //             response.last_block_app_hash.to_vec(),
-//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap genesis hash").0.to_vec()
-//         );
+//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap genesis
+// hash").0.to_vec()         );
 //     }
 
 //     #[test]
@@ -2891,7 +2910,8 @@ impl ABCIDriver {
 //         request.proposer_address = proposer_address;
 
 //         request.time = Some(Timestamp::default());
-//         request.hash = prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice());
+//         request.hash =
+// prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice());
 
 //         let response = abci_client.process_proposal(request);
 
@@ -2941,7 +2961,8 @@ impl ABCIDriver {
 //         request.proposer_address = proposer_address;
 
 //         request.time = Some(Timestamp::default());
-//         request.hash = prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice());
+//         request.hash =
+// prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice());
 
 //         let response = abci_client.finalize_block(request);
 
@@ -2954,8 +2975,8 @@ impl ABCIDriver {
 
 //         let expected_response = ResponseFinalizeBlock {
 //             events: vec![],
-//             tx_results: vec![ExecTxResult { code: SUCCESS, data: ndd_bytes, ..Default::default() }],
-//             validator_updates: vec![],
+//             tx_results: vec![ExecTxResult { code: SUCCESS, data: ndd_bytes, ..Default::default()
+// }],             validator_updates: vec![],
 //             consensus_param_updates: None,
 //             app_hash: expected_app_hash,
 //         };
@@ -2975,7 +2996,8 @@ impl ABCIDriver {
 //         let ndd =
 //             abci_client.non_deterministic_data(RUNTIME_VERSION_V1, None).expect("to have ndd");
 //         let ndd_bytes =
-//             abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect("to serialize ndd");
+//             abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect("to serialize
+// ndd");
 
 //         // second tx should be a signed transaction
 //         let mut tx_generator = TransactionGenerator::new(thread_rng());
@@ -2990,7 +3012,8 @@ impl ABCIDriver {
 //         request.proposer_address = proposer_address;
 
 //         request.time = Some(Timestamp::default());
-//         request.hash = prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice());
+//         request.hash =
+// prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice());
 
 //         let response = abci_client.finalize_block(request);
 //         assert_eq!(response, ResponseFinalizeBlock::default());
