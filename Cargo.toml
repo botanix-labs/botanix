@@ -8,7 +8,7 @@ repository = "https://github.com/botanix-labs/reth"
 exclude = [".github/"]
 
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "bin/botanix-reth",
     "bin/btc-server",

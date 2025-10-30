@@ -1,0 +1,84 @@
+name: Fmt/Lint
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+  CLICOLOR: 1
+  CI: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile:
+    name: Validate Lockfile
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+          components: rustfmt, clippy
+      - run: cargo update --workspace --locked
+
+  pre-commit:
+    name: Pre-commit
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+          components: rustfmt, clippy
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install taplo
+        run: cargo install taplo-cli --locked
+
+      - name: Run Pre Commit
+        uses: pre-commit/action@v3.0.1
+
+  cargo-fmt-lint:
+    name: Cargo verifications
+    needs:
+      - lockfile
+      - pre-commit
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+          components: rustfmt, clippy
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install required tools
+        run: |
+          cargo install cargo-binstall --force
+          cargo binstall --force --no-confirm taplo-cli cargo-machete
+
+      - name: Check for typos
+        uses: crate-ci/typos@master
+        with:
+          config: ./.typos.toml
+
+      - name: Lint project
+        run: make lint

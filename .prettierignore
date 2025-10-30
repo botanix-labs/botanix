@@ -2,3 +2,9 @@ pnpm-lock.yaml
 images
 audit
 cov-reports
+bun.lock
+claude
+data
+node_modules
+target
+terraform
