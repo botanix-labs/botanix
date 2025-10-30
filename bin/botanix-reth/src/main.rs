@@ -209,8 +209,7 @@ fn main() -> eyre::Result<()> {
                 node.pool.clone(),
             ).await?;
 
-            let (network_handle, network_manager, tx_pool_p2p, 
-eth_request_handler_p2p, frost_p2p) =
+            let (network_handle, network_manager, tx_pool_p2p, eth_request_handler_p2p, frost_p2p) =
             setup_network_builder(
                 &frost_setup_result,
                 &reth_provider_factory,

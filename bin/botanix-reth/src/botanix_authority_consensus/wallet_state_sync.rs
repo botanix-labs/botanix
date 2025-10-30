@@ -99,7 +99,7 @@ impl<BF, RDB, BDB, ToFrostMan, BtcServerClient>
 where
     BF: BitcoindFactory + Clone + 'static,
     ToFrostMan: ToFrostManager + Sync + Clone + 'static,
-    RDB: BlockReaderIdExt + CanonStateSubscriptions + Clone + 'static,
+    RDB: BlockReaderIdExt<Header = alloy_consensus::Header> + CanonStateSubscriptions + Clone + 'static,
     BDB: WalletStateSyncWriter + WalletStateSyncReader + Clone + 'static,
     BtcServerClient: BtcServerExtendedApi + Clone,
 {
@@ -193,6 +193,241 @@ where
 {
     // Note: this function should not be called unless we are fully synced
     async fn sync_wallet_state(&self) -> Result<(), WalletStateSyncError> {
+        trace!(target: "consensus::authority::WalletStateSync::sync_wallet_state", "syncing wallet state");
+        let mut btc_server = self.btc_server.clone();
+
+        let (peer_messages_tx, peer_messages_rx) = tokio::sync::oneshot::channel();
+
+        self.to_frost_manager
+            .send_command(FrostCommand::GetPeerMessagesStream(peer_messages_tx))?;
+        let mut peer_messages_rx = peer_messages_rx.await.expect("peer messages rx to be open");
+
+        let data_parser = self.data_parser.clone();
+        let frost_config = self.frost_config.clone();
+        let current_response_cycle = self.current_response_cycle.clone();
+        let mut canon_events = self.storage.reth_database.subscribe_to_canonical_state();
+        let btc_network = self.storage.btc_network;
+        let storage = self.storage.clone();
+        let reth_database = storage.reth_database.clone();
+        let botanix_provider_factory = storage.botanix_database_factory.clone();
+
+        // TODO: Currently we commit after each write operation. We need to make sure that the data
+        //  we commit here are consistent.
+
+        self.task_executor.clone().spawn(async move {
+            // try getting the wallet state from the peers we requested it from
+            loop {
+                match peer_messages_rx.recv().await {
+                    Some(peer_message_context) => {
+                        trace!(target: "consensus::authority::sync_wallet_state", "Received wallet state from peer {:?}", peer_message_context.peer_id);
+                        // Note: we ignore empty messages bc they are peer requests for wallet state
+                        // which are handled by the frost task or are malicious/faulty requests
+                        // that would cause the btc-server to wipe its state
+                        if let PeerMessageResponse::WalletState(wallet_state) =
+                            peer_message_context.message
+                        {
+                            // try parsing the uuid
+                            let request_uuid = match Uuid::parse_str(&wallet_state.uuid) {
+                                Ok(uuid) => uuid,
+                                Err(e) => {
+                                    error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to parse uuid from peer message");
+                                    continue;
+                                }
+                            };
+
+                            // process the wallet state
+                            debug!(target: "consensus::authority::sync_wallet_state", "Received wallet state from peer {:?}", wallet_state);
+
+                            // process the finalized pegout ids
+                            let finalized_pegout_ids_compressed = wallet_state.finalized_pegout_ids;
+                            let finalized_pegout_ids_decompressed = {
+                                if finalized_pegout_ids_compressed.is_empty() {
+                                    warn!(target: "consensus::authority::sync_wallet_state", "Peer sent empty finalized pegout ids");
+                                    continue;
+                                } else {
+                                    let Ok(finalized_pegout_ids_decompressed) = data_parser.decompress(&finalized_pegout_ids_compressed).await.map_err(|e| {
+                                        error!(target: "consensus::authority::sync_wallet_state", "Failed to decompress finalized pegout ids {:?}", e);
+                                        WalletStateSyncError::CompressorError(e)
+                                    }) else {
+                                        tracing::error!(target: "consensus::authority::sync_wallet_state", "Failed to decompress finalized pegout ids");
+                                        continue;
+                                    };
+                                    let Ok(finalized_pegout_ids_decompressed) = ProstMessageSerdelizer::<GetFinalizedPegoutIdsResponse>::deserialize(
+                                        finalized_pegout_ids_decompressed,
+                                    ) else {
+                                        error!(target: "consensus::authority::sync_wallet_state", "Failed to deserialize pending pegouts");
+                                        continue;
+                                    };
+                                    finalized_pegout_ids_decompressed
+                                }
+                            };
+
+                            // update the sync responses map with the received wallet state (considering only good states towards liveness)
+                            let current_response_cycle = current_response_cycle.read().await;
+                            match *current_response_cycle {
+                                Some(uuid) => {
+                                    if uuid != request_uuid {
+                                        warn!(target: "consensus::authority::sync_wallet_state", "Received wallet state with different uuid, ignoring");
+                                        continue;
+                                    }
+
+                                    // update the state
+                                    let state_sync_record_by_peer_id = match botanix_provider_factory.get_state_sync_record_by_peer_id(peer_message_context.peer_id) {
+                                        Ok(state_sync_record_by_peer_id) => state_sync_record_by_peer_id,
+                                        Err(e) => {
+                                            error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to get state sync record by peer id");
+                                            continue;
+                                        }
+                                    };
+
+                                    match state_sync_record_by_peer_id.as_ref() {
+                                        Some(wallet_state_sync_record) => {
+                                            // check if the peer is already in the db
+                                            if wallet_state_sync_record.get_uuid() != uuid_to_b256(uuid) {
+                                                warn!(target: "consensus::authority::sync_wallet_state", "Peer sent different uuid, ignoring");
+                                                continue;
+                                            }
+
+                                            // append the data to the state sync record
+                                            match botanix_provider_factory.append_data_to_state_sync_record(
+                                                wallet_state_sync_record.get_peer_id(),
+                                                finalized_pegout_ids_decompressed.data.into_iter().map(|pid | (pid.botanix_block_height, Bytes::from(pid.id))).collect::<Vec<_>>(),
+                                            ) {
+                                                Ok(_) => {
+                                                    trace!(target: "consensus::authority::sync_wallet_state", "Appended data to state sync record");
+                                                }
+                                                Err(e) => {
+                                                    error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to append data to state sync record");
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            // create a new state sync record for the peer
+                                            match botanix_provider_factory.create_new_state_sync_record(
+                                                uuid_to_b256(uuid),
+                                                peer_message_context.peer_id,
+                                                finalized_pegout_ids_decompressed.total_chunks,
+                                                Some(finalized_pegout_ids_decompressed.data.into_iter().map(|pid| (pid.botanix_block_height, Bytes::from(pid.id))).collect::<Vec<_>>()),
+                                            ) {
+                                                Ok(_) => {
+                                                    trace!(target: "consensus::authority::sync_wallet_state", "Created new state sync record");
+                                                }
+                                                Err(e) => {
+                                                    error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to create new state sync record");
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // check if we have all the chunks and a minimum superset available
+                                    match botanix_provider_factory.get_minimum_superset(frost_config.min_signers as u64) {
+                                        Ok((found, minimum_superset)) => {
+                                            if found {
+                                                // hydrate the superset
+                                                let hydrated_minimum_superset = match hydrate_minimum_superset(
+                                                    minimum_superset,
+                                                    &reth_database,
+                                                    btc_network,
+                                                ).await {
+                                                    Ok(hydrated_minimum_superset) => hydrated_minimum_superset,
+                                                    Err(e) => {
+                                                        error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to hydrate minimum superset");
+                                                        continue;
+                                                    }
+                                                };
+                                                // prepare the grpc response
+                                                let finalized_pegout_ids = hydrated_minimum_superset
+                                                .into_iter()
+                                                .flat_map(|(block, data)| {
+                                                    data.into_iter().map(move |(pegout_id, timestamp)| {
+                                                        FinalizedPegout {
+                                                            botanix_block_height: block,
+                                                            id: pegout_id.as_bytes().to_vec(),
+                                                            botanix_block_timestamp: timestamp,
+                                                        }
+                                                    })
+                                                })
+                                                .collect::<Vec<_>>();
+
+                                                trace!(target: "consensus::authority::sync_wallet_state", "Found minimum superset, notifying frost manager");
+                                                // Report to btc server to resync the wallet state
+                                                match btc_server
+                                                    .reset_wallet_state(ResetWalletStateRequest {
+                                                        finalized_pegout_ids,
+                                                    })
+                                                    .await {
+                                                    Ok(_) => {
+                                                        info!(target: "consensus::authority::sync_wallet_state", "Wallet state reset successfully");
+                                                    }
+                                                    Err(e) => {
+                                                        error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to reset wallet state");
+                                                    }
+                                                }
+                                                // Remove from the db all state sync records
+                                                match botanix_provider_factory.remove_all_state_sync_records() {
+                                                    Ok(_) => {
+                                                        info!(target: "consensus::authority::sync_wallet_state", "Removed all state sync records");
+                                                    }
+                                                    Err(e) => {
+                                                        error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to remove all state sync records");
+                                                    }
+                                                }
+                                            } else {
+                                                warn!(target: "consensus::authority::sync_wallet_state", "Minimum superset not found yet");
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to get minimum superset");
+                                        }
+                                    }
+                                },
+                                None => {
+                                    warn!(target: "consensus::authority::sync_wallet_state", "No current response cycle, ignoring wallet state");
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        warn!(target: "consensus::authority::sync_wallet_state", "Closed channels for peer messages, no wallet state received");
+                        break;
+                    }
+                }
+            }
+        });
+
+        let current_response_cycle = self.current_response_cycle.clone();
+        while let Ok(canon_event) = canon_events.recv().await {
+            debug!(target: "consensus::authority::snapshot_manager::run", "received canon event {:?}", canon_event);
+            match canon_event {
+                CanonStateNotification::Commit { new, .. } => {
+                    let tip = new.tip();
+                    // TODO: fix me
+                    // if !tip.is_poa_epoch(storage.chain_spec.epoch_length) ||
+                    //     tip.header().number == 0
+                    // {
+                    //     continue;
+                    // }
+                    // Request the wallet state from all peers for poa epoch blocks only
+                    let uuid = uuid::Uuid::new_v4();
+                    if let Err(e) = self
+                        .to_frost_manager
+                        .send_command(FrostCommand::GetWalletStateFromPeer(uuid))
+                    {
+                        error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to send get wallet state command to frost manager");
+                    }
+                    // (re-)start the current response cycle
+                    current_response_cycle.write().await.replace(uuid);
+                }
+                CanonStateNotification::Reorg { old: _old, new: _new } => {
+                    warn!(target: "consensus::authority::snapshot_manager::run", "reorg detected, this should not happen");
+                    continue;
+                }
+            }
+        }
+
         Ok(())
     }
 }

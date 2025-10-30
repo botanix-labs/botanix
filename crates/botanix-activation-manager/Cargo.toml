@@ -15,3 +15,7 @@ reth-storage-errors = { workspace = true }
 
 [features]
 test-utils = []
+
+[dev-dependencies]
+# This enables the feature when running tests
+botanix-activation-manager = { path = ".", features = ["test-utils"] }
