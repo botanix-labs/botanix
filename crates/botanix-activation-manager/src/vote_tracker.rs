@@ -121,6 +121,7 @@ impl ActivationManagerReaderWriter<Address> for VoteWatcher {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;

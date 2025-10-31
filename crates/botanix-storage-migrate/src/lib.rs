@@ -6,7 +6,8 @@
 mod migrate;
 mod report;
 mod table_transporter;
-#[cfg(feature = "test-utils")]
+
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 
 pub use migrate::{is_migration_needed, migrate_botanix_tables};

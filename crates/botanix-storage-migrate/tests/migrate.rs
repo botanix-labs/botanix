@@ -1,5 +1,4 @@
 //! Test migration of botanix storage tables to reth database
-
 use botanix_storage_migrate::{
     migrate_botanix_tables,
     test_utils::fixtures::{
@@ -8,6 +7,7 @@ use botanix_storage_migrate::{
         create_test_staged_headers, create_test_wallet_state_syncs,
     },
 };
+
 use eyre::Context;
 use reth_db::{test_utils::create_test_rw_db, DatabaseEnv};
 use reth_db_api::{

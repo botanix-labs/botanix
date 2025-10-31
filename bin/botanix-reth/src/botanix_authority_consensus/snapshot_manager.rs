@@ -1,5 +1,5 @@
 //! Snapshot manager is responsible for persisting snapshot chunks to disk
-use crate::botanix_authority_consensus::Storage;
+use crate::{BotanixBlock, botanix_authority_consensus::Storage};
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_comet_bft_rpc::{Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_data_parser::{DataParser, Error as DataParserError};
@@ -11,7 +11,7 @@ use futures::StreamExt;
 use reth_evm::ConfigureEvm;
 // use reth_evm::execute::BlockExecutorProvider;
 use alloy_primitives::BlockNumber;
-use reth_primitives::BlockWithSenders;
+use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
     BlockReaderIdExt, CanonStateNotification, CanonStateSubscriptions, ProviderError,
     TransactionVariant,
@@ -330,42 +330,42 @@ where
         info!(target: "consensus::authority::snapshot_manager::run", "Missing blocks {}", missing_blocks);
 
         // create the historical blocks stream
-        // let mut historical_blocks_stream = match missing_blocks {
-        //     0 => futures::stream::empty::<Option<BlockWithSenders>>().boxed(),
-        //     val if val > 0 && self.enable_historical_sync => {
-        //         info!(target: "consensus::authority::snapshot_manager::run", "Missing blocks detected, starting historical sync");
-        //         // mark the state lock as syncing history
-        //         let mut state_lock = self.state_lock.write().expect("snapshot state sync locked");
-        //         state_lock.set_is_syncing_history(true);
-        //         drop(state_lock);
+        let mut historical_blocks_stream = match missing_blocks {
+            0 => futures::stream::empty::<Option<RecoveredBlock<<RDB as reth_provider::BlockReader>::Block>>>().boxed(),
+            val if val > 0 && self.enable_historical_sync => {
+                info!(target: "consensus::authority::snapshot_manager::run", "Missing blocks detected, starting historical sync");
+                // mark the state lock as syncing history
+                let mut state_lock = self.state_lock.write().expect("snapshot state sync locked");
+                state_lock.set_is_syncing_history(true);
+                drop(state_lock);
 
-        //         // create a stream of missing blocks
-        //         let historical_stream = futures::stream::iter(starting_block..=latest_block_height)
-        //             .map(|block_number| {
-        //                 block_client
-        //                     .block_with_senders_by_id(
-        //                         BlockId::Number(block_number.into()),
-        //                         TransactionVariant::WithHash,
-        //                     )
-        //                     .ok()
-        //                     .flatten()
-        //             })
-        //             .boxed();
+                // create a stream of missing blocks
+                let historical_stream = futures::stream::iter(starting_block..=latest_block_height)
+                    .map(|block_number| {
+                        block_client
+                            .block_with_senders_by_id(
+                                BlockId::Number(block_number.into()),
+                                TransactionVariant::WithHash,
+                            )
+                            .ok()
+                            .flatten()
+                    })
+                    .boxed();
 
-        //         historical_stream
-        //     }
-        //     _ => {
-        //         warn!(target: "consensus::authority::snapshot_manager::run", "Missing blocks detected but historical sync is disabled!");
+                historical_stream
+            }
+            _ => {
+                warn!(target: "consensus::authority::snapshot_manager::run", "Missing blocks detected but historical sync is disabled!");
 
-        //         let mut state_lock = self.state_lock.write().expect("snapshot state sync locked");
-        //         state_lock.set_is_syncing_history(false);
-        //         drop(state_lock);
+                let mut state_lock = self.state_lock.write().expect("snapshot state sync locked");
+                state_lock.set_is_syncing_history(false);
+                drop(state_lock);
 
-        //         // allow a gap in snapshots and start syncing live blocks by returning an empty
-        //         // stream
-        //         futures::stream::empty::<Option<BlockWithSenders>>().boxed()
-        //     }
-        // };
+                // allow a gap in snapshots and start syncing live blocks by returning an empty
+                // stream
+                futures::stream::empty::<Option<RecoveredBlock<<RDB as reth_provider::BlockReader>::Block>>>().boxed()
+            }
+        };
 
         // if missing_blocks > 0 {
         //     info!(target: "consensus::authority::snapshot_manager::run", "Starting historical sync from block {} to block {}", starting_block, latest_block_height);

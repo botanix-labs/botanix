@@ -2,7 +2,6 @@ use super::patch::{
     patch_chapel_after_tx, patch_chapel_before_tx, patch_mainnet_after_tx, patch_mainnet_before_tx,
 };
 use crate::{
-    consensus::{MAX_SYSTEM_REWARD, SYSTEM_ADDRESS, SYSTEM_REWARD_PERCENT},
     evm::transaction::BotanixTxEnv,
     system_contracts::{
         get_upgrade_system_contracts, is_system_transaction, SystemContract, STAKE_HUB_CONTRACT,
@@ -19,7 +18,7 @@ use alloy_evm::{
     block::{ExecutableTx, StateChangeSource},
     eth::receipt_builder::ReceiptBuilderCtx,
 };
-use alloy_primitives::{keccak256, uint, Address, BlockNumber, Bytes, TxKind, U256};
+use alloy_primitives::{keccak256, address, uint, Address, BlockNumber, Bytes, TxKind, U256};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
 use botanix_chainspec::BotanixHardforks;
@@ -44,6 +43,14 @@ use revm::{
     Database as _, DatabaseCommit,
 };
 use tracing::debug;
+use alloy_consensus::constants::ETH_TO_WEI;
+
+/// The system account address used by the reward contract.
+pub(super) const SYSTEM_ADDRESS: Address = address!("0xfffffffffffffffffffffffffffffffffffffffe");
+/// The reward percent to system
+pub(super) const SYSTEM_REWARD_PERCENT: usize = 4;
+/// The max reward in system reward contract
+pub(super) const MAX_SYSTEM_REWARD: u128 = 100 * ETH_TO_WEI;
 
 pub(super) struct BotanixBlockExecutor<'a, EVM, Spec, R: ReceiptBuilder>
 where
