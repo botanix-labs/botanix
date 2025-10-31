@@ -11,3 +11,6 @@ pub mod utils;
 
 /// Module for state management and manipulation within the EVM context.
 pub mod state;
+
+/// Module for building execution payloads.
+pub mod payload;

@@ -20,6 +20,13 @@ reth-primitives-traits = { workspace = true }
 reth-storage-errors = { workspace = true }
 reth-evm = { workspace = true }
 reth-revm = { workspace = true }
+reth-payload-builder = { workspace = true }
+reth-payload-primitives = { workspace = true }
+reth-basic-payload-builder = { workspace = true }
+reth-ethereum-payload-builder = { workspace = true }
+reth-ethereum-engine-primitives = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
+reth-transaction-pool = { workspace = true }
 
 # REVM dependencies
 revm-database = { workspace = true }

@@ -179,6 +179,7 @@ reth-engine-tree = { git = "https://github.com/botanix-labs/reth",  branch="bota
 reth-ethereum = { git = "https://github.com/botanix-labs/reth",  branch="botanix", features = ["test-utils", "node", "provider", "pool", "network", "rpc"] }
 reth-ethereum-payload-builder = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-ethereum-consensus = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
+reth-ethereum-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-ethereum-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-eth-wire = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
 reth-eth-wire-types = { git = "https://github.com/botanix-labs/reth", branch="botanix" }

@@ -6,11 +6,13 @@ use botanix_chainspec::constants::BOTANIX_TESTNET_CHAIN_ID;
 use botanix_storage::models::RuntimeVersion;
 use reth_chain_state::ExecutedBlock;
 use reth_db::{Database, DatabaseEnv};
+use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_node_builder::{NodeTypesWithDB, NodeTypesWithDBAdapter};
 // use reth_provider::{
 //     providers::BlockchainProvider2, BlockWriter, CanonChainTracker, ExecutionOutcome,
 // };
 use reth_evm::ConfigureEvm;
+use reth_node_types::Block;
 use reth_trie::{updates::TrieUpdates, StateRoot};
 use reth_trie_db::DatabaseStateRoot;
 use std::{
@@ -24,6 +26,7 @@ use tokio::sync::Mutex;
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
+use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
 use reth_consensus::{Consensus, ConsensusError, InvalidAggregatedPublicKeyError};
 //use reth_ethereum_payload_builder::e
@@ -255,7 +258,12 @@ pub struct ABCIClientBuilder<BF, RDB, BDB> {
 
 impl<BF, RDB, BDB> ABCIClientBuilder<BF, RDB, BDB>
 where
-    RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
+    RDB: BlockReaderIdExt
+        + StateProviderFactory
+        + Clone
+        + CanonChainTracker
+        + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
+        + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
 {
@@ -422,6 +430,7 @@ pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
 impl<BF, RDB, DBD, Pool> ABCIClient<BF, RDB, DBD, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
+    RDB: reth_provider::HeaderProvider<Header = alloy_consensus::Header>,
     DBD: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
@@ -477,44 +486,38 @@ where
     }
 
     /// Returns the payload builder config
-    /// this method will block and wait for the storage lock
+    /// TODO: move to crate botanix-evm > src > payload.rs
     fn payload_builder_arguments(
         &self,
     ) -> Result<PayloadConfig<EthPayloadBuilderAttributes>, PayloadBuilderError> {
-        // let client = self.storage.reth_database.clone();
-        // let chain_spec = self.storage.chain_spec.clone();
+        let client = self.storage.reth_database.clone();
 
-        // let best_header =
-        //     client.latest_header()?.ok_or(PayloadBuilderError::LatestHeaderDoesNotExist)?;
-        // let best_block = BlockReaderIdExt::block_by_id(&client, BlockId::latest())?
-        //     .ok_or(PayloadBuilderError::LatestBlockDoesNotExist)?
-        //     .seal(best_header.hash());
+        let best_header =
+            client.latest_header()?.ok_or(PayloadBuilderError::LatestHeaderDoesNotExist)?;
+        let best_block = BlockReaderIdExt::block_by_id(&client, BlockId::latest())?
+            .ok_or(PayloadBuilderError::LatestBlockDoesNotExist)?
+            .seal();
 
-        // let parent_block =
-        //     BlockReaderIdExt::block_by_id(&client, BlockId::hash(best_header.parent_hash))?
-        //         .ok_or(PayloadBuilderError::ParentBlockDoesNotExist)?
-        //         .seal(best_header.parent_hash);
+        let parent_block =
+            BlockReaderIdExt::block_by_id(&client, BlockId::hash(best_header.parent_hash()))?
+                .ok_or(PayloadBuilderError::ParentBlockDoesNotExist)?
+                .seal();
 
-        // let payload_attributes = PayloadAttributes {
-        //     // Attributes here dont really matter
-        //     // We just want to build a payload with the best txs
-        //     // TODO: Why we don't use block time here?
-        //     timestamp: unix_timestamp(),
-        //     prev_randao: FixedBytes::<32>::random(),
-        //     suggested_fee_recipient: Address::ZERO,
-        //     withdrawals: None,
-        //     parent_beacon_block_root: parent_block.parent_beacon_block_root,
-        // };
+        let payload_attributes = PayloadAttributes {
+            // Attributes here dont really matter
+            // We just want to build a payload with the best txs
+            timestamp: unix_timestamp(), /* We override this with timestamp from CometBFT during
+                                          * build_and_execute() */
+            prev_randao: FixedBytes::<32>::random(),
+            suggested_fee_recipient: Address::ZERO,
+            withdrawals: None,
+            parent_beacon_block_root: parent_block.parent_beacon_block_root(),
+        };
 
-        // let payload_builder_attributes =
-        //     EthPayloadBuilderAttributes::new(best_block.hash(), payload_attributes);
+        let payload_builder_attributes =
+            EthPayloadBuilderAttributes::new(best_block.hash(), payload_attributes);
 
-        // Ok(PayloadConfig::new(
-        //     Arc::new(best_block),
-        //     payload_builder_attributes,
-        // ))
-
-        unimplemented!()
+        Ok(PayloadConfig::new(Arc::new(best_header), payload_builder_attributes))
     }
 
     pub(crate) fn non_deterministic_data(
@@ -522,23 +525,21 @@ where
         runtime_version: RuntimeVersion,
         network_upgrade_payload: Option<NetworkUpgradePayload>,
     ) -> Result<NonDeterministicData, ConsensusError> {
-        // let aggregate_public_key = self.aggregate_public_key()?;
-        // let block_fee_recipient_address = self
-        //     .block_fee_recipient_address
-        //     .ok_or(ConsensusError::MissingBlockFeeRecipientAddress)?;
+        let aggregate_public_key = self.aggregate_public_key()?;
+        let block_fee_recipient_address = self
+            .block_fee_recipient_address
+            .ok_or(ConsensusError::MissingBlockFeeRecipientAddress)?;
 
-        // // Construct a NDD using version 2.
-        // let ndd = NonDeterministicData::new_v2(
-        //     self.bitcoin_blockhash()?,
-        //     aggregate_public_key,
-        //     block_fee_recipient_address,
-        //     runtime_version,
-        //     network_upgrade_payload,
-        // );
+        // Construct a NDD using version 2.
+        let ndd = NonDeterministicData::new_v2(
+            self.bitcoin_blockhash()?,
+            aggregate_public_key,
+            block_fee_recipient_address,
+            runtime_version,
+            network_upgrade_payload,
+        );
 
-        // Ok(ndd)
-
-        unimplemented!()
+        Ok(ndd)
     }
 
     pub(crate) fn serialize_non_deterministic_data_to_bytes(
@@ -665,10 +666,19 @@ where
 
 impl<BF, RDB, BDB, Pool> Application for ABCIClient<BF, RDB, BDB, Pool>
 where
-    RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
+    RDB: BlockReaderIdExt
+        + StateProviderFactory
+        + Clone
+        + CanonChainTracker
+        + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
+        + reth_provider::ChainSpecProvider
+        + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
+    Pool::Transaction: reth_transaction_pool::PoolTransaction<
+        Consensus = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
+    >,
 {
     // docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#init_chain
     // Panic! on an error. Proceeding when the chain can't be initialized will lead
@@ -1395,209 +1405,220 @@ where
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#prepareProposal
     #[instrument(level = "trace", skip(self, request), fields(cbft_block_height = request.height))]
     fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
-        // let execution_start_time = std::time::Instant::now();
-        // trace!("request={:?}", request);
+        let execution_start_time = std::time::Instant::now();
+        trace!("request={:?}", request);
 
-        // if !request.txs.is_empty() {
-        //     panic!(
-        //         "Transactions are not expected from CometBFT mempool to propose on height {}",
-        //         request.height
-        //     );
-        // }
+        if !request.txs.is_empty() {
+            panic!(
+                "Transactions are not expected from CometBFT mempool to propose on height {}",
+                request.height
+            );
+        }
 
-        // let block_time = request.time.expect("block time is not set in the request");
+        let block_time = request.time.expect("block time is not set in the request");
 
-        // let max_tx_bytes: usize =
-        //     request.max_tx_bytes.try_into().expect("Invalid request proposal max_tx_bytes
-        // value");
+        let max_tx_bytes: usize = request.max_tx_bytes.try_into().expect(
+            "Invalid request proposal max_tx_bytes
+        value",
+        );
 
-        // // Activation Manager: decide whether we should build for the current or
-        // // upgraded runtime version.
-        // let decision = self
-        //     .activation_manager
-        //     .on_prepare_proposal(request.height as u64)
-        //     .expect("db cannot fail");
+        // Activation Manager: decide whether we should build for the current or
+        // upgraded runtime version.
+        let decision = self
+            .activation_manager
+            .on_prepare_proposal(request.height as u64)
+            .expect("db cannot fail");
 
-        // let use_version = decision.version;
-        // let upgrade_vote = decision.vote;
+        let use_version = decision.version;
+        let upgrade_vote = decision.vote;
 
-        // // Construct the NDD version 2 with a runtime version indicator
-        // // and an (optional) network upgrade payload.
-        // let non_deterministic_data = match self.non_deterministic_data(use_version, upgrade_vote)
-        // {     Ok(ndd) => ndd,
-        //     Err(e) => {
-        //         panic!(
-        //             "Error creating non-deterministic data for proposal on height {}: {:?}",
-        //             request.height, e
-        //         );
-        //     }
-        // };
+        // Construct the NDD version 2 with a runtime version indicator
+        // and an (optional) network upgrade payload.
+        let non_deterministic_data = match self.non_deterministic_data(use_version, upgrade_vote) {
+            Ok(ndd) => ndd,
+            Err(e) => {
+                panic!(
+                    "Error creating non-deterministic data for proposal on height {}: {:?}",
+                    request.height, e
+                );
+            }
+        };
 
-        // debug!("prepare_proposal: Building with version: {use_version}");
+        debug!("prepare_proposal: Building with version: {use_version}");
 
-        // let floor_base_fee_per_gas = match use_version {
-        //     // Historic and unused; primarily required for unit tests.
-        //     RUNTIME_VERSION_V1 => None,
-        //     // Active
-        //     RUNTIME_VERSION_V2 => Some(FLOOR_BASE_FEE_PER_GAS_V2),
-        //     // Upgrade
-        //     RUNTIME_VERSION_V3 => Some(FLOOR_BASE_FEE_PER_GAS_V3),
-        //     _ => unreachable!(),
-        // };
+        let floor_base_fee_per_gas = match use_version {
+            // Historic and unused; primarily required for unit tests.
+            RUNTIME_VERSION_V1 => None,
+            // Active
+            RUNTIME_VERSION_V2 => Some(FLOOR_BASE_FEE_PER_GAS_V2),
+            // Upgrade
+            RUNTIME_VERSION_V3 => Some(FLOOR_BASE_FEE_PER_GAS_V3),
+            _ => unreachable!(),
+        };
 
-        // trace!("non_deterministic_data={:?}", non_deterministic_data);
+        trace!("non_deterministic_data={:?}", non_deterministic_data);
 
-        // // serialize non-deterministic data tx at index 0 to bytes so historical
-        // // sync will pass verification
-        // let non_deterministic_data_bytes = match self
-        //     .serialize_non_deterministic_data_to_bytes(non_deterministic_data)
-        // {
-        //     Ok(bytes) => bytes,
-        //     Err(e) => {
-        //         panic!("Error serializing non-deterministic data bytes for proposal on height {}:
-        // {:?}", request.height, e);     }
-        // };
+        // serialize non-deterministic data tx at index 0 to bytes so historical
+        // sync will pass verification
+        let non_deterministic_data_bytes =
+            match self.serialize_non_deterministic_data_to_bytes(non_deterministic_data) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    panic!(
+                        "Error serializing non-deterministic data bytes for proposal on height {}:
+        {:?}",
+                        request.height, e
+                    );
+                }
+            };
 
-        // // NDD goes to a block as the first transaction
-        // // so we need to take into account its size
+        // NDD goes to a block as the first transaction
+        // so we need to take into account its size
 
-        // let non_deterministic_data_bytes_len = non_deterministic_data_bytes.len();
-        // if non_deterministic_data_bytes_len > max_tx_bytes {
-        //     // We should panic bc there is a critical bug and there should be a chain halt.
-        //     panic!(
-        //         "Non-deterministic data size to propose for height {}: {} exceeds the max tx
-        // bytes allowed size {}",         request.height, non_deterministic_data_bytes_len,
-        // max_tx_bytes     );
-        // };
+        let non_deterministic_data_bytes_len = non_deterministic_data_bytes.len();
+        if non_deterministic_data_bytes_len > max_tx_bytes {
+            // We should panic bc there is a critical bug and there should be a chain halt.
+            panic!(
+                "Non-deterministic data size to propose for height {}: {} exceeds the max tx
+        bytes allowed size {}",
+                request.height, non_deterministic_data_bytes_len, max_tx_bytes
+            );
+        };
 
-        // let max_tx_bytes = max_tx_bytes - non_deterministic_data_bytes_len;
+        let max_tx_bytes = max_tx_bytes - non_deterministic_data_bytes_len;
 
-        // // Nothing to process if mempool is empty
-        // // propose an empty block with NDD only
-        // if self.pool.pool_size().total == 0 {
-        //     debug!("No transactions in pool, proposing empty cbft block with NDD only");
+        // Nothing to process if mempool is empty
+        // propose an empty block with NDD only
+        if self.pool.pool_size().total == 0 {
+            debug!("No transactions in pool, proposing empty cbft block with NDD only");
 
-        //     let response = ResponsePrepareProposal { txs: vec![non_deterministic_data_bytes] };
+            let response = ResponsePrepareProposal { txs: vec![non_deterministic_data_bytes] };
 
-        //     trace!("return={:?}", response);
+            trace!("return={:?}", response);
 
-        //     if tracing::enabled!(tracing::Level::INFO) {
-        //         let execution_time = execution_start_time.elapsed().as_secs_f32();
+            if tracing::enabled!(tracing::Level::INFO) {
+                let execution_time = execution_start_time.elapsed().as_secs_f32();
 
-        //         info!(
-        //             block_time = block_time.seconds,
-        //             cbft_transactions_count = 1,
-        //             eth_transactions_count = 0,
-        //             execution_time,
-        //             "Prepared a proposal with 1 transaction in {} seconds",
-        //             execution_time,
-        //         );
-        //     }
+                info!(
+                    block_time = block_time.seconds,
+                    cbft_transactions_count = 1,
+                    eth_transactions_count = 0,
+                    execution_time,
+                    "Prepared a proposal with 1 transaction in {} seconds",
+                    execution_time,
+                );
+            }
 
-        //     return response;
-        // }
+            return response;
+        }
 
-        // let mut payload_config = match self.payload_builder_arguments() {
-        //     Ok(payload_config) => payload_config,
-        //     Err(e) => {
-        //         panic!(
-        //             "error building payload config for proposal on height {}: {:?}",
-        //             request.height, e
-        //         );
-        //     }
-        // };
-        // let client = self.storage.reth_database.clone();
+        let mut payload_config = match self.payload_builder_arguments() {
+            Ok(payload_config) => payload_config,
+            Err(e) => {
+                panic!(
+                    "error building payload config for proposal on height {}: {:?}",
+                    request.height, e
+                );
+            }
+        };
+        let client = self.storage.reth_database.clone();
 
-        // // Set the floor base fee per gas if provided.
-        // if let Some(floor) = floor_base_fee_per_gas {
-        //     let basefee = payload_config.initialized_block_env.basefee.to::<u64>();
-        //     let min_basefee = basefee.max(floor);
+        // Set the floor base fee per gas if provided.
+        // TODO: PayloadConfig API changed - initialized_block_env no longer available
+        if let Some(floor) = floor_base_fee_per_gas {
+            let basefee = payload_config.initialized_block_env.basefee.to::<u64>();
+            let min_basefee = basefee.max(floor);
 
-        //     payload_config.initialized_block_env.basefee = U256::from(min_basefee);
-        // }
+            payload_config.initialized_block_env.basefee = U256::from(min_basefee);
+        }
+        let _ = floor_base_fee_per_gas; // suppress unused warning
 
-        // let build_args = BuildArguments {
-        //     cached_reads: Default::default(),
-        //     config: payload_config,
-        //     cancel: Default::default(),
-        //     best_payload: None,
-        //     max_tx_bytes: Some(max_tx_bytes),
-        // };
+        let build_args = BuildArguments {
+            cached_reads: Default::default(),
+            config: payload_config,
+            cancel: Default::default(),
+            best_payload: None,
+            max_tx_bytes: Some(max_tx_bytes),
+        };
 
-        // // TODO: finish
-        // // let evm_config = EvmConfig;
-        // // let p = EthereumBuilderConfig;
-        // // let x = EthereumPayloadBuilder::new(client, self.pool.clone(), evm_config,
-        // builder_config)
+        // TODO: is default config ok here?
+        let builder_config = EthereumBuilderConfig::default();
 
-        // match default_ethereum_payload_builder(self.storage.evm_config, build_args) {
-        //     Ok(res) => {
-        //         match res {
-        //             reth_basic_payload_builder::BuildOutcome::Aborted { fees, cached_reads: _ }
-        // => {                 // TODO: Aborted why, shall we just propose NDD?
-        //                 panic!(
-        //                     "aborted payload building because resulted in worse block wrt. fees
-        // {} for height {}", fees, request.height                 );
-        //             }
-        //             reth_basic_payload_builder::BuildOutcome::Cancelled => {
-        //                 // TODO: Canceled why, shall we just propose NDD?
-        //                 panic!(
-        //                     "aborted payload building because cancelled for height {}",
-        //                     request.height
-        //                 );
-        //             }
-        //             reth_basic_payload_builder::BuildOutcome::Better {
-        //                 payload,
-        //                 cached_reads: _,
-        //             } => {
-        //                 let block = payload.block();
+        match default_ethereum_payload(
+            self.storage.evm_config,
+            client,
+            self.pool,
+            builder_config,
+            build_args,
+            |attributes| self.pool.best_transactions_with_attributes(attributes),
+        ) {
+            Ok(res) => {
+                match res {
+                    reth_basic_payload_builder::BuildOutcome::Aborted { fees, cached_reads: _ } => {
+                        // TODO: Aborted why, shall we just propose NDD?
+                        panic!(
+                            "aborted payload building because resulted in worse block wrt. fees
+        {} for height {}",
+                            fees, request.height
+                        );
+                    }
+                    reth_basic_payload_builder::BuildOutcome::Cancelled => {
+                        // TODO: Canceled why, shall we just propose NDD?
+                        panic!(
+                            "aborted payload building because cancelled for height {}",
+                            request.height
+                        );
+                    }
+                    reth_basic_payload_builder::BuildOutcome::Better {
+                        payload,
+                        cached_reads: _,
+                    } => {
+                        let block = payload.block();
 
-        //                 trace!("eth_block_header={:?}", block.header);
+                        trace!("eth_block_header={:?}", block.header());
 
-        //                 // These are bytes of [SignedTransaction]
-        //                 let mut txs: Vec<_> = block
-        //                     .raw_transactions()
-        //                     .iter()
-        //                     .map(|tx| prost::bytes::Bytes::copy_from_slice(tx))
-        //                     .collect::<_>();
+                        // These are bytes of [SignedTransaction]
+                        let mut txs: Vec<_> = block
+                            .body
+                            .iter()
+                            .map(|tx| prost::bytes::Bytes::copy_from_slice(tx))
+                            .collect::<_>();
 
-        //                 // insert non-deterministic data tx at index 0 so historical sync will
-        // pass                 // verification
+                        // insert non-deterministic data tx at index 0 so historical sync will pass
+                        // verification
 
-        //                 txs.insert(0, non_deterministic_data_bytes);
+                        txs.insert(0, non_deterministic_data_bytes);
 
-        //                 self.metrics.commet_prepared_proposals.increment(1);
+                        self.metrics.commet_prepared_proposals.increment(1);
 
-        //                 let txs_len = txs.len();
+                        let txs_len = txs.len();
 
-        //                 let response = ResponsePrepareProposal { txs };
+                        let response = ResponsePrepareProposal { txs };
 
-        //                 trace!("return={:?}", ResponsePrepareProposalTruncatedDebug(&response));
+                        trace!("return={:?}", ResponsePrepareProposalTruncatedDebug(&response));
 
-        //                 if tracing::enabled!(tracing::Level::INFO) {
-        //                     let execution_time = execution_start_time.elapsed().as_secs_f32();
+                        if tracing::enabled!(tracing::Level::INFO) {
+                            let execution_time = execution_start_time.elapsed().as_secs_f32();
 
-        //                     info!(
-        //                         block_time = block_time.seconds,
-        //                         execution_time,
-        //                         cbft_transactions_count = txs_len,
-        //                         eth_transactions_count = txs_len - 1, // Minus NDD
-        //                         "Prepared a proposal with {} transactions in {} seconds",
-        //                         txs_len,
-        //                         execution_time,
-        //                     );
-        //                 }
+                            info!(
+                                block_time = block_time.seconds,
+                                execution_time,
+                                cbft_transactions_count = txs_len,
+                                eth_transactions_count = txs_len - 1, // Minus NDD
+                                "Prepared a proposal with {} transactions in {} seconds",
+                                txs_len,
+                                execution_time,
+                            );
+                        }
 
-        //                 response
-        //             }
-        //         }
-        //     }
-        //     Err(e) => {
-        //         panic!("error building payload for proposal on height {}: {:?}", request.height,
-        // e);     }
-        // }
-
-        unimplemented!()
+                        response
+                    }
+                }
+            }
+            Err(e) => {
+                panic!("error building payload for proposal on height {}: {:?}", request.height, e);
+            }
+        }
     }
 
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#checktx
