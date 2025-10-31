@@ -1446,7 +1446,7 @@ where
 
         debug!("prepare_proposal: Building with version: {use_version}");
 
-        let floor_base_fee_per_gas = match use_version {
+        let floor_base_fee = match use_version {
             // Historic and unused; primarily required for unit tests.
             RUNTIME_VERSION_V1 => None,
             // Active
@@ -1523,16 +1523,6 @@ where
         };
         let client = self.storage.reth_database.clone();
 
-        // Set the floor base fee per gas if provided.
-        // TODO: PayloadConfig API changed - initialized_block_env no longer available
-        if let Some(floor) = floor_base_fee_per_gas {
-            let basefee = payload_config.initialized_block_env.basefee.to::<u64>();
-            let min_basefee = basefee.max(floor);
-
-            payload_config.initialized_block_env.basefee = U256::from(min_basefee);
-        }
-        let _ = floor_base_fee_per_gas; // suppress unused warning
-
         let build_args = BuildArguments {
             cached_reads: Default::default(),
             config: payload_config,
@@ -1551,6 +1541,7 @@ where
             builder_config,
             build_args,
             |attributes| self.pool.best_transactions_with_attributes(attributes),
+            floor_base_fee,
         ) {
             Ok(res) => {
                 match res {

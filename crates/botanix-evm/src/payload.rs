@@ -5,7 +5,6 @@ use reth_basic_payload_builder::{is_better_payload, BuildArguments, BuildOutcome
 use reth_chainspec::{EthChainSpec, EthereumHardforks};
 use reth_ethereum_engine_primitives::{EthBuiltPayload, EthPayloadBuilderAttributes};
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
-use reth_ethereum_primitives::EthPrimitives;
 use reth_evm::{
     execute::{BlockBuilder, BlockBuilderOutcome},
     ConfigureEvm, Evm, NextBlockEnvAttributes,
@@ -13,7 +12,8 @@ use reth_evm::{
 use reth_execution_errors::{BlockExecutionError, BlockValidationError};
 use reth_payload_builder::BlobSidecars;
 use reth_payload_primitives::{PayloadBuilderAttributes, PayloadBuilderError};
-use reth_primitives::{InvalidTransactionError, TransactionSigned};
+use reth_primitives::{InvalidTransactionError, NodePrimitives, TransactionSigned};
+use reth_primitives_traits::BlockBody as BlockBodyTrait;
 use reth_provider::{ChainSpecProvider, StateProviderFactory};
 use reth_revm::{context::Block, database::StateProviderDatabase, primitives::U256, State};
 use reth_transaction_pool::{
@@ -33,20 +33,21 @@ type BestTransactionsIter<Pool> = Box<
 /// Given build arguments including an Ethereum client, transaction pool,
 /// and configuration, this function creates a transaction payload. Returns
 /// a result indicating success with the payload or an error in case of failure.
-/// This is direct copy and paste from Reth with the additional functionality of passing the base
-/// fee
+/// This is mainly a copy and paste from Reth with the additional functionality of passing a floor
+/// base fee to use when calculating the base fee.
 #[inline]
-pub fn default_ethereum_payload<EvmConfig, Client, Pool, F>(
+pub fn default_ethereum_payload<Primitives, EvmConfig, Client, Pool, F>(
     evm_config: EvmConfig,
     client: Client,
     pool: Pool,
     builder_config: EthereumBuilderConfig,
     args: BuildArguments<EthPayloadBuilderAttributes, EthBuiltPayload>,
     best_txs: F,
-    base_fee: Option<u64>,
+    floor_base_fee: Option<u64>,
 ) -> Result<BuildOutcome<EthBuiltPayload>, PayloadBuilderError>
 where
-    EvmConfig: ConfigureEvm<Primitives = EthPrimitives, NextBlockEnvCtx = NextBlockEnvAttributes>,
+    Primitives: NodePrimitives<BlockHeader = alloy_consensus::Header, SignedTx = TransactionSigned>,
+    EvmConfig: ConfigureEvm<Primitives = Primitives, NextBlockEnvCtx = NextBlockEnvAttributes>,
     Client: StateProviderFactory + ChainSpecProvider<ChainSpec: EthereumHardforks>,
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>>,
     F: FnOnce(BestTransactionsAttributes) -> BestTransactionsIter<Pool>,
@@ -79,8 +80,12 @@ where
     debug!(target: "payload_builder", id=%attributes.id, parent_header = ?parent_header.hash(), parent_number = parent_header.number, "building new payload");
     let mut cumulative_gas_used = 0;
     let block_gas_limit: u64 = builder.evm_mut().block().gas_limit;
-    // Use the base fee passed in if exists
-    let base_fee = base_fee.unwrap_or_else(|| builder.evm_mut().block().basefee);
+    // Set the base fee using the floor_base_fee
+    let base_fee = {
+        let floor_base_fee = floor_base_fee.unwrap_or(0);
+        let base_fee = builder.evm_mut().block().basefee;
+        base_fee.max(floor_base_fee)
+    };
 
     let mut best_txs = best_txs(BestTransactionsAttributes::new(
         base_fee,
@@ -94,7 +99,7 @@ where
     })?;
 
     // initialize empty blob sidecars at first. If cancun is active then this will be populated by
-    // // blob sidecars if any.
+    // blob sidecars if any.
     let mut blob_sidecars = BlobSidecars::Empty;
 
     let mut block_blob_count = 0;
@@ -239,10 +244,28 @@ blob transaction because it would exceed the max blob count per block");
         .is_prague_active_at_timestamp(attributes.timestamp)
         .then_some(execution_result.requests);
 
-    let sealed_block = Arc::new(block.sealed_block().clone());
+    let sealed_block = block.sealed_block().clone();
     debug!(target: "payload_builder", id=%attributes.id, sealed_block_header = ?sealed_block.sealed_header(), "sealed built block");
 
-    let payload = EthBuiltPayload::new(attributes.id, sealed_block, total_fees, requests)
+    // Convert block to Block<EthereumTxEnvelope> to create the EthBuiltPayload
+    let eth_block = {
+        let header = sealed_block.header().clone();
+        let body = sealed_block.body();
+
+        // Create an Ethereum BlockBody from the generic body
+        let transactions = body.transactions().to_vec();
+        let ommers = body.ommers().unwrap_or_default().to_vec();
+        let withdrawals = body.withdrawals().cloned();
+
+        let eth_body = alloy_consensus::BlockBody { transactions, ommers, withdrawals };
+
+        let eth_block = alloy_consensus::Block { header, body: eth_body };
+
+        let block_hash = sealed_block.hash();
+        reth_primitives_traits::SealedBlock::new_unchecked(eth_block, block_hash)
+    };
+
+    let payload = EthBuiltPayload::new(attributes.id, Arc::new(eth_block), total_fees, requests)
         // add blob sidecars from the executed txs
         .with_sidecars(blob_sidecars);
 
