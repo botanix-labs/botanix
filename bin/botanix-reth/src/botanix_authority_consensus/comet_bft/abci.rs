@@ -1,23 +1,19 @@
 //! The purpose of this module is to provide a bridge between the CometBFT and the EVM application
 //! state
 use alloy_consensus::BlockHeader;
-use alloy_rpc_types_engine::ForkchoiceState;
+use alloy_eips::Encodable2718;
 use botanix_chainspec::constants::BOTANIX_TESTNET_CHAIN_ID;
 use botanix_storage::models::RuntimeVersion;
-use reth_chain_state::ExecutedBlock;
-use reth_db::{Database, DatabaseEnv};
+use reth_db::DatabaseEnv;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
-use reth_node_builder::{NodeTypesWithDB, NodeTypesWithDBAdapter};
+use reth_node_builder::NodeTypesWithDBAdapter;
 // use reth_provider::{
 //     providers::BlockchainProvider2, BlockWriter, CanonChainTracker, ExecutionOutcome,
 // };
-use reth_evm::ConfigureEvm;
 use reth_node_types::Block;
-use reth_trie::{updates::TrieUpdates, StateRoot};
-use reth_trie_db::DatabaseStateRoot;
+use reth_trie::updates::TrieUpdates;
 use std::{
     error::Error,
-    io::{self},
     sync::{Arc, RwLock},
 };
 use thiserror::Error;
@@ -28,21 +24,20 @@ use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
-use reth_consensus::{Consensus, ConsensusError, InvalidAggregatedPublicKeyError};
+use reth_consensus::{ConsensusError, InvalidAggregatedPublicKeyError};
 //use reth_ethereum_payload_builder::e
 // use reth_ethereum_payload_builder::{default_ethereum_payload_builder, EthereumBuilderConfig,
 // EthereumPayloadBuilder}; use reth_evm::execute::BlockExecutorProvider;
 use alloy_primitives::{Address, BlockHash, BlockNumber, B256, U256};
 use alloy_rpc_types_engine::PayloadAttributes;
 use alloy_rpc_types_eth::BlockId;
-use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
 use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, SealedBlock};
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, CanonStateNotification,
-    Chain, ExecutionOutcome, ProviderError, ProviderFactory, StateProviderFactory,
+    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, ExecutionOutcome,
+    ProviderError, ProviderFactory, StateProviderFactory,
 };
 use reth_revm::primitives::FixedBytes;
 use reth_tasks::{TaskExecutor, TaskSpawner};
@@ -52,8 +47,8 @@ use schnellru::{ByLength, LruMap};
 use tendermint_abci::{Application, ServerBuilder};
 use tendermint_proto::{
     abci::{
-        ExecTxResult, RequestPrepareProposal, RequestProcessProposal, ResponseCommit,
-        ResponsePrepareProposal, ResponseProcessProposal,
+        RequestPrepareProposal, RequestProcessProposal, ResponseCommit, ResponsePrepareProposal,
+        ResponseProcessProposal,
     },
     v0_38::abci::{
         RequestApplySnapshotChunk, RequestCheckTx, RequestFinalizeBlock, RequestInfo,
@@ -263,6 +258,7 @@ where
         + Clone
         + CanonChainTracker
         + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
@@ -320,7 +316,14 @@ where
     }
 
     /// Starts the abci client server
-    pub async fn start_server<Pool: TransactionPool + Clone + 'static>(
+    pub async fn start_server<
+        Pool: TransactionPool<
+                Transaction: reth_transaction_pool::PoolTransaction<
+                    Consensus = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
+                >,
+            > + Clone
+            + 'static,
+    >(
         &self,
         task_executor: &impl TaskSpawner,
         tx_pool: Pool,
@@ -429,8 +432,13 @@ pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
 
 impl<BF, RDB, DBD, Pool> ABCIClient<BF, RDB, DBD, Pool>
 where
-    RDB: BlockReaderIdExt + StateProviderFactory + Clone + CanonChainTracker + 'static,
-    RDB: reth_provider::HeaderProvider<Header = alloy_consensus::Header>,
+    RDB: BlockReaderIdExt
+        + StateProviderFactory
+        + Clone
+        + CanonChainTracker
+        + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
+        + 'static,
     DBD: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
@@ -671,14 +679,16 @@ where
         + Clone
         + CanonChainTracker
         + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
-        + reth_provider::ChainSpecProvider
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
-    Pool: TransactionPool + Clone + 'static,
-    Pool::Transaction: reth_transaction_pool::PoolTransaction<
-        Consensus = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
-    >,
+    Pool: TransactionPool<
+            Transaction: reth_transaction_pool::PoolTransaction<
+                Consensus = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
+            >,
+        > + Clone
+        + 'static,
 {
     // docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#init_chain
     // Panic! on an error. Proceeding when the chain can't be initialized will lead
@@ -1535,9 +1545,9 @@ where
         let builder_config = EthereumBuilderConfig::default();
 
         match default_ethereum_payload(
-            self.storage.evm_config,
+            self.storage.evm_config.clone(),
             client,
-            self.pool,
+            self.pool.clone(),
             builder_config,
             build_args,
             |attributes| self.pool.best_transactions_with_attributes(attributes),
@@ -1563,16 +1573,22 @@ where
                     reth_basic_payload_builder::BuildOutcome::Better {
                         payload,
                         cached_reads: _,
-                    } => {
+                    } |
+                    reth_basic_payload_builder::BuildOutcome::Freeze(payload) => {
                         let block = payload.block();
 
                         trace!("eth_block_header={:?}", block.header());
 
                         // These are bytes of [SignedTransaction]
                         let mut txs: Vec<_> = block
-                            .body
+                            .body()
+                            .transactions
                             .iter()
-                            .map(|tx| prost::bytes::Bytes::copy_from_slice(tx))
+                            .map(|tx| {
+                                let mut buf = Vec::new();
+                                tx.encode_2718(&mut buf);
+                                prost::bytes::Bytes::from(buf)
+                            })
                             .collect::<_>();
 
                         // insert non-deterministic data tx at index 0 so historical sync will pass

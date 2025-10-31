@@ -86,6 +86,7 @@ where
         + Clone
         + CanonChainTracker
         + CanonStateSubscriptions
+        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
         + 'static,
     BDB: SnapshotReader
         + SnapshotWriter
