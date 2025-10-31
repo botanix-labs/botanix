@@ -280,39 +280,34 @@ where
         snapshot_format: u32,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
     ) -> Self {
-        // TODO: What is the difference with storage.reth_database? Why we have it instead of using
-        // storage?
-        // let latest_sealed_header = storage
-        //     .reth_database
-        //     .latest_header()
-        //     .ok()
-        //     .flatten()
-        //     .unwrap_or_else(|| storage.chain_spec.inner().sealed_genesis_header());
-        // let blockchain_db =
-        //     BlockchainProvider::with_latest(provider_factory.clone(), latest_sealed_header)
-        //         .expect("blockchain db to exist");
+        let latest_sealed_header = storage
+            .reth_database
+            .latest_header()
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| storage.chain_spec.inner().sealed_genesis_header());
+        let blockchain_db =
+            BlockchainProvider::with_latest(provider_factory.clone(), latest_sealed_header)
+                .expect("blockchain db to exist");
 
-        // Self {
-        //     storage,
-        //     activation_manager,
-        //     bitcoin_checkpoints,
-        //     authority_consensus,
-        //     cbft_rpc_client_factory,
-        //     is_fed_node,
-        //     metrics,
-        //     task_executor,
-        //     abci_driver_tx,
-        //     provider_factory,
-        //     compressor,
-        //     snapshot_manager_state_lock,
-        //     snapshot_sync_state_lock:
-        // Some(Arc::new(RwLock::new(SnapshotSyncStateLock::default()))),
-        //     snapshot_format,
-        //     block_fee_recipient_address,
-        //     blockchain_db,
-        // }
-
-        unimplemented!()
+        Self {
+            storage,
+            activation_manager,
+            bitcoin_checkpoints,
+            authority_consensus,
+            cbft_rpc_client_factory,
+            is_fed_node,
+            metrics,
+            task_executor,
+            abci_driver_tx,
+            provider_factory,
+            compressor,
+            snapshot_manager_state_lock,
+            snapshot_sync_state_lock: Some(Arc::new(RwLock::new(SnapshotSyncStateLock::default()))),
+            snapshot_format,
+            block_fee_recipient_address,
+            blockchain_db,
+        }
     }
 
     /// Starts the abci client server
