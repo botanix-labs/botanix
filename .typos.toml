@@ -1,2 +1,8 @@
 [files]
-extend-exclude = ["docker-local"]
+extend-exclude = [
+  "cluster",
+  "crates/monitoring/README.md",
+  "docker/chain-config",
+  "docker/monitoring",
+  "bun.lock",
+]

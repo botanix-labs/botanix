@@ -1,0 +1,30 @@
+allow-dbg-in-tests = true
+allow-expect-in-tests = true
+allow-print-in-tests = true
+allow-unwrap-in-tests = true
+allow-panic-in-tests = true
+large-error-threshold = 512
+disallowed-macros = [
+  { reason = "Use tracing instead of log", path = "log::debug" },
+  { reason = "Use tracing instead of log", path = "log::error" },
+  { reason = "Use tracing instead of log", path = "log::info" },
+  { reason = "Use tracing instead of log", path = "log::log" },
+  { reason = "Use tracing instead of log", path = "log::log_enabled" },
+  { reason = "Use tracing instead of log", path = "log::trace" },
+  { reason = "Use tracing instead of log", path = "log::warn" },
+  { reason = "Use tracing instead of log", path = "tracing::log::debug" },
+  { reason = "Use tracing instead of log", path = "tracing::log::error" },
+  { reason = "Use tracing instead of log", path = "tracing::log::info" },
+  { reason = "Use tracing instead of log", path = "tracing::log::log" },
+  { reason = "Use tracing instead of log", path = "tracing::log::log_enabled" },
+  { reason = "Use tracing instead of log", path = "tracing::log::trace" },
+  { reason = "Use tracing instead of log", path = "tracing::log::warn" },
+
+  { reason = "Do not commit TODOs in code", path = "std::todo" },
+  { reason = "Do not commit debug prints", path = "std::dbg" },
+  { reason = "Do not commit unimplemented blocks", path = "std::unimplemented" },
+]
+disallowed-methods = [
+  { path = "std::iter::Iterator::for_each", reason = "prefer `for` for side-effects" },
+  { path = "std::iter::Iterator::try_for_each", reason = "prefer `for` for side-effects" },
+]
