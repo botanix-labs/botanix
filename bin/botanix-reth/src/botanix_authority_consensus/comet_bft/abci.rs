@@ -5,6 +5,7 @@ use alloy_eips::Encodable2718;
 use botanix_chainspec::constants::BOTANIX_TESTNET_CHAIN_ID;
 use botanix_storage::models::RuntimeVersion;
 use reth_db::DatabaseEnv;
+use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_node_builder::NodeTypesWithDBAdapter;
 // use reth_provider::{
@@ -24,7 +25,7 @@ use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
-use reth_consensus::{ConsensusError, InvalidAggregatedPublicKeyError};
+use reth_consensus::InvalidAggregatedPublicKeyError;
 //use reth_ethereum_payload_builder::e
 // use reth_ethereum_payload_builder::{default_ethereum_payload_builder, EthereumBuilderConfig,
 // EthereumPayloadBuilder}; use reth_evm::execute::BlockExecutorProvider;
@@ -621,12 +622,11 @@ where
         &self,
         db: &impl BlockReaderIdExt,
     ) -> Result<prost::bytes::Bytes, ConsensusError> {
-        // let header = db
-        //     .latest_header()
-        //     .map_err(ConsensusError::Provider)?
-        //     .ok_or(ConsensusError::LatestHeaderMissing)?;
-        // Ok(prost::bytes::Bytes::copy_from_slice(&header.hash().0))
-        unimplemented!()
+        let header = db
+            .latest_header()
+            .map_err(|_| ConsensusError::Other(("Provider error").to_string()))?
+            .ok_or(ConsensusError::LatestHeaderMissing)?;
+        Ok(prost::bytes::Bytes::copy_from_slice(&header.hash().0))
     }
 }
 
