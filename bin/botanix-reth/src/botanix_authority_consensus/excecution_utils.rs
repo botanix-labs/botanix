@@ -1,11 +1,14 @@
 pub(crate) mod authority_execution_utils {
+    use crate::node::{
+        primitives::{BotanixBlock, BotanixBlockBody},
+        BotanixNode,
+    };
     use alloy_consensus::{
         constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
-        BlockBody, Transaction, EMPTY_OMMER_ROOT_HASH,
+        Transaction, EMPTY_OMMER_ROOT_HASH,
     };
     use alloy_eips::{
-        eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, eip7685::Requests,
-        BlockHashOrNumber,
+        eip1559::ETHEREUM_BLOCK_GAS_LIMIT_30M, eip4844::calc_excess_blob_gas, BlockHashOrNumber,
     };
     use alloy_primitives::{Address, Bloom, Bytes, B64};
     use botanix_authority_edh::{
@@ -18,22 +21,23 @@ pub(crate) mod authority_execution_utils {
     use botanix_storage::models::RuntimeVersion;
     use reth_chainspec::{ChainSpec, EthereumHardforks};
     use reth_db::{Database, DatabaseEnv};
-    use reth_ethereum::Block;
+    use reth_ethereum_primitives::BlockBody;
     use reth_execution_errors::InternalBlockExecutionError;
     use reth_node_builder::NodeTypesWithDBAdapter;
-    use reth_node_ethereum::{EthEvmConfig, EthereumNode};
+    use reth_node_ethereum::EthEvmConfig;
     use reth_node_types::Block as BlockTrait;
     use reth_primitives::{Header, Receipt, ReceiptWithBloom, RecoveredBlock, TransactionSigned};
     use reth_primitives_traits::proofs;
     use reth_provider::{
-        BlockHashReader, BlockNumReader, DatabaseProviderFactory, ExecutionOutcome, HeaderProvider,
-        OriginalValuesKnown, ProviderFactory,
+        providers::ProviderNodeTypes, BlockHashReader, BlockNumReader, DatabaseProviderFactory,
+        ExecutionOutcome, HeaderProvider, OriginalValuesKnown, ProviderFactory,
     };
     use reth_revm::{database::StateProviderDatabase, db::State};
     use reth_trie::{HashedPostState, StateRoot};
     use reth_trie_common::KeccakKeyHasher;
     use reth_trie_db::DatabaseStateRoot;
 
+    use crate::node::evm::config::BotanixEvmConfig;
     use botanix_activation_manager::NetworkUpgradePayload;
     use botanix_evm::{
         error::{BlockExecutionError, BlockValidationError},
@@ -49,25 +53,23 @@ pub(crate) mod authority_execution_utils {
     /// This returns bundle state, block, and gas used.
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip_all, level = "trace")]
-    pub(crate) fn build_and_execute<BF, DB, N>(
+    pub(crate) fn build_and_execute<BF>(
         transactions: Vec<TransactionSigned>,
         chain_spec: Arc<BotanixChainSpec>,
         runtime_version: RuntimeVersion,
         network_upgrade_payload: Option<NetworkUpgradePayload>,
         floor_base_fee: Option<u64>,
         block_fee_recipient_address: &Address,
-        evm_config: EthEvmConfig,
-        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+        evm_config: BotanixEvmConfig,
+        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         bitcoind_factory: &BF,
         bitcoin_network: bitcoin::Network,
         bitcoin_checkpoint_block_hash: &bitcoin::BlockHash,
         agg_pk: &secp256k1::PublicKey,
         timestamp: Timestamp,
-    ) -> Result<BlockWithContext, BlockExecutionError>
+    ) -> Result<BlockWithContext<BotanixBlock>, BlockExecutionError>
     where
         BF: BitcoindFactory + Clone + Unpin + 'static,
-        DB: Database<TX = reth_db::mdbx::tx::Tx<reth_db::mdbx::RO>>,
-        N: reth_node_types::NodeTypes,
     {
         let start_execution_time = std::time::Instant::now();
 
@@ -82,7 +84,7 @@ pub(crate) mod authority_execution_utils {
         );
 
         // Construct block and header
-        let mut header = build_header_template::<DB>(
+        let mut header = build_header_template(
             &transactions,
             database_provider,
             bitcoin_checkpoint_block_hash,
@@ -102,13 +104,16 @@ pub(crate) mod authority_execution_utils {
         }
 
         // Create a block with no ommers or withdrawals as these are not used in authority consensus
-        let mut block = Block {
+        let mut block = BotanixBlock {
             header,
-            body: BlockBody { transactions, ommers: Default::default(), withdrawals: None },
+            body: BotanixBlockBody {
+                inner: BlockBody { transactions, ommers: Default::default(), withdrawals: None },
+                sidecars: None,
+            },
         };
 
         let recovered_block =
-            RecoveredBlock::<Block>::try_recover(block.clone()).map_err(|_| {
+            RecoveredBlock::<BotanixBlock>::try_recover(block.clone()).map_err(|_| {
                 // Internally, try_recover() calls try_recover_signers()
                 BlockExecutionError::Validation(BlockValidationError::SignerRecoveryError)
             })?;
@@ -116,7 +121,7 @@ pub(crate) mod authority_execution_utils {
         tracing::trace!(target: "consensus::authority", transactions=?&block.body, "executing transactions");
 
         tracing::info!(target: "consensus::authority", "block_fee_recipient_address: {:?}", block_fee_recipient_address);
-        let block_exec_output = execute::<BF, DB>(
+        let block_exec_output = execute::<BF>(
             &recovered_block,
             database_provider,
             Some(*block_fee_recipient_address),
@@ -126,7 +131,7 @@ pub(crate) mod authority_execution_utils {
             evm_config,
         )?;
 
-        let completed_header = complete_header::<DB>(
+        let completed_header = complete_header(
             recovered_block.header().clone(),
             &block_exec_output,
             block_exec_output.gas_used,
@@ -138,12 +143,12 @@ pub(crate) mod authority_execution_utils {
         // Replace header with the one that is completed and create new recovered block
         block.header = completed_header.clone();
         let recovered_block =
-            RecoveredBlock::<Block>::try_recover(block.clone()).map_err(|_| {
+            RecoveredBlock::<BotanixBlock>::try_recover(block.clone()).map_err(|_| {
                 // Internally, try_recover() calls try_recover_signers()
                 BlockExecutionError::Validation(BlockValidationError::SignerRecoveryError)
             })?;
 
-        let sealed_block_with_peg = SealedBlockWithPeg::new(
+        let sealed_block_with_peg = SealedBlockWithPeg::<BotanixBlock>::new(
             recovered_block,
             block_exec_output.pegins.clone(),
             block_exec_output.pegouts.clone(),
@@ -221,9 +226,9 @@ pub(crate) mod authority_execution_utils {
 
     /// Fills in pre-execution header fields based on the current best block and given
     /// transactions.
-    fn build_header_template<DB: Database>(
+    fn build_header_template(
         transactions: &[TransactionSigned],
-        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         bitcoin_checkpoint: &bitcoin::BlockHash,
         chain_spec: Arc<ChainSpec>,
         agg_pk: &secp256k1::PublicKey,
@@ -331,12 +336,12 @@ pub(crate) mod authority_execution_utils {
     /// Fills in the post-execution header fields based on the given PostState and gas used.
     /// In doing this, the state root is calculated and the final header is returned.
     #[allow(clippy::too_many_arguments)]
-    fn complete_header<DB: Database>(
+    fn complete_header(
         mut header: Header,
         block_exec_result: &BotanixBlockExecutionOutput<Receipt>,
         gas_used: u64,
         recent_block_hash: bitcoin::BlockHash,
-        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         agg_pk: &secp256k1::PublicKey,
     ) -> Result<Header, BlockExecutionError> {
         let exec_outcome = ExecutionOutcome::new(
@@ -420,27 +425,25 @@ pub(crate) mod authority_execution_utils {
     /// Executes the block with the given block and senders, on the provided [Executor].
     ///
     /// This returns the poststate from execution and post-block changes, as well as the gas used.
-    fn execute<BF, DB>(
-        block: &RecoveredBlock<Block>,
-        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+    fn execute<BF>(
+        block: &RecoveredBlock<BotanixBlock>,
+        database_provider: &ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
         _block_fee_recipient_address: Option<Address>,
         bitcoind_factory: &BF,
         bitcoin_network: bitcoin::Network,
         chain_spec: Arc<BotanixChainSpec>,
-        evm_config: EthEvmConfig,
+        evm_config: BotanixEvmConfig,
     ) -> Result<BotanixBlockExecutionOutput<Receipt>, BlockExecutionError>
     where
         BF: BitcoindFactory + Clone + Unpin + 'static,
-        DB: Database,
     {
         // We cannot call `execute_and_verify_receipt()` here as we dont know the gas used yet
         // We must set those values on the executor after the execution
         // This is only an execution for the block builder, all other executing operations
         // should use `execute_and_verify_receipt`
         let provider = database_provider.provider()?;
-        let state_provider = provider
-            .history_by_block_hash(block.parent_hash)
-            .expect("parent hash exists");
+        let state_provider =
+            provider.history_by_block_hash(block.parent_hash).expect("parent hash exists");
 
         let blockchain_provider = database_provider.database_provider_ro()?;
 
@@ -448,7 +451,13 @@ pub(crate) mod authority_execution_utils {
             .with_database(StateProviderDatabase::new(state_provider))
             .with_bundle_update()
             .build();
-        let executor = EthBlockExecutor::<EthEvmConfig, _, BF, Arc<DatabaseEnv>, NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>::new(
+        let executor = EthBlockExecutor::<
+            BotanixEvmConfig,
+            _,
+            BF,
+            Arc<DatabaseEnv>,
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >::new(
             chain_spec,
             evm_config,
             db,

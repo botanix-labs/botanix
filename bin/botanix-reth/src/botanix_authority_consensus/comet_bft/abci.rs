@@ -8,34 +8,30 @@ use reth_db::DatabaseEnv;
 use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_node_builder::NodeTypesWithDBAdapter;
-// use reth_provider::{
-//     providers::BlockchainProvider2, BlockWriter, CanonChainTracker, ExecutionOutcome,
-// };
 use reth_node_types::Block;
+use reth_primitives_traits::Block as BlockTrait;
 use reth_trie::updates::TrieUpdates;
 use std::{
     error::Error,
+    io,
     sync::{Arc, RwLock},
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
 
+use alloy_primitives::{Address, BlockHash, BlockNumber, B256};
+use alloy_rpc_types_engine::PayloadAttributes;
+use alloy_rpc_types_eth::BlockId;
+use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
+use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
 use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
 use reth_consensus::InvalidAggregatedPublicKeyError;
-//use reth_ethereum_payload_builder::e
-// use reth_ethereum_payload_builder::{default_ethereum_payload_builder, EthereumBuilderConfig,
-// EthereumPayloadBuilder}; use reth_evm::execute::BlockExecutorProvider;
-use alloy_primitives::{Address, BlockHash, BlockNumber, B256, U256};
-use alloy_rpc_types_engine::PayloadAttributes;
-use alloy_rpc_types_eth::BlockId;
-use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
-use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
 use reth_payload_builder::EthPayloadBuilderAttributes;
-use reth_primitives::{BlockWithSenders, SealedBlock};
+use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
     providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, ExecutionOutcome,
     ProviderError, ProviderFactory, StateProviderFactory,
@@ -65,6 +61,7 @@ use crate::{
         NonDeterministicData, RUNTIME_VERSION_GENESIS,
     },
     node::BotanixNode,
+    BotanixBlock,
 };
 
 /// Runtime version 0.1 that Botanix launched with.
@@ -216,9 +213,13 @@ impl SnapshotSyncStateLock {
 
 /// Block with execution context, trie updates and botanix peg data
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockWithContext {
+pub struct BlockWithContext<
+    B: BlockTrait = alloy_consensus::Block<
+        alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
+    >,
+> {
     /// The sealed block with peg data
-    pub sealed_block_with_peg: SealedBlockWithPeg,
+    pub sealed_block_with_peg: SealedBlockWithPeg<B>,
     /// The Botanix runtime version.
     pub runtime_version: RuntimeVersion,
     /// The optional network upgrade payload.
@@ -394,7 +395,7 @@ enum PayloadBuilderError {
 struct BlockCache {
     /// Cached blocks, inserted after execution in either `process_proposal` or
     /// `finalize_block`.
-    cache: LruMap<BlockHash, BlockWithContext>,
+    cache: LruMap<BlockHash, BlockWithContext<BotanixBlock>>,
     /// The finalized block hash tracked by `finalize_block`, and then consumed
     /// by `commit`.
     tracked_final: Option<BlockHash>,
@@ -559,7 +560,10 @@ where
         Ok(ndd_bytes)
     }
 
-    pub(crate) fn validate_block(&self, block: &SealedBlock) -> ResponseProcessProposal {
+    pub(crate) fn validate_block(
+        &self,
+        block: &RecoveredBlock<BotanixBlock>,
+    ) -> ResponseProcessProposal {
         // // validate_block_post_execution() is called when inserting the block (ABCIDriver)
         // match self.authority_consensus.validate_block_pre_execution(block) {
         //     Ok(_) => {}
@@ -1636,440 +1640,443 @@ where
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#prepareproposal
     #[instrument(level = "trace", ret, skip(self, request), fields(cfbt_block_height = request.height, cbft_block_hash = hex::encode(&request.hash)))]
     fn process_proposal(&self, request: RequestProcessProposal) -> ResponseProcessProposal {
-        // let execution_start_time = std::time::Instant::now();
-        // trace!("request={:?}", RequestProcessProposalTruncatedDebug(&request));
+        let execution_start_time = std::time::Instant::now();
+        trace!("request={:?}", RequestProcessProposalTruncatedDebug(&request));
 
-        // let txs_len = request.txs.len();
+        let txs_len = request.txs.len();
 
-        // let agg_pk = match self.aggregate_public_key() {
-        //     Ok(pk) => pk,
-        //     Err(_) => {
-        //         // Fed nodes must always have an aggregate public key
-        //         if self.is_fed_node {
-        //             warn!("Aggregate public key for fed node is not set in process proposal");
-        //         }
+        let agg_pk = match self.aggregate_public_key() {
+            Ok(pk) => pk,
+            Err(_) => {
+                // Fed nodes must always have an aggregate public key
+                if self.is_fed_node {
+                    warn!("Aggregate public key for fed node is not set in process proposal");
+                }
 
-        //         // Rpc nodes will have an aggregate public key above block height 1
-        //         if request.height > 1 {
-        //             warn!("Aggregate public key for rpc node is not set in process proposal");
-        //         }
+                // Rpc nodes will have an aggregate public key above block height 1
+                if request.height > 1 {
+                    warn!("Aggregate public key for rpc node is not set in process proposal");
+                }
 
-        //         if tracing::enabled!(tracing::Level::WARN) {
-        //             let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //             let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //                 Ok(app_hash) => app_hash,
-        //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}",
-        // e);                 }
-        //             };
+                if tracing::enabled!(tracing::Level::WARN) {
+                    let execution_time = execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                        Ok(app_hash) => app_hash,
+                        Err(e) => {
+                            panic!("failed to get application hash on process proposal: {:?}", e);
+                        }
+                    };
 
-        //             warn!(
-        //                 app_hash = hex::encode(&app_hash),
-        //                 execution_time,
-        //                 "A proposal with {} transactions is rejected in {} seconds",
-        //                 request.txs.len(),
-        //                 execution_time
-        //             );
-        //         }
+                    warn!(
+                        app_hash = hex::encode(&app_hash),
+                        execution_time,
+                        "A proposal with {} transactions is rejected in {} seconds",
+                        request.txs.len(),
+                        execution_time
+                    );
+                }
 
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
+            }
+        };
 
-        // // Extract block time: this must come from the CBFT block header NOT the system time
-        // // As that will be underministic
-        // let block_time = match request.time {
-        //     Some(time) => time,
-        //     None => {
-        //         error!("Block time is not set in process proposal");
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+        // Extract block time: this must come from the CBFT block header NOT the system time
+        // As that will be underministic
+        let block_time = match request.time {
+            Some(time) => time,
+            None => {
+                error!("Block time is not set in process proposal");
+                return ResponseProcessProposal { status: VERIFY_REJECT };
+            }
+        };
 
-        // let cbft_block_hash = FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
+        let cbft_block_hash = FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
 
-        // // extract first tx which contains non-deterministic data and validate
-        // let txs_bytes = request.txs;
-        // let non_deterministic_data_bytes = match txs_bytes.first() {
-        //     Some(tx) => tx.clone(),
-        //     None => {
-        //         warn!("No non-deterministic data in proposal request");
+        // extract first tx which contains non-deterministic data and validate
+        let txs_bytes = request.txs;
+        let non_deterministic_data_bytes = match txs_bytes.first() {
+            Some(tx) => tx.clone(),
+            None => {
+                warn!("No non-deterministic data in proposal request");
 
-        //         if tracing::enabled!(tracing::Level::WARN) {
-        //             let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //             let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //                 Ok(app_hash) => app_hash,
-        //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}",
-        // e);                 }
-        //             };
+                if tracing::enabled!(tracing::Level::WARN) {
+                    let execution_time = execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                        Ok(app_hash) => app_hash,
+                        Err(e) => {
+                            panic!("failed to get application hash on process proposal: {:?}", e);
+                        }
+                    };
 
-        //             warn!(
-        //                 app_hash = hex::encode(&app_hash),
-        //                 block_time = block_time.seconds,
-        //                 execution_time,
-        //                 cbft_transactions_count = txs_len,
-        //                 eth_transactions_count = txs_len - 1,
-        //                 "A proposal with {} transactions is rejected in {} seconds",
-        //                 txs_len,
-        //                 execution_time
-        //             );
-        //         }
+                    warn!(
+                        app_hash = hex::encode(&app_hash),
+                        block_time = block_time.seconds,
+                        execution_time,
+                        cbft_transactions_count = txs_len,
+                        eth_transactions_count = txs_len - 1,
+                        "A proposal with {} transactions is rejected in {} seconds",
+                        txs_len,
+                        execution_time
+                    );
+                }
 
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
+            }
+        };
 
-        // let reader_inner: Vec<u8> =
-        //     vec![non_deterministic_data_bytes].into_iter().flatten().collect();
-        // let reader = &mut io::Cursor::new(reader_inner);
+        let reader_inner: Vec<u8> =
+            vec![non_deterministic_data_bytes].into_iter().flatten().collect();
+        let reader = &mut io::Cursor::new(reader_inner);
 
-        // let non_deterministic_data = match NonDeterministicData::deserialize(reader) {
-        //     Ok(data) => data,
-        //     Err(e) => {
-        //         trace!(
-        //             "non_deterministic_data_bytes={:?}",
-        //             hex::encode(txs_bytes.first().expect("txs_bytes contains first transaction"))
-        //         );
+        let non_deterministic_data = match NonDeterministicData::deserialize(reader) {
+            Ok(data) => data,
+            Err(e) => {
+                trace!(
+                    "non_deterministic_data_bytes={:?}",
+                    hex::encode(txs_bytes.first().expect("txs_bytes contains first transaction"))
+                );
 
-        //         warn!("Error deserializing non-deterministic data: {:?}", e);
+                warn!("Error deserializing non-deterministic data: {:?}", e);
 
-        //         if tracing::enabled!(tracing::Level::WARN) {
-        //             let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //             let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //                 Ok(app_hash) => app_hash,
-        //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}",
-        // e);                 }
-        //             };
+                if tracing::enabled!(tracing::Level::WARN) {
+                    let execution_time = execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                        Ok(app_hash) => app_hash,
+                        Err(e) => {
+                            panic!("failed to get application hash on process proposal: {:?}", e);
+                        }
+                    };
 
-        //             warn!(
-        //                 app_hash = hex::encode(&app_hash),
-        //                 block_time = block_time.seconds,
-        //                 execution_time,
-        //                 cbft_transactions_count = txs_len,
-        //                 eth_transactions_count = txs_len - 1,
-        //                 "A proposal with {} transactions is rejected in {} seconds",
-        //                 txs_len,
-        //                 execution_time
-        //             );
-        //         }
+                    warn!(
+                        app_hash = hex::encode(&app_hash),
+                        block_time = block_time.seconds,
+                        execution_time,
+                        cbft_transactions_count = txs_len,
+                        eth_transactions_count = txs_len - 1,
+                        "A proposal with {} transactions is rejected in {} seconds",
+                        txs_len,
+                        execution_time
+                    );
+                }
 
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
+            }
+        };
 
-        // trace!("non_deterministic_data={:?}", non_deterministic_data);
+        trace!("non_deterministic_data={:?}", non_deterministic_data);
 
-        // // Only NDD versions starting from 1 are supported for block production so validate
-        // // `block_fee_recipient_address` exists
-        // let block_fee_recipient_address = match
-        // non_deterministic_data.block_fee_recipient_address() {
-        //     Some(address) => address,
-        //     None => {
-        //         warn!("Block fee recipient address is not set in process proposal");
+        // Only NDD versions starting from 1 are supported for block production so validate
+        // `block_fee_recipient_address` exists
+        let block_fee_recipient_address = match non_deterministic_data.block_fee_recipient_address()
+        {
+            Some(address) => address,
+            None => {
+                warn!("Block fee recipient address is not set in process proposal");
 
-        //         if tracing::enabled!(tracing::Level::WARN) {
-        //             let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //             let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //                 Ok(app_hash) => app_hash,
-        //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}",
-        // e);                 }
-        //             };
+                if tracing::enabled!(tracing::Level::WARN) {
+                    let execution_time = execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                        Ok(app_hash) => app_hash,
+                        Err(e) => {
+                            panic!("failed to get application hash on process proposal: {:?}", e);
+                        }
+                    };
 
-        //             warn!(
-        //                 app_hash = hex::encode(&app_hash),
-        //                 block_time = block_time.seconds,
-        //                 execution_time,
-        //                 cbft_transactions_count = txs_len,
-        //                 eth_transactions_count = txs_len - 1,
-        //                 "A proposal with {} transactions is rejected in {} seconds",
-        //                 txs_len,
-        //                 execution_time
-        //             );
-        //         }
+                    warn!(
+                        app_hash = hex::encode(&app_hash),
+                        block_time = block_time.seconds,
+                        execution_time,
+                        cbft_transactions_count = txs_len,
+                        eth_transactions_count = txs_len - 1,
+                        "A proposal with {} transactions is rejected in {} seconds",
+                        txs_len,
+                        execution_time
+                    );
+                }
 
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
+            }
+        };
 
-        // // check non-deterministic data: btc block hash and aggregate public key
-        // if !self.bitcoin_checkpoints.contains_by_hash(non_deterministic_data.
-        // bitcoin_block_hash()) {     warn!(
-        //         checkpoints_chain = %self.bitcoin_checkpoints,
-        //         proposed_checkpoint_hash = %non_deterministic_data.bitcoin_block_hash(),
-        //         "A proposed bitcoin checkpoint is not a part of local checkpoint chain. Most
-        // probably a proposer's or local bitcoin node is out of sync."     );
+        // check non-deterministic data: btc block hash and aggregate public key
+        if !self.bitcoin_checkpoints.contains_by_hash(non_deterministic_data.bitcoin_block_hash()) {
+            warn!(
+                checkpoints_chain = %self.bitcoin_checkpoints,
+                proposed_checkpoint_hash = %non_deterministic_data.bitcoin_block_hash(),
+                "A proposed bitcoin checkpoint is not a part of local checkpoint chain. Most
+        probably a proposer's or local bitcoin node is out of sync."     );
 
-        //     if tracing::enabled!(tracing::Level::WARN) {
-        //         let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //         let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //             Ok(app_hash) => app_hash,
-        //             Err(e) => {
-        //                 panic!("failed to get application hash on process proposal: {:?}", e);
-        //             }
-        //         };
+            if tracing::enabled!(tracing::Level::WARN) {
+                let execution_time = execution_start_time.elapsed().as_secs_f32();
+                let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    Ok(app_hash) => app_hash,
+                    Err(e) => {
+                        panic!("failed to get application hash on process proposal: {:?}", e);
+                    }
+                };
 
-        //         warn!(
-        //             app_hash = hex::encode(&app_hash),
-        //             block_time = block_time.seconds,
-        //             execution_time,
-        //             cbft_transactions_count = txs_len,
-        //             eth_transactions_count = txs_len - 1,
-        //             "A proposal with {} transactions is rejected in {} seconds",
-        //             txs_len,
-        //             execution_time
-        //         );
-        //     }
+                warn!(
+                    app_hash = hex::encode(&app_hash),
+                    block_time = block_time.seconds,
+                    execution_time,
+                    cbft_transactions_count = txs_len,
+                    eth_transactions_count = txs_len - 1,
+                    "A proposal with {} transactions is rejected in {} seconds",
+                    txs_len,
+                    execution_time
+                );
+            }
 
-        //     return ResponseProcessProposal { status: VERIFY_REJECT };
-        // }
+            return ResponseProcessProposal { status: VERIFY_REJECT };
+        }
 
-        // if agg_pk != non_deterministic_data.aggregated_public_key() {
-        //     warn!("Aggregate public key mismatch");
+        if agg_pk != non_deterministic_data.aggregated_public_key() {
+            warn!("Aggregate public key mismatch");
 
-        //     if tracing::enabled!(tracing::Level::WARN) {
-        //         let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //         let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //             Ok(app_hash) => app_hash,
-        //             Err(e) => {
-        //                 panic!("failed to get application hash on process proposal: {:?}", e);
-        //             }
-        //         };
+            if tracing::enabled!(tracing::Level::WARN) {
+                let execution_time = execution_start_time.elapsed().as_secs_f32();
+                let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    Ok(app_hash) => app_hash,
+                    Err(e) => {
+                        panic!("failed to get application hash on process proposal: {:?}", e);
+                    }
+                };
 
-        //         warn!(
-        //             app_hash = hex::encode(&app_hash),
-        //             block_time = block_time.seconds,
-        //             execution_time,
-        //             cbft_transactions_count = txs_len,
-        //             eth_transactions_count = txs_len - 1,
-        //             "A proposal with {} transactions is rejected in {} seconds",
-        //             txs_len,
-        //             execution_time
-        //         );
-        //     }
+                warn!(
+                    app_hash = hex::encode(&app_hash),
+                    block_time = block_time.seconds,
+                    execution_time,
+                    cbft_transactions_count = txs_len,
+                    eth_transactions_count = txs_len - 1,
+                    "A proposal with {} transactions is rejected in {} seconds",
+                    txs_len,
+                    execution_time
+                );
+            }
 
-        //     return ResponseProcessProposal { status: VERIFY_REJECT };
-        // }
+            return ResponseProcessProposal { status: VERIFY_REJECT };
+        }
 
-        // // get txs skipping the first non-deterministic data tx
-        // let txs = match transactions_signed_from_bytes(txs_bytes.iter().skip(1).cloned()) {
-        //     Ok(txs) => txs,
-        //     Err(e) => {
-        //         error!("Error decoding transactions: {:?}", e);
+        // get txs skipping the first non-deterministic data tx
+        let txs = match transactions_signed_from_bytes(txs_bytes.iter().skip(1).cloned()) {
+            Ok(txs) => txs,
+            Err(e) => {
+                error!("Error decoding transactions: {:?}", e);
 
-        //         if tracing::enabled!(tracing::Level::WARN) {
-        //             let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //             let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //                 Ok(app_hash) => app_hash,
-        //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}",
-        // e);                 }
-        //             };
+                if tracing::enabled!(tracing::Level::WARN) {
+                    let execution_time = execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                        Ok(app_hash) => app_hash,
+                        Err(e) => {
+                            panic!("failed to get application hash on process proposal: {:?}", e);
+                        }
+                    };
 
-        //             warn!(
-        //                 app_hash = hex::encode(&app_hash),
-        //                 block_time = block_time.seconds,
-        //                 execution_time,
-        //                 cbft_transactions_count = txs_len,
-        //                 eth_transactions_count = txs_len - 1,
-        //                 "A proposal with {} transactions is rejected in {} seconds",
-        //                 txs_len,
-        //                 execution_time
-        //             );
-        //         }
+                    warn!(
+                        app_hash = hex::encode(&app_hash),
+                        block_time = block_time.seconds,
+                        execution_time,
+                        cbft_transactions_count = txs_len,
+                        eth_transactions_count = txs_len - 1,
+                        "A proposal with {} transactions is rejected in {} seconds",
+                        txs_len,
+                        execution_time
+                    );
+                }
 
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
+            }
+        };
 
-        // // Activation Manager: decide whether we should process for the current
-        // // or upgraded runtime version.
-        // let floor_base_fee_per_gas;
-        // let comet_height = request.height as u64;
-        // let runtime_version = non_deterministic_data.runtime_version();
-        // let network_upgrade_payload = non_deterministic_data.network_upgrade_payload().copied();
-        // //
-        // match self
-        //     .activation_manager
-        //     .on_process_proposal(comet_height, runtime_version)
-        //     .expect("db cannot fail")
-        // {
-        //     OnProcessProposalDecision::Process { version, conditions: _ } => {
-        //         debug!("process_proposal: Processing with version: {version}");
+        // Activation Manager: decide whether we should process for the current
+        // or upgraded runtime version.
+        let floor_base_fee_per_gas;
+        let comet_height = request.height as u64;
+        let runtime_version = non_deterministic_data.runtime_version();
+        let network_upgrade_payload = non_deterministic_data.network_upgrade_payload().copied();
+        //
+        match self
+            .activation_manager
+            .on_process_proposal(comet_height, runtime_version)
+            .expect("db cannot fail")
+        {
+            OnProcessProposalDecision::Process { version, conditions: _ } => {
+                debug!("process_proposal: Processing with version: {version}");
 
-        //         match version {
-        //             // Historic and unused; primarily required for unit tests.
-        //             RUNTIME_VERSION_V1 => {
-        //                 floor_base_fee_per_gas = None;
-        //             }
-        //             // Active
-        //             RUNTIME_VERSION_V2 => {
-        //                 floor_base_fee_per_gas = Some(FLOOR_BASE_FEE_PER_GAS_V2);
-        //             }
-        //             // Upgrade
-        //             RUNTIME_VERSION_V3 => {
-        //                 floor_base_fee_per_gas = Some(FLOOR_BASE_FEE_PER_GAS_V3);
-        //             }
-        //             _ => unreachable!(),
-        //         }
-        //     }
-        //     OnProcessProposalDecision::RejectBlock { version, conditions: _ } => {
-        //         warn!("process_proposal: Rejecting block using Botanix runtime version:
-        // {version}");         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // }
+                match version {
+                    // Historic and unused; primarily required for unit tests.
+                    RUNTIME_VERSION_V1 => {
+                        floor_base_fee_per_gas = None;
+                    }
+                    // Active
+                    RUNTIME_VERSION_V2 => {
+                        floor_base_fee_per_gas = Some(FLOOR_BASE_FEE_PER_GAS_V2);
+                    }
+                    // Upgrade
+                    RUNTIME_VERSION_V3 => {
+                        floor_base_fee_per_gas = Some(FLOOR_BASE_FEE_PER_GAS_V3);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            OnProcessProposalDecision::RejectBlock { version, conditions: _ } => {
+                warn!(
+                    "process_proposal: Rejecting block using Botanix runtime version:
+        {version}"
+                );
+                return ResponseProcessProposal { status: VERIFY_REJECT };
+            }
+        }
 
-        // // Validation done as a result of this call:
-        // // - botanix consensus package created on the fly and compared to the incoming block EDH
-        // // - mint validation checks
-        // // - state trie calculated for header
-        // // This means no additional validation is needed when the ABCI driver inserts the block
-        // into // the canonical chain
-        // match build_and_execute(
-        //     txs,
-        //     self.storage.chain_spec.clone(),
-        //     runtime_version,
-        //     network_upgrade_payload,
-        //     floor_base_fee_per_gas,
-        //     &block_fee_recipient_address,
-        //     self.storage.evm_config,
-        //     &self.reth_provider_factory,
-        //     &self.storage.bitcoind_factory,
-        //     self.storage.btc_network,
-        //     &non_deterministic_data.bitcoin_block_hash(),
-        //     &agg_pk,
-        //     block_time,
-        // ) {
-        //     Ok(block_with_context) => {
-        //         let block = block_with_context.sealed_block_with_peg.block();
+        // Validation done as a result of this call:
+        // - botanix consensus package created on the fly and compared to the incoming block EDH
+        // - mint validation checks
+        // - state trie calculated for header
+        // This means no additional validation is needed when the ABCI driver inserts the block into
+        // the canonical chain
+        match build_and_execute(
+            txs,
+            self.storage.chain_spec.clone(),
+            runtime_version,
+            network_upgrade_payload,
+            floor_base_fee_per_gas,
+            &block_fee_recipient_address,
+            self.storage.evm_config.clone(),
+            &self.reth_provider_factory,
+            &self.storage.bitcoind_factory,
+            self.storage.btc_network,
+            &non_deterministic_data.bitcoin_block_hash(),
+            &agg_pk,
+            block_time,
+        ) {
+            Ok(block_with_context) => {
+                let block = block_with_context.sealed_block_with_peg.block();
 
-        //         // validate block before caching
-        //         if !matches!(
-        //             self.validate_block(block),
-        //             ResponseProcessProposal { status: VERIFY_ACCEPTED }
-        //         ) {
-        //             // we have logs inside validate_block so no need to repeat error here
+                // validate block before caching
+                if !matches!(
+                    self.validate_block(block),
+                    ResponseProcessProposal { status: VERIFY_ACCEPTED }
+                ) {
+                    // we have logs inside validate_block so no need to repeat error here
 
-        //             if tracing::enabled!(tracing::Level::WARN) {
-        //                 let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //                 let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //                     Ok(app_hash) => app_hash,
-        //                     Err(e) => {
-        //                         panic!(
-        //                             "failed to get application hash on process proposal: {:?}",
-        //                             e
-        //                         );
-        //                     }
-        //                 };
+                    if tracing::enabled!(tracing::Level::WARN) {
+                        let execution_time = execution_start_time.elapsed().as_secs_f32();
+                        let app_hash = match self.application_hash(&self.storage.reth_database) {
+                            Ok(app_hash) => app_hash,
+                            Err(e) => {
+                                panic!(
+                                    "failed to get application hash on process proposal: {:?}",
+                                    e
+                                );
+                            }
+                        };
 
-        //                 warn!(
-        //                     app_hash = hex::encode(&app_hash),
-        //                     block_time = block_time.seconds,
-        //                     execution_time,
-        //                     cbft_transactions_count = txs_len,
-        //                     eth_transactions_count = txs_len - 1,
-        //                     "A proposal with {} transactions is rejected in {} seconds",
-        //                     txs_len,
-        //                     execution_time
-        //                 );
-        //             }
+                        warn!(
+                            app_hash = hex::encode(&app_hash),
+                            block_time = block_time.seconds,
+                            execution_time,
+                            cbft_transactions_count = txs_len,
+                            eth_transactions_count = txs_len - 1,
+                            "A proposal with {} transactions is rejected in {} seconds",
+                            txs_len,
+                            execution_time
+                        );
+                    }
 
-        //             return ResponseProcessProposal { status: VERIFY_REJECT };
-        //         }
+                    return ResponseProcessProposal { status: VERIFY_REJECT };
+                }
 
-        //         match self.block_cache.write() {
-        //             Ok(mut block_cache_write) => {
-        //                 let eth_block_hash = block.hash();
+                match self.block_cache.write() {
+                    Ok(mut block_cache_write) => {
+                        let eth_block_hash = block.hash();
 
-        //                 debug!(
-        //                     cbft_block_hash = hex::encode(cbft_block_hash),
-        //                     eth_block_hash = hex::encode(eth_block_hash),
-        //                     "update eth block cache",
-        //                 );
+                        debug!(
+                            cbft_block_hash = hex::encode(cbft_block_hash),
+                            eth_block_hash = hex::encode(eth_block_hash),
+                            "update eth block cache",
+                        );
 
-        //                 block_cache_write.cache.insert(cbft_block_hash, block_with_context);
+                        block_cache_write.cache.insert(cbft_block_hash, block_with_context);
 
-        //                 self.metrics.commet_processed_proposals.increment(1);
+                        self.metrics.commet_processed_proposals.increment(1);
 
-        //                 if tracing::enabled!(tracing::Level::INFO) {
-        //                     let execution_time = execution_start_time.elapsed().as_secs_f32();
+                        if tracing::enabled!(tracing::Level::INFO) {
+                            let execution_time = execution_start_time.elapsed().as_secs_f32();
 
-        //                     info!(
-        //                         app_hash = hex::encode(eth_block_hash),
-        //                         block_time = block_time.seconds,
-        //                         execution_time,
-        //                         cbft_transactions_count = txs_len,
-        //                         eth_transactions_count = txs_len - 1, // Minus NDD
-        //                         "Processed a proposal with {} transactions in {} seconds",
-        //                         txs_len,
-        //                         execution_time,
-        //                     );
-        //                 }
+                            info!(
+                                app_hash = hex::encode(eth_block_hash),
+                                block_time = block_time.seconds,
+                                execution_time,
+                                cbft_transactions_count = txs_len,
+                                eth_transactions_count = txs_len - 1, // Minus NDD
+                                "Processed a proposal with {} transactions in {} seconds",
+                                txs_len,
+                                execution_time,
+                            );
+                        }
 
-        //                 ResponseProcessProposal { status: VERIFY_ACCEPTED }
-        //             }
-        //             Err(e) => {
-        //                 error!("Error getting block cache write lock: {:?}", e);
+                        ResponseProcessProposal { status: VERIFY_ACCEPTED }
+                    }
+                    Err(e) => {
+                        error!("Error getting block cache write lock: {:?}", e);
 
-        //                 if tracing::enabled!(tracing::Level::WARN) {
-        //                     let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //                     let app_hash = match
-        // self.application_hash(&self.storage.reth_database)                     {
-        //                         Ok(app_hash) => app_hash,
-        //                         Err(e) => {
-        //                             panic!(
-        //                                 "failed to get application hash on process proposal:
-        // {:?}",                                 e
-        //                             );
-        //                         }
-        //                     };
+                        if tracing::enabled!(tracing::Level::WARN) {
+                            let execution_time = execution_start_time.elapsed().as_secs_f32();
+                            let app_hash = match self.application_hash(&self.storage.reth_database)
+                            {
+                                Ok(app_hash) => app_hash,
+                                Err(e) => {
+                                    panic!(
+                                        "failed to get application hash on process proposal:
+        {:?}",
+                                        e
+                                    );
+                                }
+                            };
 
-        //                     warn!(
-        //                         app_hash = hex::encode(&app_hash),
-        //                         block_time = block_time.seconds,
-        //                         execution_time,
-        //                         cbft_transactions_count = txs_len,
-        //                         eth_transactions_count = txs_len - 1,
-        //                         "A proposal with {} transactions is rejected in {} seconds",
-        //                         txs_len,
-        //                         execution_time
-        //                     );
-        //                 }
+                            warn!(
+                                app_hash = hex::encode(&app_hash),
+                                block_time = block_time.seconds,
+                                execution_time,
+                                cbft_transactions_count = txs_len,
+                                eth_transactions_count = txs_len - 1,
+                                "A proposal with {} transactions is rejected in {} seconds",
+                                txs_len,
+                                execution_time
+                            );
+                        }
 
-        //                 ResponseProcessProposal { status: VERIFY_REJECT }
-        //             }
-        //         }
-        //     }
-        //     Err(e) => {
-        //         error!("Error building eth block: {:?}", e);
+                        ResponseProcessProposal { status: VERIFY_REJECT }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Error building eth block: {:?}", e);
 
-        //         if tracing::enabled!(tracing::Level::WARN) {
-        //             let execution_time = execution_start_time.elapsed().as_secs_f32();
-        //             let app_hash = match self.application_hash(&self.storage.reth_database) {
-        //                 Ok(app_hash) => app_hash,
-        //                 Err(e) => {
-        //                     panic!("failed to get application hash on process proposal: {:?}",
-        // e);                 }
-        //             };
+                if tracing::enabled!(tracing::Level::WARN) {
+                    let execution_time = execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                        Ok(app_hash) => app_hash,
+                        Err(e) => {
+                            panic!("failed to get application hash on process proposal: {:?}", e);
+                        }
+                    };
 
-        //             warn!(
-        //                 app_hash = hex::encode(&app_hash),
-        //                 block_time = block_time.seconds,
-        //                 execution_time,
-        //                 cbft_transactions_count = txs_len,
-        //                 eth_transactions_count = txs_len - 1,
-        //                 "A proposal with {} transactions is rejected in {} seconds",
-        //                 txs_len,
-        //                 execution_time
-        //             );
-        //         }
+                    warn!(
+                        app_hash = hex::encode(&app_hash),
+                        block_time = block_time.seconds,
+                        execution_time,
+                        cbft_transactions_count = txs_len,
+                        eth_transactions_count = txs_len - 1,
+                        "A proposal with {} transactions is rejected in {} seconds",
+                        txs_len,
+                        execution_time
+                    );
+                }
 
-        //         ResponseProcessProposal { status: VERIFY_REJECT }
-        //     }
-        // }
-        unimplemented!()
+                ResponseProcessProposal { status: VERIFY_REJECT }
+            }
+        }
     }
 
     ///docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#finalizeblock
@@ -2439,7 +2446,7 @@ where
 #[derive(Debug)]
 pub enum ABCIDriverMessage {
     /// Finalize a block, message includes the sealed block and the CBFT block hash
-    CommitBlock((BlockWithContext, std::sync::mpsc::Sender<()>)),
+    CommitBlock((BlockWithContext<BotanixBlock>, std::sync::mpsc::Sender<()>)),
     /// Exit the driver
     Exit,
 }
