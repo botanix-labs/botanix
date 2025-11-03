@@ -2,6 +2,7 @@
 //! state
 use alloy_consensus::BlockHeader;
 use alloy_eips::Encodable2718;
+use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_chainspec::constants::BOTANIX_TESTNET_CHAIN_ID;
 use botanix_storage::models::RuntimeVersion;
 use reth_db::DatabaseEnv;
@@ -44,8 +45,8 @@ use schnellru::{ByLength, LruMap};
 use tendermint_abci::{Application, ServerBuilder};
 use tendermint_proto::{
     abci::{
-        RequestPrepareProposal, RequestProcessProposal, ResponseCommit, ResponsePrepareProposal,
-        ResponseProcessProposal,
+        ExecTxResult, RequestPrepareProposal, RequestProcessProposal, ResponseCommit,
+        ResponsePrepareProposal, ResponseProcessProposal,
     },
     v0_38::abci::{
         RequestApplySnapshotChunk, RequestCheckTx, RequestFinalizeBlock, RequestInfo,
@@ -2082,293 +2083,299 @@ where
     ///docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#finalizeblock
     #[instrument(level = "trace", skip(self, request), fields(cbft_block_height = request.height, cbft_block_hash = hex::encode(&request.hash)))]
     fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
-        // trace!("request={:?}", RequestFinalizeBlockTruncatedDebug(&request));
+        trace!("request={:?}", RequestFinalizeBlockTruncatedDebug(&request));
 
-        // if request.txs.is_empty() {
-        //     panic!("No transactions in finalize_block request, but expected at least NDD tx");
-        // }
+        if request.txs.is_empty() {
+            panic!("No transactions in finalize_block request, but expected at least NDD tx");
+        }
 
-        // let cbft_block_hash = FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
-        // let mut block_cache_write = match self.block_cache.write() {
-        //     Ok(block_cache_write) => block_cache_write,
-        //     Err(e) => {
-        //         panic!("Error getting eth block cache write lock: {:?}", e);
-        //     }
-        // };
+        let cbft_block_hash = FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
+        let mut block_cache_write = match self.block_cache.write() {
+            Ok(block_cache_write) => block_cache_write,
+            Err(e) => {
+                panic!("Error getting eth block cache write lock: {:?}", e);
+            }
+        };
 
-        // let block_with_context = match block_cache_write.cache.get(&cbft_block_hash) {
-        //     Some(block_with_context) => {
-        //         debug!(
-        //             cbft_block_hash = hex::encode(cbft_block_hash),
-        //             eth_block_hash =
-        //                 hex::encode(block_with_context.sealed_block_with_peg.block().hash()),
-        //             "read eth block from block cache",
-        //         );
+        let block_with_context = match block_cache_write.cache.get(&cbft_block_hash) {
+            Some(block_with_context) => {
+                debug!(
+                    cbft_block_hash = hex::encode(cbft_block_hash),
+                    eth_block_hash =
+                        hex::encode(block_with_context.sealed_block_with_peg.block().hash()),
+                    "read eth block from block cache",
+                );
 
-        //         block_with_context.clone()
-        //     }
-        //     None => {
-        //         // No block in cache: this happens during historical (block) sync
-        //         // Build the block
+                block_with_context.clone()
+            }
+            None => {
+                // No block in cache: this happens during historical (block) sync
+                // Build the block
 
-        //         debug!(
-        //             cbft_block_hash = hex::encode(cbft_block_hash),
-        //             "eth block not found in block cache, building a block"
-        //         );
+                debug!(
+                    cbft_block_hash = hex::encode(cbft_block_hash),
+                    "eth block not found in block cache, building a block"
+                );
 
-        //         // get non-deterministic data
-        //         let txs_bytes = request.txs.clone();
-        //         let non_deterministic_data_bytes = match txs_bytes.clone().first() {
-        //             Some(tx) => tx.clone(),
-        //             None => {
-        //                 panic!("No non-deterministic tx in finalize block request");
-        //             }
-        //         };
-        //         let reader_inner: Vec<u8> =
-        //             vec![non_deterministic_data_bytes].into_iter().flatten().collect();
-        //         let reader = &mut io::Cursor::new(reader_inner);
+                // get non-deterministic data
+                let txs_bytes = request.txs.clone();
+                let non_deterministic_data_bytes = match txs_bytes.clone().first() {
+                    Some(tx) => tx.clone(),
+                    None => {
+                        panic!("No non-deterministic tx in finalize block request");
+                    }
+                };
+                let reader_inner: Vec<u8> =
+                    vec![non_deterministic_data_bytes].into_iter().flatten().collect();
+                let reader = &mut io::Cursor::new(reader_inner);
 
-        //         let non_deterministic_data = match NonDeterministicData::deserialize(reader) {
-        //             Ok(data) => data,
-        //             Err(e) => {
-        //                 panic!("Error deserializing non-deterministic data: {:?}", e);
-        //             }
-        //         };
+                let non_deterministic_data = match NonDeterministicData::deserialize(reader) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        panic!("Error deserializing non-deterministic data: {:?}", e);
+                    }
+                };
 
-        //         // NDD V0 (no block_fee_recipient_address) is supported only for historical sync
-        // on         // testnet
-        //         let block_fee_recipient_address = match non_deterministic_data
-        //             .block_fee_recipient_address()
-        //         {
-        //             Some(address) => {
-        //                 debug!(%address, "use proposed block fee recipient address");
-        //                 address
-        //             }
-        //             // Need to extract from `request.proposer_address` which is legacy block
-        //             // building behavior
-        //             None if self.is_testnet => {
-        //                 let address = Address::new(
-        //                     FixedBytes::<20>::from_slice(
-        //                         request.proposer_address.to_vec().as_slice(),
-        //                     )
-        //                     .0,
-        //                 );
+                // NDD V0 (no block_fee_recipient_address) is supported only for historical sync on
+                // // testnet
+                let block_fee_recipient_address =
+                    match non_deterministic_data.block_fee_recipient_address() {
+                        Some(address) => {
+                            debug!(%address, "use proposed block fee recipient address");
+                            address
+                        }
+                        // Need to extract from `request.proposer_address` which is legacy block
+                        // building behavior
+                        None if self.is_testnet => {
+                            let address = Address::new(
+                                FixedBytes::<20>::from_slice(
+                                    request.proposer_address.to_vec().as_slice(),
+                                )
+                                .0,
+                            );
 
-        //                 debug!(%address, "use a proposer address as the block fee recipient
-        // address (testnet)");
+                            debug!(%address, "use a proposer address as the block fee recipient
+        address (testnet)");
 
-        //                 address
-        //             }
-        //             None => {
-        //                 panic!(
-        //                     "Block fee recipient address is not set in finalize block for
-        // mainnet"                 );
-        //             }
-        //         };
+                            address
+                        }
+                        None => {
+                            panic!(
+                                "Block fee recipient address is not set in finalize block for
+        mainnet"
+                            );
+                        }
+                    };
 
-        //         let block_time = match request.time {
-        //             Some(time) => time,
-        //             None => {
-        //                 panic!("Block time is not set in process proposal");
-        //             }
-        //         };
+                let block_time = match request.time {
+                    Some(time) => time,
+                    None => {
+                        panic!("Block time is not set in process proposal");
+                    }
+                };
 
-        //         // get txs skipping the first non-deterministic data tx
-        //         let txs_iter = txs_bytes.clone().into_iter().skip(1);
-        //         let txs = if txs_iter.clone().next().is_none() {
-        //             vec![]
-        //         } else {
-        //             match transactions_signed_from_bytes(txs_iter) {
-        //                 Ok(txs) => txs,
-        //                 Err(e) => {
-        //                     panic!("Error decoding transactions in finalize block: {:?}", e);
-        //                 }
-        //             }
-        //         };
+                // get txs skipping the first non-deterministic data tx
+                let txs_iter = txs_bytes.clone().into_iter().skip(1);
+                let txs = if txs_iter.clone().next().is_none() {
+                    vec![]
+                } else {
+                    match transactions_signed_from_bytes(txs_iter) {
+                        Ok(txs) => txs,
+                        Err(e) => {
+                            panic!("Error decoding transactions in finalize block: {:?}", e);
+                        }
+                    }
+                };
 
-        //         let runtime_version = non_deterministic_data.runtime_version();
-        //         let network_upgrade_payload =
-        //             non_deterministic_data.network_upgrade_payload().copied();
+                let runtime_version = non_deterministic_data.runtime_version();
+                let network_upgrade_payload =
+                    non_deterministic_data.network_upgrade_payload().copied();
 
-        //         debug!("finalize_block: Finalizing block with runtime version:
-        // {runtime_version}");
+                debug!(
+                    "finalize_block: Finalizing block with runtime version:
+        {runtime_version}"
+                );
 
-        //         let floor_base_fee_per_gas = match runtime_version {
-        //             // Historic
-        //             RUNTIME_VERSION_V1 => None,
-        //             // Active
-        //             RUNTIME_VERSION_V2 => Some(FLOOR_BASE_FEE_PER_GAS_V2),
-        //             // Upgrade
-        //             RUNTIME_VERSION_V3 => Some(FLOOR_BASE_FEE_PER_GAS_V3),
-        //             // This software is outdated and just encountered an
-        //             // upgraded runtime version; this will be rejected in the
-        //             // upcoming `ActivationManager::on_finalize_block(..)` call.
-        //             _ => {
-        //                 warn!("finalize_block: Unrecognized runtime version: {runtime_version}");
-        //                 Some(FLOOR_BASE_FEE_PER_GAS_V3) // just apply the latest change.
-        //             }
-        //         };
+                let floor_base_fee_per_gas = match runtime_version {
+                    // Historic
+                    RUNTIME_VERSION_V1 => None,
+                    // Active
+                    RUNTIME_VERSION_V2 => Some(FLOOR_BASE_FEE_PER_GAS_V2),
+                    // Upgrade
+                    RUNTIME_VERSION_V3 => Some(FLOOR_BASE_FEE_PER_GAS_V3),
+                    // This software is outdated and just encountered an
+                    // upgraded runtime version; this will be rejected in the
+                    // upcoming `ActivationManager::on_finalize_block(..)` call.
+                    _ => {
+                        warn!("finalize_block: Unrecognized runtime version: {runtime_version}");
+                        Some(FLOOR_BASE_FEE_PER_GAS_V3) // just apply the latest change.
+                    }
+                };
 
-        //         match build_and_execute(
-        //             txs,
-        //             self.storage.chain_spec.clone(),
-        //             runtime_version,
-        //             network_upgrade_payload,
-        //             floor_base_fee_per_gas,
-        //             &block_fee_recipient_address,
-        //             self.storage.evm_config,
-        //             &self.reth_provider_factory,
-        //             &self.storage.bitcoind_factory,
-        //             self.storage.btc_network,
-        //             &non_deterministic_data.bitcoin_block_hash(),
-        //             &non_deterministic_data.aggregated_public_key(),
-        //             block_time,
-        //         ) {
-        //             Ok(block_with_context) => {
-        //                 block_cache_write.cache.insert(cbft_block_hash,
-        // block_with_context.clone());
+                match build_and_execute(
+                    txs,
+                    self.storage.chain_spec.clone(),
+                    runtime_version,
+                    network_upgrade_payload,
+                    floor_base_fee_per_gas,
+                    &block_fee_recipient_address,
+                    self.storage.evm_config.clone(),
+                    &self.reth_provider_factory,
+                    &self.storage.bitcoind_factory,
+                    self.storage.btc_network,
+                    &non_deterministic_data.bitcoin_block_hash(),
+                    &non_deterministic_data.aggregated_public_key(),
+                    block_time,
+                ) {
+                    Ok(block_with_context) => {
+                        block_cache_write.cache.insert(cbft_block_hash, block_with_context.clone());
 
-        //                 debug!(
-        //                     cbft_block_hash = hex::encode(cbft_block_hash),
-        //                     eth_block_hash = hex::encode(
-        //                         block_with_context.sealed_block_with_peg.block().hash()
-        //                     ),
-        //                     "update eth block cache",
-        //                 );
+                        debug!(
+                            cbft_block_hash = hex::encode(cbft_block_hash),
+                            eth_block_hash = hex::encode(
+                                block_with_context.sealed_block_with_peg.block().hash()
+                            ),
+                            "update eth block cache",
+                        );
 
-        //                 block_with_context
-        //             }
-        //             Err(e) => {
-        //                 panic!("Error building block in finalize block: {:?}", e);
-        //             }
-        //         }
-        //     }
-        // };
+                        block_with_context
+                    }
+                    Err(e) => {
+                        panic!("Error building block in finalize block: {:?}", e);
+                    }
+                }
+            }
+        };
 
-        // // Activation Manager: decide whether we're willing to accept
-        // // the runtime version.
-        // //
-        // // Note that lagging validators will automatically accept an upgrade as
-        // // long as they're specifically configured to do so (non-default
-        // // behavior), whether - from their perspective - the upgrade conditions
-        // // are met or not.
-        // let comet_height = request.height as u64;
-        // let runtime_version = block_with_context.runtime_version;
-        // let proposer_address = Address::from_slice(&request.proposer_address);
-        // let proposer_vote = block_with_context.network_upgrade_payload;
+        // Activation Manager: decide whether we're willing to accept
+        // the runtime version.
+        //
+        // Note that lagging validators will automatically accept an upgrade as
+        // long as they're specifically configured to do so (non-default
+        // behavior), whether - from their perspective - the upgrade conditions
+        // are met or not.
+        let comet_height = request.height as u64;
+        let runtime_version = block_with_context.runtime_version;
+        let proposer_address = Address::from_slice(&request.proposer_address);
+        let proposer_vote = block_with_context.network_upgrade_payload;
 
-        // match self
-        //     .activation_manager
-        //     .on_finalize_block(runtime_version, comet_height, proposer_address, proposer_vote)
-        //     .expect("db cannot fail")
-        // {
-        //     OnFinalizeBlockDecision::Finalize { version: _ } => {
-        //         // Continue...
-        //     }
-        //     OnFinalizeBlockDecision::RejectBlockDeadEnd { version } => {
-        //         error!("finalize_block: Rejecting finalized block with Botanix runtime version:
-        // {version}");         panic!("finalize_block: Rejecting Botanix upgrade
-        // '{version}' - can no longer proceed...");     }
-        // }
+        match self
+            .activation_manager
+            .on_finalize_block(runtime_version, comet_height, proposer_address, proposer_vote)
+            .expect("db cannot fail")
+        {
+            OnFinalizeBlockDecision::Finalize { version: _ } => {
+                // Continue...
+            }
+            OnFinalizeBlockDecision::RejectBlockDeadEnd { version } => {
+                error!(
+                    "finalize_block: Rejecting finalized block with Botanix runtime version:
+        {version}"
+                );
+                panic!(
+                    "finalize_block: Rejecting Botanix upgrade
+        '{version}' - can no longer proceed..."
+                );
+            }
+        }
 
-        // // Metrics
-        // //
-        // // Only create metrics if there's an actual upgrade event ongoing.
-        // if let Some((upgrade_version, polling)) =
-        //     self.activation_manager.get_upgrade_polling().expect("db cannot fail")
-        // {
-        //     // Track the raw vote by the proposer. Note that the proposer might
-        //     // be voting for a different version than the one we're interested
-        //     // in, or for none at all. The rendered metric is labeled accurately.
-        //     self.metrics.runtime_upgrade_vote(&proposer_address, &proposer_vote);
+        // Metrics
+        //
+        // Only create metrics if there's an actual upgrade event ongoing.
+        if let Some((upgrade_version, polling)) =
+            self.activation_manager.get_upgrade_polling().expect("db cannot fail")
+        {
+            // Track the raw vote by the proposer. Note that the proposer might
+            // be voting for a different version than the one we're interested
+            // in, or for none at all. The rendered metric is labeled accurately.
+            self.metrics.runtime_upgrade_vote(&proposer_address, &proposer_vote);
 
-        //     // Track the polling results for the specific version we're interested in.
-        //     self.metrics.runtime_upgrade_polling(&upgrade_version, &polling);
-        // }
+            // Track the polling results for the specific version we're interested in.
+            self.metrics.runtime_upgrade_polling(&upgrade_version, &polling);
+        }
 
-        // // Track the finalized block hash for the commit stage.
-        // block_cache_write.tracked_final = Some(cbft_block_hash);
+        // Track the finalized block hash for the commit stage.
+        block_cache_write.tracked_final = Some(cbft_block_hash);
 
-        // // Rpc node needs to store aggregate public key from block height 1
-        // let block_height = block_with_context.sealed_block_with_peg.block().number;
-        // let sealed_block_with_peg_binding = block_with_context.sealed_block_with_peg.clone();
-        // let sealed_block_with_senders = sealed_block_with_peg_binding.block();
-        // // TODO: Shouldn't it be done on block commit?
-        // if !self.is_fed_node && block_height == 1 {
-        //     let edh = match sealed_block_with_senders.deserialize_extra_data_header() {
-        //         Ok(edh) => edh,
-        //         Err(e) => {
-        //             panic!("Error deserializing extra data header in finalize block: {:?}", e);
-        //         }
-        //     };
+        // Rpc node needs to store aggregate public key from block height 1
+        let block_height = block_with_context.sealed_block_with_peg.block().number;
+        let sealed_block_with_peg_binding = block_with_context.sealed_block_with_peg.clone();
+        let sealed_block_with_senders = sealed_block_with_peg_binding.block();
+        // TODO: Shouldn't it be done on block commit?
+        if !self.is_fed_node && block_height == 1 {
+            let edh = match sealed_block_with_senders.deserialize_extra_data_header() {
+                Ok(edh) => edh,
+                Err(e) => {
+                    panic!("Error deserializing extra data header in finalize block: {:?}", e);
+                }
+            };
 
-        //     let mut storage = self.storage.inner.blocking_write();
-        //     storage.aggregate_public_key = Some(edh.aggregated_public_key);
-        // }
+            let mut storage = self.storage.inner.blocking_write();
+            storage.aggregate_public_key = Some(edh.aggregated_public_key);
+        }
 
-        // if matches!(
-        //     self.validate_block(block_with_context.sealed_block_with_peg.block()),
-        //     ResponseProcessProposal { status: VERIFY_REJECT }
-        // ) {
-        //     panic!("failed to finalize invalid block block {:?}", request.height);
-        // }
+        if matches!(
+            self.validate_block(block_with_context.sealed_block_with_peg.block()),
+            ResponseProcessProposal { status: VERIFY_REJECT }
+        ) {
+            panic!("failed to finalize invalid block block {:?}", request.height);
+        }
 
-        // let mut exec_results = vec![];
-        // // insert non-deterministic data tx which is first in the block (already checked above)
-        // let non_deterministic_data_tx = match request.txs.first() {
-        //     Some(tx) => tx.clone(),
-        //     None => {
-        //         panic!("failed to finalize block {} without NDD", request.height);
-        //     }
-        // };
+        let mut exec_results = vec![];
+        // insert non-deterministic data tx which is first in the block (already checked above)
+        let non_deterministic_data_tx = match request.txs.first() {
+            Some(tx) => tx.clone(),
+            None => {
+                panic!("failed to finalize block {} without NDD", request.height);
+            }
+        };
 
-        // let first_exec_tx_result =
-        //     ExecTxResult { code: SUCCESS, data: non_deterministic_data_tx, ..Default::default()
-        // }; exec_results.push(first_exec_tx_result);
+        let first_exec_tx_result =
+            ExecTxResult { code: SUCCESS, data: non_deterministic_data_tx, ..Default::default() };
+        exec_results.push(first_exec_tx_result);
 
-        // for _tx in block_with_context.sealed_block_with_peg.block().body().transactions() {
-        //     // https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#transaction-results
-        //     exec_results.push(ExecTxResult {
-        //         code: SUCCESS,
-        //         // From https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#gas
-        //         // In v0.34.x and earlier versions, CometBFT does not enforce anything about Gas
-        // in         // consensus, only in the mempool. ... The GasUsed field is ignored
-        //         // by CometBFT. CometBFT's genesis.json should have max_gas set to
-        //         // -1 as to not enforce any gas limit restrictions Gas and other
-        //         // block resource limits are enforced by the EVM/Reth
-        //         ..Default::default()
-        //     });
-        // }
+        for _tx in block_with_context.sealed_block_with_peg.block().body().transactions() {
+            // https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#transaction-results
+            exec_results.push(ExecTxResult {
+                code: SUCCESS,
+                // From https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#gas
+                // In v0.34.x and earlier versions, CometBFT does not enforce anything about Gas in
+                // consensus, only in the mempool. ... The GasUsed field is ignored
+                // by CometBFT. CometBFT's genesis.json should have max_gas set to
+                // -1 as to not enforce any gas limit restrictions Gas and other
+                // block resource limits are enforced by the EVM/Reth
+                ..Default::default()
+            });
+        }
 
-        // let block_hash = block_with_context.sealed_block_with_peg.block().hash();
-        // self.metrics.commet_finalized_blocks.increment(1);
+        let block_hash = block_with_context.sealed_block_with_peg.block().hash();
+        self.metrics.commet_finalized_blocks.increment(1);
 
-        // let execution_time = std::time::Instant::now().elapsed().as_secs_f32();
+        let execution_time = std::time::Instant::now().elapsed().as_secs_f32();
 
-        // let eth_block_hash_hex = hex::encode(block_hash);
+        let eth_block_hash_hex = hex::encode(block_hash);
 
-        // let txs_len = request.txs.len();
+        let txs_len = request.txs.len();
 
-        // info!(
-        //     app_hash = eth_block_hash_hex,
-        //     eth_block_hash = eth_block_hash_hex,
-        //     cbft_block_hash = hex::encode(cbft_block_hash),
-        //     cbft_transactions_count = txs_len,
-        //     eth_transactions_count = txs_len - 1, // Minus NDD
-        //     execution_time,
-        //     "Finalized cbft block with {} transactions in {} seconds",
-        //     txs_len,
-        //     execution_time,
-        // );
+        info!(
+            app_hash = eth_block_hash_hex,
+            eth_block_hash = eth_block_hash_hex,
+            cbft_block_hash = hex::encode(cbft_block_hash),
+            cbft_transactions_count = txs_len,
+            eth_transactions_count = txs_len - 1, // Minus NDD
+            execution_time,
+            "Finalized cbft block with {} transactions in {} seconds",
+            txs_len,
+            execution_time,
+        );
 
-        // ResponseFinalizeBlock {
-        //     events: vec![],
-        //     tx_results: exec_results,
-        //     validator_updates: vec![],
-        //     consensus_param_updates: None,
-        //     app_hash: prost::bytes::Bytes::copy_from_slice(&block_hash.0),
-        // }
-        unimplemented!()
+        ResponseFinalizeBlock {
+            events: vec![],
+            tx_results: exec_results,
+            validator_updates: vec![],
+            consensus_param_updates: None,
+            app_hash: prost::bytes::Bytes::copy_from_slice(&block_hash.0),
+        }
     }
 
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#commit
