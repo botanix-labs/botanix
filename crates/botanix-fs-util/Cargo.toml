@@ -8,11 +8,11 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Commonly used fs utils in reth."
 
-[lints]
-workspace = true
-
 [dependencies]
+serde = { workspace = true }
 # misc
 serde_json = { workspace = true }
-serde = { workspace = true }
 thiserror = { workspace = true }
+
+[lints]
+workspace = true

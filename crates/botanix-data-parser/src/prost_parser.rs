@@ -52,10 +52,13 @@ mod test {
             "male": "male"
         });
 
-        let parser = DataParser::default().with_compression_strategy(&DEFAULT_COMPRESSION_STRATEGY);
+        let parser = DataParser::default()
+            .with_compression_strategy(&DEFAULT_COMPRESSION_STRATEGY);
         let compressed_serialized_data = parser.encode(&data).await.unwrap();
-        let decompressed_deserialized_data =
-            parser.decode::<serde_json::Value>(&compressed_serialized_data).await.unwrap();
+        let decompressed_deserialized_data = parser
+            .decode::<serde_json::Value>(&compressed_serialized_data)
+            .await
+            .unwrap();
         assert_eq!(data, decompressed_deserialized_data);
     }
 
@@ -69,12 +72,15 @@ mod test {
         });
 
         // serialize and compress the data
-        let parser = DataParser::default().with_serialization_type(SerializationType::Json);
+        let parser = DataParser::default()
+            .with_serialization_type(SerializationType::Json);
         let serialized_compressed_data = parser.encode(&data).await.unwrap();
 
         // deserialize and decompress the data
-        let deserialized_decompressed_data =
-            parser.decode::<serde_json::Value>(&serialized_compressed_data).await.unwrap();
+        let deserialized_decompressed_data = parser
+            .decode::<serde_json::Value>(&serialized_compressed_data)
+            .await
+            .unwrap();
         assert_eq!(data, deserialized_decompressed_data);
     }
 
@@ -84,13 +90,21 @@ mod test {
         let mut utxos = vec![];
         // generate utxos
         for _ in 0..100 {
-            let txid = Txid::from_slice(&rng.gen::<[u8; 32]>()).unwrap().to_byte_array().to_vec();
+            let txid = Txid::from_slice(&rng.gen::<[u8; 32]>())
+                .unwrap()
+                .to_byte_array()
+                .to_vec();
             let script_pubkey = rng.gen::<[u8; 32]>().to_vec();
             let vout = rng.gen_range(0..u32::MAX);
             let utxo = Utxo {
-                outpoint: Some(botanix_btc_server_client::OutPoint { txid: txid.clone(), vout }),
+                outpoint: Some(botanix_btc_server_client::OutPoint {
+                    txid: txid.clone(),
+                    vout,
+                }),
                 output: Some(TxOut {
-                    script_pubkey: Some(botanix_btc_server_client::ScriptBuf { script: script_pubkey }),
+                    script_pubkey: Some(botanix_btc_server_client::ScriptBuf {
+                        script: script_pubkey,
+                    }),
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
@@ -108,7 +122,10 @@ mod test {
 
         // now decompress the prost message
         let prost_deserialized =
-            ProstMessageSerdelizer::<GetAllUtxosResponse>::deserialize(prost_serialized).unwrap();
+            ProstMessageSerdelizer::<GetAllUtxosResponse>::deserialize(
+                prost_serialized,
+            )
+            .unwrap();
         println!("Deserialized to bytes: {:?}", prost_deserialized);
 
         assert!(prost_utxos == prost_deserialized);
@@ -120,13 +137,21 @@ mod test {
         let mut utxos = vec![];
         // generate utxos
         for _ in 0..100 {
-            let txid = Txid::from_slice(&rng.gen::<[u8; 32]>()).unwrap().to_byte_array().to_vec();
+            let txid = Txid::from_slice(&rng.gen::<[u8; 32]>())
+                .unwrap()
+                .to_byte_array()
+                .to_vec();
             let script_pubkey = rng.gen::<[u8; 32]>().to_vec();
             let vout = rng.gen_range(0..u32::MAX);
             let utxo = Utxo {
-                outpoint: Some(botanix_btc_server_client::OutPoint { txid: txid.clone(), vout }),
+                outpoint: Some(botanix_btc_server_client::OutPoint {
+                    txid: txid.clone(),
+                    vout,
+                }),
                 output: Some(TxOut {
-                    script_pubkey: Some(botanix_btc_server_client::ScriptBuf { script: script_pubkey }),
+                    script_pubkey: Some(botanix_btc_server_client::ScriptBuf {
+                        script: script_pubkey,
+                    }),
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
@@ -142,8 +167,10 @@ mod test {
         let prost_serialized = prost_message_wrapper.serialize().unwrap();
 
         // now compress the prost message
-        let parser = DataParser::default().with_serialization_type(SerializationType::Json);
-        let prost_serialized_compressed = parser.compress(&prost_serialized).await.unwrap();
+        let parser = DataParser::default()
+            .with_serialization_type(SerializationType::Json);
+        let prost_serialized_compressed =
+            parser.compress(&prost_serialized).await.unwrap();
         println!(
             "Compressed to bytes: serialized: {:?} bytes, ser+compressed {:?} bytes",
             prost_serialized.len(),
@@ -156,13 +183,17 @@ mod test {
         );
 
         // now decompress the prost message
-        let prost_serialized_decompressed =
-            parser.decompress(&prost_serialized_compressed).await.unwrap();
-        let prost_serialized_decompressed_clone = prost_serialized_decompressed.clone();
-        let prost_deserialized = ProstMessageSerdelizer::<GetAllUtxosResponse>::deserialize(
-            prost_serialized_decompressed,
-        )
-        .unwrap();
+        let prost_serialized_decompressed = parser
+            .decompress(&prost_serialized_compressed)
+            .await
+            .unwrap();
+        let prost_serialized_decompressed_clone =
+            prost_serialized_decompressed.clone();
+        let prost_deserialized =
+            ProstMessageSerdelizer::<GetAllUtxosResponse>::deserialize(
+                prost_serialized_decompressed,
+            )
+            .unwrap();
         println!(
             "Serialized + decompressed: {:?} bytes, Deserialized {:?} bytes",
             prost_serialized_decompressed_clone.len(),

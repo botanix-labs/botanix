@@ -18,7 +18,10 @@ pub fn create_web_server(
         let cors = Cors::default()
             .allow_any_origin()
             .allowed_methods(vec!["GET", "POST"])
-            .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+            .allowed_headers(vec![
+                http::header::AUTHORIZATION,
+                http::header::ACCEPT,
+            ])
             .allowed_header(http::header::CONTENT_TYPE)
             .max_age(3600);
 
@@ -29,7 +32,8 @@ pub fn create_web_server(
             .service(web::resource("/health").route(web::get().to(
                 |state: web::Data<ServerState>| async move {
                     if !state.is_healthy() {
-                        return HttpResponse::ServiceUnavailable().body("Service Unavailable");
+                        return HttpResponse::ServiceUnavailable()
+                            .body("Service Unavailable");
                     }
                     HttpResponse::Ok().json(state.get_health().await)
                 },
@@ -67,15 +71,18 @@ mod tests {
         telemetry.start().await.unwrap();
         let state = ServerState::new(telemetry.clone()).await;
 
-        let app = test::init_service(App::new().app_data(web::Data::new(state.clone())).route(
-            "/health",
-            web::get().to(|state: web::Data<ServerState>| async move {
-                if !state.is_healthy() {
-                    return HttpResponse::ServiceUnavailable().body("Service Unavailable");
-                }
-                HttpResponse::Ok().json(state.get_health().await)
-            }),
-        ))
+        let app = test::init_service(
+            App::new().app_data(web::Data::new(state.clone())).route(
+                "/health",
+                web::get().to(|state: web::Data<ServerState>| async move {
+                    if !state.is_healthy() {
+                        return HttpResponse::ServiceUnavailable()
+                            .body("Service Unavailable");
+                    }
+                    HttpResponse::Ok().json(state.get_health().await)
+                }),
+            ),
+        )
         .await;
 
         let uptime = Duration::from_secs(2);

@@ -10,22 +10,22 @@ exclude.workspace = true
 
 [dependencies]
 # Reth dependencies - using botanix fork
-reth-db = { workspace = true }
-reth-execution-errors = { workspace = true }
-reth-provider = { workspace = true }
-reth-node-types = { workspace = true }
+reth-basic-payload-builder = { workspace = true }
 reth-chainspec = { workspace = true }
-reth-primitives = { workspace = true, features = ["secp256k1"] }
-reth-primitives-traits = { workspace = true }
-reth-storage-errors = { workspace = true }
+reth-db = { workspace = true }
+reth-ethereum-engine-primitives = { workspace = true }
+reth-ethereum-payload-builder = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
 reth-evm = { workspace = true }
-reth-revm = { workspace = true }
+reth-execution-errors = { workspace = true }
+reth-node-types = { workspace = true }
 reth-payload-builder = { workspace = true }
 reth-payload-primitives = { workspace = true }
-reth-basic-payload-builder = { workspace = true }
-reth-ethereum-payload-builder = { workspace = true }
-reth-ethereum-engine-primitives = { workspace = true }
-reth-ethereum-primitives = { workspace = true }
+reth-primitives = { workspace = true, features = ["secp256k1"] }
+reth-primitives-traits = { workspace = true }
+reth-provider = { workspace = true }
+reth-revm = { workspace = true }
+reth-storage-errors = { workspace = true }
 reth-transaction-pool = { workspace = true }
 
 # REVM dependencies
@@ -36,10 +36,10 @@ alloy-consensus.workspace = true
 alloy-eips.workspace = true
 
 # Botanix
+botanix-authority-edh = { workspace = true }
 botanix-authority-peg = { workspace = true }
 botanix-btc-wallet = { workspace = true }
 botanix-chainspec = { workspace = true }
-botanix-authority-edh = { workspace = true }
 botanix-consensus-common = { workspace = true }
 
 # Bitcoin

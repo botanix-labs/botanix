@@ -13,7 +13,9 @@ use bitcoin::{
 };
 use btcserverlib::{
     pegout_id::PegoutId,
-    wallet::address::{generate_taproot_scriptpubkey, generate_tweaked_public_key},
+    wallet::address::{
+        generate_taproot_scriptpubkey, generate_tweaked_public_key,
+    },
 };
 use ethers::types::U256;
 use frost_secp256k1_tr as frost;
@@ -56,10 +58,13 @@ impl PeginData {
         aggregate_pk: &secp256k1::PublicKey,
     ) -> Result<U256, PeginDataError> {
         // the aggregate value from all the pegin proofs
-        let mut aggregate_value = U256::from_str_radix("0", 10).expect("valid amount");
+        let mut aggregate_value =
+            U256::from_str_radix("0", 10).expect("valid amount");
         let commit_hash = bitcoin_commitment.0.block_hash();
         for pegin in &self.meta {
-            if ![PEGIN_META_VERSION_V0, PEGIN_META_VERSION_V1].contains(&pegin.version()) {
+            if ![PEGIN_META_VERSION_V0, PEGIN_META_VERSION_V1]
+                .contains(&pegin.version())
+            {
                 return Err(PeginDataError::Invalid(
                     "invalid meta version: only accepting version 0 or 1",
                 ));
@@ -71,8 +76,14 @@ impl PeginData {
             };
 
             // pegin block headers list should contain the commitment header
-            if !pegin.block_headers.iter().any(|h| h.block_hash() == commit_hash) {
-                return Err(PeginDataError::Invalid("recent block hash mismatch"));
+            if !pegin
+                .block_headers
+                .iter()
+                .any(|h| h.block_hash() == commit_hash)
+            {
+                return Err(PeginDataError::Invalid(
+                    "recent block hash mismatch",
+                ));
             }
 
             // Then let's validate the merkle proof.
@@ -81,19 +92,27 @@ impl PeginData {
             let mut idxs = Vec::with_capacity(1);
             let root = merkle.extract_matches(&mut txids, &mut idxs)?;
             if !txids.contains(&pegin.outpoint.txid) {
-                return Err(PeginDataError::Invalid("invalid merkle proof: inclusion"));
+                return Err(PeginDataError::Invalid(
+                    "invalid merkle proof: inclusion",
+                ));
             }
             // And check that the merkle proof is indeed for the first header provided.
             if pegin.block_headers[0].merkle_root != root {
-                return Err(PeginDataError::Invalid("merkle proof and block header mismatch"));
+                return Err(PeginDataError::Invalid(
+                    "merkle proof and block header mismatch",
+                ));
             }
 
             // then check that the merkle proof was indeed for the pegin tx
             if pegin.tx.compute_txid() != pegin.outpoint.txid {
-                return Err(PeginDataError::Invalid("invalid tx or outpoint: txid"));
+                return Err(PeginDataError::Invalid(
+                    "invalid tx or outpoint: txid",
+                ));
             }
             if pegin.tx.output.len() < pegin.outpoint.vout as usize {
-                return Err(PeginDataError::Invalid("invalid tx or outpoint: output idx"));
+                return Err(PeginDataError::Invalid(
+                    "invalid tx or outpoint: output idx",
+                ));
             }
 
             let encoded_pk = aggregate_pk.serialize();
@@ -108,7 +127,8 @@ impl PeginData {
                 return Err(PeginDataError::Invalid("invalid script pubkey"));
             }
 
-            let output_value = bitcoin::Amount::from_sat(output.value.to_sat()).to_wei();
+            let output_value =
+                bitcoin::Amount::from_sat(output.value.to_sat()).to_wei();
             aggregate_value += output_value;
 
             // check that the user provided an actual valid block header sequence
@@ -116,7 +136,9 @@ impl PeginData {
             while let Some(header) = iter.next() {
                 if let Some(next) = iter.peek() {
                     if next.prev_blockhash != header.block_hash() {
-                        return Err(PeginDataError::Invalid("invalid block header sequence"));
+                        return Err(PeginDataError::Invalid(
+                            "invalid block header sequence",
+                        ));
                     }
                 }
             }
@@ -127,17 +149,20 @@ impl PeginData {
                 .iter()
                 .rev()
                 .skip_while(|h| h.block_hash() != commit_hash)
-                .count() -
-                1; // minus one for the commitment itself
-                   // the latest block height minus the position of the user block in the list is the
-                   // height of the user block
-            if bitcoin_commitment.1 - (diff as u32) != self.bitcoin_block_height {
+                .count()
+                - 1; // minus one for the commitment itself
+                     // the latest block height minus the position of the user block in the list is the
+                     // height of the user block
+            if bitcoin_commitment.1 - (diff as u32) != self.bitcoin_block_height
+            {
                 return Err(PeginDataError::InvalidBitcoinBlockHeight);
             }
 
             // If any of the inputs are coinbase and the tx is not coinbase, return an error
             if pegin.tx.is_coinbase() && (diff as u32) < COINBASE_MATURITY {
-                return Err(PeginDataError::Invalid("spending non-mature coinbase"));
+                return Err(PeginDataError::Invalid(
+                    "spending non-mature coinbase",
+                ));
             }
         }
 
@@ -175,7 +200,8 @@ impl PeginMetaV0 {
         self.outpoint.consensus_encode(&mut bytes)?;
         bytes.extend_from_slice(self.address.0.as_slice());
         bytes.extend_from_slice(&self.aggregate_publickey.serialize());
-        btcencode::VarInt(self.block_headers.len() as u64).consensus_encode(&mut bytes)?;
+        btcencode::VarInt(self.block_headers.len() as u64)
+            .consensus_encode(&mut bytes)?;
         for header in &self.block_headers {
             header.consensus_encode(&mut bytes)?;
         }
@@ -186,7 +212,9 @@ impl PeginMetaV0 {
     }
 
     /// Deserialize a pegin meta
-    pub fn deserialize(mut bytes: &[u8]) -> Result<(Self, usize), PeginDataError> {
+    pub fn deserialize(
+        mut bytes: &[u8],
+    ) -> Result<(Self, usize), PeginDataError> {
         // bytes is a list of proofs
         let proofs_size = bytes.len();
         Ok((
@@ -202,10 +230,12 @@ impl PeginMetaV0 {
                     // compressed schnorr public key
                     let mut pk_bytes = [0u8; 33];
                     bytes.read_slice(&mut pk_bytes)?;
-                    PublicKey::from_slice(&pk_bytes).map_err(PeginDataError::InvalidPublicKey)?
+                    PublicKey::from_slice(&pk_bytes)
+                        .map_err(PeginDataError::InvalidPublicKey)?
                 },
                 block_headers: {
-                    let len = btcencode::VarInt::consensus_decode(&mut bytes)?.0;
+                    let len =
+                        btcencode::VarInt::consensus_decode(&mut bytes)?.0;
 
                     if len > MAX_BITCOIN_BLOCK_HEADERS {
                         return Err(PeginDataError::TooManyBlockHeaders(len));
@@ -219,7 +249,8 @@ impl PeginMetaV0 {
                     }
                     let mut block_headers = Vec::with_capacity(len as usize);
                     for _ in 0..len {
-                        block_headers.push(Decodable::consensus_decode(&mut bytes)?);
+                        block_headers
+                            .push(Decodable::consensus_decode(&mut bytes)?);
                     }
 
                     block_headers
@@ -259,7 +290,9 @@ impl PeginMetaV1 {
     }
 
     /// Deserialize a pegin meta
-    pub fn deserialize(mut bytes: &[u8]) -> Result<(Self, usize), PeginDataError> {
+    pub fn deserialize(
+        mut bytes: &[u8],
+    ) -> Result<(Self, usize), PeginDataError> {
         // bytes is a list of proofs
         let proofs_size = bytes.len();
         let (inner, inner_size) = PeginMetaV0::deserialize(bytes)?;
@@ -270,7 +303,13 @@ impl PeginMetaV1 {
             bytes.read_slice(&mut hash)?;
             B256::from_slice(&hash)
         };
-        Ok((Self { inner, ref_block_hash }, proofs_size - bytes.len()))
+        Ok((
+            Self {
+                inner,
+                ref_block_hash,
+            },
+            proofs_size - bytes.len(),
+        ))
     }
 
     /// Get the txout for the pegin
@@ -472,16 +511,28 @@ impl PegoutData {
         btc_network: bitcoin::Network,
     ) -> Result<Self, PegoutDataError> {
         // Check for valid address
-        let destination: bitcoin::address::Address<bitcoin::address::NetworkUnchecked> =
-            bitcoin::address::Address::from_str(address.as_str())
-                .map_err(|_e| PegoutDataError::Invalid("Invalid Bitcoin Address", eth_amount))?;
+        let destination: bitcoin::address::Address<
+            bitcoin::address::NetworkUnchecked,
+        > = bitcoin::address::Address::from_str(address.as_str()).map_err(
+            |_e| {
+                PegoutDataError::Invalid("Invalid Bitcoin Address", eth_amount)
+            },
+        )?;
 
         // For is address if valid for network
-        let network_checked_destination = destination
-            .require_network(btc_network)
-            .map_err(|_e| PegoutDataError::Invalid("Address not valid for network", eth_amount))?;
+        let network_checked_destination =
+            destination.require_network(btc_network).map_err(|_e| {
+                PegoutDataError::Invalid(
+                    "Address not valid for network",
+                    eth_amount,
+                )
+            })?;
 
-        Ok(Self { amount, destination: network_checked_destination, network: btc_network })
+        Ok(Self {
+            amount,
+            destination: network_checked_destination,
+            network: btc_network,
+        })
     }
 
     /// current version of the pegout data structure
@@ -496,8 +547,9 @@ mod tests {
 
     use super::*;
     use bitcoin::{
-        absolute::LockTime, block::Version, hash_types::TxMerkleNode, hashes::Hash, Amount,
-        BlockHash, CompactTarget, OutPoint, Transaction, TxIn, TxOut, Txid,
+        absolute::LockTime, block::Version, hash_types::TxMerkleNode,
+        hashes::Hash, Amount, BlockHash, CompactTarget, OutPoint, Transaction,
+        TxIn, TxOut, Txid,
     };
     use revm_primitives::hex;
     use secp256k1::PublicKey;
@@ -523,9 +575,10 @@ mod tests {
             tx: header_metadata.tx,
         };
         match meta_v0.version {
-            PEGIN_META_VERSION_V1 => {
-                PeginMeta::V1(PeginMetaV1 { inner: meta_v0, ref_block_hash: B256::random() })
-            }
+            PEGIN_META_VERSION_V1 => PeginMeta::V1(PeginMetaV1 {
+                inner: meta_v0,
+                ref_block_hash: B256::random(),
+            }),
             _ => PeginMeta::V0(meta_v0),
         }
     }
@@ -535,18 +588,31 @@ mod tests {
         let pk = random_pk();
         let header_metadata = create_header_metadata(None, &pk);
         let destination_address =
-            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a").unwrap();
+            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a")
+                .unwrap();
 
-        let pegin_metadata =
-            create_test_pegin_meta(Some(0_u32), None, &pk, header_metadata, destination_address);
+        let pegin_metadata = create_test_pegin_meta(
+            Some(0_u32),
+            None,
+            &pk,
+            header_metadata,
+            destination_address,
+        );
 
         let serialized = pegin_metadata.serialize().unwrap();
-        let (deserialized, size) = PeginMetaV0::deserialize(&serialized).unwrap();
+        let (deserialized, size) =
+            PeginMetaV0::deserialize(&serialized).unwrap();
         assert_eq!(pegin_metadata.version(), deserialized.version);
         assert_eq!(pegin_metadata.outpoint(), &deserialized.outpoint);
         assert_eq!(pegin_metadata.address(), deserialized.address);
-        assert_eq!(pegin_metadata.aggregate_publickey(), deserialized.aggregate_publickey);
-        assert_eq!(pegin_metadata.block_headers().len(), deserialized.block_headers.len());
+        assert_eq!(
+            pegin_metadata.aggregate_publickey(),
+            deserialized.aggregate_publickey
+        );
+        assert_eq!(
+            pegin_metadata.block_headers().len(),
+            deserialized.block_headers.len()
+        );
         assert_eq!(pegin_metadata.tx(), &deserialized.tx);
         assert_eq!(
             pegin_metadata.merkle_proof().num_transactions(),
@@ -560,31 +626,48 @@ mod tests {
         let pk = random_pk();
         let header_metadata = create_header_metadata(None, &pk);
         let destination_address =
-            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a").unwrap();
+            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a")
+                .unwrap();
 
-        let pegin_metadata =
-            create_test_pegin_meta(Some(1_u32), None, &pk, header_metadata, destination_address);
+        let pegin_metadata = create_test_pegin_meta(
+            Some(1_u32),
+            None,
+            &pk,
+            header_metadata,
+            destination_address,
+        );
         let serialized = pegin_metadata.serialize().unwrap();
-        let (deserialized, size) = PeginMetaV1::deserialize(&serialized).unwrap();
+        let (deserialized, size) =
+            PeginMetaV1::deserialize(&serialized).unwrap();
         assert_eq!(pegin_metadata.version(), deserialized.inner.version);
         assert_eq!(pegin_metadata.outpoint(), &deserialized.inner.outpoint);
         assert_eq!(pegin_metadata.address(), deserialized.inner.address);
-        assert_eq!(pegin_metadata.aggregate_publickey(), deserialized.inner.aggregate_publickey);
-        assert_eq!(pegin_metadata.block_headers().len(), deserialized.inner.block_headers.len());
+        assert_eq!(
+            pegin_metadata.aggregate_publickey(),
+            deserialized.inner.aggregate_publickey
+        );
+        assert_eq!(
+            pegin_metadata.block_headers().len(),
+            deserialized.inner.block_headers.len()
+        );
         assert_eq!(pegin_metadata.tx(), &deserialized.inner.tx);
         assert_eq!(
             pegin_metadata.merkle_proof().num_transactions(),
             deserialized.inner.merkle_proof.num_transactions()
         );
         assert_eq!(serialized.len(), size);
-        assert_eq!(pegin_metadata.ref_block_hash().unwrap(), deserialized.ref_block_hash);
+        assert_eq!(
+            pegin_metadata.ref_block_hash().unwrap(),
+            deserialized.ref_block_hash
+        );
     }
 
     #[test]
     fn deserialize_pegin_metadata_v0() {
         // Proof generated by side-car service
         let pegin_metadata_vec = hex::decode("000000002e5523bcd1b329e8a1a66b7d31719e94a33483eae77f5a677e6634d84ce55f470000000014194f42f33a9b3d5fe9e7ba8501be24d00b07b50376698beebe8ee5c74d8cc50ab84ac301ee8f10af6f28d0ffd6adf4d6d3b9b762010080732aa97865f6b4be36ba861d397401e956d23e129940bb8a03000000000000000000b0d5ec7a0f49793b896db8f4a2cb4ec37e6b2dbd8e90e23d23f860abc9a76b70f1d2ba6494380517307685f90e00000005ce88336dc1340fed95a5f334a536b459d9af3aa3f44eb7b64de3a75e01812f021403c7f4a599f74775069cd3e3e589456fd672037ee1c2c9570f6776fb2e864a3e06d4e3858fdfa9f987053290aac66ef9b7c28fcaf3d3d64724d65a5fc11a2365557cde0d0e465dbfa1f2730617416133b2347ca5170fc1c0dd86f019356acf331d671f862a2841476864ef8639511b9e6f29c25b3c150680b626f9c185be81022f000100000001a15d57094aa7a21a28cb20b59aab8fc7d1149a3bdbcddba9c622e4f5f6a99ece010000006c493046022100f93bb0e7d8db7bd46e40132d1f8242026e045f03a0efe71bbb8e3f475e970d790221009337cd7f1f929f00cc6ff01f03729b069a7c21b59b1736ddfee5db5946c5da8c0121033b9b137ee87d5a812d6f506efdd37f0affa7ffc310711c06c7f3e097c9447c52ffffffff0100e1f505000000001976a9140389035a9225b3839e2bbf32d826a1e222031fd888ac00000000").unwrap();
-        let (meta, size) = PeginMetaV0::deserialize(pegin_metadata_vec.as_slice()).unwrap();
+        let (meta, size) =
+            PeginMetaV0::deserialize(pegin_metadata_vec.as_slice()).unwrap();
         println!("meta {:?}", meta);
         println!("meta usize {:?}", size);
         assert_eq!(meta.version, PEGIN_META_VERSION_V0);
@@ -612,7 +695,8 @@ mod tests {
         // Add ref_block_hash (32 bytes of zeros) to the end
         pegin_metadata_vec.extend_from_slice(&[0; 32]);
 
-        let (meta, size) = PeginMetaV1::deserialize(pegin_metadata_vec.as_slice()).unwrap();
+        let (meta, size) =
+            PeginMetaV1::deserialize(pegin_metadata_vec.as_slice()).unwrap();
         println!("meta {:?}", meta);
         println!("meta usize {:?}", size);
 
@@ -637,7 +721,8 @@ mod tests {
     #[test]
     fn deserialize_pmt() {
         let pmt_hex = hex::decode("0e00000005ce88336dc1340fed95a5f334a536b459d9af3aa3f44eb7b64de3a75e01812f021403c7f4a599f74775069cd3e3e589456fd672037ee1c2c9570f6776fb2e864a3e06d4e3858fdfa9f987053290aac66ef9b7c28fcaf3d3d64724d65a5fc11a2365557cde0d0e465dbfa1f2730617416133b2347ca5170fc1c0dd86f019356acf331d671f862a2841476864ef8639511b9e6f29c25b3c150680b626f9c185be81022f00").unwrap();
-        let pmt = PartialMerkleTree::consensus_decode(&mut pmt_hex.as_slice()).unwrap();
+        let pmt = PartialMerkleTree::consensus_decode(&mut pmt_hex.as_slice())
+            .unwrap();
         assert_eq!(pmt.num_transactions(), 14);
         let mut txids = Vec::with_capacity(14);
         pmt.extract_matches(&mut txids, &mut Vec::new()).unwrap();
@@ -653,7 +738,10 @@ mod tests {
         tx: Transaction,
     }
 
-    fn create_header_metadata(nonce: Option<u32>, pk: &secp256k1::PublicKey) -> HeaderMetadata {
+    fn create_header_metadata(
+        nonce: Option<u32>,
+        pk: &secp256k1::PublicKey,
+    ) -> HeaderMetadata {
         // create dummy transaction -- spending utxo that doesn't exist
         let temp_outpoint: OutPoint = OutPoint {
             txid: bitcoin::Txid::from_str(
@@ -669,13 +757,18 @@ mod tests {
             witness: Default::default(),
         };
 
-        let account = Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a").unwrap();
+        let account =
+            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a")
+                .unwrap();
         let pk_encoded = pk.serialize();
         let vk = frost::VerifyingKey::deserialize(&pk_encoded).unwrap();
         let tpk = generate_tweaked_public_key(&vk, &account.into()).unwrap();
         let gateway_script = generate_taproot_scriptpubkey(&tpk);
 
-        let tx_out = TxOut { value: Amount::from_sat(100), script_pubkey: gateway_script };
+        let tx_out = TxOut {
+            value: Amount::from_sat(100),
+            script_pubkey: gateway_script,
+        };
         let tx: Transaction = Transaction {
             version: bitcoin::transaction::Version(1_i32),
             lock_time: LockTime::from_str("0").unwrap(),
@@ -683,7 +776,10 @@ mod tests {
             output: vec![tx_out],
         };
 
-        let outpoint = OutPoint { txid: tx.compute_txid(), vout: 0 };
+        let outpoint = OutPoint {
+            txid: tx.compute_txid(),
+            vout: 0,
+        };
 
         let txids = vec![
             // Another random txid
@@ -697,7 +793,9 @@ mod tests {
             let matches = vec![false, true];
             PartialMerkleTree::from_txids(&txids, &matches)
         };
-        let merkle_root = merkle_proof.extract_matches(&mut tx_matches, &mut vouts).unwrap();
+        let merkle_root = merkle_proof
+            .extract_matches(&mut tx_matches, &mut vouts)
+            .unwrap();
 
         let header = Header {
             version: Version::default(),
@@ -708,7 +806,12 @@ mod tests {
             nonce: nonce.unwrap_or_default(),
         };
 
-        HeaderMetadata { header, merkle_proof, outpoint, tx }
+        HeaderMetadata {
+            header,
+            merkle_proof,
+            outpoint,
+            tx,
+        }
     }
 
     fn pegin_data_setup(
@@ -718,7 +821,8 @@ mod tests {
     ) -> PeginData {
         let header_metadata = create_header_metadata(None, pk);
         let destination_address =
-            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a").unwrap();
+            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a")
+                .unwrap();
 
         let meta = create_test_pegin_meta(
             version,
@@ -740,25 +844,43 @@ mod tests {
     fn random_pk() -> secp256k1::PublicKey {
         let secp = secp256k1::Secp256k1::new();
         let mut rng = rand::thread_rng();
-        secp256k1::PublicKey::from_secret_key(&secp, &secp256k1::SecretKey::new(&mut rng))
+        secp256k1::PublicKey::from_secret_key(
+            &secp,
+            &secp256k1::SecretKey::new(&mut rng),
+        )
     }
 
     #[test]
     fn validate_pegin_data() {
         let pk = random_pk();
         let pegin_data = pegin_data_setup(None, None, &pk);
-        let header = pegin_data.meta.first().unwrap().block_headers().first().unwrap();
+        let header = pegin_data
+            .meta
+            .first()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
-        let aggregate_amount = pegin_data.validate(&(*header, 1_u32), &pk).expect("valid");
+        let aggregate_amount =
+            pegin_data.validate(&(*header, 1_u32), &pk).expect("valid");
         assert_eq!(aggregate_amount, pegin_data.amount);
     }
 
     #[test]
-    #[should_panic(expected = "invalid meta version: only accepting version 0 or 1")]
+    #[should_panic(
+        expected = "invalid meta version: only accepting version 0 or 1"
+    )]
     fn validate_pegin_data_with_incorrect_version() {
         let pk = random_pk();
         let pegin_data = pegin_data_setup(Some(2_u32), None, &pk);
-        let header = pegin_data.meta.first().unwrap().block_headers().first().unwrap();
+        let header = pegin_data
+            .meta
+            .first()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         pegin_data.validate(&(*header, 1_u32), &pk).unwrap();
     }
@@ -788,7 +910,13 @@ mod tests {
     fn validate_pegin_data_with_invalid_merkle_proof() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         let different_txid = bitcoin::Txid::all_zeros();
         let different_txids = vec![different_txid];
@@ -796,10 +924,12 @@ mod tests {
 
         match pegin_data.meta.first_mut().unwrap() {
             PeginMeta::V0(meta) => {
-                meta.merkle_proof = PartialMerkleTree::from_txids(&different_txids, &matches)
+                meta.merkle_proof =
+                    PartialMerkleTree::from_txids(&different_txids, &matches)
             }
             PeginMeta::V1(meta) => {
-                meta.inner.merkle_proof = PartialMerkleTree::from_txids(&different_txids, &matches)
+                meta.inner.merkle_proof =
+                    PartialMerkleTree::from_txids(&different_txids, &matches)
             }
         };
 
@@ -811,11 +941,21 @@ mod tests {
     fn validate_pegin_data_with_invalid_outpoint() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         match pegin_data.meta.first_mut().unwrap() {
-            PeginMeta::V0(meta) => meta.outpoint.txid = bitcoin::Txid::all_zeros(),
-            PeginMeta::V1(meta) => meta.inner.outpoint.txid = bitcoin::Txid::all_zeros(),
+            PeginMeta::V0(meta) => {
+                meta.outpoint.txid = bitcoin::Txid::all_zeros()
+            }
+            PeginMeta::V1(meta) => {
+                meta.inner.outpoint.txid = bitcoin::Txid::all_zeros()
+            }
         };
 
         pegin_data.validate(&(header, 1_u32), &pk).unwrap();
@@ -828,13 +968,22 @@ mod tests {
         let mut pegin_data = pegin_data_setup(None, None, &pk);
 
         match pegin_data.meta.first_mut().unwrap() {
-            PeginMeta::V0(meta) => meta.block_headers[0].merkle_root = TxMerkleNode::all_zeros(),
+            PeginMeta::V0(meta) => {
+                meta.block_headers[0].merkle_root = TxMerkleNode::all_zeros()
+            }
             PeginMeta::V1(meta) => {
-                meta.inner.block_headers[0].merkle_root = TxMerkleNode::all_zeros()
+                meta.inner.block_headers[0].merkle_root =
+                    TxMerkleNode::all_zeros()
             }
         };
 
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
         pegin_data.validate(&(header, 1_u32), &pk).unwrap();
     }
 
@@ -843,18 +992,27 @@ mod tests {
     fn validate_pegin_data_with_same_txid_different_root() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
-        let original_txid = pegin_data.meta.first_mut().unwrap().outpoint().txid;
+        let original_txid =
+            pegin_data.meta.first_mut().unwrap().outpoint().txid;
 
         let txids = vec![original_txid];
         let matches = vec![true];
         match pegin_data.meta.first_mut().unwrap() {
             PeginMeta::V0(meta) => {
-                meta.merkle_proof = PartialMerkleTree::from_txids(&txids, &matches)
+                meta.merkle_proof =
+                    PartialMerkleTree::from_txids(&txids, &matches)
             }
             PeginMeta::V1(meta) => {
-                meta.inner.merkle_proof = PartialMerkleTree::from_txids(&txids, &matches)
+                meta.inner.merkle_proof =
+                    PartialMerkleTree::from_txids(&txids, &matches)
             }
         };
 
@@ -866,11 +1024,21 @@ mod tests {
     fn validate_pegin_data_with_invalid_tx() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         match pegin_data.meta.first_mut().unwrap() {
-            PeginMeta::V0(meta) => meta.tx.version = bitcoin::transaction::Version(999),
-            PeginMeta::V1(meta) => meta.inner.tx.version = bitcoin::transaction::Version(999),
+            PeginMeta::V0(meta) => {
+                meta.tx.version = bitcoin::transaction::Version(999)
+            }
+            PeginMeta::V1(meta) => {
+                meta.inner.tx.version = bitcoin::transaction::Version(999)
+            }
         };
 
         pegin_data.validate(&(header, 1_u32), &pk).unwrap();
@@ -881,7 +1049,13 @@ mod tests {
     fn validate_pegin_data_with_invalid_outpoint_vout() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         match pegin_data.meta.first_mut().unwrap() {
             PeginMeta::V0(meta) => meta.outpoint.vout = 2,
@@ -898,9 +1072,12 @@ mod tests {
         let mut pegin_data = pegin_data_setup(None, None, &pk);
 
         match pegin_data.meta.first_mut().unwrap() {
-            PeginMeta::V0(meta) => meta.tx.output[0].script_pubkey = bitcoin::ScriptBuf::new(),
+            PeginMeta::V0(meta) => {
+                meta.tx.output[0].script_pubkey = bitcoin::ScriptBuf::new()
+            }
             PeginMeta::V1(meta) => {
-                meta.inner.tx.output[0].script_pubkey = bitcoin::ScriptBuf::new()
+                meta.inner.tx.output[0].script_pubkey =
+                    bitcoin::ScriptBuf::new()
             }
         };
 
@@ -927,8 +1104,13 @@ mod tests {
             }
         }
 
-        let modified_header =
-            *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let modified_header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
         pegin_data.validate(&(modified_header, 1_u32), &pk).unwrap();
     }
 
@@ -937,7 +1119,13 @@ mod tests {
     fn validate_pegin_data_with_different_account() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         pegin_data.account = Address::with_last_byte(1);
 
@@ -949,10 +1137,18 @@ mod tests {
     fn validate_pegin_data_with_different_pubkey() {
         let pk = random_pk();
         let pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
         let different_pk = random_pk();
 
-        pegin_data.validate(&(header, 1_u32), &different_pk).unwrap();
+        pegin_data
+            .validate(&(header, 1_u32), &different_pk)
+            .unwrap();
     }
 
     #[test]
@@ -960,7 +1156,13 @@ mod tests {
     fn validate_pegin_data_with_invalid_block_sequence() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         let second_header = bitcoin::block::Header {
             version: header.version,
@@ -973,11 +1175,13 @@ mod tests {
         match pegin_data.meta.first_mut().unwrap() {
             PeginMeta::V0(meta) => {
                 meta.block_headers.push(second_header);
-                meta.block_headers[1].prev_blockhash = bitcoin::BlockHash::all_zeros();
+                meta.block_headers[1].prev_blockhash =
+                    bitcoin::BlockHash::all_zeros();
             }
             PeginMeta::V1(meta) => {
                 meta.inner.block_headers.push(second_header);
-                meta.inner.block_headers[1].prev_blockhash = bitcoin::BlockHash::all_zeros();
+                meta.inner.block_headers[1].prev_blockhash =
+                    bitcoin::BlockHash::all_zeros();
             }
         };
 
@@ -989,7 +1193,13 @@ mod tests {
     fn validate_pegin_data_with_broken_block_chain_in_middle() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let first_header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let first_header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         let second_header = bitcoin::block::Header {
             version: first_header.version,
@@ -1027,7 +1237,13 @@ mod tests {
     fn validate_pegin_data_with_invalid_block_height() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data.meta.first_mut().unwrap().block_headers().first().unwrap();
+        let header = *pegin_data
+            .meta
+            .first_mut()
+            .unwrap()
+            .block_headers()
+            .first()
+            .unwrap();
 
         pegin_data.bitcoin_block_height = 999;
 
@@ -1050,17 +1266,24 @@ mod tests {
 
         let pk_encoded = pk.serialize();
         let vk = frost::VerifyingKey::deserialize(&pk_encoded).unwrap();
-        let tpk = generate_tweaked_public_key(&vk, &destination_address.into()).unwrap();
+        let tpk = generate_tweaked_public_key(&vk, &destination_address.into())
+            .unwrap();
         let gateway_script = generate_taproot_scriptpubkey(&tpk);
 
-        let tx_out = TxOut { value: Amount::from_sat(100), script_pubkey: gateway_script };
+        let tx_out = TxOut {
+            value: Amount::from_sat(100),
+            script_pubkey: gateway_script,
+        };
         let tx: Transaction = Transaction {
             version: bitcoin::transaction::Version(1_i32),
             lock_time: LockTime::ZERO,
             input: vec![coinbase_tx_in],
             output: vec![tx_out],
         };
-        let outpoint = OutPoint { txid: tx.compute_txid(), vout: 0 };
+        let outpoint = OutPoint {
+            txid: tx.compute_txid(),
+            vout: 0,
+        };
         let txids = vec![
             // Another random txid
             Txid::from_str("4fccd63b48697a66ae4155b183f7595694354def0345ac4b950a5765a7b90526")
@@ -1073,7 +1296,9 @@ mod tests {
             let matches = vec![false, true];
             PartialMerkleTree::from_txids(&txids, &matches)
         };
-        let merkle_root = merkle_proof.extract_matches(&mut tx_matches, &mut vouts).unwrap();
+        let merkle_root = merkle_proof
+            .extract_matches(&mut tx_matches, &mut vouts)
+            .unwrap();
         let header = Header {
             version: Version::default(),
             prev_blockhash: BlockHash::all_zeros(),
@@ -1103,7 +1328,10 @@ mod tests {
         };
 
         let res = pegin_data.validate(&(header, 1_u32), &pk).unwrap_err();
-        assert!(matches!(res, PeginDataError::Invalid("spending non-mature coinbase")));
+        assert!(matches!(
+            res,
+            PeginDataError::Invalid("spending non-mature coinbase")
+        ));
 
         // Create a chain of 100 blocks with the coinbase tx in the last 100 blocks
         let mut headers = vec![header];

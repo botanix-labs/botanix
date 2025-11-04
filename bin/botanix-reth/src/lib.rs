@@ -1,7 +1,7 @@
 //! Botanix Reth crate providing core modules and primitives.
 
 /// Consensus module for consensus-related logic.
-pub mod botanix_authority_consensus;
+pub mod consensus;
 
 mod evm;
 

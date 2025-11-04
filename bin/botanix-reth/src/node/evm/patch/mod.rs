@@ -14,8 +14,9 @@ struct StoragePatch {
 /// Applies storage patches to the state before a transaction is executed.
 /// This is necessary as it was a geth bug more infos here:
 /// <https://>forum.bnbchain.org/t/about-the-hertzfix/2400>
-static MAINNET_PATCHES_BEFORE_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLock::new(|| {
-    HashMap::from([
+static MAINNET_PATCHES_BEFORE_TX: LazyLock<HashMap<B256, StoragePatch>> =
+    LazyLock::new(|| {
+        HashMap::from([
         // patch 1: BlockNum 33851236, txIndex 89
         (
             b256!("7eba4edc7c1806d6ee1691d43513838931de5c94f9da56ec865721b402f775b0"),
@@ -365,13 +366,14 @@ static MAINNET_PATCHES_BEFORE_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLo
             },
         ),
     ])
-});
+    });
 
 /// Applies storage patches to the state after a transaction is executed.
 /// This is necessary as it was a Botanix geth bug more infos here:
 /// <https://>forum.bnbchain.org/t/about-the-hertzfix/2400>
-static MAINNET_PATCHES_AFTER_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLock::new(|| {
-    HashMap::from([
+static MAINNET_PATCHES_AFTER_TX: LazyLock<HashMap<B256, StoragePatch>> =
+    LazyLock::new(|| {
+        HashMap::from([
         // patch 1: BlockNum 33851236, txIndex 89
         (
             b256!("7eba4edc7c1806d6ee1691d43513838931de5c94f9da56ec865721b402f775b0"),
@@ -594,13 +596,14 @@ static MAINNET_PATCHES_AFTER_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLoc
             },
         ),
     ])
-});
+    });
 
 /// Applies storage patches to the state before a transaction is executed for Chapel testnet.
 /// This is necessary as it was a Botanix geth bug more infos here:
 /// <https://>forum.bnbchain.org/t/about-the-hertzfix/2400>
-static CHAPEL_PATCHES_BEFORE_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLock::new(|| {
-    HashMap::from([
+static CHAPEL_PATCHES_BEFORE_TX: LazyLock<HashMap<B256, StoragePatch>> =
+    LazyLock::new(|| {
+        HashMap::from([
         // patch 1: BlockNum 35547779, txIndex 196
         (
             b256!("7ce9a3cf77108fcc85c1e84e88e363e3335eca515dfcf2feb2011729878b13a7"),
@@ -636,13 +639,14 @@ static CHAPEL_PATCHES_BEFORE_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLoc
             },
         ),
     ])
-});
+    });
 
 /// Applies storage patches to the state after a transaction is executed for Chapel testnet.
 /// This is necessary as it was a Botanix geth bug more infos here:
 /// <https://>forum.bnbchain.org/t/about-the-hertzfix/2400>
-static CHAPEL_PATCHES_AFTER_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLock::new(|| {
-    HashMap::from([
+static CHAPEL_PATCHES_AFTER_TX: LazyLock<HashMap<B256, StoragePatch>> =
+    LazyLock::new(|| {
+        HashMap::from([
         // patch 1: BlockNum 35547779, txIndex 196
         (
             b256!("7ce9a3cf77108fcc85c1e84e88e363e3335eca515dfcf2feb2011729878b13a7"),
@@ -672,7 +676,7 @@ static CHAPEL_PATCHES_AFTER_TX: LazyLock<HashMap<B256, StoragePatch>> = LazyLock
             },
         ),
     ])
-});
+    });
 
 pub(crate) fn patch_mainnet_before_tx<DB, T>(
     transaction: &T,
@@ -755,7 +759,9 @@ where
     DB: Database,
     <DB as revm::Database>::Error: Sync + Send + 'static,
 {
-    let account = state.load_cache_account(address).map_err(BlockExecutionError::other)?;
+    let account = state
+        .load_cache_account(address)
+        .map_err(BlockExecutionError::other)?;
     let account_change = account.change(
         account.account_info().unwrap_or_default(),
         storage
@@ -763,7 +769,10 @@ where
             .map(|(key, value)| {
                 (
                     *key,
-                    StorageSlot { previous_or_original_value: U256::ZERO, present_value: *value },
+                    StorageSlot {
+                        previous_or_original_value: U256::ZERO,
+                        present_value: *value,
+                    },
                 )
             })
             .collect(),

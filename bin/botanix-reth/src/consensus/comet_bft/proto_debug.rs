@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Formatter};
 use tendermint_proto::abci::{
-    RequestApplySnapshotChunk, RequestProcessProposal, ResponseLoadSnapshotChunk,
-    ResponsePrepareProposal,
+    RequestApplySnapshotChunk, RequestProcessProposal,
+    ResponseLoadSnapshotChunk, ResponsePrepareProposal,
 };
 
 struct TruncatedSlice<'a, T> {
@@ -11,7 +11,10 @@ struct TruncatedSlice<'a, T> {
 
 impl<'a, T> TruncatedSlice<'a, T> {
     fn new(slice: &'a [T], max_len: usize) -> Self {
-        Self { inner: slice, max_len }
+        Self {
+            inner: slice,
+            max_len,
+        }
     }
 }
 
@@ -36,7 +39,10 @@ where
             }
 
             if is_truncated {
-                f.write_fmt(format_args!(", ...({} more)", self.inner.len() - dbg_len))?;
+                f.write_fmt(format_args!(
+                    ", ...({} more)",
+                    self.inner.len() - dbg_len
+                ))?;
             }
         }
 
@@ -46,7 +52,9 @@ where
 
 /// Truncated debug implementation for [RequestProcessProposal].
 /// It uses [TruncatedSlice] to limit the number of transactions displayed in the debug output.
-pub(crate) struct RequestProcessProposalTruncatedDebug<'a>(pub(crate) &'a RequestProcessProposal);
+pub(crate) struct RequestProcessProposalTruncatedDebug<'a>(
+    pub(crate) &'a RequestProcessProposal,
+);
 
 impl Debug for RequestProcessProposalTruncatedDebug<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -67,13 +75,17 @@ impl Debug for RequestProcessProposalTruncatedDebug<'_> {
 
 /// Truncated debug implementation for [ResponsePrepareProposal].
 /// It uses [TruncatedSlice] to limit the number of transactions displayed in the debug output.
-pub(crate) struct ResponsePrepareProposalTruncatedDebug<'a>(pub(crate) &'a ResponsePrepareProposal);
+pub(crate) struct ResponsePrepareProposalTruncatedDebug<'a>(
+    pub(crate) &'a ResponsePrepareProposal,
+);
 
 impl Debug for ResponsePrepareProposalTruncatedDebug<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let txs = TruncatedSlice::new(self.0.txs.as_slice(), 0);
 
-        f.debug_struct("ResponsePrepareProposal").field("txs", &txs).finish()
+        f.debug_struct("ResponsePrepareProposal")
+            .field("txs", &txs)
+            .finish()
     }
 }
 
@@ -105,7 +117,9 @@ impl Debug for ResponseLoadSnapshotChunkTruncatedDebug<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let chunk = TruncatedSlice::new(self.0.chunk.as_ref(), 3);
 
-        f.debug_struct("ResponseLoadSnapshotChunk").field("chunk", &chunk).finish()
+        f.debug_struct("ResponseLoadSnapshotChunk")
+            .field("chunk", &chunk)
+            .finish()
     }
 }
 

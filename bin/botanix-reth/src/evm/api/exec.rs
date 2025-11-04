@@ -31,7 +31,10 @@ where
         self.inner.set_block(block);
     }
 
-    fn transact_one(&mut self, tx: Self::Tx) -> Result<Self::ExecutionResult, Self::Error> {
+    fn transact_one(
+        &mut self,
+        tx: Self::Tx,
+    ) -> Result<Self::ExecutionResult, Self::Error> {
         self.inner.ctx.set_tx(tx);
         BotanixHandler::new().run(self)
     }
@@ -68,7 +71,10 @@ where
         self.inner.set_inspector(inspector);
     }
 
-    fn inspect_one_tx(&mut self, tx: Self::Tx) -> Result<Self::ExecutionResult, Self::Error> {
+    fn inspect_one_tx(
+        &mut self,
+        tx: Self::Tx,
+    ) -> Result<Self::ExecutionResult, Self::Error> {
         self.inner.ctx.set_tx(tx);
         BotanixHandler::new().inspect_run(self)
     }

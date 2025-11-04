@@ -36,7 +36,10 @@ fn filter_excluded_utxos(
         return utxos.clone();
     }
 
-    info!("Filtering out excluded eth addresses: {} addresses", excluded_addresses.len());
+    info!(
+        "Filtering out excluded eth addresses: {} addresses",
+        excluded_addresses.len()
+    );
 
     let filtered_utxos: HashMap<OutPoint, Utxo> = utxos
         .iter()
@@ -142,7 +145,8 @@ pub fn make_tx(
         }
 
         // Remove 10% of the outputs and try again
-        attempted_outputs.truncate(attempted_outputs.len() - (attempted_outputs.len() / 10));
+        attempted_outputs
+            .truncate(attempted_outputs.len() - (attempted_outputs.len() / 10));
         warn!("psbt expected weight was too big: {}, with outputs.len: {}. Truncating outputs to {} and trying again", tx_weight, attempted_outputs.len(), attempted_outputs.len());
     }
 }
@@ -177,7 +181,8 @@ pub fn attempt_make_tx(
     debug!("utxos = {:?}", utxos);
 
     // Exclude UTXOs that have been specifically requested to not be included in the coin selection
-    let filtered_utxos = filter_excluded_utxos(&utxos, &config.excluded_eth_addresses);
+    let filtered_utxos =
+        filter_excluded_utxos(&utxos, &config.excluded_eth_addresses);
 
     let tracked_inputs = tracked_txs
         .iter()
@@ -202,7 +207,10 @@ pub fn attempt_make_tx(
         .iter()
         .flat_map(|tx| tx.pegout_requests.iter().map(|p| p.id))
         .collect::<HashSet<_>>();
-    debug!("tracked_pegout_request_ids = {:?}", tracked_pegout_request_ids);
+    debug!(
+        "tracked_pegout_request_ids = {:?}",
+        tracked_pegout_request_ids
+    );
 
     // Collect all pegout ids being retried.
     let matching_pegouts_ids: Vec<&PegoutId> = outputs
@@ -213,27 +221,40 @@ pub fn attempt_make_tx(
     debug!("matching_pegouts_ids = {:?}", matching_pegouts_ids);
 
     // get a tracked input for each matching pegout
-    let matching_tracked_inputs: Result<Vec<OutPoint>, CoordinatorError> = tracked_txs
-        .iter()
-        .filter(|tx| tx.pegout_requests.iter().any(|p| matching_pegouts_ids.contains(&&p.id)))
-        .map(|tx| tx.inputs().next().ok_or_else(|| CoordinatorError::NoConflictingInputs))
-        .collect();
+    let matching_tracked_inputs: Result<Vec<OutPoint>, CoordinatorError> =
+        tracked_txs
+            .iter()
+            .filter(|tx| {
+                tx.pegout_requests
+                    .iter()
+                    .any(|p| matching_pegouts_ids.contains(&&p.id))
+            })
+            .map(|tx| {
+                tx.inputs()
+                    .next()
+                    .ok_or_else(|| CoordinatorError::NoConflictingInputs)
+            })
+            .collect();
     let matching_tracked_inputs = matching_tracked_inputs?;
     debug!("matching_tracked_inputs = {:?}", matching_tracked_inputs);
 
     // get the utxo for each matching tracked input
     let mut conflicting_utxos: HashMap<OutPoint, Utxo> = HashMap::new();
-    let conflicting_inputs: Result<Vec<Utxo>, CoordinatorError> = matching_tracked_inputs
-        .iter()
-        .map(|op| {
-            utxos.get(op).ok_or_else(|| CoordinatorError::MissingUtxoForConflictingInput).map(
-                |u: &Utxo| {
-                    conflicting_utxos.insert(*op, u.clone());
-                    u.clone()
-                },
-            )
-        })
-        .collect();
+    let conflicting_inputs: Result<Vec<Utxo>, CoordinatorError> =
+        matching_tracked_inputs
+            .iter()
+            .map(|op| {
+                utxos
+                    .get(op)
+                    .ok_or_else(|| {
+                        CoordinatorError::MissingUtxoForConflictingInput
+                    })
+                    .map(|u: &Utxo| {
+                        conflicting_utxos.insert(*op, u.clone());
+                        u.clone()
+                    })
+            })
+            .collect();
 
     let _ = conflicting_inputs?;
     debug!("conflicting_utxos = {:?}", conflicting_utxos);
@@ -287,12 +308,17 @@ pub async fn finalize_signing(
     db: &Db,
 ) -> Result<Psbt, CoordinatorError> {
     // Lock here to prevent a make_tx that uses utxos that will be removed
-    let mut psbt = db.get_psbt(signing_session_id)?.ok_or(CoordinatorError::CouldNotFindPsbt)?;
+    let mut psbt = db
+        .get_psbt(signing_session_id)?
+        .ok_or(CoordinatorError::CouldNotFindPsbt)?;
 
-    let pk_package = db.get_public_key_package()?.ok_or(CoordinatorError::MissingKeyPackage)?;
+    let pk_package = db
+        .get_public_key_package()?
+        .ok_or(CoordinatorError::MissingKeyPackage)?;
     // Get signing packages for this signing session
-    let signing_packages =
-        psbt.signing_packages().map_err(CoordinatorError::PsbtToSigningPackageConversionError)?;
+    let signing_packages = psbt
+        .signing_packages()
+        .map_err(CoordinatorError::PsbtToSigningPackageConversionError)?;
 
     for (index, psbt_input) in psbt.inputs.iter_mut().enumerate() {
         let signing_package = signing_packages
@@ -313,17 +339,23 @@ pub async fn finalize_signing(
 
         let effective_key = pk_package.clone().tweak(&signing_parameters);
         // Verify signature -- redundant check finalize psbt already checks this
-        effective_key.verifying_key().verify(signing_package.message(), &agg_sig)?;
+        effective_key
+            .verifying_key()
+            .verify(signing_package.message(), &agg_sig)?;
 
-        let secp_sig = bitcoin::secp256k1::schnorr::Signature::from_slice(&agg_sig.serialize()?)?;
+        let secp_sig = bitcoin::secp256k1::schnorr::Signature::from_slice(
+            &agg_sig.serialize()?,
+        )?;
 
         // Note: we don't need to add the internal key here for a key spend path
         // as the output key is derived from the scriptpubkey
         let hash_ty = bitcoin::sighash::TapSighashType::Default;
         let sighash_type = bitcoin::psbt::PsbtSighashType::from(hash_ty);
         psbt_input.sighash_type = Some(sighash_type);
-        psbt_input.tap_key_sig =
-            Some(bitcoin::taproot::Signature { signature: secp_sig, sighash_type: hash_ty });
+        psbt_input.tap_key_sig = Some(bitcoin::taproot::Signature {
+            signature: secp_sig,
+            sighash_type: hash_ty,
+        });
     }
 
     // Keep a copy of the original psbt as we need to add back the signing commitments and
@@ -333,7 +365,8 @@ pub async fn finalize_signing(
     // TODO: secp context should be a global variable or passed down
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let mut original_psbt = psbt.clone();
-    if let Err(errs) = miniscript::psbt::PsbtExt::finalize_mut(&mut psbt, &secp) {
+    if let Err(errs) = miniscript::psbt::PsbtExt::finalize_mut(&mut psbt, &secp)
+    {
         error!("Had {} PSBT finalization errors:", errs.len());
         for e in &errs {
             error!("PSBT finalization error: {}", e);
@@ -368,7 +401,10 @@ mod tests {
 
         let utxo_to_filter = Utxo::new(
             outpoint_to_filter,
-            TxOut { value: Amount::from_sat(1000), script_pubkey: ScriptBuf::new() },
+            TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::new(),
+            },
             Some(eth_address),
             None,
         );
@@ -377,7 +413,10 @@ mod tests {
         let eth_address_to_keep = [1u8; 20];
         let utxo_to_keep = Utxo::new(
             outpoint_to_keep,
-            TxOut { value: Amount::from_sat(1000), script_pubkey: ScriptBuf::new() },
+            TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::new(),
+            },
             Some(eth_address_to_keep),
             None,
         );
@@ -385,7 +424,10 @@ mod tests {
         let outpoint_change = OutPoint::new(random_compute_txid(), 2);
         let utxo_change = Utxo::new(
             outpoint_change,
-            TxOut { value: Amount::from_sat(1000), script_pubkey: ScriptBuf::new() },
+            TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::new(),
+            },
             None,
             None,
         );

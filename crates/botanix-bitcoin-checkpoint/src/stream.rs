@@ -36,14 +36,21 @@ impl DummyHashBlockStream {
     /// * `interval` — Minimum duration to wait between consecutive messages (except the first,
     ///   which is immediate).
     pub fn new(interval: Duration) -> Self {
-        Self { interval, first_poll: true, sleep: None }
+        Self {
+            interval,
+            first_poll: true,
+            sleep: None,
+        }
     }
 }
 
 impl Stream for DummyHashBlockStream {
     type Item = Result<SocketMessage, bitcoincore_zmq::Error>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if self.first_poll {
             // First poll returns immediately
             self.first_poll = false;
@@ -72,9 +79,12 @@ impl Stream for DummyHashBlockStream {
     }
 }
 
-fn dummy_hash_block_message_ready() -> Poll<Option<Result<SocketMessage, bitcoincore_zmq::Error>>> {
+fn dummy_hash_block_message_ready(
+) -> Poll<Option<Result<SocketMessage, bitcoincore_zmq::Error>>> {
     let dummy_hash = BitcoinBlockHash::all_zeros();
-    Poll::Ready(Some(Ok(SocketMessage::Message(Message::HashBlock(dummy_hash, 0)))))
+    Poll::Ready(Some(Ok(SocketMessage::Message(Message::HashBlock(
+        dummy_hash, 0,
+    )))))
 }
 
 #[cfg(test)]
@@ -107,7 +117,11 @@ mod tests {
         assert!(elapsed < Duration::from_millis(100));
         assert!(result.is_some());
 
-        if let Some(Ok(SocketMessage::Message(Message::HashBlock(hash, height)))) = result {
+        if let Some(Ok(SocketMessage::Message(Message::HashBlock(
+            hash,
+            height,
+        )))) = result
+        {
             assert_eq!(hash, BitcoinBlockHash::all_zeros());
             assert_eq!(height, 0);
         } else {
@@ -143,8 +157,14 @@ mod tests {
 
         // Should be able to get messages rapidly
         let start = Instant::now();
-        let _first = tokio::time::timeout(Duration::from_secs(1), stream.next()).await.unwrap();
-        let _second = tokio::time::timeout(Duration::from_secs(1), stream.next()).await.unwrap();
+        let _first =
+            tokio::time::timeout(Duration::from_secs(1), stream.next())
+                .await
+                .unwrap();
+        let _second =
+            tokio::time::timeout(Duration::from_secs(1), stream.next())
+                .await
+                .unwrap();
         let elapsed = start.elapsed();
 
         // Both messages should arrive quickly (zero interval means immediate)
@@ -154,8 +174,9 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_polling() {
         let interval = Duration::from_millis(100);
-        let stream =
-            std::sync::Arc::new(tokio::sync::Mutex::new(DummyHashBlockStream::new(interval)));
+        let stream = std::sync::Arc::new(tokio::sync::Mutex::new(
+            DummyHashBlockStream::new(interval),
+        ));
 
         let mut handles = Vec::new();
 
@@ -165,16 +186,19 @@ mod tests {
             let handle = tokio::spawn(async move {
                 let mut stream_guard = stream_clone.lock().await;
                 let mut stream_pin = Pin::new(&mut *stream_guard);
-                tokio::time::timeout(Duration::from_secs(2), stream_pin.next()).await
+                tokio::time::timeout(Duration::from_secs(2), stream_pin.next())
+                    .await
             });
             handles.push(handle);
         }
 
         // Wait for all tasks to complete with timeout
-        let results =
-            tokio::time::timeout(Duration::from_secs(5), futures::future::join_all(handles))
-                .await
-                .expect("Tasks should complete within timeout");
+        let results = tokio::time::timeout(
+            Duration::from_secs(5),
+            futures::future::join_all(handles),
+        )
+        .await
+        .expect("Tasks should complete within timeout");
 
         // At least one should succeed (the first poll)
         let successful_results: Vec<_> = results
@@ -196,7 +220,9 @@ mod tests {
         // Get several messages and verify state consistency
         for i in 0..5 {
             let start = Instant::now();
-            let result = tokio::time::timeout(Duration::from_secs(2), stream.next()).await;
+            let result =
+                tokio::time::timeout(Duration::from_secs(2), stream.next())
+                    .await;
             let elapsed = start.elapsed();
 
             assert!(result.is_ok(), "Message {} should not timeout", i);
@@ -227,16 +253,18 @@ mod tests {
         let mut timings = Vec::new();
         for _ in 0..3 {
             let start = Instant::now();
-            let _message = tokio::time::timeout(Duration::from_secs(1), stream.next())
-                .await
-                .expect("Should not timeout");
+            let _message =
+                tokio::time::timeout(Duration::from_secs(1), stream.next())
+                    .await
+                    .expect("Should not timeout");
             timings.push(start.elapsed());
         }
 
         // All timings should be approximately the interval duration
         for (i, timing) in timings.iter().enumerate() {
             assert!(
-                *timing >= Duration::from_millis(95) && *timing <= Duration::from_millis(150),
+                *timing >= Duration::from_millis(95)
+                    && *timing <= Duration::from_millis(150),
                 "Timing {} ({:?}) should be close to interval duration",
                 i,
                 timing

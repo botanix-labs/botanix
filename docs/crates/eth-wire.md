@@ -152,10 +152,10 @@ Now that we know how the types work, let's take a look at how these are utilized
 
 The lowest level stream to communicate with other peers is the P2P stream. It takes an underlying Tokio stream and does the following:
 
--   Tracks and Manages Ping and pong messages and sends them when needed.
--   Keeps track of the SharedCapabilities between the reth node and its peers.
--   Receives bytes from peers, decompresses and forwards them to its parent stream.
--   Receives bytes from its parent stream, compresses them and sends it to peers.
+- Tracks and Manages Ping and pong messages and sends them when needed.
+- Keeps track of the SharedCapabilities between the reth node and its peers.
+- Receives bytes from peers, decompresses and forwards them to its parent stream.
+- Receives bytes from its parent stream, compresses them and sends it to peers.
 
 Decompression/Compression of bytes is done with snappy algorithm ([EIP 706](https://eips.ethereum.org/EIPS/eip-706))
 using the external `snap` crate.

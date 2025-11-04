@@ -50,24 +50,47 @@ fn setup(
     let eve_sec = secp256k1::SecretKey::new(&mut rand::thread_rng());
     let eve_pub = secp256k1::PublicKey::from_secret_key(&secp, &eve_sec);
 
-    let alice_addr = frost::Identifier::derive(0u16.to_le_bytes().as_slice()).unwrap();
-    let bob_addr = frost::Identifier::derive(1u16.to_le_bytes().as_slice()).unwrap();
-    let eve_addr = frost::Identifier::derive(2u16.to_le_bytes().as_slice()).unwrap();
+    let alice_addr =
+        frost::Identifier::derive(0u16.to_le_bytes().as_slice()).unwrap();
+    let bob_addr =
+        frost::Identifier::derive(1u16.to_le_bytes().as_slice()).unwrap();
+    let eve_addr =
+        frost::Identifier::derive(2u16.to_le_bytes().as_slice()).unwrap();
 
     let mut members = BTreeMap::new();
     members.insert(alice_addr, alice_pub);
     members.insert(bob_addr, bob_pub);
     members.insert(eve_addr, eve_pub);
 
-    let alice =
-        DkgStateMachine::new(alice_addr, alice_sec, alice_addr, members.clone(), config, Some(0))
-            .unwrap();
+    let alice = DkgStateMachine::new(
+        alice_addr,
+        alice_sec,
+        alice_addr,
+        members.clone(),
+        config,
+        Some(0),
+    )
+    .unwrap();
 
-    let bob =
-        DkgStateMachine::new(bob_addr, bob_sec, alice_addr, members.clone(), config, None).unwrap();
+    let bob = DkgStateMachine::new(
+        bob_addr,
+        bob_sec,
+        alice_addr,
+        members.clone(),
+        config,
+        None,
+    )
+    .unwrap();
 
-    let eve =
-        DkgStateMachine::new(eve_addr, eve_sec, alice_addr, members.clone(), config, None).unwrap();
+    let eve = DkgStateMachine::new(
+        eve_addr,
+        eve_sec,
+        alice_addr,
+        members.clone(),
+        config,
+        None,
+    )
+    .unwrap();
 
     (alice_addr, bob_addr, eve_addr, alice, bob, eve)
 }
@@ -90,9 +113,17 @@ impl CheckedSend {
             payloads.push(dkg);
         }
 
-        CheckedSend { payloads, sender, cursor: 0 }
+        CheckedSend {
+            payloads,
+            sender,
+            cursor: 0,
+        }
     }
-    pub fn round1(mut self, initiator: frost::Identifier, recipient: frost::Identifier) -> Self {
+    pub fn round1(
+        mut self,
+        initiator: frost::Identifier,
+        recipient: frost::Identifier,
+    ) -> Self {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::Round1 { initiator: i, .. } = dkg.msg else {
@@ -132,7 +163,12 @@ impl CheckedSend {
     ) -> Self {
         let dkg = &self.payloads[self.cursor];
 
-        let DkgMessage::Round2 { initiator: i, target: t, .. } = dkg.msg else {
+        let DkgMessage::Round2 {
+            initiator: i,
+            target: t,
+            ..
+        } = dkg.msg
+        else {
             panic!("Expected round2 message");
         };
 
@@ -152,7 +188,11 @@ impl CheckedSend {
     ) -> Self {
         let dkg = &self.payloads[self.cursor];
 
-        let DkgMessage::AckRound2 { initiator: i, target: t } = dkg.msg else {
+        let DkgMessage::AckRound2 {
+            initiator: i,
+            target: t,
+        } = dkg.msg
+        else {
             panic!("Expected ack_round2 message");
         };
 
@@ -164,7 +204,11 @@ impl CheckedSend {
         self.cursor += 1;
         self
     }
-    pub fn round3(mut self, initiator: frost::Identifier, recipient: frost::Identifier) -> Self {
+    pub fn round3(
+        mut self,
+        initiator: frost::Identifier,
+        recipient: frost::Identifier,
+    ) -> Self {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::Round3 { initiator: i, .. } = dkg.msg else {
@@ -205,6 +249,8 @@ impl CheckedSend {
             panic!("Not all messages were checked");
         }
 
-        self.payloads.try_into().expect("Failed to retrieve messages")
+        self.payloads
+            .try_into()
+            .expect("Failed to retrieve messages")
     }
 }

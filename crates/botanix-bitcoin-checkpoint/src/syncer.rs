@@ -4,7 +4,8 @@
 //! using a Bitcoin RPC connection.
 
 use super::{
-    chain::BitcoinCheckpointsChain, checkpoint::BitcoinCheckpoint, error::BitcoinCheckpointError,
+    chain::BitcoinCheckpointsChain, checkpoint::BitcoinCheckpoint,
+    error::BitcoinCheckpointError,
 };
 use bitcoin::block::BlockHash as BitcoinBlockHash;
 use bitcoincore_zmq::{Message, SocketEvent, SocketMessage};
@@ -14,8 +15,12 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, Mutex as TokioMutex, Mutex};
 
 /// Bitcoin block hash stream
-pub type BitcoinHashBlockStream =
-    Box<dyn Stream<Item = Result<SocketMessage, bitcoincore_zmq::Error>> + Send + Unpin + 'static>;
+pub type BitcoinHashBlockStream = Box<
+    dyn Stream<Item = Result<SocketMessage, bitcoincore_zmq::Error>>
+        + Send
+        + Unpin
+        + 'static,
+>;
 
 /// A delay to avoid busy loops
 const SAFE_DELAY: Duration = Duration::from_secs(1);
@@ -48,7 +53,10 @@ struct SyncedCheckpointInfo {
 /// Conversion from a [BitcoinCheckpoint] to [SyncedCheckpointInfo].
 impl From<&BitcoinCheckpoint> for SyncedCheckpointInfo {
     fn from(checkpoint: &BitcoinCheckpoint) -> Self {
-        Self { height: checkpoint.height, hash: checkpoint.hash }
+        Self {
+            height: checkpoint.height,
+            hash: checkpoint.hash,
+        }
     }
 }
 
@@ -89,14 +97,23 @@ impl BitcoinCheckpointsChainSynchronizer {
     /// # Returns
     ///
     /// A new synchronizer instance with the last synced height initialized from the chain.
-    pub fn new(checkpoints_chain: Arc<BitcoinCheckpointsChain>, rpc: Arc<dyn botanix_btc_wallet::bitcoind::BitcoindRpc + Send + Sync>,) -> Self {
+    pub fn new(
+        checkpoints_chain: Arc<BitcoinCheckpointsChain>,
+        rpc: Arc<dyn botanix_btc_wallet::bitcoind::BitcoindRpc + Send + Sync>,
+    ) -> Self {
         // Calculate the last synced height based on the most recent checkpoint
         // in chain and the lowest confirmation depth
-        let last_synced_height = checkpoints_chain
-            .recent_height()
-            .map(|height| height as u64 + checkpoints_chain.lowest_confirmation_depth() as u64);
+        let last_synced_height =
+            checkpoints_chain.recent_height().map(|height| {
+                height as u64
+                    + checkpoints_chain.lowest_confirmation_depth() as u64
+            });
 
-        Self { rpc, checkpoints_chain, last_synced_height }
+        Self {
+            rpc,
+            checkpoints_chain,
+            last_synced_height,
+        }
     }
 
     /// Synchronizes new Bitcoin blocks to the checkpoints chain.
@@ -119,20 +136,27 @@ impl BitcoinCheckpointsChainSynchronizer {
     ///
     /// It will return [BitcoinCheckpointError::StaleBlockAdded] error if a new block arrives during
     /// sync.
-    fn sync_new_blocks(&mut self) -> Result<Vec<SyncedCheckpointInfo>, BitcoinCheckpointError> {
+    fn sync_new_blocks(
+        &mut self,
+    ) -> Result<Vec<SyncedCheckpointInfo>, BitcoinCheckpointError> {
         let tip_height = map_rpc_error!(self.rpc, get_block_count_rpc())?;
 
         let last_synced_height = self.last_synced_height.unwrap_or_default();
 
         // Don't sync if we're at the same height
         if tip_height <= last_synced_height {
-            tracing::debug!(last_synced_height, tip_height, "No new blocks to sync");
+            tracing::debug!(
+                last_synced_height,
+                tip_height,
+                "No new blocks to sync"
+            );
             return Ok(Vec::new());
         }
 
         // Is the chain too young to have any blocks with the
         // required lowest confirmation depth?
-        let lowest_confirmation_depth = self.checkpoints_chain.lowest_confirmation_depth() as u64;
+        let lowest_confirmation_depth =
+            self.checkpoints_chain.lowest_confirmation_depth() as u64;
         if tip_height < lowest_confirmation_depth {
             // Not enough blocks yet.
             // Remember the new tip and return.
@@ -152,9 +176,11 @@ impl BitcoinCheckpointsChainSynchronizer {
         let confirmed_available = tip_height + 1 - lowest_confirmation_depth;
 
         // How many of them have we already synced?
-        let confirmed_already =
-            last_synced_height.saturating_add(1).saturating_sub(lowest_confirmation_depth);
-        let need_to_sync = confirmed_available.saturating_sub(confirmed_already);
+        let confirmed_already = last_synced_height
+            .saturating_add(1)
+            .saturating_sub(lowest_confirmation_depth);
+        let need_to_sync =
+            confirmed_available.saturating_sub(confirmed_already);
 
         if need_to_sync == 0 {
             self.last_synced_height = Some(tip_height);
@@ -177,22 +203,30 @@ impl BitcoinCheckpointsChainSynchronizer {
         let blocks_to_sync = need_to_sync.min(chain_size_limit);
 
         // Use saturating subtraction to prevent overflow when tip_height is small
-        let top_confirmed_height = tip_height.saturating_sub(lowest_confirmation_depth - 1);
+        let top_confirmed_height =
+            tip_height.saturating_sub(lowest_confirmation_depth - 1);
 
         // We push from oldest to newest, so we start `blocks_to_sync`−1 below the top.
         // Use saturating subtraction to prevent overflow when blocks_to_sync > top_confirmed_height
-        let from_height = top_confirmed_height.saturating_sub(blocks_to_sync - 1);
+        let from_height =
+            top_confirmed_height.saturating_sub(blocks_to_sync - 1);
         let to_height = top_confirmed_height;
 
         let mut synced_checkpoints = Vec::new();
         for height in from_height..=to_height {
-            let confirmed_hash = map_rpc_error!(self.rpc, get_block_hash_rpc(height))?;
-            let header = map_rpc_error!(self.rpc, get_block_header_rpc(&confirmed_hash))?;
+            let confirmed_hash =
+                map_rpc_error!(self.rpc, get_block_hash_rpc(height))?;
+            let header = map_rpc_error!(
+                self.rpc,
+                get_block_header_rpc(&confirmed_hash)
+            )?;
 
             // Create, report and push the checkpoint
-            let bitcoin_checkpoint = BitcoinCheckpoint::new(header, height as u32);
+            let bitcoin_checkpoint =
+                BitcoinCheckpoint::new(header, height as u32);
 
-            synced_checkpoints.push(SyncedCheckpointInfo::from(&bitcoin_checkpoint));
+            synced_checkpoints
+                .push(SyncedCheckpointInfo::from(&bitcoin_checkpoint));
 
             tracing::trace!(
                 ?bitcoin_checkpoint,
@@ -254,7 +288,10 @@ impl BitcoinCheckpointsChainSynchronizer {
         let (tx, mut rx) = mpsc::channel::<()>(1);
 
         // Spawn a task to consume the ZMQ stream and signal sync needs
-        tokio::spawn(handle_hash_block_stream_messages(bitcoin_block_hash_stream, tx.clone()));
+        tokio::spawn(handle_hash_block_stream_messages(
+            bitcoin_block_hash_stream,
+            tx.clone(),
+        ));
 
         // Sync at the start to ensure we have the latest checkpoints
         tracing::debug!("Syncing bitcoin checkpoints at the start");
@@ -270,12 +307,21 @@ impl BitcoinCheckpointsChainSynchronizer {
             .await
             .expect("spawned blocking task failed to sync bitcoin checkpoints");
 
-            match handle_new_blocks_sync_result(result, Arc::clone(&syncer_lock)).await {
+            match handle_new_blocks_sync_result(
+                result,
+                Arc::clone(&syncer_lock),
+            )
+            .await
+            {
                 SyncLoopControl::WaitForNewBlock => {
-                    tracing::trace!("Waiting for new block to sync checkpoints");
+                    tracing::trace!(
+                        "Waiting for new block to sync checkpoints"
+                    );
                 }
                 SyncLoopControl::Sync => {
-                    tracing::trace!("Immediately syncing checkpoints requested");
+                    tracing::trace!(
+                        "Immediately syncing checkpoints requested"
+                    );
 
                     trigger_checkpoints_sync(tx.clone())
                 }
@@ -294,7 +340,9 @@ fn trigger_checkpoints_sync(tx: mpsc::Sender<()>) {
         }
         Err(mpsc::error::TrySendError::Full(_)) => {
             // If the channel is full, we skip this message
-            tracing::trace!("Sync task is busy, skipping new block hash message");
+            tracing::trace!(
+                "Sync task is busy, skipping new block hash message"
+            );
         }
         Err(mpsc::error::TrySendError::Closed(_)) => {
             // If the channel is closed, we stop processing messages
@@ -313,7 +361,10 @@ async fn handle_hash_block_stream_messages<S, E>(
     loop {
         while let Some(msg) = bitcoin_block_hash_stream.next().await {
             match msg {
-                Ok(SocketMessage::Message(Message::HashBlock(bitcoin_block_hash, _))) => {
+                Ok(SocketMessage::Message(Message::HashBlock(
+                    bitcoin_block_hash,
+                    _,
+                ))) => {
                     tracing::trace!(
                         %bitcoin_block_hash,
                         "Received new bitcoin block hash message"
@@ -328,7 +379,11 @@ async fn handle_hash_block_stream_messages<S, E>(
                     );
                 }
                 Ok(SocketMessage::Event(message)) => {
-                    tracing::trace!(?message, "Received socket event {:?}", message.event);
+                    tracing::trace!(
+                        ?message,
+                        "Received socket event {:?}",
+                        message.event
+                    );
 
                     match message.event {
                         SocketEvent::Disconnected { .. } => {
@@ -404,7 +459,9 @@ async fn handle_new_blocks_sync_result(
             SyncLoopControl::Sync
         }
         Err(e) => {
-            tracing::warn!("Async task failed to sync bitcoin checkpoints: {e}");
+            tracing::warn!(
+                "Async task failed to sync bitcoin checkpoints: {e}"
+            );
 
             // We need to try again
             SyncLoopControl::Sync
@@ -416,7 +473,8 @@ async fn handle_new_blocks_sync_result(
 mod tests {
     use super::*;
     use bitcoin::{
-        block::Header as BitcoinHeader, hashes::Hash, BlockHash as BitcoinBlockHash, TxMerkleNode,
+        block::Header as BitcoinHeader, hashes::Hash,
+        BlockHash as BitcoinBlockHash, TxMerkleNode,
     };
     use bitcoincore_rpc::json::GetBlockResult;
     use botanix_btc_wallet::bitcoind::{BitcoindError, EstimateSmartFeeResult};
@@ -427,13 +485,18 @@ mod tests {
 
         #[test]
         fn test_no_new_blocks_does_nothing() {
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
 
             let mut mock = MockRpc::new();
             mock.expect_get_block_count_rpc().returning(|| Ok(100));
 
-            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(Arc::clone(&chain), Arc::new(mock));
+            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
+                Arc::clone(&chain),
+                Arc::new(mock),
+            );
             syncer.last_synced_height = Some(100);
 
             syncer.sync_new_blocks().expect("sync new blocks");
@@ -443,15 +506,24 @@ mod tests {
         #[test]
         fn test_new_blocks_fewer_than_limit_fetches_exact_delta() {
             // limit = 7, lowest_conf_depth = 4 -> heights 98-102
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
 
             let mut mock = MockRpc::new();
             mock.expect_get_block_count_rpc().returning(|| Ok(105));
 
-            expect_header_chain(&mut mock, 98..=102, BitcoinBlockHash::all_zeros());
+            expect_header_chain(
+                &mut mock,
+                98..=102,
+                BitcoinBlockHash::all_zeros(),
+            );
 
-            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(Arc::clone(&chain), Arc::new(mock));
+            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
+                Arc::clone(&chain),
+                Arc::new(mock),
+            );
             syncer.last_synced_height = Some(100);
 
             syncer.sync_new_blocks().expect("sync new blocks");
@@ -462,15 +534,24 @@ mod tests {
         #[test]
         fn test_blocks_truncated_to_limit() {
             // limit = 7 -> heights 131-137
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
 
             let mut mock = MockRpc::new();
             mock.expect_get_block_count_rpc().returning(|| Ok(140));
 
-            expect_header_chain(&mut mock, 131..=137, BitcoinBlockHash::all_zeros());
+            expect_header_chain(
+                &mut mock,
+                131..=137,
+                BitcoinBlockHash::all_zeros(),
+            );
 
-            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(Arc::clone(&chain), Arc::new(mock));
+            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
+                Arc::clone(&chain),
+                Arc::new(mock),
+            );
             syncer.last_synced_height = Some(100);
 
             syncer.sync_new_blocks().expect("sync new blocks");
@@ -480,15 +561,18 @@ mod tests {
 
         #[test]
         fn test_rpc_error_mapping() {
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
 
             let mut mock = MockRpc::new();
             mock.expect_get_block_count_rpc().return_once(|| {
                 Err(botanix_btc_wallet::bitcoind::JsonRPCError::UnexpectedStructure)
             });
 
-            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(chain, Arc::new(mock));
+            let mut syncer =
+                BitcoinCheckpointsChainSynchronizer::new(chain, Arc::new(mock));
 
             let result = syncer.sync_new_blocks();
 
@@ -499,8 +583,10 @@ mod tests {
 
         #[test]
         fn test_stale_block_error() {
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
 
             // Preload height-1 checkpoint, so the next height-1 push will be "stale"
             let header = create_header(BitcoinBlockHash::all_zeros());
@@ -517,20 +603,32 @@ mod tests {
             let h1 = BitcoinBlockHash::from_byte_array([1u8; 32]);
             let h2 = BitcoinBlockHash::from_byte_array([2u8; 32]);
 
-            mock.expect_get_block_hash_rpc().with(eq(1u64)).returning(move |_| Ok(h1));
+            mock.expect_get_block_hash_rpc()
+                .with(eq(1u64))
+                .returning(move |_| Ok(h1));
             mock.expect_get_block_header_rpc()
                 .with(eq(h1))
-                .returning(|_| Ok(create_header(BitcoinBlockHash::all_zeros())));
+                .returning(|_| {
+                    Ok(create_header(BitcoinBlockHash::all_zeros()))
+                });
 
-            mock.expect_get_block_hash_rpc().with(eq(2u64)).returning(move |_| Ok(h2));
-            mock.expect_get_block_header_rpc().with(eq(h2)).returning(move |_| Ok(create_header(h1)));
+            mock.expect_get_block_hash_rpc()
+                .with(eq(2u64))
+                .returning(move |_| Ok(h2));
+            mock.expect_get_block_header_rpc()
+                .with(eq(h2))
+                .returning(move |_| Ok(create_header(h1)));
 
-            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(chain, Arc::new(mock));
+            let mut syncer =
+                BitcoinCheckpointsChainSynchronizer::new(chain, Arc::new(mock));
             syncer.last_synced_height = Some(1);
 
             let result = syncer.sync_new_blocks();
 
-            assert!(matches!(result, Err(BitcoinCheckpointError::StaleBlockAdded { .. })));
+            assert!(matches!(
+                result,
+                Err(BitcoinCheckpointError::StaleBlockAdded { .. })
+            ));
         }
     }
 
@@ -540,17 +638,24 @@ mod tests {
         #[tokio::test]
         async fn test_stale_block_resets_chain_and_height_and_requests_sync() {
             // Configure a chain with some data
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
 
             let initial_header = create_header(BitcoinBlockHash::all_zeros());
             let initial_checkpoint = BitcoinCheckpoint::new(initial_header, 1);
-            chain.push(initial_checkpoint).expect("push initial checkpoint");
+            chain
+                .push(initial_checkpoint)
+                .expect("push initial checkpoint");
 
             let mock = MockRpc::new();
 
             // Create our synchronizer with initial state
-            let syncer = BitcoinCheckpointsChainSynchronizer::new(Arc::clone(&chain), Arc::new(mock));
+            let syncer = BitcoinCheckpointsChainSynchronizer::new(
+                Arc::clone(&chain),
+                Arc::new(mock),
+            );
 
             // Should be initialized from chain
             assert_eq!(syncer.last_synced_height, Some(5));
@@ -562,7 +667,9 @@ mod tests {
                 received_prev_block_hash: BitcoinBlockHash::all_zeros(),
             });
 
-            let control = handle_new_blocks_sync_result(result, Arc::clone(&syncer_lock)).await;
+            let control =
+                handle_new_blocks_sync_result(result, Arc::clone(&syncer_lock))
+                    .await;
 
             assert!(matches!(control, SyncLoopControl::Sync));
 
@@ -575,10 +682,15 @@ mod tests {
         #[tokio::test]
         async fn test_successful_sync_requests_wait_for_new_block() {
             // Configure a chain
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
             let mock = MockRpc::new();
-            let syncer = BitcoinCheckpointsChainSynchronizer::new(Arc::clone(&chain), Arc::new(mock));
+            let syncer = BitcoinCheckpointsChainSynchronizer::new(
+                Arc::clone(&chain),
+                Arc::new(mock),
+            );
             let syncer_lock = Arc::new(Mutex::new(syncer));
 
             // Create successful result with two checkpoints
@@ -593,7 +705,9 @@ mod tests {
             ];
 
             let result = Ok(checkpoints);
-            let control = handle_new_blocks_sync_result(result, Arc::clone(&syncer_lock)).await;
+            let control =
+                handle_new_blocks_sync_result(result, Arc::clone(&syncer_lock))
+                    .await;
 
             // Verify we get WaitForNewBlock
             assert!(matches!(control, SyncLoopControl::WaitForNewBlock));
@@ -602,19 +716,27 @@ mod tests {
         #[tokio::test]
         async fn test_generic_error_requests_sync() {
             // Configure a chain
-            let chain =
-                Arc::new(BitcoinCheckpointsChain::try_new(6, 4, 2).expect("create valid chain"));
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
             let mock = MockRpc::new();
-            let syncer = BitcoinCheckpointsChainSynchronizer::new(Arc::clone(&chain), Arc::new(mock));
+            let syncer = BitcoinCheckpointsChainSynchronizer::new(
+                Arc::clone(&chain),
+                Arc::new(mock),
+            );
             let syncer_lock = Arc::new(Mutex::new(syncer));
 
             // Create an RPC error
             let result = Err(BitcoinCheckpointError::SyncRpcError {
-                error: botanix_btc_wallet::bitcoind::BitcoindError::EmptyBlockTip,
+                error:
+                    botanix_btc_wallet::bitcoind::BitcoindError::EmptyBlockTip,
                 procedure_name: "get_block_count".to_string(),
             });
 
-            let control = handle_new_blocks_sync_result(result, Arc::clone(&syncer_lock)).await;
+            let control =
+                handle_new_blocks_sync_result(result, Arc::clone(&syncer_lock))
+                    .await;
 
             // Verify we get Sync for generic errors
             assert!(matches!(control, SyncLoopControl::Sync));
@@ -679,7 +801,9 @@ mod tests {
         }
 
         impl MockMessageStream {
-            fn new(messages: Vec<Result<SocketMessage, bitcoincore_zmq::Error>>) -> Self {
+            fn new(
+                messages: Vec<Result<SocketMessage, bitcoincore_zmq::Error>>,
+            ) -> Self {
                 Self { messages }
             }
         }
@@ -731,7 +855,8 @@ mod tests {
         async fn test_handle_hash_block_message() {
             let hash = BitcoinBlockHash::from_byte_array([42u8; 32]);
 
-            let messages = vec![Ok(SocketMessage::Message(Message::HashBlock(hash, 0)))];
+            let messages =
+                vec![Ok(SocketMessage::Message(Message::HashBlock(hash, 0)))];
 
             let received = run_handler_with_messages(messages).await;
 
@@ -744,7 +869,8 @@ mod tests {
             let txid = Txid::from_byte_array([1u8; 32]);
 
             // Create an unexpected message type
-            let messages = vec![Ok(SocketMessage::Message(Message::HashTx(txid, 0)))];
+            let messages =
+                vec![Ok(SocketMessage::Message(Message::HashTx(txid, 0)))];
 
             let received = run_handler_with_messages(messages).await;
 
@@ -787,7 +913,8 @@ mod tests {
         #[tokio::test]
         async fn test_handle_stream_error() {
             // Create a stream error
-            let messages = vec![Err(bitcoincore_zmq::Error::Invalid256BitHashLength(0))];
+            let messages =
+                vec![Err(bitcoincore_zmq::Error::Invalid256BitHashLength(0))];
 
             let received = run_handler_with_messages(messages).await;
 
@@ -856,39 +983,79 @@ mod tests {
     // 'static lifetime. So to satisfy the `RpcApi` trait, we need to implement the `call`
     // method directly in generated MockRpc
     impl botanix_btc_wallet::bitcoind::BitcoindRpc for MockRpc {
-        fn is_synced<'life0,'async_trait>(&'life0 self) ->  ::core::pin::Pin<Box<dyn ::core::future::Future<Output = Result<bool,BitcoindError> > + ::core::marker::Send+'async_trait> >where 'life0:'async_trait,Self:'async_trait {
+        fn is_synced<'life0, 'async_trait>(
+            &'life0 self,
+        ) -> ::core::pin::Pin<
+            Box<
+                dyn ::core::future::Future<Output = Result<bool, BitcoindError>>
+                    + ::core::marker::Send
+                    + 'async_trait,
+            >,
+        >
+        where
+            'life0: 'async_trait,
+            Self: 'async_trait,
+        {
             todo!()
         }
-        
-        fn wait_until_synced<'life0,'async_trait>(&'life0 self) ->  ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send+'async_trait> >where 'life0:'async_trait,Self:'async_trait {
+
+        fn wait_until_synced<'life0, 'async_trait>(
+            &'life0 self,
+        ) -> ::core::pin::Pin<
+            Box<
+                dyn ::core::future::Future<Output = ()>
+                    + ::core::marker::Send
+                    + 'async_trait,
+            >,
+        >
+        where
+            'life0: 'async_trait,
+            Self: 'async_trait,
+        {
             todo!()
         }
-        
-        fn get_best_block_hash_rpc(&self) -> Result<bitcoin::BlockHash, BitcoindError>  {
+
+        fn get_best_block_hash_rpc(
+            &self,
+        ) -> Result<bitcoin::BlockHash, BitcoindError> {
             Ok(bitcoin::BlockHash::all_zeros())
         }
-        
-        fn get_block_header_rpc(&self, _h: &bitcoin::BlockHash,) -> Result<bitcoin::blockdata::block::Header,BitcoindError>  {
+
+        fn get_block_header_rpc(
+            &self,
+            _h: &bitcoin::BlockHash,
+        ) -> Result<bitcoin::blockdata::block::Header, BitcoindError> {
             todo!()
         }
-        
-        fn get_block_hash_rpc(&self, _height: u64) -> Result<bitcoin::BlockHash,BitcoindError>  {
+
+        fn get_block_hash_rpc(
+            &self,
+            _height: u64,
+        ) -> Result<bitcoin::BlockHash, BitcoindError> {
             Ok(bitcoin::BlockHash::all_zeros())
         }
-        
-        fn get_txids_rpc(&self, _h: &bitcoin::BlockHash) -> Result<Vec<bitcoin::Txid>, BitcoindError>  {
+
+        fn get_txids_rpc(
+            &self,
+            _h: &bitcoin::BlockHash,
+        ) -> Result<Vec<bitcoin::Txid>, BitcoindError> {
             Ok(vec![])
         }
-        
-        fn get_estimate_smart_fee_rpc(&self) -> Result<EstimateSmartFeeResult, BitcoindError>  {
+
+        fn get_estimate_smart_fee_rpc(
+            &self,
+        ) -> Result<EstimateSmartFeeResult, BitcoindError> {
             todo!()
         }
-        
-        fn get_block_info_rpc(&self, _block_hash: &bitcoin::BlockHash,) -> Result<GetBlockResult, BitcoindError>  {
+
+        fn get_block_info_rpc(
+            &self,
+            _block_hash: &bitcoin::BlockHash,
+        ) -> Result<GetBlockResult, BitcoindError> {
             todo!()
         }
-        
-        fn get_block_count_rpc(&self) -> Result<u64, BitcoindError>  {
+
+        fn get_block_count_rpc(&self) -> Result<u64, BitcoindError> {
             Ok(0)
         }
     }
@@ -914,9 +1081,13 @@ mod tests {
             let header = create_header(prev_hash);
             let new_hash = header.block_hash();
 
-            mock.expect_get_block_hash_rpc().with(eq(height)).returning(move |_| Ok(new_hash));
+            mock.expect_get_block_hash_rpc()
+                .with(eq(height))
+                .returning(move |_| Ok(new_hash));
 
-            mock.expect_get_block_header_rpc().with(eq(new_hash)).returning(move |_| Ok(header));
+            mock.expect_get_block_header_rpc()
+                .with(eq(new_hash))
+                .returning(move |_| Ok(header));
 
             prev_hash = new_hash;
         }

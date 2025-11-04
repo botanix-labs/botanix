@@ -12,8 +12,8 @@ use zeroize::Zeroizing;
 /// > GENESIS_AGGR_KEY =
 /// > hex::decode("03ae26f6152efa6e65619f436aae5076356cacab97bed10c294a38b777efa66e72")
 const GENESIS_AGGR_KEY: &[u8] = &[
-    3, 174, 38, 246, 21, 46, 250, 110, 101, 97, 159, 67, 106, 174, 80, 118, 53, 108, 172, 171, 151,
-    190, 209, 12, 41, 74, 56, 183, 119, 239, 166, 110, 114,
+    3, 174, 38, 246, 21, 46, 250, 110, 101, 97, 159, 67, 106, 174, 80, 118, 53,
+    108, 172, 171, 151, 190, 209, 12, 41, 74, 56, 183, 119, 239, 166, 110, 114,
 ];
 
 #[derive(Clone, Debug, Parser)]
@@ -87,11 +87,14 @@ impl ComputeGatewayAddress {
             .transpose()?
             .unwrap_or(GENESIS_AGGR_KEY.to_vec());
 
-        let aggr_key = frost_secp256k1_tr::VerifyingKey::deserialize(&aggr_key)?;
+        let aggr_key =
+            frost_secp256k1_tr::VerifyingKey::deserialize(&aggr_key)?;
 
         let eth_address = parse_eth_address(self.botanix_address)?;
-        let tweaked_key = generate_tweaked_public_key(&aggr_key, &eth_address).unwrap();
-        let gateway_address = generate_taproot_address(&tweaked_key, bitcoin::Network::Bitcoin);
+        let tweaked_key =
+            generate_tweaked_public_key(&aggr_key, &eth_address).unwrap();
+        let gateway_address =
+            generate_taproot_address(&tweaked_key, bitcoin::Network::Bitcoin);
 
         Ok(gateway_address.to_string())
     }
@@ -105,7 +108,8 @@ fn get_passphrase(
         Some(p) => Ok(p.trim().to_string().into()),
         None => {
             // Prompt user if CLI was not provided.
-            let p1: Zeroizing<String> = rpassword::prompt_password("Passphrase: ")?.into();
+            let p1: Zeroizing<String> =
+                rpassword::prompt_password("Passphrase: ")?.into();
 
             if do_confirm {
                 let p2: Zeroizing<String> =
@@ -137,7 +141,9 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
 
             // Passphrase must not be empty, unless explicitly allowed.
             if passphrase.is_empty() && !c.allow_empty_passphrase {
-                anyhow::bail!("Passphrase may not be empty unless explicitly allowed");
+                anyhow::bail!(
+                    "Passphrase may not be empty unless explicitly allowed"
+                );
             }
 
             // Create the encrypted export.
@@ -150,7 +156,10 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
             ciborium::into_writer(&export, &mut bytes)?;
             std::fs::write(&c.output, &bytes)?;
 
-            println!("Successfully exported encrypted key package to '{}'", c.output.display());
+            println!(
+                "Successfully exported encrypted key package to '{}'",
+                c.output.display()
+            );
         }
         Commands::ImportKeyPackage(c) => {
             // NOTE: This creates a new database if it does not already exist...
@@ -172,7 +181,8 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
             // Read the import, attempt to decrypt and save the key package to
             // the database.
             let bytes = std::fs::read(&c.input)?;
-            let import: database::ExportedKeyPackage = ciborium::from_reader(bytes.as_slice())?;
+            let import: database::ExportedKeyPackage =
+                ciborium::from_reader(bytes.as_slice())?;
             db.import_key_package(passphrase, import)?;
 
             println!("Successfully imported decrypted key package");
@@ -201,10 +211,12 @@ mod tests {
 
     #[test]
     fn btc_utils_compute_gateway_address() {
-        const MATCH: &str = "bc1pdxrrvdqunlrwnt4qrqs52djk0g4r39s0f5qsa0j9dcctq6jvaf5qu9na42";
+        const MATCH: &str =
+            "bc1pdxrrvdqunlrwnt4qrqs52djk0g4r39s0f5qsa0j9dcctq6jvaf5qu9na42";
 
         let c = ComputeGatewayAddress {
-            botanix_address: "0xE99F129Bb9d60a91f6d0Ae2d6bBC746C52A87220".to_string(),
+            botanix_address: "0xE99F129Bb9d60a91f6d0Ae2d6bBC746C52A87220"
+                .to_string(),
             aggregated_key: Some(hex::encode(GENESIS_AGGR_KEY)),
         };
 
@@ -213,7 +225,8 @@ mod tests {
 
         // Uses the `GENESIS_AGGR_KEY` by default.
         let c = ComputeGatewayAddress {
-            botanix_address: "0xE99F129Bb9d60a91f6d0Ae2d6bBC746C52A87220".to_string(),
+            botanix_address: "0xE99F129Bb9d60a91f6d0Ae2d6bBC746C52A87220"
+                .to_string(),
             aggregated_key: None,
         };
 
@@ -224,7 +237,8 @@ mod tests {
     #[test]
     fn btc_utils_compute_gateway_address_bad_aggr_key() {
         let c = ComputeGatewayAddress {
-            botanix_address: "0xE99F129Bb9d60a91f6d0Ae2d6bBC746C52A87220".to_string(),
+            botanix_address: "0xE99F129Bb9d60a91f6d0Ae2d6bBC746C52A87220"
+                .to_string(),
             aggregated_key: Some("zzz".to_string()),
         };
 

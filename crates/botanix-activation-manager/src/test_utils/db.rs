@@ -14,7 +14,9 @@ pub struct Db {
 
 impl Db {
     pub fn new() -> Self {
-        Db { votes: Arc::new(RwLock::new(HashMap::new())) }
+        Db {
+            votes: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 }
 
@@ -40,7 +42,7 @@ impl ActivationManagerReaderWriter<Address> for Db {
                 // updated to the new values if and only if the botanix height
                 // is greater than the existing botanix height.
                 if e.get().botanix_height >= botanix_height {
-                    return Ok(())
+                    return Ok(());
                 }
 
                 let e = e.get_mut();
@@ -49,7 +51,11 @@ impl ActivationManagerReaderWriter<Address> for Db {
                 e.botanix_height = botanix_height;
             }
             Entry::Vacant(v) => {
-                let _ = v.insert(VoteEntry { vote, is_compliant, botanix_height });
+                let _ = v.insert(VoteEntry {
+                    vote,
+                    is_compliant,
+                    botanix_height,
+                });
             }
         }
 
@@ -70,7 +76,10 @@ impl ActivationManagerReaderWriter<Address> for Db {
 
     fn get_abstained_votes(&self) -> ProviderResult<(usize, usize)> {
         let votes = self.votes.read().unwrap();
-        let abstains = votes.iter().filter(|(_, e)| e.vote == Vote::Abstain).count();
+        let abstains = votes
+            .iter()
+            .filter(|(_, e)| e.vote == Vote::Abstain)
+            .count();
         Ok((abstains, votes.len()))
     }
 
@@ -87,7 +96,8 @@ impl ActivationManagerReaderWriter<Address> for Db {
         let votes = self.votes.read().unwrap();
 
         let total = votes.len().max(min_validator_count);
-        let votes_received = votes.iter().filter(|(_, e)| e.vote == Vote::Aye).count();
+        let votes_received =
+            votes.iter().filter(|(_, e)| e.vote == Vote::Aye).count();
 
         // Calculate percentage (0-100) of votes received
         let quorum = (votes_received * 100).div_ceil(total);
@@ -102,7 +112,8 @@ impl ActivationManagerReaderWriter<Address> for Db {
         let votes = self.votes.read().unwrap();
 
         let total = votes.len().max(min_validator_count);
-        let votes_received = votes.iter().filter(|(_, e)| e.is_compliant).count();
+        let votes_received =
+            votes.iter().filter(|(_, e)| e.is_compliant).count();
 
         // Calculate percentage (0-100) of votes received
         let quorum = (votes_received * 100).div_ceil(total);
@@ -110,7 +121,10 @@ impl ActivationManagerReaderWriter<Address> for Db {
         Ok((quorum, total))
     }
 
-    fn remove_upgrading_votes(&self, botanix_height: u64) -> ProviderResult<usize> {
+    fn remove_upgrading_votes(
+        &self,
+        botanix_height: u64,
+    ) -> ProviderResult<usize> {
         let mut votes = self.votes.write().unwrap();
 
         let gross_total = votes.len();

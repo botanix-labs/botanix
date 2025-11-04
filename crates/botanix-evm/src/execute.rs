@@ -5,7 +5,9 @@ use alloy_eips::eip7685::Requests;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::{
     consensus_package::BotanixConsensusPackage,
-    mint_validation::{try_parse_burn_event, try_parse_mint_event, MintContractError},
+    mint_validation::{
+        try_parse_burn_event, try_parse_mint_event, MintContractError,
+    },
     peg_contract::{PeginData, PegoutWithId},
 };
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
@@ -20,8 +22,12 @@ use reth_execution_errors::InternalBlockExecutionError;
 use reth_node_types::NodePrimitives;
 use reth_primitives::{Receipt, RecoveredBlock, SealedHeader};
 
-use reth_primitives_traits::{AlloyBlockHeader, Block, BlockBody, SignedTransaction};
-use reth_provider::{BlockExecutionResult, BlockReader, DatabaseProviderRO, ProviderError};
+use reth_primitives_traits::{
+    AlloyBlockHeader, Block, BlockBody, SignedTransaction,
+};
+use reth_provider::{
+    BlockExecutionResult, BlockReader, DatabaseProviderRO, ProviderError,
+};
 use reth_revm::{
     context::result::{ExecutionResult, ResultAndState},
     primitives::{alloy_primitives::TxHash, Address, U256},
@@ -114,7 +120,8 @@ where
     state: State<DB>,
 }
 
-impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+impl<EvmConfig, DB, BF, RethDB, N>
+    EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
@@ -179,7 +186,8 @@ where
     }
 }
 
-impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+impl<EvmConfig, DB, BF, RethDB, N>
+    EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
     DB: RethDatabase<Error: Into<ProviderError> + Display>,
@@ -204,10 +212,13 @@ where
         // 1. prepare state on new block
         self.on_new_block(block.number());
 
-        let header: &SealedHeader<<N::Primitives as NodePrimitives>::BlockHeader> =
-            block.sealed_header();
+        let header: &SealedHeader<
+            <N::Primitives as NodePrimitives>::BlockHeader,
+        > = block.sealed_header();
         let edh = header.deserialize_extra_data_header().map_err(|_| {
-            BlockExecutionError::Validation(BlockValidationError::ExtraDataSerializeError)
+            BlockExecutionError::Validation(
+                BlockValidationError::ExtraDataSerializeError,
+            )
         })?;
 
         let botanix_consensus_pkg = header
@@ -217,7 +228,9 @@ where
             )
             .map_err(|e| {
                 error!("Failed to get botanix consensus package: {:?}", e);
-                BlockExecutionError::Validation(BlockValidationError::BotanixConsensusPkgError(e))
+                BlockExecutionError::Validation(
+                    BlockValidationError::BotanixConsensusPkgError(e),
+                )
             })?;
 
         let block_fee_recipient_address = edh.block_fee_recipient_address;
@@ -225,7 +238,8 @@ where
         // 2. configure the evm and execute
         let env = self.evm_env_for_block(block.header());
         let output: EthExecuteOutput = {
-            let evm = self.executor.evm_config.evm_with_env(&mut self.state, env);
+            let evm =
+                self.executor.evm_config.evm_with_env(&mut self.state, env);
             self.executor.execute_state_transitions(
                 block,
                 evm,
@@ -235,7 +249,10 @@ where
         };
 
         // 3. apply post execution changes
-        self.post_execution(Some(output.total_block_fees), block_fee_recipient_address)?;
+        self.post_execution(
+            Some(output.total_block_fees),
+            block_fee_recipient_address,
+        )?;
 
         Ok(output)
     }
@@ -243,8 +260,9 @@ where
     /// Apply settings before a new block is executed.
     pub(crate) fn on_new_block(&mut self, block_number: BlockNumber) {
         // Set state clear flag if the block is after the Spurious Dragon hardfork.
-        let state_clear_flag =
-            self.botanix_chain_spec().is_spurious_dragon_active_at_block(block_number);
+        let state_clear_flag = self
+            .botanix_chain_spec()
+            .is_spurious_dragon_active_at_block(block_number);
         self.state.set_state_clear_flag(state_clear_flag);
     }
 
@@ -304,13 +322,16 @@ where
     where
         E: reth_evm::Evm,
         E::DB: DatabaseCommit + RevmDatabase,
-        E::Tx: reth_evm::FromRecoveredTx<<N::Primitives as NodePrimitives>::SignedTx>,
+        E::Tx: reth_evm::FromRecoveredTx<
+            <N::Primitives as NodePrimitives>::SignedTx,
+        >,
         <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
         N: reth_provider::providers::NodeTypesForProvider,
     {
         // Apply pre execution changes
-        let mut system_caller =
-            reth_evm::system_calls::SystemCaller::new(self.botanix_chain_spec.inner());
+        let mut system_caller = reth_evm::system_calls::SystemCaller::new(
+            self.botanix_chain_spec.inner(),
+        );
         system_caller.apply_pre_execution_changes(block.header(), &mut evm)?;
 
         // execute transactions
@@ -320,14 +341,19 @@ where
         let mut total_block_fees = 0_u128;
         let mut cumulative_gas_used = 0;
         let base_fee = block.base_fee_per_gas();
-        let mut receipts: Vec<Receipt> = Vec::with_capacity(block.body().transactions().len());
+        let mut receipts: Vec<Receipt> =
+            Vec::with_capacity(block.body().transactions().len());
 
-        for (tx_index, (sender, transaction)) in
-            block.senders().iter().zip(block.body().transactions()).enumerate()
+        for (tx_index, (sender, transaction)) in block
+            .senders()
+            .iter()
+            .zip(block.body().transactions())
+            .enumerate()
         {
             // The sum of the transaction’s gas limit, Tg, and the gas utilized in this block prior,
             // must be no greater than the block’s gasLimit.
-            let block_available_gas = block.header().gas_limit() - cumulative_gas_used;
+            let block_available_gas =
+                block.header().gas_limit() - cumulative_gas_used;
             if transaction.gas_limit() > block_available_gas {
                 return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
                     transaction_gas_limit: transaction.gas_limit(),
@@ -341,14 +367,21 @@ where
             // fails.
             // If the sender is not found in the state, we need to error because there is no balance
             // to subtract from. This shouldn't happen because the tx would have failed.
-            let sender_db_error =
-                BlockExecutionError::Internal(InternalBlockExecutionError::Other(
-                    format!("DB error getting sender: {}", hex::encode(sender)).into(),
-                ));
-            let sender_not_found =
-                BlockExecutionError::Internal(InternalBlockExecutionError::Other(
-                    format!("Sender not found in state: {}", hex::encode(sender)).into(),
-                ));
+            let sender_db_error = BlockExecutionError::Internal(
+                InternalBlockExecutionError::Other(
+                    format!("DB error getting sender: {}", hex::encode(sender))
+                        .into(),
+                ),
+            );
+            let sender_not_found = BlockExecutionError::Internal(
+                InternalBlockExecutionError::Other(
+                    format!(
+                        "Sender not found in state: {}",
+                        hex::encode(sender)
+                    )
+                    .into(),
+                ),
+            );
             let mut original_sender_info: reth_revm::state::AccountInfo = evm
                 .db_mut()
                 .basic(*sender)
@@ -356,15 +389,24 @@ where
                 .ok_or(sender_not_found)?;
 
             // Execute transaction.
-            let recovered_tx: Recovered<<N::Primitives as NodePrimitives>::SignedTx> =
-                Recovered::new_unchecked(transaction.clone(), *sender);
+            let recovered_tx: Recovered<
+                <N::Primitives as NodePrimitives>::SignedTx,
+            > = Recovered::new_unchecked(transaction.clone(), *sender);
             let tx_hash = transaction.tx_hash();
-            let ResultAndState { mut result, mut state } =
-                evm.transact(recovered_tx).map_err(move |err| {
-                    BlockExecutionError::Internal(InternalBlockExecutionError::Other(
-                        format!("EVM error for transaction {}: {}", tx_hash, err).into(),
-                    ))
-                })?;
+            let ResultAndState {
+                mut result,
+                mut state,
+            } = evm.transact(recovered_tx).map_err(move |err| {
+                BlockExecutionError::Internal(
+                    InternalBlockExecutionError::Other(
+                        format!(
+                            "EVM error for transaction {}: {}",
+                            tx_hash, err
+                        )
+                        .into(),
+                    ),
+                )
+            })?;
 
             // calculate the total transaction fee
             let mut transaction_fee = transaction
@@ -403,9 +445,10 @@ where
 
                             // Determine the total gas cost: gas_used * effective_gas_price
                             // Base fee is needed for effective_gas_price calculation
-                            let effective_gas_price = transaction.effective_gas_price(base_fee);
-                            let total_gas_cost =
-                                U256::from(gas_used) * U256::from(effective_gas_price);
+                            let effective_gas_price =
+                                transaction.effective_gas_price(base_fee);
+                            let total_gas_cost = U256::from(gas_used)
+                                * U256::from(effective_gas_price);
 
                             // Get the new nonce. This should be original nonce + 1
                             let new_nonce = state
@@ -437,7 +480,9 @@ where
                                 .checked_sub(total_gas_cost)
                                 .ok_or(BlockExecutionError::Internal(
                                     InternalBlockExecutionError::Other(
-                                        "Sender balance underflow".to_string().into(),
+                                        "Sender balance underflow"
+                                            .to_string()
+                                            .into(),
                                     ),
                                 ))?;
 
@@ -448,8 +493,8 @@ where
                                 info: original_sender_info,
                                 storage: Default::default(), // Storage changes remain reverted.
                                 status: AccountStatus::Touched, // Mark as touched
-                                transaction_id: tx_index,    /* TODO: confirm tx_index is correct
-                                                              * here */
+                                transaction_id: tx_index, /* TODO: confirm tx_index is correct
+                                                           * here */
                             };
                             state.insert(*sender, reverted_account);
 
@@ -474,7 +519,8 @@ where
             let tx_type = tx_type(transaction);
 
             receipts.push(
-                #[allow(clippy::needless_update)] // side-effect of optimism fields
+                #[allow(clippy::needless_update)]
+                // side-effect of optimism fields
                 Receipt {
                     tx_type,
                     // Success flag was added in `EIP-658: Embedding transaction status code in
@@ -523,7 +569,10 @@ where
         let consensus_pkg = botanix_consensus_pkg;
         let btc_network = consensus_pkg.btc_network;
 
-        tracing::trace!("botanix_consensus_package={:?}", botanix_consensus_pkg);
+        tracing::trace!(
+            "botanix_consensus_package={:?}",
+            botanix_consensus_pkg
+        );
 
         // Check pegins.
         let mut pegins = vec![];
@@ -534,14 +583,20 @@ where
                 Some(p) => p,
             };
 
-            tracing::trace!(?pegin_data, "validate pegin data for tx {}", tx_hash);
+            tracing::trace!(
+                ?pegin_data,
+                "validate pegin data for tx {}",
+                tx_hash
+            );
 
             // Get the reference block hash from the pegin metadata.
             // This is used to avoid the growing list of headers in the pegin metadata
             // by using a bitcoin checkpoint that is close to the pegin block height.
             // The reference block hash is only provided for version v1.
             let mut bitcoin_checkpoint = consensus_pkg.bitcoin_checkpoint;
-            let (version, ref_block_hash) = if let Some(meta) = pegin_data.meta.first() {
+            let (version, ref_block_hash) = if let Some(meta) =
+                pegin_data.meta.first()
+            {
                 match (meta.version(), meta.ref_block_hash()) {
                     (1, None) => {
                         return Err(MintContractError::InvalidPeginData {
@@ -615,7 +670,8 @@ where
 
                 if meta.ref_block_hash() != ref_block_hash {
                     return Err(MintContractError::InvalidPeginData {
-                        error: "Proofs have mismatching reference block hashes".to_string(),
+                        error: "Proofs have mismatching reference block hashes"
+                            .to_string(),
                         revert_address: pegin_data.account,
                         revert_amount: pegin_data.amount,
                     });
@@ -634,7 +690,9 @@ where
                 });
             }
             let aggregate_public_key = consensus_pkg.aggregate_public_key;
-            match pegin_data.validate(&bitcoin_checkpoint, &aggregate_public_key) {
+            match pegin_data
+                .validate(&bitcoin_checkpoint, &aggregate_public_key)
+            {
                 Ok(aggregate_value) => {
                     if pegin_data.amount >= aggregate_value {
                         return Err(MintContractError::InvalidPeginData {
@@ -669,7 +727,10 @@ where
                 let mut tx_hash_array = [0u8; 32];
                 tx_hash_array.copy_from_slice(tx_hash.as_slice());
                 let pegout_id = PegoutId::new(tx_hash_array, index as u32);
-                let pegout_with_id = PegoutWithId { data: pegout_data, id: pegout_id };
+                let pegout_with_id = PegoutWithId {
+                    data: pegout_data,
+                    id: pegout_id,
+                };
                 pegouts.push(pegout_with_id);
             }
         }
@@ -678,13 +739,15 @@ where
     }
 }
 
-impl<EvmConfig, DB, BF, RethDB, N> EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+impl<EvmConfig, DB, BF, RethDB, N>
+    EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
     DB: RethDatabase<Error: Into<ProviderError> + Display>,
     RethDB: reth_db::Database,
     BF: BitcoindFactory + Clone + Unpin + 'static,
-    N: reth_node_types::NodeTypes + reth_provider::providers::NodeTypesForProvider,
+    N: reth_node_types::NodeTypes
+        + reth_provider::providers::NodeTypesForProvider,
     <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
     <N::Primitives as NodePrimitives>::Receipt: From<Receipt>,
 {
@@ -700,8 +763,14 @@ where
         BotanixBlockExecutionOutput<<N::Primitives as NodePrimitives>::Receipt>,
         BlockExecutionError,
     > {
-        let EthExecuteOutput { receipts, requests, gas_used, total_block_fees, pegins, pegouts } =
-            self.execute_without_verification(block)?;
+        let EthExecuteOutput {
+            receipts,
+            requests,
+            gas_used,
+            total_block_fees,
+            pegins,
+            pegouts,
+        } = self.execute_without_verification(block)?;
 
         // TODO NOTE: we need to merge keep the reverts for the bundle retention
         self.state.merge_transitions(BundleRetention::Reverts);

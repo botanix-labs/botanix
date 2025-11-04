@@ -1,14 +1,22 @@
-use std::path::PathBuf;
 use botanix_cli_args::poa_node::PoaNodeArgs;
 use eyre::{Context, Ok};
-use reth::{args::{NetworkArgs}};
+use reth::args::NetworkArgs;
+use std::path::PathBuf;
 
 /// Loads the Reth configuration using the provided PoA and network arguments.
-pub fn load_reth_config(poa_args: &PoaNodeArgs, network_args: &NetworkArgs) -> eyre::Result<reth_config::Config> {
-    match <std::option::Option<PathBuf> as Clone>::clone(&poa_args.network_config_path) {
+pub fn load_reth_config(
+    poa_args: &PoaNodeArgs,
+    network_args: &NetworkArgs,
+) -> eyre::Result<reth_config::Config> {
+    match <std::option::Option<PathBuf> as Clone>::clone(
+        &poa_args.network_config_path,
+    ) {
         Some(config_path) => {
-            let mut config = confy::load_path::<reth_config::Config>(&config_path)
-                .wrap_err_with(|| format!("Could not load config file {:?}", config_path))?;
+            let mut config =
+                confy::load_path::<reth_config::Config>(&config_path)
+                    .wrap_err_with(|| {
+                        format!("Could not load config file {:?}", config_path)
+                    })?;
 
             tracing::info!(target: "reth::cli", path = ?config_path, "Network onfiguration loaded");
 

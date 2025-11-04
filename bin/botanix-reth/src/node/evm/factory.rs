@@ -1,8 +1,6 @@
-use crate::{
-    evm::{
-        api::{BotanixContext, BotanixEvm},
-        transaction::BotanixTxEnv,
-    },
+use crate::evm::{
+    api::{BotanixContext, BotanixEvm},
+    transaction::BotanixTxEnv,
 };
 use botanix_chainspec::BotanixHardfork;
 use reth_evm::{precompiles::PrecompilesMap, Database, EvmEnv, EvmFactory};
@@ -18,10 +16,12 @@ use revm::{
 pub struct BotanixEvmFactory;
 
 impl EvmFactory for BotanixEvmFactory {
-    type Evm<DB: Database, I: Inspector<BotanixContext<DB>>> = BotanixEvm<DB, I>;
+    type Evm<DB: Database, I: Inspector<BotanixContext<DB>>> =
+        BotanixEvm<DB, I>;
     type Context<DB: Database> = BotanixContext<DB>;
     type Tx = BotanixTxEnv;
-    type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
+    type Error<DBError: core::error::Error + Send + Sync + 'static> =
+        EVMError<DBError>;
     type HaltReason = HaltReason;
     type Spec = BotanixHardfork;
     type Precompiles = PrecompilesMap;
@@ -34,7 +34,10 @@ impl EvmFactory for BotanixEvmFactory {
         BotanixEvm::new(input, db, NoOpInspector {}, false)
     }
 
-    fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>>>(
+    fn create_evm_with_inspector<
+        DB: Database,
+        I: Inspector<Self::Context<DB>>,
+    >(
         &self,
         db: DB,
         input: EvmEnv<BotanixHardfork>,

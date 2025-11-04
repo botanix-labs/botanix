@@ -64,7 +64,8 @@ async fn setup_tasks(num_members: u16, config: Config, absent_nodes: &[u16]) {
     debug_assert!(config.min_signers <= num_members);
     debug_assert!(config.max_signers == num_members);
 
-    let coordinator = frost::Identifier::derive(0u16.to_le_bytes().as_slice()).unwrap();
+    let coordinator =
+        frost::Identifier::derive(0u16.to_le_bytes().as_slice()).unwrap();
 
     // List of all Ids.
     let mut members = BTreeMap::new();
@@ -75,16 +76,20 @@ async fn setup_tasks(num_members: u16, config: Config, absent_nodes: &[u16]) {
 
     let absent_nodes: Vec<frost::Identifier> = absent_nodes
         .iter()
-        .map(|id| frost::Identifier::derive(id.to_le_bytes().as_slice()).unwrap())
+        .map(|id| {
+            frost::Identifier::derive(id.to_le_bytes().as_slice()).unwrap()
+        })
         .collect();
 
     for num in 0..num_members {
-        let id = frost::Identifier::derive(num.to_le_bytes().as_slice()).unwrap();
+        let id =
+            frost::Identifier::derive(num.to_le_bytes().as_slice()).unwrap();
         let (tx, rx) = mpsc::channel(100);
 
         let secp = secp256k1::Secp256k1::new();
         let static_sec = secp256k1::SecretKey::new(&mut rand::thread_rng());
-        let static_pub = secp256k1::PublicKey::from_secret_key(&secp, &static_sec);
+        let static_pub =
+            secp256k1::PublicKey::from_secret_key(&secp, &static_sec);
 
         members.insert(id, static_pub);
         channels.insert(id, tx);
@@ -100,11 +105,22 @@ async fn setup_tasks(num_members: u16, config: Config, absent_nodes: &[u16]) {
             continue;
         }
 
-        let machine =
-            DkgStateMachine::new(id, static_sec, coordinator, members.clone(), config, Some(0))
-                .unwrap();
+        let machine = DkgStateMachine::new(
+            id,
+            static_sec,
+            coordinator,
+            members.clone(),
+            config,
+            Some(0),
+        )
+        .unwrap();
 
-        tokio::spawn(run_dkg(machine, rx, channels.clone(), callback_tx.clone()));
+        tokio::spawn(run_dkg(
+            machine,
+            rx,
+            channels.clone(),
+            callback_tx.clone(),
+        ));
     }
 
     // Wait for all members to finish with their aggregated public key packages.
@@ -220,22 +236,38 @@ async fn run_dkg(
 }
 
 fn name_addr(id: &frost::Identifier) -> String {
-    let alice_addr = frost::Identifier::derive(0u16.to_le_bytes().as_slice()).unwrap();
-    let bob_addr = frost::Identifier::derive(1u16.to_le_bytes().as_slice()).unwrap();
-    let charlie_addr = frost::Identifier::derive(2u16.to_le_bytes().as_slice()).unwrap();
-    let dave_addr = frost::Identifier::derive(3u16.to_le_bytes().as_slice()).unwrap();
-    let eve_addr = frost::Identifier::derive(4u16.to_le_bytes().as_slice()).unwrap();
-    let frank_addr = frost::Identifier::derive(5u16.to_le_bytes().as_slice()).unwrap();
-    let grace_addr = frost::Identifier::derive(6u16.to_le_bytes().as_slice()).unwrap();
-    let heidi_addr = frost::Identifier::derive(7u16.to_le_bytes().as_slice()).unwrap();
-    let ivan_addr = frost::Identifier::derive(8u16.to_le_bytes().as_slice()).unwrap();
-    let jane_addr = frost::Identifier::derive(9u16.to_le_bytes().as_slice()).unwrap();
-    let kevin_addr = frost::Identifier::derive(10u16.to_le_bytes().as_slice()).unwrap();
-    let lisa_addr = frost::Identifier::derive(11u16.to_le_bytes().as_slice()).unwrap();
-    let mike_addr = frost::Identifier::derive(12u16.to_le_bytes().as_slice()).unwrap();
-    let nancy_addr = frost::Identifier::derive(13u16.to_le_bytes().as_slice()).unwrap();
-    let oscar_addr = frost::Identifier::derive(14u16.to_le_bytes().as_slice()).unwrap();
-    let peggy_addr = frost::Identifier::derive(15u16.to_le_bytes().as_slice()).unwrap();
+    let alice_addr =
+        frost::Identifier::derive(0u16.to_le_bytes().as_slice()).unwrap();
+    let bob_addr =
+        frost::Identifier::derive(1u16.to_le_bytes().as_slice()).unwrap();
+    let charlie_addr =
+        frost::Identifier::derive(2u16.to_le_bytes().as_slice()).unwrap();
+    let dave_addr =
+        frost::Identifier::derive(3u16.to_le_bytes().as_slice()).unwrap();
+    let eve_addr =
+        frost::Identifier::derive(4u16.to_le_bytes().as_slice()).unwrap();
+    let frank_addr =
+        frost::Identifier::derive(5u16.to_le_bytes().as_slice()).unwrap();
+    let grace_addr =
+        frost::Identifier::derive(6u16.to_le_bytes().as_slice()).unwrap();
+    let heidi_addr =
+        frost::Identifier::derive(7u16.to_le_bytes().as_slice()).unwrap();
+    let ivan_addr =
+        frost::Identifier::derive(8u16.to_le_bytes().as_slice()).unwrap();
+    let jane_addr =
+        frost::Identifier::derive(9u16.to_le_bytes().as_slice()).unwrap();
+    let kevin_addr =
+        frost::Identifier::derive(10u16.to_le_bytes().as_slice()).unwrap();
+    let lisa_addr =
+        frost::Identifier::derive(11u16.to_le_bytes().as_slice()).unwrap();
+    let mike_addr =
+        frost::Identifier::derive(12u16.to_le_bytes().as_slice()).unwrap();
+    let nancy_addr =
+        frost::Identifier::derive(13u16.to_le_bytes().as_slice()).unwrap();
+    let oscar_addr =
+        frost::Identifier::derive(14u16.to_le_bytes().as_slice()).unwrap();
+    let peggy_addr =
+        frost::Identifier::derive(15u16.to_le_bytes().as_slice()).unwrap();
 
     match *id {
         id if id == alice_addr => "Alice".to_string(),
@@ -266,11 +298,23 @@ fn name_payload(msg: &DkgMessage) -> String {
         DkgMessage::AckRound1 { initiator, .. } => {
             format!("AckRound1({})", name_addr(&initiator.0))
         }
-        DkgMessage::Round2 { initiator, target, .. } => {
-            format!("Round2({}.{})", name_addr(&initiator.0), name_addr(&target.0))
+        DkgMessage::Round2 {
+            initiator, target, ..
+        } => {
+            format!(
+                "Round2({}.{})",
+                name_addr(&initiator.0),
+                name_addr(&target.0)
+            )
         }
-        DkgMessage::AckRound2 { initiator, target, .. } => {
-            format!("AckRound2({}.{})", name_addr(&initiator.0), name_addr(&target.0))
+        DkgMessage::AckRound2 {
+            initiator, target, ..
+        } => {
+            format!(
+                "AckRound2({}.{})",
+                name_addr(&initiator.0),
+                name_addr(&target.0)
+            )
         }
         DkgMessage::Round3 { initiator, .. } => {
             format!("Round3({})", name_addr(&initiator.0))

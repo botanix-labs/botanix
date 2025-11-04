@@ -50,7 +50,8 @@ impl BuiltPayload for BotanixBuiltPayload {
 #[non_exhaustive]
 pub struct BotanixPayloadServiceBuilder;
 
-impl<Node, Pool, Evm> PayloadServiceBuilder<Node, Pool, Evm> for BotanixPayloadServiceBuilder
+impl<Node, Pool, Evm> PayloadServiceBuilder<Node, Pool, Evm>
+    for BotanixPayloadServiceBuilder
 where
     Node: FullNodeTypes<Types = BotanixNode>,
     Pool: TransactionPool,
@@ -64,21 +65,26 @@ where
     ) -> eyre::Result<PayloadBuilderHandle<BotanixPayloadTypes>> {
         let (tx, mut rx) = mpsc::unbounded_channel();
 
-        ctx.task_executor().spawn_critical("payload builder", async move {
-            let mut subscriptions = Vec::new();
+        ctx.task_executor()
+            .spawn_critical("payload builder", async move {
+                let mut subscriptions = Vec::new();
 
-            while let Some(message) = rx.recv().await {
-                match message {
-                    PayloadServiceCommand::Subscribe(tx) => {
-                        let (events_tx, events_rx) = broadcast::channel(100);
-                        // Retain senders to make sure that channels are not getting closed
-                        subscriptions.push(events_tx);
-                        let _ = tx.send(events_rx);
+                while let Some(message) = rx.recv().await {
+                    match message {
+                        PayloadServiceCommand::Subscribe(tx) => {
+                            let (events_tx, events_rx) =
+                                broadcast::channel(100);
+                            // Retain senders to make sure that channels are not getting closed
+                            subscriptions.push(events_tx);
+                            let _ = tx.send(events_rx);
+                        }
+                        message => warn!(
+                            ?message,
+                            "Noop payload service received a message"
+                        ),
                     }
-                    message => warn!(?message, "Noop payload service received a message"),
                 }
-            }
-        });
+            });
 
         Ok(PayloadBuilderHandle::new(tx))
     }

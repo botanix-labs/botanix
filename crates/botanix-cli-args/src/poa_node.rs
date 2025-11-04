@@ -1,6 +1,6 @@
+use alloy_primitives::Address;
 use botanix_cli_parsers::parsers::parse_ethereum_address;
 use clap::Args;
-use alloy_primitives::Address;
 use std::path::PathBuf;
 
 use crate::state_sync::StateSyncArgs;
@@ -61,7 +61,12 @@ pub struct PoaNodeArgs {
     pub abci_host: String,
 
     /// ABCI client port to listen on
-    #[arg(long, value_name = "ABCI_PORT", env = "RETH_ABCI_PORT", default_value_t = 26658)]
+    #[arg(
+        long,
+        value_name = "ABCI_PORT",
+        env = "RETH_ABCI_PORT",
+        default_value_t = 26658
+    )]
     pub abci_port: u16,
 
     /// `CometBFT` RPC Port

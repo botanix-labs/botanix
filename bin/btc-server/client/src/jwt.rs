@@ -1,6 +1,7 @@
 use alloy_primitives::hex;
 use jsonwebtoken::{
-    decode, errors::ErrorKind, get_current_timestamp, Algorithm, DecodingKey, Validation,
+    decode, errors::ErrorKind, get_current_timestamp, Algorithm, DecodingKey,
+    Validation,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,9 @@ pub enum JwtError {
 
     /// The "iat" (issued-at) claim in the JWT is not within the allowed ±60 seconds from the
     /// current time.
-    #[error("IAT (issued-at) claim is not within ±60 seconds from the current time")]
+    #[error(
+        "IAT (issued-at) claim is not within ±60 seconds from the current time"
+    )]
     InvalidIssuanceTimestamp,
 
     /// The Authorization header is missing or invalid in the context of JWT validation.
@@ -108,7 +111,10 @@ pub struct Claims {
 impl Claims {
     /// Creates a new instance of [`Claims`] with the current timestamp as the `iat` claim.
     pub fn with_current_timestamp() -> Self {
-        Self { iat: get_current_timestamp(), exp: None }
+        Self {
+            iat: get_current_timestamp(),
+            exp: None,
+        }
     }
 
     /// Checks if the `iat` claim is within the allowed range from the current time.
@@ -158,8 +164,10 @@ impl JwtSecret {
     /// I/O or secret validation errors might occur during read operations in the form of
     /// a [`JwtError`].
     pub fn from_file(fpath: &Path) -> Result<Self, JwtError> {
-        let hex = fs::read_to_string(fpath)
-            .map_err(|err| JwtError::Read { source: err, path: fpath.into() })?;
+        let hex = fs::read_to_string(fpath).map_err(|err| JwtError::Read {
+            source: err,
+            path: fpath.into(),
+        })?;
         let secret = Self::from_hex(hex)?;
         Ok(secret)
     }
@@ -169,14 +177,19 @@ impl JwtSecret {
     pub fn try_create_random(fpath: &Path) -> Result<Self, JwtError> {
         if let Some(dir) = fpath.parent() {
             // Create parent directory
-            fs::create_dir_all(dir)
-                .map_err(|err| JwtError::CreateDir { source: err, path: fpath.into() })?
+            fs::create_dir_all(dir).map_err(|err| JwtError::CreateDir {
+                source: err,
+                path: fpath.into(),
+            })?
         }
 
         let secret = Self::random();
         let bytes = &secret.0;
         let hex = hex::encode(bytes);
-        fs::write(fpath, hex).map_err(|err| JwtError::Write { source: err, path: fpath.into() })?;
+        fs::write(fpath, hex).map_err(|err| JwtError::Write {
+            source: err,
+            path: fpath.into(),
+        })?;
         Ok(secret)
     }
 
@@ -194,7 +207,11 @@ impl JwtSecret {
         validation.set_required_spec_claims(&["iat"]);
         let bytes = &self.0;
 
-        match decode::<Claims>(jwt, &DecodingKey::from_secret(bytes), &validation) {
+        match decode::<Claims>(
+            jwt,
+            &DecodingKey::from_secret(bytes),
+            &validation,
+        ) {
             Ok(token) => {
                 if !token.claims.is_within_time_window() {
                     Err(JwtError::InvalidIssuanceTimestamp)?
@@ -202,7 +219,9 @@ impl JwtSecret {
             }
             Err(err) => match *err.kind() {
                 ErrorKind::InvalidSignature => Err(JwtError::InvalidSignature)?,
-                ErrorKind::InvalidAlgorithm => Err(JwtError::UnsupportedSignatureAlgorithm)?,
+                ErrorKind::InvalidAlgorithm => {
+                    Err(JwtError::UnsupportedSignatureAlgorithm)?
+                }
                 _ => {
                     let detail = format!("{err}");
                     Err(JwtError::JwtDecodingError(detail))?
@@ -222,7 +241,10 @@ impl JwtSecret {
 
     /// Encode the header and claims given and sign the payload using the algorithm from the header
     /// and the key.
-    pub fn encode(&self, claims: &Claims) -> Result<String, jsonwebtoken::errors::Error> {
+    pub fn encode(
+        &self,
+        claims: &Claims,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
         let bytes = &self.0;
         let key = jsonwebtoken::EncodingKey::from_secret(bytes);
         let algo = jsonwebtoken::Header::new(Algorithm::HS256);
@@ -254,7 +276,8 @@ mod tests {
 
     #[test]
     fn from_hex() {
-        let key = "f79ae8046bc11c9927afe911db7143c51a806c4a537cc08e0d37140b0192f430";
+        let key =
+            "f79ae8046bc11c9927afe911db7143c51a806c4a537cc08e0d37140b0192f430";
         let secret: Result<JwtSecret, _> = JwtSecret::from_hex(key);
         assert!(secret.is_ok());
 
@@ -264,7 +287,8 @@ mod tests {
 
     #[test]
     fn original_key_integrity_across_transformations() {
-        let original = "f79ae8046bc11c9927afe911db7143c51a806c4a537cc08e0d37140b0192f430";
+        let original =
+            "f79ae8046bc11c9927afe911db7143c51a806c4a537cc08e0d37140b0192f430";
         let secret = JwtSecret::from_hex(original).unwrap();
         let bytes = &secret.0;
         let computed = hex::encode(bytes);
@@ -296,7 +320,9 @@ mod tests {
 
     #[test]
     fn creation_error_wrong_hex_string() {
-        let hex: String = "This__________Is__________Not_______An____Hex_____________String".into();
+        let hex: String =
+            "This__________Is__________Not_______An____Hex_____________String"
+                .into();
         let result = JwtSecret::from_hex(hex);
         assert!(matches!(result, Err(JwtError::JwtSecretHexDecodeError(_))));
     }
@@ -304,7 +330,10 @@ mod tests {
     #[test]
     fn validation_ok() {
         let secret = JwtSecret::random();
-        let claims = Claims { iat: get_current_timestamp(), exp: Some(10000000000) };
+        let claims = Claims {
+            iat: get_current_timestamp(),
+            exp: Some(10000000000),
+        };
         let jwt = secret.encode(&claims).unwrap();
 
         let result = secret.validate(&jwt);
@@ -330,7 +359,10 @@ mod tests {
         // Check past 'iat' claim more than 60 secs
         let offset = Duration::from_secs(JWT_MAX_IAT_DIFF.as_secs() + 1);
         let out_of_window_time = SystemTime::now().checked_sub(offset).unwrap();
-        let claims = Claims { iat: to_u64(out_of_window_time), exp: Some(10000000000) };
+        let claims = Claims {
+            iat: to_u64(out_of_window_time),
+            exp: Some(10000000000),
+        };
         let jwt = secret.encode(&claims).unwrap();
 
         let result = secret.validate(&jwt);
@@ -340,7 +372,10 @@ mod tests {
         // Check future 'iat' claim more than 60 secs
         let offset = Duration::from_secs(JWT_MAX_IAT_DIFF.as_secs() + 1);
         let out_of_window_time = SystemTime::now().checked_add(offset).unwrap();
-        let claims = Claims { iat: to_u64(out_of_window_time), exp: Some(10000000000) };
+        let claims = Claims {
+            iat: to_u64(out_of_window_time),
+            exp: Some(10000000000),
+        };
         let jwt = secret.encode(&claims).unwrap();
 
         let result = secret.validate(&jwt);
@@ -351,7 +386,10 @@ mod tests {
     #[test]
     fn validation_error_exp_expired() {
         let secret = JwtSecret::random();
-        let claims = Claims { iat: get_current_timestamp(), exp: Some(1) };
+        let claims = Claims {
+            iat: get_current_timestamp(),
+            exp: Some(1),
+        };
         let jwt = secret.encode(&claims).unwrap();
 
         let result = secret.validate(&jwt);
@@ -362,7 +400,10 @@ mod tests {
     #[test]
     fn validation_error_wrong_signature() {
         let secret_1 = JwtSecret::random();
-        let claims = Claims { iat: get_current_timestamp(), exp: Some(10000000000) };
+        let claims = Claims {
+            iat: get_current_timestamp(),
+            exp: Some(10000000000),
+        };
         let jwt = secret_1.encode(&claims).unwrap();
 
         // A different secret will generate a different signature.
@@ -379,18 +420,27 @@ mod tests {
         let key = EncodingKey::from_secret(bytes);
         let unsupported_algo = Header::new(Algorithm::HS384);
 
-        let claims = Claims { iat: get_current_timestamp(), exp: Some(10000000000) };
+        let claims = Claims {
+            iat: get_current_timestamp(),
+            exp: Some(10000000000),
+        };
         let jwt = encode(&unsupported_algo, &claims, &key).unwrap();
         let result = secret.validate(&jwt);
 
-        assert!(matches!(result, Err(JwtError::UnsupportedSignatureAlgorithm)));
+        assert!(matches!(
+            result,
+            Err(JwtError::UnsupportedSignatureAlgorithm)
+        ));
     }
 
     #[test]
     fn valid_without_exp_claim() {
         let secret = JwtSecret::random();
 
-        let claims = Claims { iat: get_current_timestamp(), exp: None };
+        let claims = Claims {
+            iat: get_current_timestamp(),
+            exp: None,
+        };
         let jwt = secret.encode(&claims).unwrap();
 
         let result = secret.validate(&jwt);
@@ -402,7 +452,8 @@ mod tests {
     fn ephemeral_secret_created() {
         let fpath: &Path = Path::new("secret0.hex");
         assert!(fs::metadata(fpath).is_err());
-        JwtSecret::try_create_random(fpath).expect("A secret file should be created");
+        JwtSecret::try_create_random(fpath)
+            .expect("A secret file should be created");
         assert!(fs::metadata(fpath).is_ok());
         fs::remove_file(fpath).unwrap();
     }

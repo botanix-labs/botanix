@@ -1,4 +1,5 @@
 use crate::errors::{EthereumAddressParseError, UrlParsingError};
+use alloy_genesis::Genesis;
 use alloy_primitives::{hex, Address};
 use askama::Template;
 use bitcoin::hashes::Hash;
@@ -7,44 +8,56 @@ use botanix_authority_edh::{
     nums_secp256k1_pk,
 };
 use botanix_chainspec::constants::{
-    create_botanix_config_with_genesis, BotanixTestnetGenesisConfig, BOTANIX_MAINNET,
-    BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID,
+    create_botanix_config_with_genesis, BotanixTestnetGenesisConfig,
+    BOTANIX_MAINNET, BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID,
 };
 use botanix_configs::federation::FederationTomlConfig;
 use reth_chainspec::{ChainSpec, DEV, HOLESKY, MAINNET, SEPOLIA};
 use reth_cli_util::parsers::SocketAddressParsingError;
-use alloy_genesis::Genesis;
 use std::{fs, path::PathBuf, str::FromStr, sync::Arc};
 use url::Url;
 
 /// Chains supported by reth. First value should be used as the default.
-pub const SUPPORTED_CHAINS: &[&str] =
-    &["mainnet", "sepolia", "holesky", "dev", "botanix_testnet", "botanix_mainnet"];
+pub const SUPPORTED_CHAINS: &[&str] = &[
+    "mainnet",
+    "sepolia",
+    "holesky",
+    "dev",
+    "botanix_testnet",
+    "botanix_mainnet",
+];
 
 /// Parse a [`SocketAddr`] from a `str` prefixing with http.
 ///
 /// An error is returned if the value is empty or if non socket value is passed
-pub fn parse_grpc_address(value: &str) -> eyre::Result<String, SocketAddressParsingError> {
+pub fn parse_grpc_address(
+    value: &str,
+) -> eyre::Result<String, SocketAddressParsingError> {
     if value.is_empty() {
         return Err(SocketAddressParsingError::Empty);
     }
     // TODO configurable for https
     let addr = format!("http://{}", value);
     tonic::transport::Endpoint::try_from(addr.clone()).map_err(|_e| {
-        SocketAddressParsingError::Parse("Failed to parse as tonic endpoint".to_string())
+        SocketAddressParsingError::Parse(
+            "Failed to parse as tonic endpoint".to_string(),
+        )
     })?;
     Ok(addr)
 }
 
 /// Parse a [URL] from a `str` value
 pub fn parse_url(value: &str) -> eyre::Result<Url, UrlParsingError> {
-    let url = Url::parse(value).map_err(|_e| UrlParsingError::Parse(value.to_owned()))?;
+    let url = Url::parse(value)
+        .map_err(|_e| UrlParsingError::Parse(value.to_owned()))?;
     Ok(url)
 }
 
 /// Attempts to parse a hex string into an Address.
 /// Accepts an optional "0x" prefix.
-pub fn parse_ethereum_address(s: &str) -> eyre::Result<Address, EthereumAddressParseError> {
+pub fn parse_ethereum_address(
+    s: &str,
+) -> eyre::Result<Address, EthereumAddressParseError> {
     // Remove the optional "0x" prefix.
     let hex_str = s.strip_prefix("0x").unwrap_or(s);
 
@@ -54,7 +67,8 @@ pub fn parse_ethereum_address(s: &str) -> eyre::Result<Address, EthereumAddressP
     }
 
     // Decode the hex string into bytes.
-    let bytes = hex::decode(hex_str).map_err(|_e| EthereumAddressParseError::InvalidHex)?;
+    let bytes = hex::decode(hex_str)
+        .map_err(|_e| EthereumAddressParseError::InvalidHex)?;
 
     // Ensure the decoded bytes are exactly 20 in length.
     if bytes.len() != 20 {
@@ -77,7 +91,9 @@ pub fn parse_ethereum_address(s: &str) -> eyre::Result<Address, EthereumAddressP
 /// The value parser matches either a known chain, the path
 /// to a json file, or a json formatted string in-memory. The json can be either
 /// a serialized [`ChainSpec`] or Genesis struct.
-pub fn genesis_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error> {
+pub fn genesis_value_parser(
+    s: &str,
+) -> eyre::Result<Arc<ChainSpec>, eyre::Error> {
     Ok(match s {
         "mainnet" => MAINNET.clone(),
         "sepolia" => SEPOLIA.clone(),
@@ -87,7 +103,9 @@ pub fn genesis_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error
         "botanix_mainnet" | "botanix-mainnet" => BOTANIX_MAINNET.inner_arc(),
         _ => {
             // try to read json from path first
-            let raw = match fs::read_to_string(PathBuf::from(shellexpand::full(s)?.into_owned())) {
+            let raw = match fs::read_to_string(PathBuf::from(
+                shellexpand::full(s)?.into_owned(),
+            )) {
                 Ok(raw) => raw,
                 Err(io_err) => {
                     // valid json may start with "\n", but must contain "{"
@@ -100,7 +118,8 @@ pub fn genesis_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error
             };
             // both serialized Genesis and ChainSpec supported
             let genesis_toml_config = FederationTomlConfig::from_str(&raw)?;
-            let botanix_fee_recipient = genesis_toml_config.botanix_fee_recipient.clone();
+            let botanix_fee_recipient =
+                genesis_toml_config.botanix_fee_recipient.clone();
             let lst_fee_receiver = genesis_toml_config.lst_fee_receiver;
 
             let _public_keys = genesis_toml_config
@@ -121,7 +140,8 @@ pub fn genesis_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error
                 Address::ZERO,
             );
             let edh = hex::encode(extra_data_header.serialize());
-            let botanix_testnet_config_genesis = BotanixTestnetGenesisConfig { edh: &edh };
+            let botanix_testnet_config_genesis =
+                BotanixTestnetGenesisConfig { edh: &edh };
             let rendered_json = botanix_testnet_config_genesis.render()?;
             let genesis = serde_json::from_str(&rendered_json)?;
             let botanix_testnet = create_botanix_config_with_genesis(
@@ -142,7 +162,9 @@ pub fn genesis_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error
 ///
 /// The value parser matches either a known chain, the path
 /// to a json file, or a json formatted string in-memory. The json needs to be a Genesis struct.
-pub fn chain_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error> {
+pub fn chain_value_parser(
+    s: &str,
+) -> eyre::Result<Arc<ChainSpec>, eyre::Error> {
     Ok(match s {
         "mainnet" => MAINNET.clone(),
         "sepolia" => SEPOLIA.clone(),
@@ -152,7 +174,9 @@ pub fn chain_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error> 
         "botanix_mainnet" | "botanix-mainnet" => BOTANIX_MAINNET.inner_arc(),
         _ => {
             // try to read json from path first
-            let raw = match fs::read_to_string(PathBuf::from(shellexpand::full(s)?.into_owned())) {
+            let raw = match fs::read_to_string(PathBuf::from(
+                shellexpand::full(s)?.into_owned(),
+            )) {
                 Ok(raw) => raw,
                 Err(io_err) => {
                     // valid json may start with "\n", but must contain "{"
@@ -179,7 +203,8 @@ mod tests {
     use crate::{
         errors::EthereumAddressParseError,
         parsers::{
-            chain_value_parser, genesis_value_parser, parse_ethereum_address, SUPPORTED_CHAINS,
+            chain_value_parser, genesis_value_parser, parse_ethereum_address,
+            SUPPORTED_CHAINS,
         },
     };
 
@@ -187,7 +212,8 @@ mod tests {
     fn test_parse_ethereum_address_no_prefix() {
         // A valid address with 40 hex characters (without the "0x" prefix)
         let address_str = "43C8bDCb9AFeBB1D834A7de18CC214a6FD1632d9";
-        let parsed = parse_ethereum_address(address_str).expect("Should parse valid address");
+        let parsed = parse_ethereum_address(address_str)
+            .expect("Should parse valid address");
 
         // Build the expected Address by decoding and converting.
         let expected_bytes = hex::decode(address_str).unwrap();
@@ -202,7 +228,8 @@ mod tests {
     fn test_parse_ethereum_address_with_prefix() {
         // A valid address provided with the "0x" prefix.
         let address_str = "0x43C8bDCb9AFeBB1D834A7de18CC214a6FD1632d9";
-        let parsed = parse_ethereum_address(address_str).expect("Should parse valid address");
+        let parsed = parse_ethereum_address(address_str)
+            .expect("Should parse valid address");
 
         // The expected address is the same as if the prefix weren't there.
         let trimmed = "43C8bDCb9AFeBB1D834A7de18CC214a6FD1632d9";
@@ -219,7 +246,10 @@ mod tests {
         // Test with too short a string.
         let address_str = "1234";
         let err = parse_ethereum_address(address_str).unwrap_err();
-        assert_eq!(err, EthereumAddressParseError::InvalidHexLength(address_str.len()));
+        assert_eq!(
+            err,
+            EthereumAddressParseError::InvalidHexLength(address_str.len())
+        );
     }
 
     #[test]

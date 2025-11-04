@@ -22,12 +22,24 @@ pub enum SerializationType {
 
 /// Traits required for a data type to be parseable
 pub trait DataParseable:
-    serde::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync + Debug + std::marker::Sized
+    serde::Serialize
+    + serde::de::DeserializeOwned
+    + Clone
+    + Send
+    + Sync
+    + Debug
+    + std::marker::Sized
 {
 }
 
-impl<T: serde::Serialize + serde::de::DeserializeOwned + Clone + Send + Sync + Debug> DataParseable
-    for T
+impl<
+        T: serde::Serialize
+            + serde::de::DeserializeOwned
+            + Clone
+            + Send
+            + Sync
+            + Debug,
+    > DataParseable for T
 {
 }
 
@@ -75,7 +87,10 @@ impl Default for DataParser {
     /// assert!(matches!(parser.serialization_type, SerializationType::Json));
     /// ```
     fn default() -> Self {
-        Self { compression_strategy: None, serialization_type: SerializationType::Json }
+        Self {
+            compression_strategy: None,
+            serialization_type: SerializationType::Json,
+        }
     }
 }
 
@@ -124,7 +139,10 @@ impl DataParser {
     ///
     /// let parser = DataParser::default().with_serialization_type(SerializationType::Json);
     /// ```
-    pub fn with_serialization_type(mut self, serialization_type: SerializationType) -> Self {
+    pub fn with_serialization_type(
+        mut self,
+        serialization_type: SerializationType,
+    ) -> Self {
         self.serialization_type = serialization_type;
         self
     }
@@ -159,7 +177,10 @@ impl DataParser {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn encode<T: DataParseable>(&self, data: &T) -> Result<Vec<u8>, Error> {
+    pub async fn encode<T: DataParseable>(
+        &self,
+        data: &T,
+    ) -> Result<Vec<u8>, Error> {
         let serialized_data = self.serialize(data).await?;
         Ok(match &self.compression_strategy {
             Some(strategy) => strategy.compress(&serialized_data[..]).await?,
@@ -175,7 +196,10 @@ impl DataParser {
         Ok(decompressed_data)
     }
 
-    pub fn encode_json<T: DataParseable>(&self, data: &T) -> Result<Vec<u8>, Error> {
+    pub fn encode_json<T: DataParseable>(
+        &self,
+        data: &T,
+    ) -> Result<Vec<u8>, Error> {
         self.serialize_json(data)
     }
 
@@ -189,22 +213,26 @@ impl DataParser {
     ///
     /// A `Result` containing either a `Vec<u8>` of the serialized data,
     /// or an `Error` if serialization fails.
-    pub async fn serialize<T: DataParseable>(&self, raw_data: &T) -> Result<Vec<u8>, Error> {
+    pub async fn serialize<T: DataParseable>(
+        &self,
+        raw_data: &T,
+    ) -> Result<Vec<u8>, Error> {
         match self.serialization_type {
-            SerializationType::Bincode => {
-                bincode::serialize(&raw_data).map_err(|e| Error::Serde(SerdeError::Bincode(*e)))
-            }
-            SerializationType::Postcard => {
-                postcard::to_allocvec(&raw_data).map_err(|e| Error::Serde(SerdeError::Postcard(e)))
-            }
-            SerializationType::Json => {
-                serde_json::to_vec(&raw_data).map_err(|e| Error::Serde(SerdeError::Json(e)))
-            }
+            SerializationType::Bincode => bincode::serialize(&raw_data)
+                .map_err(|e| Error::Serde(SerdeError::Bincode(*e))),
+            SerializationType::Postcard => postcard::to_allocvec(&raw_data)
+                .map_err(|e| Error::Serde(SerdeError::Postcard(e))),
+            SerializationType::Json => serde_json::to_vec(&raw_data)
+                .map_err(|e| Error::Serde(SerdeError::Json(e))),
         }
     }
 
-    fn serialize_json<T: DataParseable>(&self, raw_data: &T) -> Result<Vec<u8>, Error> {
-        serde_json::to_vec(&raw_data).map_err(|e| Error::Serde(SerdeError::Json(e)))
+    fn serialize_json<T: DataParseable>(
+        &self,
+        raw_data: &T,
+    ) -> Result<Vec<u8>, Error> {
+        serde_json::to_vec(&raw_data)
+            .map_err(|e| Error::Serde(SerdeError::Json(e)))
     }
 
     /// Decodes the provided data by deserializing and optionally decompressing it.
@@ -239,7 +267,10 @@ impl DataParser {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn decode<T: DataParseable>(&self, data: &[u8]) -> Result<T, Error> {
+    pub async fn decode<T: DataParseable>(
+        &self,
+        data: &[u8],
+    ) -> Result<T, Error> {
         let data = match &self.compression_strategy {
             Some(strategy) => strategy.decompress(data).await?,
             None => data.to_vec(),
@@ -248,7 +279,10 @@ impl DataParser {
         Ok(decoded_data)
     }
 
-    pub fn decode_json<T: DataParseable>(&self, data: &[u8]) -> Result<T, Error> {
+    pub fn decode_json<T: DataParseable>(
+        &self,
+        data: &[u8],
+    ) -> Result<T, Error> {
         self.deserialize_json(data)
     }
 
@@ -275,12 +309,10 @@ impl DataParser {
         raw_data: &'a [u8],
     ) -> Result<T, Error> {
         match self.serialization_type {
-            SerializationType::Bincode => {
-                bincode::deserialize(raw_data).map_err(|e| Error::Serde(SerdeError::Bincode(*e)))
-            }
-            SerializationType::Postcard => {
-                postcard::from_bytes(raw_data).map_err(|e| Error::Serde(SerdeError::Postcard(e)))
-            }
+            SerializationType::Bincode => bincode::deserialize(raw_data)
+                .map_err(|e| Error::Serde(SerdeError::Bincode(*e))),
+            SerializationType::Postcard => postcard::from_bytes(raw_data)
+                .map_err(|e| Error::Serde(SerdeError::Postcard(e))),
             SerializationType::Json => self.deserialize_json(raw_data),
         }
     }
@@ -289,7 +321,8 @@ impl DataParser {
         &self,
         raw_data: &'a [u8],
     ) -> Result<T, Error> {
-        serde_json::from_slice(raw_data).map_err(|e| Error::Serde(SerdeError::Json(e)))
+        serde_json::from_slice(raw_data)
+            .map_err(|e| Error::Serde(SerdeError::Json(e)))
     }
 }
 
@@ -305,7 +338,9 @@ mod tests {
     #[tokio::test]
     async fn test_encode_decode() {
         let parser = DataParser::default();
-        let original_data = TestData { field: "test".to_string() };
+        let original_data = TestData {
+            field: "test".to_string(),
+        };
         let encoded = parser.encode(&original_data).await.unwrap();
         let decoded: TestData = parser.decode(&encoded).await.unwrap();
         assert_eq!(original_data, decoded);
@@ -313,12 +348,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_serialization_types() {
-        let data = TestData { field: "test".to_string() };
+        let data = TestData {
+            field: "test".to_string(),
+        };
 
-        for serialization_type in
-            [SerializationType::Bincode, SerializationType::Postcard, SerializationType::Json]
-        {
-            let parser = DataParser::default().with_serialization_type(serialization_type);
+        for serialization_type in [
+            SerializationType::Bincode,
+            SerializationType::Postcard,
+            SerializationType::Json,
+        ] {
+            let parser = DataParser::default()
+                .with_serialization_type(serialization_type);
             let encoded = parser.encode(&data).await.unwrap();
             let decoded: TestData = parser.decode(&encoded).await.unwrap();
             assert_eq!(data, decoded);
@@ -327,7 +367,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_compression_strategies() {
-        let data = TestData { field: "test".to_string() };
+        let data = TestData {
+            field: "test".to_string(),
+        };
         let compression_strategies: Vec<Arc<dyn CompressionStrategy>> = vec![
             Arc::new(ZLibCompressionStrategy),
             Arc::new(GzipCompressionStrategy),
@@ -335,7 +377,8 @@ mod tests {
         ];
 
         for strategy in compression_strategies {
-            let parser = DataParser::default().with_compression_strategy(&strategy);
+            let parser =
+                DataParser::default().with_compression_strategy(&strategy);
             let encoded = parser.encode(&data).await.unwrap();
             let decoded: TestData = parser.decode(&encoded).await.unwrap();
             assert_eq!(data, decoded);

@@ -22,7 +22,9 @@ use crate::{
         util::{VerifyingKeyExt, VerifyingKeyExtError},
     },
 };
-use bitcoin::{Amount, Block, BlockHash, OutPoint, ScriptBuf, Transaction, TxOut, Txid};
+use bitcoin::{
+    Amount, Block, BlockHash, OutPoint, ScriptBuf, Transaction, TxOut, Txid,
+};
 use bitcoincore_rpc::RpcApi;
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
@@ -30,7 +32,8 @@ use thiserror::Error;
 
 use crate::{database, rpc};
 
-pub const TX_NOT_FOUND_BITCOIND_ERROR: &str = "no such mempool or blockchain transaction";
+pub const TX_NOT_FOUND_BITCOIND_ERROR: &str =
+    "no such mempool or blockchain transaction";
 pub const TX_NOT_IN_MEMPOOL_BITCOIND_ERROR: &str = "transaction not in mempool";
 
 macro_rules! print_safe {
@@ -92,7 +95,9 @@ impl Tx {
 
     /// Get all the pegouts of this tx. These are the outputs this tx delivers.
     /// I.e. all outputs that are not change outputs.
-    pub fn pegouts(&self) -> impl ExactSizeIterator<Item = (OutPoint, &TxOut)> + '_ {
+    pub fn pegouts(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (OutPoint, &TxOut)> + '_ {
         self.pegout_idxs.iter().map(|i| {
             let point = OutPoint::new(self.txid, *i as u32);
             let output = &self.tx.output[*i];
@@ -101,7 +106,9 @@ impl Tx {
     }
 
     /// Get all change outputs of this tx.
-    pub fn change(&self) -> impl ExactSizeIterator<Item = (OutPoint, &TxOut)> + '_ {
+    pub fn change(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (OutPoint, &TxOut)> + '_ {
         self.change_idxs.iter().map(|i| {
             let point = OutPoint::new(self.txid, *i as u32);
             let output = &self.tx.output[*i];
@@ -134,7 +141,10 @@ pub struct PegoutRequest {
 
 impl PegoutRequest {
     pub fn txout(&self) -> TxOut {
-        TxOut { script_pubkey: self.spk.clone(), value: self.value }
+        TxOut {
+            script_pubkey: self.spk.clone(),
+            value: self.value,
+        }
     }
 }
 
@@ -143,7 +153,8 @@ impl TryFrom<rpc::PendingPegout> for PegoutRequest {
 
     fn try_from(pegout: rpc::PendingPegout) -> Result<Self, Self::Error> {
         Ok(PegoutRequest {
-            id: PegoutId::from_bytes(&pegout.pegout_id).expect("valid pegout id"),
+            id: PegoutId::from_bytes(&pegout.pegout_id)
+                .expect("valid pegout id"),
             spk: ScriptBuf::from_bytes(pegout.spk),
             value: Amount::from_sat(pegout.amount),
             botanix_height: pegout.height,
@@ -244,8 +255,12 @@ impl PegoutScheduler {
         let mut ret = PegoutScheduler {
             conf_window,
             txs: HashMap::with_capacity(txs.len()),
-            txs_by_input: HashMap::with_capacity(txs.iter().map(|t| t.tx.input.len()).sum()),
-            txs_by_pegout: HashMap::with_capacity(txs.iter().map(|t| t.pegouts().len()).sum()),
+            txs_by_input: HashMap::with_capacity(
+                txs.iter().map(|t| t.tx.input.len()).sum(),
+            ),
+            txs_by_pegout: HashMap::with_capacity(
+                txs.iter().map(|t| t.pegouts().len()).sum(),
+            ),
             confirmed_txs: HashSet::new(),
             last_blocks: VecDeque::with_capacity(conf_window as usize),
             last_finalized,
@@ -291,7 +306,10 @@ impl PegoutScheduler {
             self.txs_by_input.entry(input).or_default().push(tx.txid);
         }
         for (_utxo, pegout) in tx.pegouts() {
-            self.txs_by_pegout.entry(pegout.clone()).or_default().push(tx.txid);
+            self.txs_by_pegout
+                .entry(pegout.clone())
+                .or_default()
+                .push(tx.txid);
         }
         self.txs.insert(tx.txid, tx);
     }
@@ -320,7 +338,9 @@ impl PegoutScheduler {
                 let idx = tx
                     .output
                     .iter()
-                    .position(|txout| txout.script_pubkey == pegout_txout.script_pubkey)
+                    .position(|txout| {
+                        txout.script_pubkey == pegout_txout.script_pubkey
+                    })
                     .expect("tx doesn't contain all pegouts");
                 ret.push(idx);
             }
@@ -333,7 +353,9 @@ impl PegoutScheduler {
                     continue;
                 }
                 // sanity check that the change output spk is correct
-                if txout.script_pubkey != self.get_change_spk().expect("change spk should exist") {
+                if txout.script_pubkey
+                    != self.get_change_spk().expect("change spk should exist")
+                {
                     warn!(
                         "PegoutScheduler::add_tx: Change output spk in tx {} is not correct: {:?}",
                         tx.compute_txid(),
@@ -423,8 +445,12 @@ impl PegoutScheduler {
     /// Add a tx back into the pending pegout set
     /// This should be called when a tracked tx is reorged or dropped from the mempool.
     /// Its expected the caller will remove the tx from the tracked set
-    fn add_tx_back_to_pending(&mut self, tx: &Tx) -> Result<(), database::Error> {
-        let pegout_refs: Vec<&PegoutRequest> = tx.pegout_requests.iter().collect();
+    fn add_tx_back_to_pending(
+        &mut self,
+        tx: &Tx,
+    ) -> Result<(), database::Error> {
+        let pegout_refs: Vec<&PegoutRequest> =
+            tx.pegout_requests.iter().collect();
         self.db.store_pending_pegouts(&pegout_refs)?;
         self.db.flush()?;
         if let Some(telemetry) = self.telemetry.as_ref() {
@@ -448,28 +474,48 @@ impl PegoutScheduler {
             drop.relevant_inputs
         );
         for txid in drop.relevant_txs {
-            let tx = self.txs.get(&txid).expect("relevant tx should exist").clone();
+            let tx = self
+                .txs
+                .get(&txid)
+                .expect("relevant tx should exist")
+                .clone();
             // Currently confirmed_txs is not used, could remove this
             self.confirmed_txs.remove(&txid);
             // TODO should we remove the expect here
             self.un_track_tx(&txid).expect("untrack tx");
-            self.add_tx_back_to_pending(&tx).expect("add tx back to pending");
+            self.add_tx_back_to_pending(&tx)
+                .expect("add tx back to pending");
         }
     }
 
     /// Finalize a block by adding the UTXOs that are deeply confirmed back to the database.
     /// This is also where we remove tracked transactions
-    fn finalize_block(&mut self, block: &BlockInfo) -> Result<(), database::Error> {
-        info!("PegoutScheduler::finalize_block: Finalizing block {}", block.hash);
+    fn finalize_block(
+        &mut self,
+        block: &BlockInfo,
+    ) -> Result<(), database::Error> {
+        info!(
+            "PegoutScheduler::finalize_block: Finalizing block {}",
+            block.hash
+        );
         let change_spk_res = self.get_change_spk(); // Get result first
-        info!("PegoutScheduler::finalize_block: Expected change SPK result: {:?}", change_spk_res);
+        info!(
+            "PegoutScheduler::finalize_block: Expected change SPK result: {:?}",
+            change_spk_res
+        );
 
         // To make sure we only update the index when the db is also synced,
         // first try store the new finalized UTXOs to the db, then update the index.
-        let mut all_inputs = block.relevant_inputs.iter().copied().collect::<HashSet<_>>();
+        let mut all_inputs = block
+            .relevant_inputs
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
         for txid in &block.relevant_txs {
-            let tx =
-                self.txs.get(txid).ok_or(database::Error::TrackedTxNotFoundInPegoutScheduler)?;
+            let tx = self
+                .txs
+                .get(txid)
+                .ok_or(database::Error::TrackedTxNotFoundInPegoutScheduler)?;
             // Add back the change to the utxo set
             let mut change_utxos = vec![];
             if let Ok(ref change_spk) = change_spk_res {
@@ -508,7 +554,9 @@ impl PegoutScheduler {
                     change_spk_res.as_ref().err()
                 );
             }
-            self.db.store_utxos(change_utxos.iter().collect::<Vec<_>>().as_slice())?;
+            self.db.store_utxos(
+                change_utxos.iter().collect::<Vec<_>>().as_slice(),
+            )?;
             self.db.flush()?;
             all_inputs.extend(tx.tx.input.iter().map(|i| i.previous_output));
         }
@@ -555,7 +603,8 @@ impl PegoutScheduler {
                         finalized_pegout_ids.len(),
                         txid
                     );
-                    let refs: Vec<&FinalizedPegout> = finalized_pegout_ids.iter().collect();
+                    let refs: Vec<&FinalizedPegout> =
+                        finalized_pegout_ids.iter().collect();
                     self.db.store_finalized_pegout_ids_atomically(&refs)?;
                     self.db.prune_finalized_pegout_ids()?;
                     self.db.flush()?;
@@ -582,7 +631,9 @@ impl PegoutScheduler {
         }
 
         let utxos = self.db.get_all_utxos()?;
-        let utxos_amount = utxos.iter().fold(Amount::ZERO, |acc, utxo| acc + utxo.output.value);
+        let utxos_amount = utxos
+            .iter()
+            .fold(Amount::ZERO, |acc, utxo| acc + utxo.output.value);
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.update_utxos(
                 self.bitcoin_network,
@@ -609,14 +660,21 @@ impl PegoutScheduler {
         //     panic!("bip34 is not active: {:?}", e);
         // }).expect("bip34 is active");
         let last = self.last_blocks.back().expect("always something");
-        assert_eq!(block.header.prev_blockhash, last.hash, "adding {}:{}", height, hash);
+        assert_eq!(
+            block.header.prev_blockhash, last.hash,
+            "adding {}:{}",
+            height, hash
+        );
 
         let mut relevant_txs = Vec::new();
         let mut relevant_inputs = Vec::new();
         for tx in &block.txdata {
             let txid = tx.compute_txid();
             if self.txs.contains_key(&txid) {
-                debug!("Indexed tx {} confirmed in block {}:{}", txid, height, hash);
+                debug!(
+                    "Indexed tx {} confirmed in block {}:{}",
+                    txid, height, hash
+                );
                 relevant_txs.push(txid);
                 self.confirmed_txs.insert(txid);
                 // set last confirmed pegout (id, height) = (txid, height)
@@ -629,7 +687,9 @@ impl PegoutScheduler {
                 }
             } else {
                 for input in &tx.input {
-                    if let Some(conflicts) = self.txs_by_input.get(&input.previous_output) {
+                    if let Some(conflicts) =
+                        self.txs_by_input.get(&input.previous_output)
+                    {
                         warn!(
                             "Tx confirmed that conflicts with one of our txs: \
                             new={}, ours={:?}, block={}:{}",
@@ -645,7 +705,11 @@ impl PegoutScheduler {
             }
         }
 
-        self.last_blocks.push_back(BlockInfo { hash, relevant_txs, relevant_inputs });
+        self.last_blocks.push_back(BlockInfo {
+            hash,
+            relevant_txs,
+            relevant_inputs,
+        });
     }
 
     /// Check if tx is in the mempool, has been dropped or there was a reorg.
@@ -672,7 +736,10 @@ impl PegoutScheduler {
             .collect::<Vec<_>>();
         debug!(
             "Txids older than checkpoint: {:?}",
-            maybe_dropped_txs.iter().map(|t| t.to_string()).collect::<Vec<_>>()
+            maybe_dropped_txs
+                .iter()
+                .map(|t| t.to_string())
+                .collect::<Vec<_>>()
         );
 
         // Check if tx still exists
@@ -748,7 +815,11 @@ impl PegoutScheduler {
                         txid, e
                     );
                     // check error message to confirm the tx is not in the mempool
-                    if !e.to_string().to_lowercase().contains(TX_NOT_IN_MEMPOOL_BITCOIND_ERROR) {
+                    if !e
+                        .to_string()
+                        .to_lowercase()
+                        .contains(TX_NOT_IN_MEMPOOL_BITCOIND_ERROR)
+                    {
                         warn!("Error checking mempool for tx {}: {}", &txid, e);
                         continue;
                     }
@@ -816,7 +887,12 @@ impl PegoutScheduler {
         // If we suspect the node is still syncing, it might have restarted and
         // some of the blocks we already saw might not be in the node's chain.
         // To avoid errors related to this, we'll just ask called to wait.
-        if is_syncing(bitcoind, &self.telemetry, self.bitcoin_network, self.identifier)? {
+        if is_syncing(
+            bitcoind,
+            &self.telemetry,
+            self.bitcoin_network,
+            self.identifier,
+        )? {
             update_pegout_scheduler_error_metrics!(
                 &self.telemetry,
                 self.bitcoin_network,
@@ -981,13 +1057,23 @@ impl PegoutScheduler {
         // we can't just query blocks by height (reorgs might occur along the way).
         // Instead, we first go from the tip and keep a list of hashes to sync,
         // then sync these in the right order.
-        debug!("Syncing hashes from {}:{} to {}:{}", last.height, last.hash, tip.height, tip.hash);
-        let mut to_sync = Vec::with_capacity(tip.height.saturating_sub(last.height));
+        debug!(
+            "Syncing hashes from {}:{} to {}:{}",
+            last.height, last.hash, tip.height, tip.hash
+        );
+        let mut to_sync =
+            Vec::with_capacity(tip.height.saturating_sub(last.height));
         to_sync.push(tip.hash);
         let mut cursor = tip.clone();
         loop {
-            let prevhash = cursor.previous_block_hash.expect("can't reach genesis");
-            trace!("Getting prev block of {}:{}: {}", cursor.height, cursor.hash, prevhash);
+            let prevhash =
+                cursor.previous_block_hash.expect("can't reach genesis");
+            trace!(
+                "Getting prev block of {}:{}: {}",
+                cursor.height,
+                cursor.hash,
+                prevhash
+            );
 
             let block_header_info = measure_rpc_latency!(
                 &telemetry,
@@ -1012,7 +1098,11 @@ impl PegoutScheduler {
             };
 
             if cursor.height == last.height {
-                assert_eq!(cursor.hash, last.hash, "last={:?}, tip={:?}", last, tip);
+                assert_eq!(
+                    cursor.hash, last.hash,
+                    "last={:?}, tip={:?}",
+                    last, tip
+                );
                 break;
             }
             to_sync.push(cursor.hash);
@@ -1047,7 +1137,10 @@ impl PegoutScheduler {
                 }
             };
 
-            info!("PegoutScheduler::sync_until: Processing block {}:{}", height, hash);
+            info!(
+                "PegoutScheduler::sync_until: Processing block {}:{}",
+                height, hash
+            );
 
             let block = measure_rpc_latency!(
                 &telemetry,
@@ -1074,7 +1167,8 @@ impl PegoutScheduler {
             self.add_block(&block, height);
 
             if self.last_blocks.len() > self.conf_window as usize {
-                let deeply_confirmed_block = self.last_blocks.pop_front().unwrap();
+                let deeply_confirmed_block =
+                    self.last_blocks.pop_front().unwrap();
                 info!(
                     "PegoutScheduler::sync_until: Block {} is now deeply confirmed ({} blocks deep). Finalizing...",
                     deeply_confirmed_block.hash,
@@ -1110,8 +1204,16 @@ impl PegoutScheduler {
         // handle txs that are still in the mempool, have been dropped or there was a reorg
         // this must be done after `finalize_block` which updates the db and pegout scheduler state
         info!("PegoutScheduler::sync_until: Finished block processing loop. Tracking mempool...");
-        match self.track_mempool(bitcoind, cp_result, telemetry, bitcoin_network, identifier) {
-            Ok(_) => info!("PegoutScheduler::sync_until: Mempool tracking successful."),
+        match self.track_mempool(
+            bitcoind,
+            cp_result,
+            telemetry,
+            bitcoin_network,
+            identifier,
+        ) {
+            Ok(_) => info!(
+                "PegoutScheduler::sync_until: Mempool tracking successful."
+            ),
             Err(e) => {
                 error!("PegoutScheduler::sync_until: Error during mempool tracking: {}. Propagating error.", e);
                 // Decide if mempool tracking error should halt the sync
@@ -1175,7 +1277,10 @@ pub fn is_syncing(
         initialblockdownload: bool,
     }
 
-    if bitcoind.call::<Res>("getblockchaininfo", &[])?.initialblockdownload {
+    if bitcoind
+        .call::<Res>("getblockchaininfo", &[])?
+        .initialblockdownload
+    {
         return Ok(true);
     }
 
@@ -1195,7 +1300,9 @@ pub fn is_syncing(
         bitcoind.get_block_header_info(&best_block_hash)
     )?;
 
-    let elapsed = SystemTime::now().duration_since(tip.block_time()).unwrap_or_default();
+    let elapsed = SystemTime::now()
+        .duration_since(tip.block_time())
+        .unwrap_or_default();
     if elapsed > Duration::from_secs(60 * 60) {
         // The tip is over an hour old, node is probably still syncing.
         return Ok(true);
@@ -1250,8 +1357,9 @@ mod tests {
     use crate::{
         frost_id,
         test_utils::{
-            create_block, create_random_pegout_id, create_tx, pegout_requests_from_tx,
-            random_p2wpkh_script, setup_db, trusted_dealer_setup, MockBitcoind,
+            create_block, create_random_pegout_id, create_tx,
+            pegout_requests_from_tx, random_p2wpkh_script, setup_db,
+            trusted_dealer_setup, MockBitcoind,
         },
     };
 
@@ -1264,40 +1372,48 @@ mod tests {
     // ("855b53d27666779a179ec93d88dbe28f456040155c4b712a1261ad211f4ba6f2")
     // This is currently used to test
     // `track_mempool_should_untrack_and_add_back_pegout_when_not_in_mempool()`
-    pub static TEST_TRANSACTION_1: LazyLock<Transaction> = LazyLock::new(|| Transaction {
-        version: Version(2),
-        lock_time: LockTime::ZERO,
-        input: vec![TxIn {
-            previous_output: OutPoint::new(Txid::from_byte_array([123u8; 32]), 0),
-            script_sig: ScriptBuf::new(),
-            sequence: Sequence::MAX,
-            witness: Default::default(),
-        }],
-        output: vec![TxOut {
-            value: Amount::from_sat(1000),
-            script_pubkey: ScriptBuf::with_capacity(0),
-        }],
-    });
+    pub static TEST_TRANSACTION_1: LazyLock<Transaction> =
+        LazyLock::new(|| Transaction {
+            version: Version(2),
+            lock_time: LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::new(
+                    Txid::from_byte_array([123u8; 32]),
+                    0,
+                ),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Default::default(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::with_capacity(0),
+            }],
+        });
 
     // A test transaction when you need a deterministic txid which is:
     // ("26bbaab2e585d465cceecc2acc7b398069aa85fc4dd1f52e39666a65e54a4569")
     // This is currently used to test
     // `track_mempool_should_not_add_back_pegout_when_still_in_mempool()`
     #[allow(dead_code)]
-    pub static TEST_TRANSACTION_2: LazyLock<Transaction> = LazyLock::new(|| Transaction {
-        version: Version(2),
-        lock_time: LockTime::ZERO,
-        input: vec![TxIn {
-            previous_output: OutPoint::new(Txid::from_byte_array([45u8; 32]), 0),
-            script_sig: ScriptBuf::new(),
-            sequence: Sequence::MAX,
-            witness: Default::default(),
-        }],
-        output: vec![TxOut {
-            value: Amount::from_sat(1000),
-            script_pubkey: ScriptBuf::with_capacity(0),
-        }],
-    });
+    pub static TEST_TRANSACTION_2: LazyLock<Transaction> =
+        LazyLock::new(|| Transaction {
+            version: Version(2),
+            lock_time: LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::new(
+                    Txid::from_byte_array([45u8; 32]),
+                    0,
+                ),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Default::default(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: ScriptBuf::with_capacity(0),
+            }],
+        });
 
     #[test]
     fn tracked_tx_utils() {
@@ -1340,17 +1456,28 @@ mod tests {
     #[test]
     fn test_track_tx() {
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
 
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
-        let agg_pk =
-            db.get_public_key_package().unwrap().unwrap().verifying_key().to_secp_pk().unwrap();
+        let agg_pk = db
+            .get_public_key_package()
+            .unwrap()
+            .unwrap()
+            .verifying_key()
+            .to_secp_pk()
+            .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
+        let change_output = TxOut {
+            value: Amount::from_sat(1000),
+            script_pubkey: change_spk,
+        };
         let tx = create_tx(3, 3, Some(change_output.clone()));
         let pegout_idxs = vec![0, 1, 2];
         let change_idxs = vec![3];
@@ -1381,7 +1508,8 @@ mod tests {
 
         let pending_txs = pegout_scheduler.txs.clone();
         assert_eq!(pending_txs.len(), 1);
-        let (pending_txid, pending_tx) = pending_txs.into_iter().next().unwrap();
+        let (pending_txid, pending_tx) =
+            pending_txs.into_iter().next().unwrap();
         assert_eq!(pending_txid, tx.compute_txid());
         assert_eq!(pending_tx.pegout_idxs, pegout_idxs);
         assert_eq!(pending_tx.change_idxs, change_idxs);
@@ -1390,13 +1518,19 @@ mod tests {
         let txs_by_pegout = pegout_scheduler.txs_by_pegout.clone();
         assert_eq!(txs_by_pegout.len(), 3);
         for pegout in pegouts.iter() {
-            assert_eq!(txs_by_pegout.get(&pegout.txout()).unwrap(), &vec![tx.compute_txid()]);
+            assert_eq!(
+                txs_by_pegout.get(&pegout.txout()).unwrap(),
+                &vec![tx.compute_txid()]
+            );
         }
 
         let tx_by_input = pegout_scheduler.txs_by_input.clone();
         assert_eq!(tx_by_input.len(), 3);
         for input in tx.input.iter() {
-            assert_eq!(tx_by_input.get(&input.previous_output).unwrap(), &vec![tx.compute_txid()]);
+            assert_eq!(
+                tx_by_input.get(&input.previous_output).unwrap(),
+                &vec![tx.compute_txid()]
+            );
         }
 
         let tracked_inputs = pegout_scheduler.tracked_inputs();
@@ -1409,7 +1543,8 @@ mod tests {
         pegout_scheduler.add_tx(tx.clone(), &pegouts, SystemTime::now());
         assert_eq!(pegout_scheduler.txs.len(), 1);
         let pending_txs = pegout_scheduler.txs.clone();
-        let (pending_txid, pending_tx) = pending_txs.into_iter().next().unwrap();
+        let (pending_txid, pending_tx) =
+            pending_txs.into_iter().next().unwrap();
         assert_eq!(pending_txid, tx.compute_txid());
         assert_eq!(pending_tx.pegout_idxs, pegout_idxs);
         assert_eq!(pending_tx.change_idxs, change_idxs);
@@ -1418,11 +1553,14 @@ mod tests {
     #[test]
     fn test_add_block() {
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
 
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1462,17 +1600,28 @@ mod tests {
     #[test]
     fn test_finalize_block() {
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
 
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
-        let agg_pk =
-            db.get_public_key_package().unwrap().unwrap().verifying_key().to_secp_pk().unwrap();
+        let agg_pk = db
+            .get_public_key_package()
+            .unwrap()
+            .unwrap()
+            .verifying_key()
+            .to_secp_pk()
+            .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
+        let change_output = TxOut {
+            value: Amount::from_sat(1000),
+            script_pubkey: change_spk,
+        };
 
         let mut pegout_scheduler = PegoutScheduler::new(
             101,
@@ -1497,7 +1646,9 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         assert_eq!(last_blocks.len(), 2);
         let last_block = last_blocks.back().unwrap();
-        pegout_scheduler.finalize_block(last_block).expect("finalize block");
+        pegout_scheduler
+            .finalize_block(last_block)
+            .expect("finalize block");
 
         assert_eq!(pegout_scheduler.last_finalized, block.block_hash());
 
@@ -1516,17 +1667,28 @@ mod tests {
     #[test]
     fn finalizing_one_change_output() {
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
 
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
-        let agg_pk =
-            db.get_public_key_package().unwrap().unwrap().verifying_key().to_secp_pk().unwrap();
+        let agg_pk = db
+            .get_public_key_package()
+            .unwrap()
+            .unwrap()
+            .verifying_key()
+            .to_secp_pk()
+            .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
+        let change_output = TxOut {
+            value: Amount::from_sat(1000),
+            script_pubkey: change_spk,
+        };
 
         let mut pegout_scheduler = PegoutScheduler::new(
             101,
@@ -1541,7 +1703,8 @@ mod tests {
         let pegouts = pegout_requests_from_tx(&tx, &[0]);
         pegout_scheduler.add_tx(tx.clone(), &pegouts, SystemTime::now());
 
-        let (last_tx_txid, last_tx) = pegout_scheduler.txs.clone().into_iter().next().unwrap();
+        let (last_tx_txid, last_tx) =
+            pegout_scheduler.txs.clone().into_iter().next().unwrap();
         assert_eq!(last_tx_txid, tx.compute_txid());
         assert_eq!(last_tx.pegout_idxs, vec![0]);
         assert_eq!(last_tx.change_idxs, vec![1]);
@@ -1552,7 +1715,9 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         let last_block = last_blocks.back().unwrap();
 
-        pegout_scheduler.finalize_block(last_block).expect("finalize block");
+        pegout_scheduler
+            .finalize_block(last_block)
+            .expect("finalize block");
 
         let utxos = db.get_all_utxos().unwrap();
         // there is now one change so there is one UTXO to add back to UTXO set
@@ -1564,11 +1729,14 @@ mod tests {
         // here we are tracking tx where all outputs are pegouts but one is mistaken as change
         // The result should be that the incorrect change is NOT added back to UTXO set
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
 
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1586,7 +1754,8 @@ mod tests {
         let pegouts = pegout_requests_from_tx(&tx, &[0]);
         pegout_scheduler.add_tx(tx.clone(), &pegouts, SystemTime::now());
 
-        let (last_tx_txid, last_tx) = pegout_scheduler.txs.clone().into_iter().next().unwrap();
+        let (last_tx_txid, last_tx) =
+            pegout_scheduler.txs.clone().into_iter().next().unwrap();
         assert_eq!(last_tx_txid, tx.compute_txid());
         assert_eq!(last_tx.pegout_idxs, vec![0]);
         // should be empty since we check against change.spk during add_tx
@@ -1598,7 +1767,9 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         let last_block = last_blocks.back().unwrap();
 
-        pegout_scheduler.finalize_block(last_block).expect("finalize block");
+        pegout_scheduler
+            .finalize_block(last_block)
+            .expect("finalize block");
 
         let utxos = db.get_all_utxos().unwrap();
         // No change so there is no UTXO to add back to UTXO set
@@ -1610,11 +1781,14 @@ mod tests {
         // Here we are tracking tx where the incorrect change is registered
         // The result should be that the incorrect change is NOT added back to UTXO set
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
 
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
         let mut pegout_scheduler = PegoutScheduler::new(
             101,
@@ -1630,13 +1804,17 @@ mod tests {
         let tx = create_tx(
             3,
             2,
-            Some(TxOut { value: Amount::from_sat(1000), script_pubkey: incorrect_change_spk }),
+            Some(TxOut {
+                value: Amount::from_sat(1000),
+                script_pubkey: incorrect_change_spk,
+            }),
         );
 
         let pegouts = pegout_requests_from_tx(&tx, &[0, 1]);
         pegout_scheduler.add_tx(tx.clone(), &pegouts, SystemTime::now());
 
-        let (last_tx_txid, last_tx) = pegout_scheduler.txs.clone().into_iter().next().unwrap();
+        let (last_tx_txid, last_tx) =
+            pegout_scheduler.txs.clone().into_iter().next().unwrap();
         assert_eq!(last_tx_txid, tx.compute_txid());
         assert_eq!(last_tx.pegout_idxs, vec![0, 1]);
         // should be empty since we check against change.spk during add_tx
@@ -1648,7 +1826,9 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         let last_block = last_blocks.back().unwrap();
 
-        pegout_scheduler.finalize_block(last_block).expect("finalize block");
+        pegout_scheduler
+            .finalize_block(last_block)
+            .expect("finalize block");
 
         let utxos = db.get_all_utxos().unwrap();
         // No change so there is no UTXO to add back to UTXO set
@@ -1678,7 +1858,8 @@ mod tests {
             bitcoin::Network::Regtest,
             0,
         );
-        let (last_tx_txid, last_tx) = pegout_scheduler.txs.clone().into_iter().next().unwrap();
+        let (last_tx_txid, last_tx) =
+            pegout_scheduler.txs.clone().into_iter().next().unwrap();
         assert_eq!(last_tx_txid, tx.compute_txid());
         assert_eq!(last_tx.pegout_idxs, vec![0]);
         assert_eq!(last_tx.change_idxs, vec![1]);
@@ -1687,16 +1868,27 @@ mod tests {
     #[test]
     fn test_finalize_many_blocks() {
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
 
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
-        let agg_pk =
-            db.get_public_key_package().unwrap().unwrap().verifying_key().to_secp_pk().unwrap();
+        let agg_pk = db
+            .get_public_key_package()
+            .unwrap()
+            .unwrap()
+            .verifying_key()
+            .to_secp_pk()
+            .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
+        let change_output = TxOut {
+            value: Amount::from_sat(1000),
+            script_pubkey: change_spk,
+        };
 
         let mut pegout_scheduler = PegoutScheduler::new(
             1,
@@ -1719,7 +1911,9 @@ mod tests {
 
             let last_block = last_blocks.back().unwrap();
             last_block_hash = last_block.hash;
-            pegout_scheduler.finalize_block(last_block).expect("finalize block");
+            pegout_scheduler
+                .finalize_block(last_block)
+                .expect("finalize block");
         }
         // 100 change outputs are added back to UTXO set
         let utxos = db.get_all_utxos().unwrap();
@@ -1751,7 +1945,9 @@ mod tests {
         );
         assert_eq!(pegout_scheduler.txs.len(), 1);
 
-        pegout_scheduler.un_track_tx(&tx.compute_txid()).expect("untrack tx");
+        pegout_scheduler
+            .un_track_tx(&tx.compute_txid())
+            .expect("untrack tx");
         // Check the mapping is correct
         let txs_by_pegout = pegout_scheduler.txs_by_pegout.clone();
         assert_eq!(txs_by_pegout.len(), 0);
@@ -1768,10 +1964,13 @@ mod tests {
     #[test]
     fn test_roll_back_tip() {
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1786,7 +1985,8 @@ mod tests {
         let tx = create_tx(1, 2, None);
         let pegouts = pegout_requests_from_tx(&tx, &[0]);
 
-        let tracked_tx = pegout_scheduler.add_tx(tx.clone(), &pegouts, SystemTime::now());
+        let tracked_tx =
+            pegout_scheduler.add_tx(tx.clone(), &pegouts, SystemTime::now());
         // Add to db as well
         db.store_tracked_tx(&tracked_tx).unwrap();
         assert_eq!(pegout_scheduler.txs.len(), 1);
@@ -1838,10 +2038,13 @@ mod tests {
     // mock_bitcoind is set up so the tracked tx is confirmed but not deeply confirmed.
     fn track_mempool_should_not_add_back_pegout_when_not_deeply_confirmed() {
         let db = setup_db().0;
-        let (shares, pk_package) = trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
-            .expect("valid key package");
-        db.set_pubkey_package(pk_package).expect("set public key package");
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
+        db.set_pubkey_package(pk_package)
+            .expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1874,7 +2077,8 @@ mod tests {
         assert!(result.is_ok());
 
         // assert the pegout was added to pending pegouts
-        let pending_pegouts = db.get_pending_pegouts().expect("pending pegouts exist");
+        let pending_pegouts =
+            db.get_pending_pegouts().expect("pending pegouts exist");
         assert_eq!(pending_pegouts.len(), 0);
     }
 
@@ -1895,7 +2099,11 @@ mod tests {
         // "855b53d27666779a179ec93d88dbe28f456040155c4b712a1261ad211f4ba6f2" for this test
         // this txid will result in the tx not being on chain nor in the mempool
         let pegouts = pegout_requests_from_tx(&TEST_TRANSACTION_1, &[0]);
-        pegout_scheduler.add_tx(TEST_TRANSACTION_1.clone(), &pegouts, SystemTime::now());
+        pegout_scheduler.add_tx(
+            TEST_TRANSACTION_1.clone(),
+            &pegouts,
+            SystemTime::now(),
+        );
 
         let mock_bitcoind = MockBitcoind::new();
         let mut checkpoint = mock_bitcoind
@@ -1905,7 +2113,8 @@ mod tests {
         checkpoint.time += 5;
 
         // assert pending pegouts is empty
-        let pending_pegouts = db.get_pending_pegouts().expect("pending pegouts exist");
+        let pending_pegouts =
+            db.get_pending_pegouts().expect("pending pegouts exist");
         assert!(pending_pegouts.is_empty());
 
         let result = pegout_scheduler.track_mempool(
@@ -1918,7 +2127,8 @@ mod tests {
         assert!(result.is_ok());
 
         // assert the pegout was added to pending pegouts
-        let pending_pegouts = db.get_pending_pegouts().expect("pending pegouts exist");
+        let pending_pegouts =
+            db.get_pending_pegouts().expect("pending pegouts exist");
         assert_eq!(pending_pegouts.len(), 1);
         assert_eq!(pending_pegouts[0], pegouts[0]);
 

@@ -10,7 +10,10 @@ fn test_is_migration_needed_both_paths_nonexistent() -> Result<()> {
     let botanix_path = temp_dir.path().join("botanix_db");
 
     let result = is_migration_needed(&reth_path, &botanix_path)?;
-    assert!(!result, "Migration should not be needed when both paths don't exist");
+    assert!(
+        !result,
+        "Migration should not be needed when both paths don't exist"
+    );
 
     Ok(())
 }
@@ -25,13 +28,17 @@ fn test_is_migration_needed_reth_empty_botanix_nonexistent() -> Result<()> {
     fs::create_dir(&reth_path)?;
 
     let result = is_migration_needed(&reth_path, &botanix_path)?;
-    assert!(!result, "Migration should not be needed when reth db is empty");
+    assert!(
+        !result,
+        "Migration should not be needed when reth db is empty"
+    );
 
     Ok(())
 }
 
 #[test]
-fn test_is_migration_needed_reth_has_content_botanix_nonexistent() -> Result<()> {
+fn test_is_migration_needed_reth_has_content_botanix_nonexistent() -> Result<()>
+{
     let temp_dir = TempDir::new()?;
     let reth_path = temp_dir.path().join("reth_db");
     let botanix_path = temp_dir.path().join("botanix_db");
@@ -69,7 +76,8 @@ fn test_is_migration_needed_reth_has_content_botanix_empty() -> Result<()> {
 }
 
 #[test]
-fn test_is_migration_needed_reth_has_content_botanix_has_content() -> Result<()> {
+fn test_is_migration_needed_reth_has_content_botanix_has_content() -> Result<()>
+{
     let temp_dir = TempDir::new()?;
     let reth_path = temp_dir.path().join("reth_db");
     let botanix_path = temp_dir.path().join("botanix_db");
@@ -83,7 +91,10 @@ fn test_is_migration_needed_reth_has_content_botanix_has_content() -> Result<()>
     fs::write(botanix_path.join("botanix_file.db"), "botanix content")?;
 
     let result = is_migration_needed(&reth_path, &botanix_path)?;
-    assert!(!result, "Migration should not be needed when both databases have content");
+    assert!(
+        !result,
+        "Migration should not be needed when both databases have content"
+    );
 
     Ok(())
 }
@@ -102,7 +113,10 @@ fn test_is_migration_needed_reth_empty_botanix_has_content() -> Result<()> {
     fs::write(botanix_path.join("botanix_file.db"), "botanix content")?;
 
     let result = is_migration_needed(&reth_path, &botanix_path)?;
-    assert!(!result, "Migration should not be needed when reth db is empty");
+    assert!(
+        !result,
+        "Migration should not be needed when reth db is empty"
+    );
 
     Ok(())
 }
@@ -118,7 +132,10 @@ fn test_is_migration_needed_both_paths_empty_directories() -> Result<()> {
     fs::create_dir(&botanix_path)?;
 
     let result = is_migration_needed(&reth_path, &botanix_path)?;
-    assert!(!result, "Migration should not be needed when both directories are empty");
+    assert!(
+        !result,
+        "Migration should not be needed when both directories are empty"
+    );
 
     Ok(())
 }

@@ -7,23 +7,14 @@ license = { workspace = true }
 
 [dependencies]
 
-# reth deps
-reth-chainspec = { workspace = true }
-reth-cli = { workspace = true }
-reth-ethereum-forks = { workspace = true }
-reth-primitives-traits = { workspace = true }
-reth-network-peers = { workspace = true }
-reth-evm = { workspace = true }
-revm = { workspace = true }
-
 # ethereum
 alloy-chains = { workspace = true, features = ["serde", "rlp"] }
+alloy-consensus = { workspace = true }
 alloy-eips = { workspace = true, features = ["serde"] }
 alloy-genesis = { workspace = true }
+alloy-hardforks = { workspace = true }
 alloy-primitives = { workspace = true, features = ["rand", "rlp", "serde"] }
 alloy-serde = { workspace = true }
-alloy-consensus = { workspace = true }
-alloy-hardforks = { workspace = true }
 
 # other deps
 askama = { workspace = true }
@@ -31,6 +22,15 @@ clap = { workspace = true, features = ["derive", "env"] }
 derive_more = { workspace = true }
 eyre = { workspace = true }
 once_cell = { workspace = true }
+
+# reth deps
+reth-chainspec = { workspace = true }
+reth-cli = { workspace = true }
+reth-ethereum-forks = { workspace = true }
+reth-evm = { workspace = true }
+reth-network-peers = { workspace = true }
+reth-primitives-traits = { workspace = true }
+revm = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 shellexpand = { workspace = true }

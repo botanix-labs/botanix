@@ -1,11 +1,11 @@
 //! Loads a pending block from database. Helper trait for `eth_` block, transaction, call and trace
 //! RPC methods.
 
-use futures::Future;
-use alloy_primitives::U256;
-use reth_provider::BlockReaderIdExt;
 use crate::error::BotanixEthApiError;
+use alloy_primitives::U256;
 use botanix_rpc_config::botanix_config::Botanix;
+use futures::Future;
+use reth_provider::BlockReaderIdExt;
 use revm_primitives::Address;
 
 /// Botanix Rpc endpoints
@@ -24,7 +24,9 @@ pub trait EthBotanixApi: Send + Sync + 'static {
     fn get_aggregate_public_key(
         &self,
         provider: &impl BlockReaderIdExt,
-    ) -> impl Future<Output = Result<secp256k1::PublicKey, BotanixEthApiError>> + Send + Sync {
+    ) -> impl Future<Output = Result<secp256k1::PublicKey, BotanixEthApiError>>
+           + Send
+           + Sync {
         async move {
             let aggregate_public_key = self
                 .botanix_provider()
@@ -41,7 +43,10 @@ pub trait EthBotanixApi: Send + Sync + 'static {
         eth_address: Address,
         provider: &impl BlockReaderIdExt,
     ) -> impl Future<
-        Output = Result<Option<(bitcoin::Address, secp256k1::PublicKey)>, BotanixEthApiError>,
+        Output = Result<
+            Option<(bitcoin::Address, secp256k1::PublicKey)>,
+            BotanixEthApiError,
+        >,
     > + Send {
         async move {
             let pegin_info = self
@@ -70,7 +75,9 @@ pub trait EthBotanixApi: Send + Sync + 'static {
     }
 
     /// Retrieves the btc fee rate
-    fn get_btc_fee_rate(&self) -> impl Future<Output = Result<U256, BotanixEthApiError>> + Send {
+    fn get_btc_fee_rate(
+        &self,
+    ) -> impl Future<Output = Result<U256, BotanixEthApiError>> + Send {
         async move {
             let fee_rate = self
                 .botanix_provider()

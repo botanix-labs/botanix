@@ -8,34 +8,33 @@ homepage = { workspace = true }
 repository = { workspace = true }
 description = "A library for botanix tables migration from reth to botanix database"
 
-[lints]
-workspace = true
+[features]
+test-utils = ["reth-db/test-utils", "botanix-storage/test-utils"]
 
 [dependencies]
+alloy-primitives = { workspace = true, features = ["std"] }
 
 # botanix
 botanix-storage = { workspace = true }
+eyre = { workspace = true }
 
 # reth
 reth-db = { workspace = true, features = ["mdbx"] }
 reth-db-api = { workspace = true }
 reth-primitives = { workspace = true }
-alloy-primitives = { workspace = true, features = ["std"] }
 
 tracing = { workspace = true }
-eyre = { workspace = true }
 
 [dev-dependencies]
-# reth deps
-reth-db = { workspace = true, features = ["mdbx", "test-utils"] }
 
 # botanix deps
 botanix-storage = { workspace = true, features = ["test-utils"] }
 
+botanix-storage-migrate = { path = ".", features = ["test-utils"] }
+# reth deps
+reth-db = { workspace = true, features = ["mdbx", "test-utils"] }
+
 tempfile = { workspace = true }
 
-botanix-storage-migrate = { path = ".", features = ["test-utils"] }
-
-[features]
-test-utils = ["reth-db/test-utils", "botanix-storage/test-utils"]
-
+[lints]
+workspace = true

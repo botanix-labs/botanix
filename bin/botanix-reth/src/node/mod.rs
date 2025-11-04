@@ -3,7 +3,9 @@ use crate::{
         engine_api::{
             builder::BotanixEngineApiBuilder,
             payload::BotanixPayloadTypes,
-            validator::{BotanixEngineValidatorBuilder, BotanixPayloadValidatorBuilder},
+            validator::{
+                BotanixEngineValidatorBuilder, BotanixPayloadValidatorBuilder,
+            },
         },
         primitives::BotanixPrimitives,
         storage::BotanixStorage,
@@ -17,7 +19,10 @@ use evm::BotanixExecutorBuilder;
 use network::BotanixNetworkBuilder;
 use reth::{
     api::{FullNodeComponents, FullNodeTypes, NodeTypes},
-    builder::{components::ComponentsBuilder, rpc::RpcAddOns, DebugNode, Node, NodeAdapter},
+    builder::{
+        components::ComponentsBuilder, rpc::RpcAddOns, DebugNode, Node,
+        NodeAdapter,
+    },
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
 use reth_engine_primitives::BeaconConsensusEngineHandle;
@@ -120,7 +125,12 @@ where
     type RpcBlock = alloy_rpc_types::Block;
 
     fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BotanixBlock {
-        let alloy_rpc_types::Block { header, transactions, withdrawals, .. } = rpc_block;
+        let alloy_rpc_types::Block {
+            header,
+            transactions,
+            withdrawals,
+            ..
+        } = rpc_block;
         BotanixBlock {
             header: header.inner,
             body: BotanixBlockBody {
@@ -139,7 +149,9 @@ where
 
     fn local_payload_attributes_builder(
         chain_spec: &Self::ChainSpec,
-    ) -> impl PayloadAttributesBuilder<<Self::Payload as PayloadTypes>::PayloadAttributes> {
+    ) -> impl PayloadAttributesBuilder<
+        <Self::Payload as PayloadTypes>::PayloadAttributes,
+    > {
         LocalPayloadAttributesBuilder::new(Arc::new(chain_spec.clone()))
     }
 }

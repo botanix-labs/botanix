@@ -1,24 +1,24 @@
 //! Test utilities for the authority consensus crate.
-use botanix_authority_peg::mint_validation::{BURN_TOPIC, MINT_CONTRACT_ADDRESS};
+use alloy_consensus::Header;
+use alloy_primitives::{
+    address, b256, bytes, hex_literal::hex, BlockHash, BlockNumber, Bytes,
+    TxHash, TxNumber, B256, U256,
+};
+use botanix_authority_peg::mint_validation::{
+    BURN_TOPIC, MINT_CONTRACT_ADDRESS,
+};
 use ethabi;
 use reth_chainspec::ChainInfo;
-use alloy_primitives::{
-    address, b256, bytes, BlockHash, BlockNumber, Bytes, B256, U256, TxNumber, TxHash, hex_literal::hex
-};
 use reth_primitives::{
-    Log, LogData, Receipt,
-    SealedHeader, TransactionMeta, TransactionSigned,
+    Log, LogData, Receipt, SealedHeader, TransactionMeta, TransactionSigned,
     TxType,
 };
-use alloy_consensus::{ 
-    Header,
-};
 
-use reth_provider::{
-    BlockHashReader, BlockNumReader, HeaderProvider, ProviderResult, ReceiptProvider,
-    TransactionsProvider,
-};
 use alloy_eips::BlockHashOrNumber;
+use reth_provider::{
+    BlockHashReader, BlockNumReader, HeaderProvider, ProviderResult,
+    ReceiptProvider, TransactionsProvider,
+};
 use std::ops::{RangeBounds, RangeInclusive};
 
 /// A mock provider for testing purposes.
@@ -55,7 +55,6 @@ impl MockProvider {
 }
 
 impl ReceiptProvider for MockProvider {
-
     type Receipt = Receipt;
 
     fn receipt(&self, _id: TxNumber) -> ProviderResult<Option<Self::Receipt>> {
@@ -63,11 +62,17 @@ impl ReceiptProvider for MockProvider {
     }
 
     // return receipt with burn log
-    fn receipt_by_hash(&self, _hash: TxHash) -> ProviderResult<Option<Self::Receipt>> {
+    fn receipt_by_hash(
+        &self,
+        _hash: TxHash,
+    ) -> ProviderResult<Option<Self::Receipt>> {
         // encoded values (amount, destination, version)
-        let amount =
-            ethabi::Token::Uint(ethabi::ethereum_types::U256::from(10_000_000_000_000_u64));
-        let destination = ethabi::Token::String("mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string());
+        let amount = ethabi::Token::Uint(ethabi::ethereum_types::U256::from(
+            10_000_000_000_000_u64,
+        ));
+        let destination = ethabi::Token::String(
+            "mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string(),
+        );
         let version = ethabi::Token::Bytes(vec![0]);
         let payload = ethabi::encode(&[amount, destination, version]);
 
@@ -92,7 +97,10 @@ impl ReceiptProvider for MockProvider {
         Ok(Some(receipt))
     }
 
-    fn receipts_by_block(&self, _block: BlockHashOrNumber) -> ProviderResult<Option<Vec<Self::Receipt>>> {
+    fn receipts_by_block(
+        &self,
+        _block: BlockHashOrNumber,
+    ) -> ProviderResult<Option<Vec<Self::Receipt>>> {
         Ok(Some(vec![MockProvider::receipt()]))
     }
 
@@ -113,11 +121,9 @@ impl ReceiptProvider for MockProvider {
         }
         Ok(result)
     }
-
 }
 
 impl TransactionsProvider for MockProvider {
-
     type Transaction = TransactionSigned;
 
     fn transaction_by_hash_with_meta(
@@ -127,19 +133,31 @@ impl TransactionsProvider for MockProvider {
         unimplemented!();
     }
 
-    fn transaction_id(&self, _tx_hash: TxHash) -> ProviderResult<Option<TxNumber>> {
+    fn transaction_id(
+        &self,
+        _tx_hash: TxHash,
+    ) -> ProviderResult<Option<TxNumber>> {
         unimplemented!();
     }
 
-    fn transaction_by_id(&self, _id: TxNumber) -> ProviderResult<Option<Self::Transaction>> {
+    fn transaction_by_id(
+        &self,
+        _id: TxNumber,
+    ) -> ProviderResult<Option<Self::Transaction>> {
         unimplemented!();
     }
 
-    fn transaction_by_hash(&self, _hash: TxHash) -> ProviderResult<Option<Self::Transaction>> {
+    fn transaction_by_hash(
+        &self,
+        _hash: TxHash,
+    ) -> ProviderResult<Option<Self::Transaction>> {
         unimplemented!();
     }
 
-    fn transaction_block(&self, _id: TxNumber) -> ProviderResult<Option<BlockNumber>> {
+    fn transaction_block(
+        &self,
+        _id: TxNumber,
+    ) -> ProviderResult<Option<BlockNumber>> {
         unimplemented!();
     }
 
@@ -180,8 +198,11 @@ impl TransactionsProvider for MockProvider {
     > {
         unimplemented!();
     }
-    
-    fn transaction_by_id_unhashed(&self, _id: TxNumber) -> ProviderResult<Option<Self::Transaction> >  {
+
+    fn transaction_by_id_unhashed(
+        &self,
+        _id: TxNumber,
+    ) -> ProviderResult<Option<Self::Transaction>> {
         unimplemented!();
     }
 }
@@ -231,20 +252,31 @@ impl BlockNumReader for MockProvider {
         unimplemented!()
     }
 
-    fn convert_number(&self, _id: BlockHashOrNumber) -> ProviderResult<Option<B256>> {
+    fn convert_number(
+        &self,
+        _id: BlockHashOrNumber,
+    ) -> ProviderResult<Option<B256>> {
         unimplemented!()
     }
 }
 
 impl HeaderProvider for MockProvider {
-
     type Header = Header;
 
-    fn header_by_number(&self, _num: u64) -> ProviderResult<Option<Self::Header>> {
-        Ok(Some(Header { timestamp: self.timestamp, ..Default::default() }))
+    fn header_by_number(
+        &self,
+        _num: u64,
+    ) -> ProviderResult<Option<Self::Header>> {
+        Ok(Some(Header {
+            timestamp: self.timestamp,
+            ..Default::default()
+        }))
     }
 
-    fn header(&self, _block_hash: &BlockHash) -> ProviderResult<Option<Self::Header>> {
+    fn header(
+        &self,
+        _block_hash: &BlockHash,
+    ) -> ProviderResult<Option<Self::Header>> {
         unimplemented!()
     }
 
@@ -252,15 +284,24 @@ impl HeaderProvider for MockProvider {
         unimplemented!()
     }
 
-    fn header_td_by_number(&self, _number: BlockNumber) -> ProviderResult<Option<U256>> {
+    fn header_td_by_number(
+        &self,
+        _number: BlockNumber,
+    ) -> ProviderResult<Option<U256>> {
         unimplemented!()
     }
 
-    fn headers_range(&self, _range: impl RangeBounds<BlockNumber>) -> ProviderResult<Vec<Self::Header>> {
+    fn headers_range(
+        &self,
+        _range: impl RangeBounds<BlockNumber>,
+    ) -> ProviderResult<Vec<Self::Header>> {
         unimplemented!()
     }
 
-    fn sealed_header(&self, _number: BlockNumber) -> ProviderResult<Option<SealedHeader<Self::Header>>> {
+    fn sealed_header(
+        &self,
+        _number: BlockNumber,
+    ) -> ProviderResult<Option<SealedHeader<Self::Header>>> {
         unimplemented!()
     }
 

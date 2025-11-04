@@ -25,7 +25,8 @@ fn inner_main() -> Result<(), anyhow::Error> {
         App::PeginProof(cmd) => match cmd {
             PeginProof::Inspect { proof } => {
                 let bytes = hex::decode(&proof).context("invalid hex")?;
-                let meta = PeginMeta::deserialize(&bytes).context("invalid proof format")?;
+                let meta = PeginMeta::deserialize(&bytes)
+                    .context("invalid proof format")?;
                 println!("{:#?}", meta);
             }
         },
@@ -48,7 +49,10 @@ mod tests {
 
     // Helper function to parse command line arguments
     fn parse_args(args: &[&str]) -> App {
-        let args = args.iter().map(|s| OsString::from_str(s).unwrap()).collect::<Vec<_>>();
+        let args = args
+            .iter()
+            .map(|s| OsString::from_str(s).unwrap())
+            .collect::<Vec<_>>();
         App::parse_from(args)
     }
 
@@ -104,7 +108,10 @@ mod tests {
     }
 
     fn test_inner_main(args: &[&str]) -> Result<(), anyhow::Error> {
-        let args = args.iter().map(|s| OsString::from_str(s).unwrap()).collect::<Vec<_>>();
+        let args = args
+            .iter()
+            .map(|s| OsString::from_str(s).unwrap())
+            .collect::<Vec<_>>();
         match App::parse_from(args) {
             App::PeginProof(cmd) => match cmd {
                 PeginProof::Inspect { proof } => {
@@ -120,13 +127,15 @@ mod tests {
 
     #[test]
     fn test_inner_main_valid_proof() {
-        let result = test_inner_main(&["app", "pegin-proof", "inspect", "deadbeef"]);
+        let result =
+            test_inner_main(&["app", "pegin-proof", "inspect", "deadbeef"]);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_inner_main_invalid_hex() {
-        let result = test_inner_main(&["app", "pegin-proof", "inspect", "invalid-hex"]);
+        let result =
+            test_inner_main(&["app", "pegin-proof", "inspect", "invalid-hex"]);
         assert!(result.is_err());
 
         let err = result.unwrap_err().to_string();

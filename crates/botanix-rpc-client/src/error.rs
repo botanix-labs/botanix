@@ -20,10 +20,12 @@ pub enum BotanixEthApiError {
 impl From<BotanixEthApiError> for jsonrpsee_types::error::ErrorObject<'static> {
     fn from(error: BotanixEthApiError) -> Self {
         match error {
-            BotanixEthApiError::GatewayAddress |
-            BotanixEthApiError::GetMerkleProof |
-            BotanixEthApiError::GetBtcFee |
-            BotanixEthApiError::GetAggregatePublicKey => internal_rpc_err(error.to_string()),
+            BotanixEthApiError::GatewayAddress
+            | BotanixEthApiError::GetMerkleProof
+            | BotanixEthApiError::GetBtcFee
+            | BotanixEthApiError::GetAggregatePublicKey => {
+                internal_rpc_err(error.to_string())
+            }
         }
     }
 }

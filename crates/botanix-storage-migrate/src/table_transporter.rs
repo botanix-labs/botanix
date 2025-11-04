@@ -35,7 +35,10 @@ impl<'a> TableTransporter<'a> {
         reth_tx: &'a Tx<reth_db::mdbx::RW>,
         botanix_tx: &'a Tx<reth_db::mdbx::RW>,
     ) -> Self {
-        Self { reth_tx, botanix_tx }
+        Self {
+            reth_tx,
+            botanix_tx,
+        }
     }
 
     /// Transfers all entries from a reth database table to a botanix database table.
@@ -81,28 +84,34 @@ impl<'a> TableTransporter<'a> {
             return Ok(MigrationReport::default());
         }
 
-        let mut reth_db_cursor = self
-            .reth_tx
-            .cursor_read::<T>()
-            .wrap_err(format!("Failed to create reth db write cursor for table '{}'", T::NAME))?;
+        let mut reth_db_cursor =
+            self.reth_tx.cursor_read::<T>().wrap_err(format!(
+                "Failed to create reth db write cursor for table '{}'",
+                T::NAME
+            ))?;
 
-        let mut botanix_db_cursor = self.botanix_tx.cursor_write::<T>().wrap_err(format!(
-            "Failed to create botanix db write cursor for table '{}'",
-            T::NAME
-        ))?;
+        let mut botanix_db_cursor =
+            self.botanix_tx.cursor_write::<T>().wrap_err(format!(
+                "Failed to create botanix db write cursor for table '{}'",
+                T::NAME
+            ))?;
 
         let mut migrated_keys_count = 0;
 
         // Walk through all entries in the source table and copy to destination
-        for result in
-            reth_db_cursor.walk(None).wrap_err(format!("Failed to walk table '{}'", T::NAME))?
+        for result in reth_db_cursor
+            .walk(None)
+            .wrap_err(format!("Failed to walk table '{}'", T::NAME))?
         {
-            let (key, value) =
-                result.wrap_err(format!("Failed to read entry from table '{}'", T::NAME))?;
+            let (key, value) = result.wrap_err(format!(
+                "Failed to read entry from table '{}'",
+                T::NAME
+            ))?;
 
-            botanix_db_cursor
-                .append(key, &value)
-                .wrap_err(format!("Failed to append entry to table '{}'", T::NAME))?;
+            botanix_db_cursor.append(key, &value).wrap_err(format!(
+                "Failed to append entry to table '{}'",
+                T::NAME
+            ))?;
 
             migrated_keys_count += 1;
         }
@@ -115,7 +124,9 @@ impl<'a> TableTransporter<'a> {
             ));
         }
 
-        self.reth_tx.clear::<T>().wrap_err(format!("Failed to clear table '{}'", T::NAME))?;
+        self.reth_tx
+            .clear::<T>()
+            .wrap_err(format!("Failed to clear table '{}'", T::NAME))?;
 
         let report = MigrationReport::new(migrated_keys_count, start_time);
 

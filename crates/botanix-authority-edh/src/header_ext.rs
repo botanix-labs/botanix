@@ -1,8 +1,12 @@
-use super::extra_data_header::{ExtraDataHeader, ExtraDataHeaderDeserializeError};
+use super::extra_data_header::{
+    ExtraDataHeader, ExtraDataHeaderDeserializeError,
+};
 use alloy_primitives::Bytes;
 use botanix_btc_wallet::bitcoind::BitcoindError;
 // use bitcoincore_rpc::{Error as BitcoindError, RpcApi};
-use botanix_authority_peg::consensus_package::{BotanixConsensusPackage, RecentHeader};
+use botanix_authority_peg::consensus_package::{
+    BotanixConsensusPackage, RecentHeader,
+};
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use reth_primitives_traits::Header;
 use revm_primitives::Address;
@@ -39,7 +43,9 @@ pub trait HeaderExt {
     ) -> Result<secp256k1::PublicKey, ExtraDataHeaderDeserializeError>;
 
     /// Get the block producer address
-    fn block_fee_recipient_address(&self) -> Result<Address, ExtraDataHeaderDeserializeError>;
+    fn block_fee_recipient_address(
+        &self,
+    ) -> Result<Address, ExtraDataHeaderDeserializeError>;
 }
 
 /// Errors that can occur while creating a Botanix consensus package
@@ -83,7 +89,9 @@ impl HeaderExt for Header {
     }
 
     /// get block fee recipient address
-    fn block_fee_recipient_address(&self) -> Result<Address, ExtraDataHeaderDeserializeError> {
+    fn block_fee_recipient_address(
+        &self,
+    ) -> Result<Address, ExtraDataHeaderDeserializeError> {
         let edh = self.deserialize_extra_data_header()?;
         Ok(edh.block_fee_recipient_address)
     }
@@ -113,10 +121,15 @@ impl HeaderExt for Header {
 
         tracing::trace!("edh={:?}", edh);
 
-        let bitcoind = match bitcoind_factory.build_and_connect() {
-            Ok(bitcoind) => bitcoind,
-            Err(e) => return Err(BotanixConsensusPackageError::FailedToCreateBitcoindClient(e)),
-        };
+        let bitcoind =
+            match bitcoind_factory.build_and_connect() {
+                Ok(bitcoind) => bitcoind,
+                Err(e) => return Err(
+                    BotanixConsensusPackageError::FailedToCreateBitcoindClient(
+                        e,
+                    ),
+                ),
+            };
 
         let bitcoin_checkpoint_header = match bitcoind.get_rpc_client_dyn().get_block_header_rpc(&edh.bitcoin_block_hash) {
             Ok(header) => header,
@@ -125,7 +138,10 @@ impl HeaderExt for Header {
             }
         };
 
-        tracing::trace!("bitcoin_checkpoint_header={:?}", bitcoin_checkpoint_header);
+        tracing::trace!(
+            "bitcoin_checkpoint_header={:?}",
+            bitcoin_checkpoint_header
+        );
 
         let bitcoin_checkpoint_height = match bitcoind.get_rpc_client_dyn().get_block_info_rpc(&edh.bitcoin_block_hash) {
             Ok(info) => info.height,
@@ -160,7 +176,9 @@ mod tests {
         hashes::Hash,
         CompactTarget, TxMerkleNode,
     };
-    use botanix_btc_wallet::{bitcoind::BitcoindConfig, test_utils::MockBitcoindFactory};
+    use botanix_btc_wallet::{
+        bitcoind::BitcoindConfig, test_utils::MockBitcoindFactory,
+    };
 
     use super::*;
     use reth_primitives_traits::Header;
@@ -171,8 +189,9 @@ mod tests {
         let edh = ExtraDataHeader::default();
         let serialized = edh.serialize();
         header.extra_data = serialized.into();
-        let deserialized_edh =
-            header.deserialize_extra_data_header().expect("Deserialization passed");
+        let deserialized_edh = header
+            .deserialize_extra_data_header()
+            .expect("Deserialization passed");
 
         assert_eq!(deserialized_edh, edh);
     }
@@ -183,13 +202,18 @@ mod tests {
         let edh = ExtraDataHeader::default();
         header.add_extra_data_header(&edh);
         let btc_network = bitcoin::Network::Testnet;
-        let bitcoind_factory = MockBitcoindFactory::new(BitcoindConfig::default());
+        let bitcoind_factory =
+            MockBitcoindFactory::new(BitcoindConfig::default());
 
-        let res = header.botanix_consensus_package(btc_network, bitcoind_factory);
+        let res =
+            header.botanix_consensus_package(btc_network, bitcoind_factory);
         assert!(res.is_ok());
 
-        let BotanixConsensusPackage { bitcoin_checkpoint, aggregate_public_key, btc_network } =
-            res.unwrap();
+        let BotanixConsensusPackage {
+            bitcoin_checkpoint,
+            aggregate_public_key,
+            btc_network,
+        } = res.unwrap();
 
         let expected_header = BtcHeader {
             version: Version::default(),

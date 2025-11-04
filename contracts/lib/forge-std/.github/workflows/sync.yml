@@ -22,7 +22,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
       - name: Sync Release Branch
-        run: |
+        run: |-
           git fetch --tags
           git checkout v1
           git reset --hard ${GITHUB_REF}

@@ -1,4 +1,6 @@
-use crate::models::{ChunkId, Snapshot, SnapshotChunk, SnapshotId, SnapshotSync, SnapshotSyncId};
+use crate::models::{
+    ChunkId, Snapshot, SnapshotChunk, SnapshotId, SnapshotSync, SnapshotSyncId,
+};
 use alloy_primitives::{BlockNumber, B256};
 use reth_storage_errors::provider::ProviderResult;
 use std::ops::RangeInclusive;
@@ -42,7 +44,10 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some(Snapshot))` - The snapshot if found
     /// * `Ok(None)` - If no snapshot exists with the given ID
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_snapshot_by_id(&self, snapshot_id: SnapshotId) -> ProviderResult<Option<Snapshot>>;
+    fn get_snapshot_by_id(
+        &self,
+        snapshot_id: SnapshotId,
+    ) -> ProviderResult<Option<Snapshot>>;
 
     /// Get last snapshot sync by id
     ///
@@ -55,7 +60,9 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some(SnapshotSyncId))` - The ID of the last sync operation
     /// * `Ok(None)` - If no sync operations have been recorded
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_last_snapshot_sync_id(&self) -> ProviderResult<Option<SnapshotSyncId>>;
+    fn get_last_snapshot_sync_id(
+        &self,
+    ) -> ProviderResult<Option<SnapshotSyncId>>;
 
     /// Get snapshot sync by height
     ///
@@ -71,7 +78,10 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some(SnapshotSync))` - The sync record if found at the given height
     /// * `Ok(None)` - If no sync record exists for the given height
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_snapshot_sync_by_height(&self, height: u64) -> ProviderResult<Option<SnapshotSync>>;
+    fn get_snapshot_sync_by_height(
+        &self,
+        height: u64,
+    ) -> ProviderResult<Option<SnapshotSync>>;
 
     /// Get snapshot sync by id
     ///
@@ -87,7 +97,10 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some(SnapshotSync))` - The sync record if found
     /// * `Ok(None)` - If no sync record exists with the given ID
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_snapshot_sync_by_id(&self, id: u64) -> ProviderResult<Option<SnapshotSync>>;
+    fn get_snapshot_sync_by_id(
+        &self,
+        id: u64,
+    ) -> ProviderResult<Option<SnapshotSync>>;
 
     /// Get chunk by chunk id
     ///
@@ -104,7 +117,10 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some(SnapshotChunk))` - The chunk if found
     /// * `Ok(None)` - If no chunk exists with the given ID
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_chunk_by_id(&self, chunk_id: ChunkId) -> ProviderResult<Option<SnapshotChunk>>;
+    fn get_chunk_by_id(
+        &self,
+        chunk_id: ChunkId,
+    ) -> ProviderResult<Option<SnapshotChunk>>;
 
     /// Get chunk size
     ///
@@ -156,7 +172,10 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some(BlockNumber))` - The block number if the chunk exists
     /// * `Ok(None)` - If no chunk exists with the given ID
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_chunk_block_number(&self, chunk_id: ChunkId) -> ProviderResult<Option<BlockNumber>>;
+    fn get_chunk_block_number(
+        &self,
+        chunk_id: ChunkId,
+    ) -> ProviderResult<Option<BlockNumber>>;
 
     /// Get last snapshot height
     ///
@@ -169,7 +188,9 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some((SnapshotId, BlockNumber)))` - The latest snapshot ID and its height
     /// * `Ok(None)` - If no snapshots exist in the database
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_last_snapshot_height(&self) -> ProviderResult<Option<(SnapshotId, BlockNumber)>>;
+    fn get_last_snapshot_height(
+        &self,
+    ) -> ProviderResult<Option<(SnapshotId, BlockNumber)>>;
 
     /// Get first snapshot height
     ///
@@ -182,7 +203,9 @@ pub trait SnapshotReader: Send + Sync {
     /// * `Ok(Some((SnapshotId, BlockNumber)))` - The earliest snapshot ID and its height
     /// * `Ok(None)` - If no snapshots exist in the database
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_first_snapshot_height(&self) -> ProviderResult<Option<(SnapshotId, BlockNumber)>>;
+    fn get_first_snapshot_height(
+        &self,
+    ) -> ProviderResult<Option<(SnapshotId, BlockNumber)>>;
 
     /// Get snapshot size
     ///
@@ -198,7 +221,10 @@ pub trait SnapshotReader: Send + Sync {
     ///
     /// * `Ok(usize)` - The total size of the snapshot in bytes
     /// * `Err(ProviderError)` - If there was a database error or snapshot doesn't exist
-    fn get_snapshot_size(&self, snapshot_id: SnapshotId) -> ProviderResult<usize>;
+    fn get_snapshot_size(
+        &self,
+        snapshot_id: SnapshotId,
+    ) -> ProviderResult<usize>;
 
     /// Get snapshots count
     ///
@@ -433,7 +459,10 @@ pub trait SnapshotWriter: Send + Sync {
     ///
     /// * `Ok(())` - If the snapshots were successfully removed
     /// * `Err(ProviderError)` - If there was a database error
-    fn remove_snapshots(&self, range: RangeInclusive<SnapshotId>) -> ProviderResult<()>;
+    fn remove_snapshots(
+        &self,
+        range: RangeInclusive<SnapshotId>,
+    ) -> ProviderResult<()>;
 
     /// Removes oldest snapshot
     ///
@@ -460,7 +489,10 @@ pub trait SnapshotWriter: Send + Sync {
     ///
     /// * `Ok(())` - If the chunks were successfully removed
     /// * `Err(ProviderError)` - If there was a database error
-    fn remove_chunks(&self, range: RangeInclusive<ChunkId>) -> ProviderResult<()>;
+    fn remove_chunks(
+        &self,
+        range: RangeInclusive<ChunkId>,
+    ) -> ProviderResult<()>;
 
     /// Deletes chunks in blocks
     ///
@@ -476,5 +508,8 @@ pub trait SnapshotWriter: Send + Sync {
     ///
     /// * `Ok(())` - If the chunks and block mappings were successfully deleted
     /// * `Err(ProviderError)` - If there was a database error
-    fn delete_chunks_in_blocks(&self, range: RangeInclusive<ChunkId>) -> ProviderResult<()>;
+    fn delete_chunks_in_blocks(
+        &self,
+        range: RangeInclusive<ChunkId>,
+    ) -> ProviderResult<()>;
 }

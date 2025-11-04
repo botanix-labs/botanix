@@ -1,4 +1,6 @@
-use crate::{ActivationManager, MIN_QUORUM, MIN_VALIDATOR_COUNT, VOTE_RETENTION_PERIOD};
+use crate::{
+    ActivationManager, MIN_QUORUM, MIN_VALIDATOR_COUNT, VOTE_RETENTION_PERIOD,
+};
 use botanix_storage::{
     models::{RuntimeVersion, Vote},
     ActivationManagerReaderWriter,

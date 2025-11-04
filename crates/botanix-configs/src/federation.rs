@@ -62,7 +62,9 @@ pub struct FederationTomlConfig {
 
 impl FederationTomlConfig {
     #[allow(dead_code)]
-    pub(crate) async fn new_from_path(path: impl AsRef<Path> + Send) -> Result<Self, Error> {
+    pub(crate) async fn new_from_path(
+        path: impl AsRef<Path> + Send,
+    ) -> Result<Self, Error> {
         read_to_string(path)?.parse()
     }
 
@@ -81,8 +83,12 @@ impl FederationTomlConfig {
         }
     }
     /// Write the config to a file
-    pub fn write_to_path(&self, path: impl AsRef<Path> + Send) -> Result<(), Error> {
-        let toml = toml::to_string(self).map_err(Error::ParseSerializeConfig)?;
+    pub fn write_to_path(
+        &self,
+        path: impl AsRef<Path> + Send,
+    ) -> Result<(), Error> {
+        let toml =
+            toml::to_string(self).map_err(Error::ParseSerializeConfig)?;
         let mut file = File::create(path).map_err(Error::OpenConfig)?;
         file.write_all(toml.as_bytes()).map_err(Error::ReadConfig)
     }
@@ -100,13 +106,18 @@ impl FederationTomlConfig {
             .federation_member_public_key
             .iter()
             .map(|key| {
-                let public_key = secp256k1::PublicKey::from_str(&key.key).map_err(Error::from)?;
+                let public_key = secp256k1::PublicKey::from_str(&key.key)
+                    .map_err(Error::from)?;
 
-                let soc_addr = key.socket_addr.parse::<SocketAddr>().map_err(Error::from)?;
+                let soc_addr = key
+                    .socket_addr
+                    .parse::<SocketAddr>()
+                    .map_err(Error::from)?;
 
                 Ok((public_key, soc_addr))
             })
-            .collect::<Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error>>()?;
+            .collect::<Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error>>(
+            )?;
 
         Ok(federation_members)
     }
@@ -123,20 +134,26 @@ impl FromStr for FederationTomlConfig {
 fn read_to_string(path: impl AsRef<Path> + Send) -> Result<String, Error> {
     let mut file = File::open(path).map_err(Error::OpenConfig)?;
     let meta = file.metadata().map_err(Error::ReadMeta)?;
-    let mut contents = Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0));
+    let mut contents =
+        Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0));
     file.read_to_end(&mut contents).map_err(Error::ReadConfig)?;
     String::from_utf8(contents).map_err(Error::ParseUtf8)
 }
 
 /// Writes random bytes to a filepath
 #[allow(dead_code)]
-pub(crate) fn write_data_to_file(path: impl AsRef<Path> + Send, data: &[u8]) -> Result<(), Error> {
+pub(crate) fn write_data_to_file(
+    path: impl AsRef<Path> + Send,
+    data: &[u8],
+) -> Result<(), Error> {
     let mut file = File::create(path).map_err(Error::OpenConfig)?;
     file.write_all(data).map_err(Error::ReadConfig)
 }
 
 /// Load the federation setup toml
-pub fn load_federation_config_toml(path: &PathBuf) -> eyre::Result<FederationTomlConfig> {
+pub fn load_federation_config_toml(
+    path: &PathBuf,
+) -> eyre::Result<FederationTomlConfig> {
     let _ = fs::metadata(path)?;
     let raw = fs::read_to_string(path)?;
     let genesis_toml_config = FederationTomlConfig::from_str(&raw)?;

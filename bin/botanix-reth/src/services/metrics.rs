@@ -1,9 +1,15 @@
-
-use std::{net::SocketAddr, sync::Arc};
 use botanix_chainspec::BotanixChainSpec;
-use btcserverlib::version::{CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP, VERGEN_GIT_SHA};
+use btcserverlib::version::{
+    CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP, VERGEN_GIT_SHA,
+};
+use std::{net::SocketAddr, sync::Arc};
 
-use reth_node_metrics::{chain::ChainSpecInfo, hooks::Hooks, server::{MetricServer, MetricServerConfig}, version::VersionInfo};
+use reth_node_metrics::{
+    chain::ChainSpecInfo,
+    hooks::Hooks,
+    server::{MetricServer, MetricServerConfig},
+    version::VersionInfo,
+};
 
 /// Starts an optional metrics server if `metrics_args` is Some(SocketAddr).
 ///
@@ -12,7 +18,11 @@ use reth_node_metrics::{chain::ChainSpecInfo, hooks::Hooks, server::{MetricServe
 /// - `chain_spec`: Shared chain specification with chain metadata.
 ///
 /// Returns Ok(()) when the server is started or when metrics are disabled.
-pub async fn run_metrics_service(metrics_args: Option<SocketAddr>, task_executor: &reth::tasks::TaskExecutor, chain_spec: Arc<BotanixChainSpec>) -> eyre::Result<()> {
+pub async fn run_metrics_service(
+    metrics_args: Option<SocketAddr>,
+    task_executor: &reth::tasks::TaskExecutor,
+    chain_spec: Arc<BotanixChainSpec>,
+) -> eyre::Result<()> {
     // add metrics if necessary
     if let Some(metrics_listener_address) = metrics_args {
         // start the metrics server

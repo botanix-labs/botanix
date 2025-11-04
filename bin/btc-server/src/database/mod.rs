@@ -8,7 +8,10 @@ use std::{
 use crate::{
     pegout_id::PegoutId,
     pegout_scheduler::{self},
-    rpc::{OutPoint as RpcOutPoint, ScriptBuf as RpcScriptBuf, TxOut as RpcTxOut, Utxo as RpcUtxo},
+    rpc::{
+        OutPoint as RpcOutPoint, ScriptBuf as RpcScriptBuf, TxOut as RpcTxOut,
+        Utxo as RpcUtxo,
+    },
     util::{parse_eth_address, OutPointExt},
 };
 use bitcoin::{
@@ -83,7 +86,12 @@ impl Utxo {
         eth_address: Option<[u8; 20]>,
         version: Option<UtxoVersion>,
     ) -> Self {
-        Utxo { outpoint, output, eth_address, version: version.unwrap_or(UtxoVersion::V1) as u32 }
+        Utxo {
+            outpoint,
+            output,
+            eth_address,
+            version: version.unwrap_or(UtxoVersion::V1) as u32,
+        }
     }
 }
 
@@ -100,8 +108,16 @@ pub struct FinalizedPegout {
 }
 
 impl FinalizedPegout {
-    pub fn new(id: PegoutId, block_number: u64, timestamp: Option<u64>) -> Self {
-        FinalizedPegout { id, block_number, timestamp }
+    pub fn new(
+        id: PegoutId,
+        block_number: u64,
+        timestamp: Option<u64>,
+    ) -> Self {
+        FinalizedPegout {
+            id,
+            block_number,
+            timestamp,
+        }
     }
 }
 
@@ -176,8 +192,10 @@ impl Db {
         let db = sled::open(path)?;
         Ok(Db {
             utxos: db.open_tree(TREE_UTXOS)?,
-            round1_dkg_packages: db.open_tree(TREE_ROUND1_DKG_PERSONAL_PACKAGE)?,
-            round2_dkg_packages: db.open_tree(TREE_ROUND2_DKG_PERSONAL_PACKAGE)?,
+            round1_dkg_packages: db
+                .open_tree(TREE_ROUND1_DKG_PERSONAL_PACKAGE)?,
+            round2_dkg_packages: db
+                .open_tree(TREE_ROUND2_DKG_PERSONAL_PACKAGE)?,
             psbt: db.open_tree(TREE_PSBT)?,
             tracked_txs: db.open_tree(TREE_TRACKED_TXS)?,
             pending_pegouts: db.open_tree(TREE_PENDING_PEGOUTS)?,
@@ -199,13 +217,19 @@ impl Db {
     }
 
     /// Adds a PSBT to the database.
-    pub fn update_psbt(&self, signing_session_id: &[u8; 32], psbt: &Psbt) -> Result<usize, Error> {
+    pub fn update_psbt(
+        &self,
+        signing_session_id: &[u8; 32],
+        psbt: &Psbt,
+    ) -> Result<usize, Error> {
         let mut bytes = Vec::new();
         if let Some(b) = self.psbt.get(&signing_session_id[..])? {
             // if there is an existing psbt then we merge the new psbt with the existing one
-            let mut existing_psbt = ciborium::from_reader::<Psbt, _>(b.as_ref())?;
+            let mut existing_psbt =
+                ciborium::from_reader::<Psbt, _>(b.as_ref())?;
             existing_psbt.combine(psbt.clone())?;
-            ciborium::into_writer(&existing_psbt, &mut bytes).expect("writing to buffer");
+            ciborium::into_writer(&existing_psbt, &mut bytes)
+                .expect("writing to buffer");
         } else {
             ciborium::into_writer(psbt, &mut bytes).expect("writing to buffer");
         }
@@ -216,7 +240,10 @@ impl Db {
     /// Get PSBT from the database.
     /// Returns None if the PSBT is not found.
     /// Rertrieves psbt using signing_session_id
-    pub fn get_psbt(&self, signing_session_id: &[u8; 32]) -> Result<Option<Psbt>, Error> {
+    pub fn get_psbt(
+        &self,
+        signing_session_id: &[u8; 32],
+    ) -> Result<Option<Psbt>, Error> {
         if let Some(b) = self.psbt.get(&signing_session_id[..])? {
             let ret = ciborium::from_reader::<Psbt, _>(b.as_ref())?;
             Ok(Some(ret))
@@ -226,13 +253,19 @@ impl Db {
     }
 
     /// Get signing session ids from db
-    pub fn get_session_ids(&self, max_results: u32) -> Result<Vec<[u8; 32]>, Error> {
+    pub fn get_session_ids(
+        &self,
+        max_results: u32,
+    ) -> Result<Vec<[u8; 32]>, Error> {
         let mut ret = Vec::new();
         let mut results = 0;
         for res in self.psbt.iter() {
             let (k, _) = res?;
-            let signing_session_id: [u8; 32] =
-                k.to_vec().as_slice().try_into().map_err(Error::Serialization)?;
+            let signing_session_id: [u8; 32] = k
+                .to_vec()
+                .as_slice()
+                .try_into()
+                .map_err(Error::Serialization)?;
             results += 1;
             if max_results == results {
                 break;
@@ -265,9 +298,13 @@ impl Db {
     /// Returns `Ok(Some(public_key_package))` if the public key package is found in the database.
     /// Returns `Ok(None)` if the public key package is not found.
     /// Returns `Err` in case of deserialization or other errors.
-    pub fn get_public_key_package(&self) -> Result<Option<frost::keys::PublicKeyPackage>, Error> {
+    pub fn get_public_key_package(
+        &self,
+    ) -> Result<Option<frost::keys::PublicKeyPackage>, Error> {
         if let Some(b) = self.db.get(TREE_PUBKEY_PACKAGE)? {
-            let ret = ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(b.as_ref())?;
+            let ret = ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(
+                b.as_ref(),
+            )?;
             Ok(Some(ret))
         } else {
             Ok(None)
@@ -281,9 +318,13 @@ impl Db {
     /// Returns `Ok(Some(key_package))` if the key package is found in the database.
     /// Returns `Ok(None)` if the key package is not found.
     /// Returns `Err` in case of deserialization or other errors.
-    pub fn get_key_package(&self) -> Result<Option<frost::keys::KeyPackage>, Error> {
+    pub fn get_key_package(
+        &self,
+    ) -> Result<Option<frost::keys::KeyPackage>, Error> {
         if let Some(b) = self.db.get(TREE_KEY_PACKAGE)? {
-            let ret = ciborium::from_reader::<frost::keys::KeyPackage, _>(b.as_ref())?;
+            let ret = ciborium::from_reader::<frost::keys::KeyPackage, _>(
+                b.as_ref(),
+            )?;
             Ok(Some(ret))
         } else {
             Ok(None)
@@ -300,9 +341,13 @@ impl Db {
     ///
     /// Returns `Ok(())` if the key package is successfully stored in the database.
     /// Returns `Err` in case of serialization or other errors.
-    pub fn set_key_package(&self, key_package: frost::keys::KeyPackage) -> Result<(), Error> {
+    pub fn set_key_package(
+        &self,
+        key_package: frost::keys::KeyPackage,
+    ) -> Result<(), Error> {
         let mut bytes = Vec::new();
-        ciborium::into_writer(&key_package, &mut bytes).expect("writing to buffer");
+        ciborium::into_writer(&key_package, &mut bytes)
+            .expect("writing to buffer");
 
         self.db.insert(TREE_KEY_PACKAGE, &bytes[..])?;
         Ok(())
@@ -323,7 +368,8 @@ impl Db {
         pk_package: frost::keys::PublicKeyPackage,
     ) -> Result<(), Error> {
         let mut bytes = Vec::new();
-        ciborium::into_writer(&pk_package, &mut bytes).expect("writing to buffer");
+        ciborium::into_writer(&pk_package, &mut bytes)
+            .expect("writing to buffer");
 
         self.db.insert(TREE_PUBKEY_PACKAGE, &bytes[..])?;
         Ok(())
@@ -365,11 +411,15 @@ impl Db {
         // Validate retrieved packages.
         #[cfg(debug_assertions)]
         {
-            ciborium::from_reader::<frost::keys::KeyPackage, _>(key_package.as_ref())
-                .expect("bad key package");
+            ciborium::from_reader::<frost::keys::KeyPackage, _>(
+                key_package.as_ref(),
+            )
+            .expect("bad key package");
 
-            ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(pk_package.as_ref())
-                .expect("bad public key package");
+            ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(
+                pk_package.as_ref(),
+            )
+            .expect("bad public key package");
         }
 
         // IMPORTANT: We randomly generate a single nonce, which is included in
@@ -382,7 +432,9 @@ impl Db {
         let iv: [u8; 12] = rand::random();
         let nonce = Nonce::from_slice(&iv);
 
-        let mut t = merlin::Transcript::new(b"Botanix_Macbeth_BtcServer_ExportedKeyPackage");
+        let mut t = merlin::Transcript::new(
+            b"Botanix_Macbeth_BtcServer_ExportedKeyPackage",
+        );
         t.append_message(b"salt", nonce);
         t.append_message(b"passphrase", passphrase.as_bytes());
 
@@ -458,7 +510,9 @@ impl Db {
         // Retrieve the nonce directly from the exported package.
         let nonce = Nonce::from_slice(&export.iv);
 
-        let mut t = merlin::Transcript::new(b"Botanix_Macbeth_BtcServer_ExportedKeyPackage");
+        let mut t = merlin::Transcript::new(
+            b"Botanix_Macbeth_BtcServer_ExportedKeyPackage",
+        );
         t.append_message(b"salt", nonce);
         t.append_message(b"passphrase", passphrase.as_bytes());
 
@@ -522,8 +576,10 @@ impl Db {
         }
         let mut bytes = Vec::new();
 
-        ciborium::into_writer(&dkg_round2_package, &mut bytes).map_err(Error::CiboriumWrite)?;
-        self.round2_dkg_packages.insert(&peer_id_bytes[..], &bytes[..])?;
+        ciborium::into_writer(&dkg_round2_package, &mut bytes)
+            .map_err(Error::CiboriumWrite)?;
+        self.round2_dkg_packages
+            .insert(&peer_id_bytes[..], &bytes[..])?;
         Ok(bytes.len())
     }
 
@@ -552,8 +608,10 @@ impl Db {
             return Ok(0);
         }
         let mut bytes = Vec::new();
-        ciborium::into_writer(&dkg_round1, &mut bytes).map_err(Error::CiboriumWrite)?;
-        self.round1_dkg_packages.insert(&peer_id_bytes[..], &bytes[..])?;
+        ciborium::into_writer(&dkg_round1, &mut bytes)
+            .map_err(Error::CiboriumWrite)?;
+        self.round1_dkg_packages
+            .insert(&peer_id_bytes[..], &bytes[..])?;
         Ok(bytes.len())
     }
 
@@ -571,18 +629,26 @@ impl Db {
     /// serialization errors.
     pub fn get_round2_dkg_packages(
         &self,
-    ) -> Result<BTreeMap<frost::Identifier, frost::keys::dkg::round2::Package>, Error> {
+    ) -> Result<
+        BTreeMap<frost::Identifier, frost::keys::dkg::round2::Package>,
+        Error,
+    > {
         let mut ret = BTreeMap::new();
         for res in self.round2_dkg_packages.iter() {
             let (k, v) = res?;
-            let peer_id_bytes: [u8; 32] =
-                k.to_vec().as_slice().try_into().map_err(Error::Serialization)?;
+            let peer_id_bytes: [u8; 32] = k
+                .to_vec()
+                .as_slice()
+                .try_into()
+                .map_err(Error::Serialization)?;
 
             let peer_id = frost::Identifier::deserialize(&peer_id_bytes)
                 .map_err(Error::FrostSerialization)?;
 
-            let dkg_round2 =
-                ciborium::from_reader::<frost::keys::dkg::round2::Package, _>(v.as_ref())?;
+            let dkg_round2 = ciborium::from_reader::<
+                frost::keys::dkg::round2::Package,
+                _,
+            >(v.as_ref())?;
             ret.insert(peer_id, dkg_round2);
         }
         Ok(ret)
@@ -602,18 +668,26 @@ impl Db {
     /// serialization errors.
     pub fn get_round1_dkg_packages(
         &self,
-    ) -> Result<BTreeMap<frost::Identifier, frost::keys::dkg::round1::Package>, Error> {
+    ) -> Result<
+        BTreeMap<frost::Identifier, frost::keys::dkg::round1::Package>,
+        Error,
+    > {
         let mut ret = BTreeMap::new();
         for res in self.round1_dkg_packages.iter() {
             let (k, v) = res?;
-            let peer_id_bytes: [u8; 32] =
-                k.to_vec().as_slice().try_into().map_err(Error::Serialization)?;
+            let peer_id_bytes: [u8; 32] = k
+                .to_vec()
+                .as_slice()
+                .try_into()
+                .map_err(Error::Serialization)?;
 
             let peer_id = frost::Identifier::deserialize(&peer_id_bytes)
                 .map_err(Error::FrostSerialization)?;
 
-            let dkg_round1 =
-                ciborium::from_reader::<frost::keys::dkg::round1::Package, _>(v.as_ref())?;
+            let dkg_round1 = ciborium::from_reader::<
+                frost::keys::dkg::round1::Package,
+                _,
+            >(v.as_ref())?;
             ret.insert(peer_id, dkg_round1);
         }
         Ok(ret)
@@ -657,7 +731,8 @@ impl Db {
         let op = utxo.outpoint;
         if !self.utxos.contains_key(op.to_bytes())? {
             let mut bytes = Vec::new();
-            ciborium::into_writer(&utxo, &mut bytes).map_err(Error::CiboriumWrite)?;
+            ciborium::into_writer(&utxo, &mut bytes)
+                .map_err(Error::CiboriumWrite)?;
             self.utxos.insert(op.to_bytes(), &bytes[..])?;
             Ok(true)
         } else {
@@ -675,7 +750,8 @@ impl Db {
                         ciborium::into_writer(&utxo, &mut bytes)
                             .map_err(Error::CiboriumWrite)
                             .expect("Ciborium error");
-                        database_tx.insert(op.to_bytes().to_vec(), &bytes[..])?;
+                        database_tx
+                            .insert(op.to_bytes().to_vec(), &bytes[..])?;
                     }
                 }
                 Ok::<(), ConflictableTransactionError>(())
@@ -701,8 +777,10 @@ impl Db {
         let mut utxos = vec![];
         for res in self.utxos.iter() {
             let (k, v) = res?;
-            let outpoint: OutPoint = OutPoint::from_slice(&k).expect("corrupt db: outpoint");
-            let mut utxo: Utxo = ciborium::de::from_reader(v.as_ref()).expect("corrupt db: utxo");
+            let outpoint: OutPoint =
+                OutPoint::from_slice(&k).expect("corrupt db: outpoint");
+            let mut utxo: Utxo = ciborium::de::from_reader(v.as_ref())
+                .expect("corrupt db: utxo");
             utxo.outpoint = outpoint;
             utxos.push(utxo);
         }
@@ -710,7 +788,10 @@ impl Db {
     }
 
     /// Store a list of txs that we are tracking for the pegout scheduler.
-    pub fn store_tracked_txs(&self, txs: &[&pegout_scheduler::Tx]) -> Result<(), Error> {
+    pub fn store_tracked_txs(
+        &self,
+        txs: &[&pegout_scheduler::Tx],
+    ) -> Result<(), Error> {
         match txs.len() {
             0 => Ok(()),
             1 => self.store_tracked_tx(txs.first().expect("to have tx")),
@@ -719,7 +800,10 @@ impl Db {
     }
 
     /// Store a list of txs that we are tracking for the pegout scheduler atomically.
-    pub fn store_tracked_txs_atomically(&self, txs: &[&pegout_scheduler::Tx]) -> Result<(), Error> {
+    pub fn store_tracked_txs_atomically(
+        &self,
+        txs: &[&pegout_scheduler::Tx],
+    ) -> Result<(), Error> {
         self.tracked_txs
             .transaction(|database_tx| {
                 for tx in txs.iter() {
@@ -729,17 +813,25 @@ impl Db {
                         ciborium::into_writer(tx, &mut bytes)
                             .map_err(Error::CiboriumWrite)
                             .expect("Ciborium error");
-                        database_tx.insert(txid.to_byte_array().to_vec(), &bytes[..])?;
+                        database_tx.insert(
+                            txid.to_byte_array().to_vec(),
+                            &bytes[..],
+                        )?;
                     }
                 }
                 Ok::<(), ConflictableTransactionError>(())
             })
-            .map_err(|e: TransactionError<_>| Error::Transaction(e.to_string()))?;
+            .map_err(|e: TransactionError<_>| {
+                Error::Transaction(e.to_string())
+            })?;
         Ok(())
     }
 
     /// Store a tx that we are tracking for the pegout scheduler.
-    pub fn store_tracked_tx(&self, tx: &pegout_scheduler::Tx) -> Result<(), Error> {
+    pub fn store_tracked_tx(
+        &self,
+        tx: &pegout_scheduler::Tx,
+    ) -> Result<(), Error> {
         let mut bytes = Vec::new();
         ciborium::into_writer(tx, &mut bytes).map_err(Error::CiboriumWrite)?;
         self.tracked_txs.insert(tx.txid, &bytes[..])?;
@@ -752,7 +844,8 @@ impl Db {
         let mut ret = Vec::new();
         for res in self.tracked_txs.iter() {
             let (_k, v) = res?;
-            let tx = ciborium::de::from_reader(v.as_ref()).expect("corrupt db: pending tx");
+            let tx = ciborium::de::from_reader(v.as_ref())
+                .expect("corrupt db: pending tx");
             ret.push(tx);
         }
         Ok(ret)
@@ -765,7 +858,9 @@ impl Db {
             .iter()
             .map(|tx| {
                 let mut engine = sha256::Hash::engine();
-                tx.txid.consensus_encode(&mut engine).expect("engine don't error");
+                tx.txid
+                    .consensus_encode(&mut engine)
+                    .expect("engine don't error");
                 Ok(sha256::Hash::from_engine(engine))
             })
             .collect::<Result<Vec<_>, Error>>()?;
@@ -774,15 +869,22 @@ impl Db {
             return Ok(());
         }
 
-        let root = bitcoin::merkle_tree::calculate_root(tracked_txs.into_iter())
-            .ok_or(Error::EmptyMerkleRoot)?;
-        self.db.insert(KEY_TRACKED_TX_MERKLE_ROOT, root.to_byte_array().to_vec())?;
+        let root =
+            bitcoin::merkle_tree::calculate_root(tracked_txs.into_iter())
+                .ok_or(Error::EmptyMerkleRoot)?;
+        self.db.insert(
+            KEY_TRACKED_TX_MERKLE_ROOT,
+            root.to_byte_array().to_vec(),
+        )?;
         Ok(())
     }
 
-    pub fn get_tracked_tx_merkle_root(&self) -> Result<Option<sha256::Hash>, Error> {
+    pub fn get_tracked_tx_merkle_root(
+        &self,
+    ) -> Result<Option<sha256::Hash>, Error> {
         Ok(self.db.get(KEY_TRACKED_TX_MERKLE_ROOT)?.map(|b| {
-            sha256::Hash::from_slice(&b).expect("corrupt db: Merkle root should be 32 bytes")
+            sha256::Hash::from_slice(&b)
+                .expect("corrupt db: Merkle root should be 32 bytes")
         }))
     }
 
@@ -791,16 +893,22 @@ impl Db {
         Ok(())
     }
 
-    pub fn store_pegout_mgr_finalized_block(&self, block_hash: BlockHash) -> Result<(), Error> {
-        self.db.insert(KEY_PEGOUTMGR_TIP, &block_hash.to_byte_array())?;
+    pub fn store_pegout_mgr_finalized_block(
+        &self,
+        block_hash: BlockHash,
+    ) -> Result<(), Error> {
+        self.db
+            .insert(KEY_PEGOUTMGR_TIP, &block_hash.to_byte_array())?;
         Ok(())
     }
 
-    pub fn get_pegout_mgr_finalized_block(&self) -> Result<Option<BlockHash>, Error> {
-        Ok(self
-            .db
-            .get(KEY_PEGOUTMGR_TIP)?
-            .map(|t| BlockHash::from_slice(&t).expect("corrupt db: pegout mgr block hash")))
+    pub fn get_pegout_mgr_finalized_block(
+        &self,
+    ) -> Result<Option<BlockHash>, Error> {
+        Ok(self.db.get(KEY_PEGOUTMGR_TIP)?.map(|t| {
+            BlockHash::from_slice(&t)
+                .expect("corrupt db: pegout mgr block hash")
+        }))
     }
 
     /// Stores the consensus Merkle root of all spendable UTXOs.
@@ -809,7 +917,9 @@ impl Db {
             .iter_utxos()
             .map(|u| {
                 let mut engine = sha256::Hash::engine();
-                u?.outpoint.consensus_encode(&mut engine).expect("engine don't error");
+                u?.outpoint
+                    .consensus_encode(&mut engine)
+                    .expect("engine don't error");
                 Ok(sha256::Hash::from_engine(engine))
             })
             .collect::<Result<Vec<_>, Error>>()?;
@@ -820,14 +930,16 @@ impl Db {
 
         let root = bitcoin::merkle_tree::calculate_root(utxos.into_iter())
             .ok_or(Error::EmptyMerkleRoot)?;
-        self.db.insert(KEY_UTXO_MERKLE_ROOT, root.to_byte_array().to_vec())?;
+        self.db
+            .insert(KEY_UTXO_MERKLE_ROOT, root.to_byte_array().to_vec())?;
         Ok(())
     }
 
     /// Retrieves the consensus Merkle root of all spendable UTXOs.
     pub fn get_utxo_merkle_root(&self) -> Result<Option<sha256::Hash>, Error> {
         Ok(self.db.get(KEY_UTXO_MERKLE_ROOT)?.map(|b| {
-            sha256::Hash::from_slice(&b).expect("corrupt db: Merkle root should be 32 bytes")
+            sha256::Hash::from_slice(&b)
+                .expect("corrupt db: Merkle root should be 32 bytes")
         }))
     }
 
@@ -838,15 +950,21 @@ impl Db {
     ) -> Result<(), Error> {
         match pegout_requests.len() {
             0 => Ok(()),
-            1 => self.store_pending_pegout(pegout_requests.first().expect("to have tx")),
+            1 => self.store_pending_pegout(
+                pegout_requests.first().expect("to have tx"),
+            ),
             _ => self.store_pending_pegouts_atomically(pegout_requests),
         }
     }
 
     /// Store a pending pegout
-    pub fn store_pending_pegout(&self, req: &pegout_scheduler::PegoutRequest) -> Result<(), Error> {
+    pub fn store_pending_pegout(
+        &self,
+        req: &pegout_scheduler::PegoutRequest,
+    ) -> Result<(), Error> {
         let mut bytes = Vec::new();
-        ciborium::into_writer(&req, &mut bytes).map_err(Error::CiboriumWrite)?;
+        ciborium::into_writer(&req, &mut bytes)
+            .map_err(Error::CiboriumWrite)?;
         self.pending_pegouts.insert(req.id.as_bytes(), &bytes[..])?;
         self.update_pending_pegouts_merkle_root()?;
         Ok(())
@@ -865,12 +983,15 @@ impl Db {
                         ciborium::into_writer(req, &mut bytes)
                             .map_err(Error::CiboriumWrite)
                             .expect("Ciborium error");
-                        database_tx.insert(req.id.as_bytes().to_vec(), &bytes[..])?;
+                        database_tx
+                            .insert(req.id.as_bytes().to_vec(), &bytes[..])?;
                     }
                 }
                 Ok::<(), ConflictableTransactionError>(())
             })
-            .map_err(|e: TransactionError<_>| Error::Transaction(e.to_string()))?;
+            .map_err(|e: TransactionError<_>| {
+                Error::Transaction(e.to_string())
+            })?;
         self.update_pending_pegouts_merkle_root()?;
         Ok(())
     }
@@ -892,16 +1013,23 @@ impl Db {
             return Ok(());
         }
 
-        let root = bitcoin::merkle_tree::calculate_root(pending_pegouts.into_iter())
-            .ok_or(Error::EmptyMerkleRoot)?;
-        self.db.insert(KEY_PENDING_PEGOUTS_MERKLE_ROOT, root.to_byte_array().to_vec())?;
+        let root =
+            bitcoin::merkle_tree::calculate_root(pending_pegouts.into_iter())
+                .ok_or(Error::EmptyMerkleRoot)?;
+        self.db.insert(
+            KEY_PENDING_PEGOUTS_MERKLE_ROOT,
+            root.to_byte_array().to_vec(),
+        )?;
         Ok(())
     }
 
     /// Get pending pegouts merkle root
-    pub fn get_pending_pegouts_merkle_root(&self) -> Result<Option<sha256::Hash>, Error> {
+    pub fn get_pending_pegouts_merkle_root(
+        &self,
+    ) -> Result<Option<sha256::Hash>, Error> {
         Ok(self.db.get(KEY_PENDING_PEGOUTS_MERKLE_ROOT)?.map(|b| {
-            sha256::Hash::from_slice(&b).expect("corrupt db: Merkle root should be 32 bytes")
+            sha256::Hash::from_slice(&b)
+                .expect("corrupt db: Merkle root should be 32 bytes")
         }))
     }
 
@@ -911,18 +1039,21 @@ impl Db {
         &self,
         id: &PegoutId,
     ) -> Result<Option<pegout_scheduler::PegoutRequest>, Error> {
-        Ok(self
-            .pending_pegouts
-            .get(id.as_bytes())?
-            .map(|b| ciborium::de::from_reader(b.as_ref()).expect("corrupt db: pending pegout")))
+        Ok(self.pending_pegouts.get(id.as_bytes())?.map(|b| {
+            ciborium::de::from_reader(b.as_ref())
+                .expect("corrupt db: pending pegout")
+        }))
     }
 
     /// Get all pending pegouts
-    pub fn get_pending_pegouts(&self) -> Result<Vec<pegout_scheduler::PegoutRequest>, Error> {
+    pub fn get_pending_pegouts(
+        &self,
+    ) -> Result<Vec<pegout_scheduler::PegoutRequest>, Error> {
         let mut ret = Vec::new();
         for res in self.pending_pegouts.iter() {
             let (_k, v) = res?;
-            let tx = ciborium::de::from_reader(v.as_ref()).expect("corrupt db: pending tx");
+            let tx = ciborium::de::from_reader(v.as_ref())
+                .expect("corrupt db: pending tx");
             ret.push(tx);
         }
         Ok(ret)
@@ -945,7 +1076,10 @@ impl Db {
     }
 
     /// Removes pending pegouts from the database.
-    pub fn remove_pending_pegout(&self, pegout_ids: &[PegoutId]) -> Result<(), Error> {
+    pub fn remove_pending_pegout(
+        &self,
+        pegout_ids: &[PegoutId],
+    ) -> Result<(), Error> {
         for pegout_id in pegout_ids.iter() {
             self.pending_pegouts.remove(&pegout_id.as_bytes()[..])?;
         }
@@ -969,11 +1103,14 @@ impl Db {
 
     /// Get all finalized pegouts
     /// Returns a vector of pegout requests that have been finalized.
-    pub fn get_finalized_pegout_ids(&self) -> Result<Vec<FinalizedPegout>, Error> {
+    pub fn get_finalized_pegout_ids(
+        &self,
+    ) -> Result<Vec<FinalizedPegout>, Error> {
         let mut ret = Vec::new();
         for res in self.finalized_pegout_ids.iter() {
             let (_k, v) = res?;
-            let tx = ciborium::de::from_reader(v.as_ref()).expect("corrupt db: pending tx");
+            let tx = ciborium::de::from_reader(v.as_ref())
+                .expect("corrupt db: pending tx");
             ret.push(tx);
         }
         Ok(ret)
@@ -990,8 +1127,10 @@ impl Db {
     pub fn get_finalized_pegout_ids_stream(
         &self,
         chunk_size: usize,
-    ) -> impl Stream<Item = Result<(Vec<FinalizedPegout>, u64, u64), Error>> + Send + '_ + Sync
-    {
+    ) -> impl Stream<Item = Result<(Vec<FinalizedPegout>, u64, u64), Error>>
+           + Send
+           + '_
+           + Sync {
         async_stream::stream! {
             let total_count = match self.peek_finalized_pegout_ids() {
                 Ok(count) => count,
@@ -1043,7 +1182,8 @@ impl Db {
         finalized_pegout_ids: &[FinalizedPegout],
     ) -> Result<(), Error> {
         for pegout_id in finalized_pegout_ids.iter() {
-            self.finalized_pegout_ids.remove(&pegout_id.id.as_bytes()[..])?;
+            self.finalized_pegout_ids
+                .remove(&pegout_id.id.as_bytes()[..])?;
         }
         Ok(())
     }
@@ -1073,14 +1213,21 @@ impl Db {
             1 => self.store_finalized_pegout_id(
                 finalized_pegout_ids.first().expect("to have pegout id"),
             ),
-            _ => self.store_finalized_pegout_ids_atomically(finalized_pegout_ids),
+            _ => {
+                self.store_finalized_pegout_ids_atomically(finalized_pegout_ids)
+            }
         }
     }
 
-    fn store_finalized_pegout_id(&self, pegout_id: &FinalizedPegout) -> Result<(), Error> {
+    fn store_finalized_pegout_id(
+        &self,
+        pegout_id: &FinalizedPegout,
+    ) -> Result<(), Error> {
         let mut bytes = Vec::new();
-        ciborium::into_writer(&pegout_id, &mut bytes).map_err(Error::CiboriumWrite)?;
-        self.finalized_pegout_ids.insert(pegout_id.id.as_bytes(), &bytes[..])?;
+        ciborium::into_writer(&pegout_id, &mut bytes)
+            .map_err(Error::CiboriumWrite)?;
+        self.finalized_pegout_ids
+            .insert(pegout_id.id.as_bytes(), &bytes[..])?;
         Ok(())
     }
 
@@ -1097,12 +1244,15 @@ impl Db {
                         ciborium::into_writer(req, &mut bytes)
                             .map_err(Error::CiboriumWrite)
                             .expect("Ciborium error");
-                        database_tx.insert(req.id.as_bytes().to_vec(), &bytes[..])?;
+                        database_tx
+                            .insert(req.id.as_bytes().to_vec(), &bytes[..])?;
                     }
                 }
                 Ok::<(), ConflictableTransactionError>(())
             })
-            .map_err(|e: TransactionError<_>| Error::Transaction(e.to_string()))?;
+            .map_err(|e: TransactionError<_>| {
+                Error::Transaction(e.to_string())
+            })?;
         Ok(())
     }
 
@@ -1177,9 +1327,20 @@ impl Db {
             .map(|pegout_id| {
                 let mut engine = sha256::Hash::engine();
                 let pegout_id = pegout_id?;
-                pegout_id.id.idx.consensus_encode(&mut engine).expect("engine don't error");
-                pegout_id.id.txid.consensus_encode(&mut engine).expect("engine don't error");
-                pegout_id.block_number.consensus_encode(&mut engine).expect("engine don't error");
+                pegout_id
+                    .id
+                    .idx
+                    .consensus_encode(&mut engine)
+                    .expect("engine don't error");
+                pegout_id
+                    .id
+                    .txid
+                    .consensus_encode(&mut engine)
+                    .expect("engine don't error");
+                pegout_id
+                    .block_number
+                    .consensus_encode(&mut engine)
+                    .expect("engine don't error");
                 Ok(sha256::Hash::from_engine(engine))
             })
             .collect::<Result<Vec<_>, Error>>()?;
@@ -1188,21 +1349,32 @@ impl Db {
             return Ok(());
         }
 
-        let root = bitcoin::merkle_tree::calculate_root(finalized_pegout_ids.into_iter())
-            .ok_or(Error::EmptyMerkleRoot)?;
-        self.db.insert(KEY_FINALIZED_PEGOUT_IDS_MERKLE_ROOT, root.to_byte_array().to_vec())?;
+        let root = bitcoin::merkle_tree::calculate_root(
+            finalized_pegout_ids.into_iter(),
+        )
+        .ok_or(Error::EmptyMerkleRoot)?;
+        self.db.insert(
+            KEY_FINALIZED_PEGOUT_IDS_MERKLE_ROOT,
+            root.to_byte_array().to_vec(),
+        )?;
         Ok(())
     }
 
     /// Retrieves the consensus Merkle root of all finalized pegout ids.
-    pub fn get_finalized_pegout_ids_merkle_root(&self) -> Result<Option<sha256::Hash>, Error> {
+    pub fn get_finalized_pegout_ids_merkle_root(
+        &self,
+    ) -> Result<Option<sha256::Hash>, Error> {
         Ok(self.db.get(KEY_FINALIZED_PEGOUT_IDS_MERKLE_ROOT)?.map(|b| {
-            sha256::Hash::from_slice(&b).expect("corrupt db: Merkle root should be 32 bytes")
+            sha256::Hash::from_slice(&b)
+                .expect("corrupt db: Merkle root should be 32 bytes")
         }))
     }
 
     /// Resets all tracked txs, and re-adding the functions arguments back in
-    pub fn reset_tracked_txs(&self, tracked_txs: &[&pegout_scheduler::Tx]) -> Result<(), Error> {
+    pub fn reset_tracked_txs(
+        &self,
+        tracked_txs: &[&pegout_scheduler::Tx],
+    ) -> Result<(), Error> {
         self.clear_tracked_txs()?;
         self.store_tracked_txs(tracked_txs)?;
         Ok(())
@@ -1224,7 +1396,9 @@ fn parse_p2tr_script_with_fallback(script_bytes: &[u8]) -> ScriptBuf {
     // Fallback: Handle legacy consensus-encoded format (with length prefix)
     // Provides backwards compatibility in case other node services are still
     // using the old encoding format (see https://github.com/botanix-labs/Macbeth/pull/949)
-    if let Ok(script_from_consensus) = bitcoin::consensus::deserialize::<ScriptBuf>(script_bytes) {
+    if let Ok(script_from_consensus) =
+        bitcoin::consensus::deserialize::<ScriptBuf>(script_bytes)
+    {
         warn!("Received RpcUtxo with legacy consensus-encoded script format");
         if script_from_consensus.is_p2tr() {
             return script_from_consensus;
@@ -1242,32 +1416,36 @@ impl TryFrom<RpcUtxo> for Utxo {
 
     fn try_from(value: RpcUtxo) -> Result<Self, Self::Error> {
         // outpoint
-        let outpoint =
-            value.outpoint.ok_or_else(|| Error::RpcToDbMap("Outpoint is None".to_string()))?;
+        let outpoint = value
+            .outpoint
+            .ok_or_else(|| Error::RpcToDbMap("Outpoint is None".to_string()))?;
         let txid = bitcoin::consensus::deserialize::<Txid>(&outpoint.txid)
             .map_err(|_| Error::RpcToDbMap("Unparsable Txid".to_string()))?;
         let vout = outpoint.vout;
 
         // txout
-        let tx_out = value.output.ok_or_else(|| Error::RpcToDbMap("TxOut is None".to_string()))?;
+        let tx_out = value
+            .output
+            .ok_or_else(|| Error::RpcToDbMap("TxOut is None".to_string()))?;
         let tx_out_val = Amount::from_sat(tx_out.value);
-        let script_pubkey = tx_out
-            .script_pubkey
-            .ok_or_else(|| Error::RpcToDbMap("Script Pub Key is None".to_string()))?;
+        let script_pubkey = tx_out.script_pubkey.ok_or_else(|| {
+            Error::RpcToDbMap("Script Pub Key is None".to_string())
+        })?;
         let script = parse_p2tr_script_with_fallback(&script_pubkey.script);
 
         // create the utxo
         Ok(Utxo::new(
             OutPoint::new(txid, vout),
-            TxOut { value: tx_out_val, script_pubkey: script },
+            TxOut {
+                value: tx_out_val,
+                script_pubkey: script,
+            },
             if value.eth_address.is_empty() {
                 None
             } else {
-                Some(
-                    parse_eth_address(value.eth_address).map_err(|_| {
-                        Error::RpcToDbMap("Unparsable Ethereum Address".to_string())
-                    })?,
-                )
+                Some(parse_eth_address(value.eth_address).map_err(|_| {
+                    Error::RpcToDbMap("Unparsable Ethereum Address".to_string())
+                })?)
             },
             Some(UtxoVersion::V1),
         ))
@@ -1305,8 +1483,8 @@ mod tests {
     use crate::{
         pegout_scheduler::{PegoutRequest, Tx},
         test_utils::{
-            create_random_pegout_id, create_tx, random_p2wpkh_scriptpubkey, setup_db,
-            trusted_dealer_setup,
+            create_random_pegout_id, create_tx, random_p2wpkh_scriptpubkey,
+            setup_db, trusted_dealer_setup,
         },
     };
     use std::{collections::HashSet, time::SystemTime};
@@ -1490,17 +1668,25 @@ mod tests {
     #[test]
     fn utxo_rpc_conversion_round_trip() {
         // Test round-trip conversion: DbUtxo -> RpcUtxo -> DbUtxo
-        use crate::test_utils::{random_compute_txid, random_p2tr_keyspend_script};
+        use crate::test_utils::{
+            random_compute_txid, random_p2tr_keyspend_script,
+        };
 
         let txid = random_compute_txid();
 
         // Test cases: (eth_address, utxo_version, description)
         let test_cases = [
-            (Some([0; 20]), Some(UtxoVersion::V1), "with eth address and version"),
+            (
+                Some([0; 20]),
+                Some(UtxoVersion::V1),
+                "with eth address and version",
+            ),
             (None, None, "without eth address or version"),
         ];
 
-        for (vout, (eth_address, utxo_version, description)) in test_cases.iter().enumerate() {
+        for (vout, (eth_address, utxo_version, description)) in
+            test_cases.iter().enumerate()
+        {
             // Create a proper taproot TxOut instead of using create_tx which generates P2WPKH
             let taproot_output = TxOut {
                 value: Amount::from_sat(1000),
@@ -1536,7 +1722,9 @@ mod tests {
 
         // Create script bytes using the OLD way (consensus encoding with length prefix)
         let mut consensus_encoded_bytes = vec![];
-        raw_script.consensus_encode(&mut consensus_encoded_bytes).unwrap();
+        raw_script
+            .consensus_encode(&mut consensus_encoded_bytes)
+            .unwrap();
 
         // Create a mock RpcUtxo with the consensus-encoded script bytes
         let rpc_utxo = RpcUtxo {
@@ -1572,7 +1760,8 @@ mod tests {
         // Test consensus-encoded bytes (legacy format)
         let mut consensus_bytes = vec![];
         script.consensus_encode(&mut consensus_bytes).unwrap();
-        let parsed_consensus = parse_p2tr_script_with_fallback(&consensus_bytes);
+        let parsed_consensus =
+            parse_p2tr_script_with_fallback(&consensus_bytes);
         assert_eq!(script, parsed_consensus);
 
         // Test invalid script bytes
@@ -1775,31 +1964,43 @@ mod tests {
         let mut rng = thread_rng();
         for i in 0..num_txs {
             let pegout_id = PegoutId::new(rng.gen::<[u8; 32]>(), i as u32);
-            let finalized_pegout =
-                FinalizedPegout { id: pegout_id, block_number: 100, timestamp: None };
+            let finalized_pegout = FinalizedPegout {
+                id: pegout_id,
+                block_number: 100,
+                timestamp: None,
+            };
             finalized_pegout_ids.push(finalized_pegout);
         }
-        let finalized_pegout_ids_slice =
-            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
+        let finalized_pegout_ids_slice = finalized_pegout_ids
+            .iter()
+            .collect::<Vec<&FinalizedPegout>>();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
+            .unwrap();
         db.update_finalized_pegout_ids_merkle_root().unwrap();
         db.flush().unwrap();
 
-        let merkle_root = db.get_finalized_pegout_ids_merkle_root().unwrap().unwrap();
+        let merkle_root =
+            db.get_finalized_pegout_ids_merkle_root().unwrap().unwrap();
         // Updating again should not change the merkle root
         db.update_finalized_pegout_ids_merkle_root().unwrap();
         db.flush().unwrap();
-        let merkle_root2 = db.get_finalized_pegout_ids_merkle_root().unwrap().unwrap();
+        let merkle_root2 =
+            db.get_finalized_pegout_ids_merkle_root().unwrap().unwrap();
         assert_eq!(merkle_root, merkle_root2);
 
         // // Adding an additional pegout id should change the merkle root
-        let pegout_id = PegoutId::new(rng.gen::<[u8; 32]>(), num_txs + 1 as u32);
-        let finalized_pegout =
-            FinalizedPegout { id: pegout_id, block_number: 100, timestamp: None };
+        let pegout_id =
+            PegoutId::new(rng.gen::<[u8; 32]>(), num_txs + 1 as u32);
+        let finalized_pegout = FinalizedPegout {
+            id: pegout_id,
+            block_number: 100,
+            timestamp: None,
+        };
         db.store_finalized_pegout_id(&finalized_pegout).unwrap();
         db.update_finalized_pegout_ids_merkle_root().unwrap();
         db.flush().unwrap();
-        let merkle_root3 = db.get_finalized_pegout_ids_merkle_root().unwrap().unwrap();
+        let merkle_root3 =
+            db.get_finalized_pegout_ids_merkle_root().unwrap().unwrap();
         assert_ne!(merkle_root, merkle_root3);
     }
 
@@ -1811,27 +2012,36 @@ mod tests {
         let mut rng = thread_rng();
         for i in 0..num_txs {
             let pegout_id = PegoutId::new(rng.gen::<[u8; 32]>(), i as u32);
-            let finalized_pegout =
-                FinalizedPegout { id: pegout_id, block_number: 100, timestamp: None };
+            let finalized_pegout = FinalizedPegout {
+                id: pegout_id,
+                block_number: 100,
+                timestamp: None,
+            };
             finalized_pegout_ids.push(finalized_pegout);
         }
 
         // update finalized pegout to be within the pruning window
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         finalized_pegout_ids[0].timestamp = Some(now);
 
         // update finalized pegout to be outside the pruning window
-        finalized_pegout_ids[1].timestamp = Some(now.saturating_sub(RETENTION_WINDOW_SECONDS + 1));
+        finalized_pegout_ids[1].timestamp =
+            Some(now.saturating_sub(RETENTION_WINDOW_SECONDS + 1));
 
-        let finalized_pegout_ids_slice =
-            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
+        let finalized_pegout_ids_slice = finalized_pegout_ids
+            .iter()
+            .collect::<Vec<&FinalizedPegout>>();
 
         // We now have 3 finalized pegouts in the following order:
         // - one with a timestamp within the pruning window
         // - one with a timestamp outside the pruning window
         // - one without a timestamp (None)
 
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
+            .unwrap();
         db.flush().unwrap();
 
         db.prune_finalized_pegout_ids().unwrap();
@@ -1848,7 +2058,10 @@ mod tests {
             .iter()
             .find(|p| p.id == finalized_pegout_ids[0].id)
             .expect("Pegout with timestamp should still be present");
-        assert_eq!(pegout_with_timestamp.timestamp, finalized_pegout_ids[0].timestamp);
+        assert_eq!(
+            pegout_with_timestamp.timestamp,
+            finalized_pegout_ids[0].timestamp
+        );
 
         // Check that the pegout without a timestamp is still present
         let pegout_without_timestamp = retrieved_pegouts
@@ -1866,20 +2079,26 @@ mod tests {
         let mut rng = thread_rng();
         for i in 0..num_txs {
             let pegout_id = PegoutId::new(rng.gen::<[u8; 32]>(), i as u32);
-            let finalized_pegout =
-                FinalizedPegout { id: pegout_id, block_number: 100, timestamp: None };
+            let finalized_pegout = FinalizedPegout {
+                id: pegout_id,
+                block_number: 100,
+                timestamp: None,
+            };
             finalized_pegout_ids.push(finalized_pegout);
         }
-        let finalized_pegout_ids_slice =
-            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
+        let finalized_pegout_ids_slice = finalized_pegout_ids
+            .iter()
+            .collect::<Vec<&FinalizedPegout>>();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
+            .unwrap();
         db.flush().unwrap();
 
         let chunk_size = 10;
         let stream = db.get_finalized_pegout_ids_stream(chunk_size);
         pin!(stream);
         let mut total_count = 0;
-        let expected_total_chunks = (num_txs as u64).div_ceil(chunk_size as u64);
+        let expected_total_chunks =
+            (num_txs as u64).div_ceil(chunk_size as u64);
         let mut chunk_indexes_set = HashSet::new();
         while let Some(item) = stream.next().await {
             match item {
@@ -1906,20 +2125,26 @@ mod tests {
         let mut rng = thread_rng();
         for i in 0..num_txs {
             let pegout_id = PegoutId::new(rng.gen::<[u8; 32]>(), i as u32);
-            let finalized_pegout =
-                FinalizedPegout { id: pegout_id, block_number: 100, timestamp: None };
+            let finalized_pegout = FinalizedPegout {
+                id: pegout_id,
+                block_number: 100,
+                timestamp: None,
+            };
             finalized_pegout_ids.push(finalized_pegout);
         }
-        let finalized_pegout_ids_slice =
-            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
+        let finalized_pegout_ids_slice = finalized_pegout_ids
+            .iter()
+            .collect::<Vec<&FinalizedPegout>>();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
+            .unwrap();
         db.flush().unwrap();
 
         let chunk_size = 10;
         let stream = db.get_finalized_pegout_ids_stream(chunk_size);
         pin!(stream);
         let mut total_count = 0;
-        let expected_total_chunks = (num_txs as u64).div_ceil(chunk_size as u64);
+        let expected_total_chunks =
+            (num_txs as u64).div_ceil(chunk_size as u64);
         let mut chunk_indexes_set = HashSet::new();
         while let Some(item) = stream.next().await {
             match item {
@@ -1945,12 +2170,16 @@ mod tests {
         let mut pegouts = vec![];
         for _ in 0..num_pegout_ids {
             let pegout_id = create_random_pegout_id();
-            let finalized_pegout =
-                FinalizedPegout { id: pegout_id, block_number: 100, timestamp: None };
+            let finalized_pegout = FinalizedPegout {
+                id: pegout_id,
+                block_number: 100,
+                timestamp: None,
+            };
             pegouts.push(finalized_pegout);
         }
         let pegout_slice = pegouts.iter().collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids_atomically(&pegout_slice).unwrap();
+        db.store_finalized_pegout_ids_atomically(&pegout_slice)
+            .unwrap();
         db.flush().unwrap();
 
         // Get all pegout ids
@@ -1969,8 +2198,11 @@ mod tests {
         let mut pegouts = vec![];
         for _ in 0..num_pegout_ids {
             let pegout_id = create_random_pegout_id();
-            let finalized_pegout =
-                FinalizedPegout { id: pegout_id, block_number: 100, timestamp: None };
+            let finalized_pegout = FinalizedPegout {
+                id: pegout_id,
+                block_number: 100,
+                timestamp: None,
+            };
             pegouts.push(finalized_pegout);
         }
         let pegout_slice = pegouts.iter().collect::<Vec<&FinalizedPegout>>();
@@ -2010,8 +2242,10 @@ mod tests {
         db.update_psbt(&signing_session_id, &psbt).unwrap();
         db.flush().unwrap();
 
-        let signing_session_id = db.get_session_ids(10).unwrap().first().cloned().unwrap();
-        let signing_status = db.get_signing_status(&signing_session_id).unwrap();
+        let signing_session_id =
+            db.get_session_ids(10).unwrap().first().cloned().unwrap();
+        let signing_status =
+            db.get_signing_status(&signing_session_id).unwrap();
         assert!(signing_status == SigningStatus::Running);
     }
 
@@ -2215,12 +2449,14 @@ mod tests {
         db.store_pending_pegout(&pegout_req).unwrap();
         db.flush().unwrap();
 
-        let merkle_root = db.get_pending_pegouts_merkle_root().unwrap().unwrap();
+        let merkle_root =
+            db.get_pending_pegouts_merkle_root().unwrap().unwrap();
 
         // Assert the same pending pegout added again does not change the merkle root
         db.store_pending_pegout(&pegout_req).unwrap();
         db.flush().unwrap();
-        let merkle_root2 = db.get_pending_pegouts_merkle_root().unwrap().unwrap();
+        let merkle_root2 =
+            db.get_pending_pegouts_merkle_root().unwrap().unwrap();
         assert_eq!(merkle_root, merkle_root2);
 
         // Add a second pending pegout
@@ -2234,7 +2470,8 @@ mod tests {
         db.store_pending_pegout(&pegout_req2).unwrap();
         db.flush().unwrap();
 
-        let merkle_root3 = db.get_pending_pegouts_merkle_root().unwrap().unwrap();
+        let merkle_root3 =
+            db.get_pending_pegouts_merkle_root().unwrap().unwrap();
         assert_ne!(merkle_root, merkle_root3);
     }
 
@@ -2371,13 +2608,17 @@ mod tests {
         let mut rng = thread_rng();
         // Simulate old serialized data (without timestamp field)
         let pegout_id = PegoutId::new(rng.gen::<[u8; 32]>(), 1 as u32);
-        let old_pegout = OldFinalizedPegout { id: pegout_id.clone(), block_number: 100 };
+        let old_pegout = OldFinalizedPegout {
+            id: pegout_id.clone(),
+            block_number: 100,
+        };
 
         // Serialize with old structure
         let serialized_old = serde_json::to_vec(&old_pegout).unwrap();
 
         // Deserialize with new structure - should have timestamp = None
-        let deserialized_new: FinalizedPegout = serde_json::from_slice(&serialized_old).unwrap();
+        let deserialized_new: FinalizedPegout =
+            serde_json::from_slice(&serialized_old).unwrap();
 
         assert_eq!(deserialized_new.id, pegout_id);
         assert_eq!(deserialized_new.block_number, 100);
@@ -2398,7 +2639,8 @@ mod tests {
 
         // Serialize and deserialize to old finalized pegout
         let serialized = serde_json::to_vec(&new_pegout).unwrap();
-        let deserialized: OldFinalizedPegout = serde_json::from_slice(&serialized).unwrap();
+        let deserialized: OldFinalizedPegout =
+            serde_json::from_slice(&serialized).unwrap();
 
         assert_eq!(deserialized.id, pegout_id);
         assert_eq!(deserialized.block_number, 200);
@@ -2416,9 +2658,11 @@ mod tests {
         assert!(res.is_none());
 
         // Generate key packages.
-        let id = frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
+        let id =
+            frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
         let (shares, pk_package) = trusted_dealer_setup(2, 3);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Set key packages.
         db.set_pubkey_package(pk_package.clone()).unwrap();
@@ -2428,8 +2672,10 @@ mod tests {
         let origin_key_package = key_package;
 
         // Each export creates a new nonce.
-        let mut export_1 = db.export_key_package(good_pass.clone()).unwrap().unwrap();
-        let export_2 = db.export_key_package(good_pass.clone()).unwrap().unwrap();
+        let mut export_1 =
+            db.export_key_package(good_pass.clone()).unwrap().unwrap();
+        let export_2 =
+            db.export_key_package(good_pass.clone()).unwrap().unwrap();
         //
         assert_ne!(export_1.iv, export_2.iv);
         assert_ne!(export_1, export_2);
@@ -2440,21 +2686,28 @@ mod tests {
         assert!(prev_pk.is_some());
 
         // ERR: Bad password!
-        let err = db.import_key_package(bad_pass, export_1.clone()).unwrap_err();
+        let err = db
+            .import_key_package(bad_pass, export_1.clone())
+            .unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad IV/nonce!
         export_1.iv = export_2.iv;
-        let err = db.import_key_package(good_pass.clone(), export_1.clone()).unwrap_err();
+        let err = db
+            .import_key_package(good_pass.clone(), export_1.clone())
+            .unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad version indicator!
         export_1.version = u16::MAX;
-        let err = db.import_key_package(good_pass.clone(), export_1.clone()).unwrap_err();
+        let err = db
+            .import_key_package(good_pass.clone(), export_1.clone())
+            .unwrap_err();
         assert_eq!(err, Error::BadExportedPackageFormatVersion);
 
         // OK: Successful import with good passphrase and export package.
-        db.import_key_package(good_pass.clone(), export_2.clone()).unwrap();
+        db.import_key_package(good_pass.clone(), export_2.clone())
+            .unwrap();
 
         // Sanity check.
         let new_pk_package = db.get_public_key_package().unwrap().unwrap();

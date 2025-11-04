@@ -274,7 +274,10 @@ impl ConditionList {
     /// Returns true only when all conditions are satisfied, indicating
     /// that the network is ready to activate the upgrade.
     pub fn all_passing(&self) -> bool {
-        self.comp_req && self.aye_approval_req && self.comp_approval_req && self.block_height_req
+        self.comp_req
+            && self.aye_approval_req
+            && self.comp_approval_req
+            && self.block_height_req
     }
 }
 
@@ -398,7 +401,11 @@ where
         // include our vote (if any) to signal our upgrade intentions, even when
         // not yet proposing upgraded blocks.
         let active_version = self.active_version.read().expect("poisoned lock");
-        Ok(OnPrepareProposalDecision { version: *active_version, vote: our_vote, conditions })
+        Ok(OnPrepareProposalDecision {
+            version: *active_version,
+            vote: our_vote,
+            conditions,
+        })
     }
 
     /// Processes an incoming block proposal, tracking votes and determining if
@@ -448,10 +455,16 @@ where
         // Check if the proposed block uses the currently active runtime version.
         let active_version = self.active_version.read().expect("poisoned lock");
         if block_version == *active_version {
-            return Ok(OnProcessProposalDecision::Process { version: *active_version, conditions });
+            return Ok(OnProcessProposalDecision::Process {
+                version: *active_version,
+                conditions,
+            });
         }
 
-        Ok(OnProcessProposalDecision::RejectBlock { version: block_version, conditions })
+        Ok(OnProcessProposalDecision::RejectBlock {
+            version: block_version,
+            conditions,
+        })
     }
 
     /// Finalizes a block and handles potential version transitions.
@@ -504,19 +517,24 @@ where
 
         let active_version = self.active_version.read().expect("poisoned lock");
         if block_version <= *active_version {
-            return Ok(OnFinalizeBlockDecision::Finalize { version: block_version });
+            return Ok(OnFinalizeBlockDecision::Finalize {
+                version: block_version,
+            });
         }
 
         let mut maybe_upgrade = self.upgrade.write().expect("poisoned lock");
         if let Some(upgrade) = maybe_upgrade.as_ref() {
             // Prune **all** votes since the decision is now finalized.
-            self.client.remove_upgrading_votes(block_height.saturating_add(1))?;
+            self.client
+                .remove_upgrading_votes(block_height.saturating_add(1))?;
 
             // Future version detected, reject the block; this node is running an
             // outdated version of this software that cannot handle those finalized
             // blocks.
             if block_version != upgrade.version {
-                return Ok(OnFinalizeBlockDecision::RejectBlockDeadEnd { version: block_version });
+                return Ok(OnFinalizeBlockDecision::RejectBlockDeadEnd {
+                    version: block_version,
+                });
             }
 
             // For nodes that are explicitly not accepting this upgrade version,
@@ -525,7 +543,9 @@ where
                 // Upgrade has been activated; clear pending upgrade.
                 *maybe_upgrade = None;
 
-                return Ok(OnFinalizeBlockDecision::RejectBlockDeadEnd { version: block_version });
+                return Ok(OnFinalizeBlockDecision::RejectBlockDeadEnd {
+                    version: block_version,
+                });
             }
 
             std::mem::drop(active_version);
@@ -533,17 +553,22 @@ where
             // Upgrade is now active and mandatory for all future block
             // production. Update our active version and clear the pending
             // upgrade.
-            let mut active_version = self.active_version.write().expect("poisoned lock");
+            let mut active_version =
+                self.active_version.write().expect("poisoned lock");
             *active_version = upgrade.version;
             *maybe_upgrade = None;
 
-            return Ok(OnFinalizeBlockDecision::Finalize { version: *active_version });
+            return Ok(OnFinalizeBlockDecision::Finalize {
+                version: *active_version,
+            });
         }
 
         // Future version detected, reject the block; this node is running an
         // outdated version of this software that cannot handle those finalized
         // blocks.
-        Ok(OnFinalizeBlockDecision::RejectBlockDeadEnd { version: block_version })
+        Ok(OnFinalizeBlockDecision::RejectBlockDeadEnd {
+            version: block_version,
+        })
     }
 
     /// Returns current voting statistics for the tracked network upgrade.
@@ -559,7 +584,9 @@ where
     ///   - `polling` contains current vote counts and compliance statistics
     /// * `Ok(None)` if no upgrade is currently being tracked
     /// * `Err` if there was an error retrieving voting data from the database
-    pub fn get_upgrade_polling(&self) -> ProviderResult<Option<(RuntimeVersion, Polling)>> {
+    pub fn get_upgrade_polling(
+        &self,
+    ) -> ProviderResult<Option<(RuntimeVersion, Polling)>> {
         let maybe_upgrade = self.upgrade.read().expect("poisoned lock");
         let Some(upgrade) = maybe_upgrade.as_ref() else {
             return Ok(None);
@@ -575,7 +602,13 @@ where
         debug_assert_eq!(total, t4);
         debug_assert_eq!(ayes + nays + abstained, total);
 
-        let polling = Polling { ayes, nays, abstained, compliant, total };
+        let polling = Polling {
+            ayes,
+            nays,
+            abstained,
+            compliant,
+            total,
+        };
 
         Ok(Some((upgrade.version, polling)))
     }
@@ -633,7 +666,8 @@ where
         let mut upgrade = self.upgrade.write().expect("poisoned lock");
         *upgrade = None;
         //
-        let mut active_version = self.active_version.write().expect("poisoned lock");
+        let mut active_version =
+            self.active_version.write().expect("poisoned lock");
         *active_version = version;
 
         true
@@ -659,11 +693,14 @@ where
         upgrade: &NetworkUpgrade,
         block_height: u64,
     ) -> ProviderResult<ConditionList> {
-        let (aye_approval, total_votes) =
-            self.client.get_upgrading_approval_rate_ayes(upgrade.min_validator_count)?;
+        let (aye_approval, total_votes) = self
+            .client
+            .get_upgrading_approval_rate_ayes(upgrade.min_validator_count)?;
 
         let (comp_approval, t2) =
-            self.client.get_upgrading_approval_rate_compliance(upgrade.min_validator_count)?;
+            self.client.get_upgrading_approval_rate_compliance(
+                upgrade.min_validator_count,
+            )?;
 
         debug_assert_eq!(total_votes, t2);
         debug_assert!(total_votes >= upgrade.min_validator_count);
@@ -731,10 +768,16 @@ where
         };
 
         // Then track the vote.
-        self.client.update_upgrading_vote(addr, vote.vote, vote.is_compliant, block_height)?;
+        self.client.update_upgrading_vote(
+            addr,
+            vote.vote,
+            vote.is_compliant,
+            block_height,
+        )?;
 
         // Prune old votes.
-        let prune_below = block_height.saturating_sub(self.vote_retention_period);
+        let prune_below =
+            block_height.saturating_sub(self.vote_retention_period);
         self.client.remove_upgrading_votes(prune_below)?;
 
         Ok(())

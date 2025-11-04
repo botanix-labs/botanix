@@ -1,5 +1,6 @@
 pub use async_compression::{
-    tokio::write as compression_encoders_and_decoders, Level as CompressionLevel,
+    tokio::write as compression_encoders_and_decoders,
+    Level as CompressionLevel,
 };
 use tokio::io::AsyncWriteExt;
 
@@ -28,7 +29,10 @@ pub trait CompressionStrategy: private::Sealed + Sync + Send {
     ///
     /// A `Result` containing a `Vec<u8>` of the compressed data or a `CompressionError` if
     /// compression fails.
-    async fn compress(&self, uncompressed: &[u8]) -> Result<Vec<u8>, CompressionError>;
+    async fn compress(
+        &self,
+        uncompressed: &[u8],
+    ) -> Result<Vec<u8>, CompressionError>;
 
     /// Decompresses the provided data asynchronously.
     ///
@@ -40,7 +44,10 @@ pub trait CompressionStrategy: private::Sealed + Sync + Send {
     ///
     /// A `Result` containing a `Vec<u8>` of the decompressed data or a `CompressionError` if
     /// decompression fails.
-    async fn decompress(&self, compressed: &[u8]) -> Result<Vec<u8>, CompressionError>;
+    async fn decompress(
+        &self,
+        compressed: &[u8],
+    ) -> Result<Vec<u8>, CompressionError>;
 }
 
 /// A macro to define a new compression strategy by implementing the `CompressionStrategy` trait.
@@ -98,37 +105,65 @@ macro_rules! define_compression_strategy {
 
 #[derive(Clone)]
 pub struct ZLibCompressionStrategy;
-define_compression_strategy!(ZLibCompressionStrategy, Zlib, CompressionLevel::Fastest);
+define_compression_strategy!(
+    ZLibCompressionStrategy,
+    Zlib,
+    CompressionLevel::Fastest
+);
 
 #[derive(Clone)]
 pub struct GzipCompressionStrategy;
 
-define_compression_strategy!(GzipCompressionStrategy, Gzip, CompressionLevel::Fastest);
+define_compression_strategy!(
+    GzipCompressionStrategy,
+    Gzip,
+    CompressionLevel::Fastest
+);
 
 #[derive(Clone)]
 pub struct BrotliCompressionStrategy;
 
-define_compression_strategy!(BrotliCompressionStrategy, Brotli, CompressionLevel::Fastest);
+define_compression_strategy!(
+    BrotliCompressionStrategy,
+    Brotli,
+    CompressionLevel::Fastest
+);
 
 #[derive(Clone)]
 pub struct BzCompressionStrategy;
 
-define_compression_strategy!(BzCompressionStrategy, Bz, CompressionLevel::Fastest);
+define_compression_strategy!(
+    BzCompressionStrategy,
+    Bz,
+    CompressionLevel::Fastest
+);
 
 #[derive(Clone)]
 pub struct LzmaCompressionStrategy;
 
-define_compression_strategy!(LzmaCompressionStrategy, Lzma, CompressionLevel::Fastest);
+define_compression_strategy!(
+    LzmaCompressionStrategy,
+    Lzma,
+    CompressionLevel::Fastest
+);
 
 #[derive(Clone)]
 pub struct DeflateCompressionStrategy;
 
-define_compression_strategy!(DeflateCompressionStrategy, Deflate, CompressionLevel::Fastest);
+define_compression_strategy!(
+    DeflateCompressionStrategy,
+    Deflate,
+    CompressionLevel::Fastest
+);
 
 #[derive(Clone)]
 pub struct ZstdCompressionStrategy;
 
-define_compression_strategy!(ZstdCompressionStrategy, Zstd, CompressionLevel::Fastest);
+define_compression_strategy!(
+    ZstdCompressionStrategy,
+    Zstd,
+    CompressionLevel::Fastest
+);
 
 use std::sync::Arc;
 

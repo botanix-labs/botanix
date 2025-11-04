@@ -10,7 +10,7 @@ use reth_primitives::{
     SealedHeader, TransactionMeta, TransactionSigned,
     TxType,
 };
-use alloy_consensus::{ 
+use alloy_consensus::{
     Header,
 };
 
@@ -183,7 +183,7 @@ impl TransactionsProvider for MockProvider {
     > {
         unimplemented!();
     }
-    
+
     fn transaction_by_id_unhashed(&self,id:TxNumber) -> ProviderResult<Option<Self::Transaction> >  {
         unimplemented!();
     }

@@ -1,3 +1,4 @@
+use alloy_primitives::Address;
 use askama::Template;
 use bitcoin::hashes::Hash;
 use botanix_authority_edh::{
@@ -7,14 +8,13 @@ use botanix_authority_edh::{
 use botanix_chainspec::{
     constants::{
         create_botanix_config_with_genesis, BotanixMainnetGenesisConfig,
-        BotanixTestnetGenesisConfig, BOTANIX_MAINNET, BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET,
-        BOTANIX_TESTNET_CHAIN_ID,
+        BotanixTestnetGenesisConfig, BOTANIX_MAINNET, BOTANIX_MAINNET_CHAIN_ID,
+        BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID,
     },
     BotanixChainSpec,
 };
 use botanix_cli_parsers::parsers::SUPPORTED_CHAINS;
 use botanix_configs::federation::FederationTomlConfig;
-use alloy_primitives::Address;
 use std::{fs, path::PathBuf, str::FromStr};
 
 /// The help info for the --chain flag
@@ -39,7 +39,9 @@ impl BotanixNetwork {
     pub fn from_args(is_testnet: bool, is_devnet: bool) -> eyre::Result<Self> {
         // Validate that only one network argument is passed
         if is_testnet && is_devnet {
-            return Err(eyre::eyre!("Both testnet and devnet cannot be enabled at the same time"));
+            return Err(eyre::eyre!(
+                "Both testnet and devnet cannot be enabled at the same time"
+            ));
         }
 
         if is_testnet {
@@ -66,8 +68,15 @@ impl BotanixNetwork {
 }
 
 /// Returns the Botanix network chain spec based on a flag
-pub fn get_botanix_chain(raw: &str, is_testnet: bool) -> eyre::Result<BotanixChainSpec> {
-    let network = if is_testnet { BotanixNetwork::Testnet } else { BotanixNetwork::Mainnet };
+pub fn get_botanix_chain(
+    raw: &str,
+    is_testnet: bool,
+) -> eyre::Result<BotanixChainSpec> {
+    let network = if is_testnet {
+        BotanixNetwork::Testnet
+    } else {
+        BotanixNetwork::Mainnet
+    };
 
     // our own toml format
     let genesis_toml_config = FederationTomlConfig::from_str(raw)?;
@@ -82,32 +91,33 @@ pub fn get_botanix_chain(raw: &str, is_testnet: bool) -> eyre::Result<BotanixCha
         Address::ZERO,
     );
     let edh = hex::encode(extra_data_header.serialize());
-    let (genesis, pegin_conf_depth, chain_id, genesis_hash, epoch_length) = match network {
-        BotanixNetwork::Mainnet => {
-            let genesis_config = BotanixMainnetGenesisConfig { edh: &edh };
-            let rendered_json = genesis_config.render()?;
-            let genesis = serde_json::from_str(&rendered_json)?;
-            (
-                genesis,
-                BOTANIX_MAINNET.bitcoin_checkpoint_confirmation_depth,
-                BOTANIX_MAINNET_CHAIN_ID,
-                BOTANIX_MAINNET.inner().genesis_hash(),
-                BOTANIX_MAINNET.epoch_length,
-            )
-        }
-        BotanixNetwork::Testnet | BotanixNetwork::Devnet => {
-            let genesis_config = BotanixTestnetGenesisConfig { edh: &edh };
-            let rendered_json = genesis_config.render()?;
-            let genesis = serde_json::from_str(&rendered_json)?;
-            (
-                genesis,
-                BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth,
-                BOTANIX_TESTNET_CHAIN_ID,
-                BOTANIX_TESTNET.inner().genesis_hash(),
-                BOTANIX_TESTNET.epoch_length,
-            )
-        }
-    };
+    let (genesis, pegin_conf_depth, chain_id, genesis_hash, epoch_length) =
+        match network {
+            BotanixNetwork::Mainnet => {
+                let genesis_config = BotanixMainnetGenesisConfig { edh: &edh };
+                let rendered_json = genesis_config.render()?;
+                let genesis = serde_json::from_str(&rendered_json)?;
+                (
+                    genesis,
+                    BOTANIX_MAINNET.bitcoin_checkpoint_confirmation_depth,
+                    BOTANIX_MAINNET_CHAIN_ID,
+                    BOTANIX_MAINNET.inner().genesis_hash(),
+                    BOTANIX_MAINNET.epoch_length,
+                )
+            }
+            BotanixNetwork::Testnet | BotanixNetwork::Devnet => {
+                let genesis_config = BotanixTestnetGenesisConfig { edh: &edh };
+                let rendered_json = genesis_config.render()?;
+                let genesis = serde_json::from_str(&rendered_json)?;
+                (
+                    genesis,
+                    BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth,
+                    BOTANIX_TESTNET_CHAIN_ID,
+                    BOTANIX_TESTNET.inner().genesis_hash(),
+                    BOTANIX_TESTNET.epoch_length,
+                )
+            }
+        };
     let botanix_chain = create_botanix_config_with_genesis(
         genesis,
         pegin_conf_depth,
@@ -126,7 +136,9 @@ pub fn get_chain_from_federation_config(
     is_testnet: bool,
 ) -> eyre::Result<BotanixChainSpec, eyre::Error> {
     // try to read json from path first
-    let raw = match fs::read_to_string(PathBuf::from(shellexpand::full(s)?.into_owned())) {
+    let raw = match fs::read_to_string(PathBuf::from(
+        shellexpand::full(s)?.into_owned(),
+    )) {
         Ok(raw) => raw,
         Err(io_err) => {
             // valid json may start with "\n", but must contain "{"
@@ -147,9 +159,18 @@ mod tests {
 
     #[test]
     fn test_from_args() {
-        assert_eq!(BotanixNetwork::from_args(false, false).unwrap(), BotanixNetwork::Mainnet);
-        assert_eq!(BotanixNetwork::from_args(true, false).unwrap(), BotanixNetwork::Testnet);
-        assert_eq!(BotanixNetwork::from_args(false, true).unwrap(), BotanixNetwork::Devnet);
+        assert_eq!(
+            BotanixNetwork::from_args(false, false).unwrap(),
+            BotanixNetwork::Mainnet
+        );
+        assert_eq!(
+            BotanixNetwork::from_args(true, false).unwrap(),
+            BotanixNetwork::Testnet
+        );
+        assert_eq!(
+            BotanixNetwork::from_args(false, true).unwrap(),
+            BotanixNetwork::Devnet
+        );
         assert!(
             BotanixNetwork::from_args(true, true).is_err(),
             "Both testnet and devnet cannot be enabled at the same time"

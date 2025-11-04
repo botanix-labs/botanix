@@ -23,41 +23,50 @@ pub fn post_block_balance_increments(
     // choice tests). During normal operation, the block fee recipient address will never be a zero
     // address: it will be an address passed by the node operator.
     let fees = total_block_fees.unwrap_or(0);
-    let block_fee_recipient = block_fee_recipient_address.unwrap_or(Address::ZERO);
+    let block_fee_recipient =
+        block_fee_recipient_address.unwrap_or(Address::ZERO);
 
-    if fees > 0 &&
-        block_fee_recipient != Address::ZERO &&
-        chain_spec.botanix_fee_recipient.is_some() &&
-        chain_spec.lst_fee_receiver.is_some()
+    if fees > 0
+        && block_fee_recipient != Address::ZERO
+        && chain_spec.botanix_fee_recipient.is_some()
+        && chain_spec.lst_fee_receiver.is_some()
     {
         let (lst_fee_receiver_fees, botanix_fees, block_fee_recipient_fees) =
             utils::block_fees_split(fees);
 
         // FeeReceiver fees
         let lst_fee_receiver_addr = Address::from_str(
-            chain_spec.lst_fee_receiver.clone().expect("FeeReceiver to exist").as_str(),
+            chain_spec
+                .lst_fee_receiver
+                .clone()
+                .expect("FeeReceiver to exist")
+                .as_str(),
         )
         .expect("Valid FeeReceiver");
         balance_increments
             .entry(lst_fee_receiver_addr)
             .and_modify(|bal: &mut u128| {
-                *bal = bal
-                    .checked_add(lst_fee_receiver_fees)
-                    .expect("overflow incrementing balance for LST FeeReceiver");
+                *bal = bal.checked_add(lst_fee_receiver_fees).expect(
+                    "overflow incrementing balance for LST FeeReceiver",
+                );
             })
             .or_insert(lst_fee_receiver_fees);
 
         // Botanix fees
         let botanix_addr = Address::from_str(
-            chain_spec.botanix_fee_recipient.clone().expect("FeeReceiver to exist").as_str(),
+            chain_spec
+                .botanix_fee_recipient
+                .clone()
+                .expect("FeeReceiver to exist")
+                .as_str(),
         )
         .expect("Valid FeeReceiver");
         balance_increments
             .entry(botanix_addr)
             .and_modify(|bal| {
-                *bal = bal
-                    .checked_add(botanix_fees)
-                    .expect("overflow incrementing balance for Botanix fee recipient");
+                *bal = bal.checked_add(botanix_fees).expect(
+                    "overflow incrementing balance for Botanix fee recipient",
+                );
             })
             .or_insert(botanix_fees);
 
@@ -65,9 +74,9 @@ pub fn post_block_balance_increments(
         balance_increments
             .entry(block_fee_recipient)
             .and_modify(|bal| {
-                *bal = bal
-                    .checked_add(block_fee_recipient_fees)
-                    .expect("overflow incrementing balance for block fee recipient");
+                *bal = bal.checked_add(block_fee_recipient_fees).expect(
+                    "overflow incrementing balance for block fee recipient",
+                );
             })
             .or_insert(block_fee_recipient_fees);
     }

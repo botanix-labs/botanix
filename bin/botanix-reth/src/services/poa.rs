@@ -1,7 +1,4 @@
-use crate::botanix_authority_consensus::AuthorityConsensusBuilder;
-
-
-
+use crate::consensus::AuthorityConsensusBuilder;
 
 // pub async fn construct_poa() -> eyre::Result<()> {
 //     let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();

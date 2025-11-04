@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
+use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
 use botanix_btc_wallet::bitcoind::BitcoindConfig;
 use botanix_cli_parsers::parsers::{parse_grpc_address, parse_url};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
 
 /// Default bitcoind url
 pub const DEFAULT_BITCOIND_URL: &str = "localhost:18443";
@@ -114,12 +114,12 @@ impl From<BitcoindArgs> for BitcoindConfig {
 }
 
 impl BitcoindArgs {
-    pub fn btc_signing_server_jwt_secret(&self) -> Result<Option<JwtSecret>, JwtError> {
+    pub fn btc_signing_server_jwt_secret(
+        &self,
+    ) -> Result<Option<JwtSecret>, JwtError> {
         self.btc_signing_server_jwt_secret_path
             .as_ref()
-            .map(|jwt| {
-                JwtSecret::from_file(jwt)
-            })
+            .map(|jwt| JwtSecret::from_file(jwt))
             .transpose()
     }
 }

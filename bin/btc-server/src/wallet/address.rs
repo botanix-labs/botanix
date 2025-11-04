@@ -1,4 +1,6 @@
-use bitcoin::{key::TweakedPublicKey, secp256k1::PublicKey, Address, Network, ScriptBuf};
+use bitcoin::{
+    key::TweakedPublicKey, secp256k1::PublicKey, Address, Network, ScriptBuf,
+};
 use frost_secp256k1_tr::{self as frost, keys::Tweak, SigningParameters};
 
 use crate::wallet::util::{VerifyingKeyExt, VerifyingKeyExtError};
@@ -25,20 +27,28 @@ pub fn generate_tweaked_public_key(
     Ok(tweaked_pk)
 }
 
-pub fn generate_taproot_scriptpubkey(tweaked_public_key: &PublicKey) -> ScriptBuf {
-    let tap_tweaked_key =
-        TweakedPublicKey::dangerous_assume_tweaked(tweaked_public_key.x_only_public_key().0);
+pub fn generate_taproot_scriptpubkey(
+    tweaked_public_key: &PublicKey,
+) -> ScriptBuf {
+    let tap_tweaked_key = TweakedPublicKey::dangerous_assume_tweaked(
+        tweaked_public_key.x_only_public_key().0,
+    );
     bitcoin::ScriptBuf::new_p2tr_tweaked(tap_tweaked_key)
 }
 
 /// Generate a taproot address from a given tweaked public key
 /// Note this includes both the eth address tweak and the taproot merkel root tweak
-pub fn generate_taproot_address(tweaked_public_key: &PublicKey, network: Network) -> Address {
+pub fn generate_taproot_address(
+    tweaked_public_key: &PublicKey,
+    network: Network,
+) -> Address {
     let p2tr_script = generate_taproot_scriptpubkey(tweaked_public_key);
     Address::from_script(&p2tr_script, network).expect("valid address")
 }
 
-pub fn generate_taproot_change_scriptpubkey(public_key: &PublicKey) -> ScriptBuf {
+pub fn generate_taproot_change_scriptpubkey(
+    public_key: &PublicKey,
+) -> ScriptBuf {
     // This is commented out for now b/c the frost library only supports empty merkel root
     // let taproot_spend_info =
     //     generate_taproot_spend_info(secp, public_key).expect("Valid spend info");

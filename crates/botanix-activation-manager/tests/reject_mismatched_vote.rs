@@ -1,5 +1,7 @@
 use botanix_activation_manager::{
-    test_utils::{Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE},
+    test_utils::{
+        Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
+    },
     ConditionList,
 };
 use botanix_storage::models::Vote;

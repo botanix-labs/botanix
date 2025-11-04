@@ -6,7 +6,9 @@ use once_cell::race::OnceBox;
 use revm::{
     context::Cfg,
     handler::EthPrecompiles,
-    precompile::{bls12_381, kzg_point_evaluation, modexp, secp256r1, Precompiles},
+    precompile::{
+        bls12_381, kzg_point_evaluation, modexp, secp256r1, Precompiles,
+    },
 };
 use std::boxed::Box;
 
@@ -37,7 +39,12 @@ impl BotanixPrecompiles {
             jalapeno()
         };
 
-        Self { inner: EthPrecompiles { precompiles, spec: spec.into() } }
+        Self {
+            inner: EthPrecompiles {
+                precompiles,
+                spec: spec.into(),
+            },
+        }
     }
 
     #[inline]
@@ -50,8 +57,11 @@ impl BotanixPrecompiles {
 pub fn genesis() -> &'static Precompiles {
     static INSTANCE: OnceBox<Precompiles> = OnceBox::new();
     INSTANCE.get_or_init(|| {
-        let mut precompiles = Precompiles::prague().clone();// NOTE: Currently Botanix is same as Prague
-        precompiles.extend([tendermint::TENDERMINT_HEADER_VALIDATION, iavl::IAVL_PROOF_VALIDATION]);
+        let mut precompiles = Precompiles::prague().clone(); // NOTE: Currently Botanix is same as Prague
+        precompiles.extend([
+            tendermint::TENDERMINT_HEADER_VALIDATION,
+            iavl::IAVL_PROOF_VALIDATION,
+        ]);
         Box::new(precompiles)
     })
 }
@@ -65,14 +75,20 @@ pub fn jalapeno() -> &'static Precompiles {
             double_sign::DOUBLE_SIGN_EVIDENCE_VALIDATION,
             tm_secp256k1::TM_SECP256K1_SIGNATURE_RECOVER,
         ]);
-        precompiles.extend([tendermint::TENDERMINT_HEADER_VALIDATION, iavl::IAVL_PROOF_VALIDATION]);
-        precompiles.extend([cometbft::COMETBFT_LIGHT_BLOCK_VALIDATION, modexp::BERLIN]);
+        precompiles.extend([
+            tendermint::TENDERMINT_HEADER_VALIDATION,
+            iavl::IAVL_PROOF_VALIDATION,
+        ]);
+        precompiles.extend([
+            cometbft::COMETBFT_LIGHT_BLOCK_VALIDATION,
+            modexp::BERLIN,
+        ]);
         precompiles.extend([iavl::IAVL_PROOF_VALIDATION_PLATO]);
         precompiles.extend([
             bls::BLS_SIGNATURE_VALIDATION,
             cometbft::COMETBFT_LIGHT_BLOCK_VALIDATION_BEFORE_HERTZ,
         ]);
-            precompiles.extend([
+        precompiles.extend([
             tendermint::TENDERMINT_HEADER_VALIDATION_NANO,
             iavl::IAVL_PROOF_VALIDATION_NANO,
         ]);

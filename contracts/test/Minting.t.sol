@@ -59,12 +59,12 @@ contract MintingTest is Test {
         vm.fee(2**64 - 1);
 
         bytes memory metadata = bytes("0x00000000");
-        
+
         vm.expectRevert(); // Expect the transaction to revert
         minting.mint(destination, amount, bitcoinBlockHeight, metadata, refundAddress);
     }
 
-   
+
     function testBurnDustRequire() public payable {
         bytes memory data = bytes("0x00000000");
         bytes memory destinationBytes = bytes("0x31C1ebB34954eEd948949320Ca8a61FAff80C98d");

@@ -3,10 +3,11 @@ use super::{executor::BotanixBlockExecutor, factory::BotanixEvmFactory};
 use crate::{
     evm::transaction::BotanixTxEnv,
     node::engine_api::validator::BotanixExecutionData,
-    system_contracts::SystemContract,
-    BotanixPrimitives,
+    system_contracts::SystemContract, BotanixPrimitives,
 };
-use alloy_consensus::{transaction::SignerRecoverable, BlockHeader, Header, TxReceipt};
+use alloy_consensus::{
+    transaction::SignerRecoverable, BlockHeader, Header, TxReceipt,
+};
 use alloy_eips::eip7840::BlobParams;
 use alloy_primitives::{Log, U256};
 use botanix_chainspec::{BotanixChainSpec, BotanixHardfork, BotanixHardforks};
@@ -15,11 +16,14 @@ use reth_ethereum_forks::EthereumHardfork;
 use reth_evm::{
     block::{BlockExecutorFactory, BlockExecutorFor},
     eth::{receipt_builder::ReceiptBuilder, EthBlockExecutionCtx},
-    ConfigureEngineEvm, ConfigureEvm, EvmEnv, EvmFactory, ExecutableTxIterator, ExecutionCtxFor,
-    FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, NextBlockEnvAttributes,
+    ConfigureEngineEvm, ConfigureEvm, EvmEnv, EvmFactory, ExecutableTxIterator,
+    ExecutionCtxFor, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv,
+    NextBlockEnvAttributes,
 };
 use reth_evm_ethereum::{EthBlockAssembler, RethReceiptBuilder};
-use reth_primitives::{BlockTy, HeaderTy, SealedBlock, SealedHeader, TransactionSigned};
+use reth_primitives::{
+    BlockTy, HeaderTy, SealedBlock, SealedHeader, TransactionSigned,
+};
 use reth_revm::State;
 use revm::{
     context::{BlockEnv, CfgEnv},
@@ -33,8 +37,11 @@ use std::{borrow::Cow, convert::Infallible, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct BotanixEvmConfig {
     /// Inner [`BotanixBlockExecutorFactory`].
-    pub executor_factory:
-        BotanixBlockExecutorFactory<RethReceiptBuilder, Arc<BotanixChainSpec>, BotanixEvmFactory>,
+    pub executor_factory: BotanixBlockExecutorFactory<
+        RethReceiptBuilder,
+        Arc<BotanixChainSpec>,
+        BotanixEvmFactory,
+    >,
     /// Ethereum block assembler.
     pub block_assembler: EthBlockAssembler<BotanixChainSpec>,
 }
@@ -53,7 +60,10 @@ impl BotanixEvmConfig {
 
 impl BotanixEvmConfig {
     /// Creates a new Ethereum EVM configuration with the given chain spec and EVM factory.
-    pub fn new_with_evm_factory(chain_spec: Arc<BotanixChainSpec>, evm_factory: BotanixEvmFactory) -> Self {
+    pub fn new_with_evm_factory(
+        chain_spec: Arc<BotanixChainSpec>,
+        evm_factory: BotanixEvmFactory,
+    ) -> Self {
         Self {
             block_assembler: EthBlockAssembler::new(chain_spec.clone()),
             executor_factory: BotanixBlockExecutorFactory::new(
@@ -88,8 +98,16 @@ pub struct BotanixBlockExecutorFactory<
 impl<R, Spec, EvmFactory> BotanixBlockExecutorFactory<R, Spec, EvmFactory> {
     /// Creates a new [`BotanixBlockExecutorFactory`] with the given spec, [`EvmFactory`], and
     /// [`ReceiptBuilder`].
-    pub const fn new(receipt_builder: R, spec: Spec, evm_factory: EvmFactory) -> Self {
-        Self { receipt_builder, spec, evm_factory }
+    pub const fn new(
+        receipt_builder: R,
+        spec: Spec,
+        evm_factory: EvmFactory,
+    ) -> Self {
+        Self {
+            receipt_builder,
+            spec,
+            evm_factory,
+        }
     }
 
     /// Exposes the receipt builder.
@@ -103,11 +121,19 @@ impl<R, Spec, EvmFactory> BotanixBlockExecutorFactory<R, Spec, EvmFactory> {
     }
 }
 
-impl<R, Spec, EvmF> BlockExecutorFactory for BotanixBlockExecutorFactory<R, Spec, EvmF>
+impl<R, Spec, EvmF> BlockExecutorFactory
+    for BotanixBlockExecutorFactory<R, Spec, EvmF>
 where
-    R: ReceiptBuilder<Transaction = TransactionSigned, Receipt: TxReceipt<Log = Log>>,
-    Spec: EthereumHardforks + BotanixHardforks + EthChainSpec + Hardforks + Clone,
-    EvmF: EvmFactory<Tx: FromRecoveredTx<TransactionSigned> + FromTxWithEncoded<TransactionSigned>>,
+    R: ReceiptBuilder<
+        Transaction = TransactionSigned,
+        Receipt: TxReceipt<Log = Log>,
+    >,
+    Spec:
+        EthereumHardforks + BotanixHardforks + EthChainSpec + Hardforks + Clone,
+    EvmF: EvmFactory<
+        Tx: FromRecoveredTx<TransactionSigned>
+                + FromTxWithEncoded<TransactionSigned>,
+    >,
     R::Transaction: From<TransactionSigned> + Clone,
     Self: 'static,
     BotanixTxEnv: IntoTxEnv<<EvmF as EvmFactory>::Tx>,
@@ -128,7 +154,9 @@ where
     ) -> impl BlockExecutorFor<'a, Self, DB, I>
     where
         DB: alloy_evm::Database + 'a,
-        I: Inspector<<Self::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a,
+        I: Inspector<
+                <Self::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>,
+            > + 'a,
     {
         BotanixBlockExecutor::new(
             evm,
@@ -161,7 +189,8 @@ where
     }
 
     fn evm_env(&self, header: &Header) -> EvmEnv<BotanixHardfork> {
-        let blob_params = self.chain_spec().blob_params_at_timestamp(header.timestamp);
+        let blob_params =
+            self.chain_spec().blob_params_at_timestamp(header.timestamp);
         let spec = revm_spec_by_timestamp_and_block_number(
             self.chain_spec().clone(),
             header.timestamp(),
@@ -169,8 +198,9 @@ where
         );
 
         // configure evm env based on parent block
-        let mut cfg_env =
-            CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec);
+        let mut cfg_env = CfgEnv::new()
+            .with_chain_id(self.chain_spec().chain().id())
+            .with_spec(spec);
 
         if let Some(blob_params) = &blob_params {
             cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
@@ -178,10 +208,15 @@ where
 
         // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
         // blobparams
-        let blob_excess_gas_and_price =
-            header.excess_blob_gas.zip(blob_params).map(|(excess_blob_gas, params)| {
+        let blob_excess_gas_and_price = header
+            .excess_blob_gas
+            .zip(blob_params)
+            .map(|(excess_blob_gas, params)| {
                 let blob_gasprice = params.calc_blob_fee(excess_blob_gas);
-                BlobExcessGasAndPrice { excess_blob_gas, blob_gasprice }
+                BlobExcessGasAndPrice {
+                    excess_blob_gas,
+                    blob_gasprice,
+                }
             });
 
         let eth_spec = SpecId::from(spec);
@@ -190,7 +225,11 @@ where
             number: U256::from(header.number()),
             beneficiary: header.beneficiary(),
             timestamp: U256::from(header.timestamp()),
-            difficulty: if eth_spec >= SpecId::MERGE { U256::ZERO } else { header.difficulty() },
+            difficulty: if eth_spec >= SpecId::MERGE {
+                U256::ZERO
+            } else {
+                header.difficulty()
+            },
             // Botanix does not replace the DIFFICULTY output with prevrandao so here we are setting
             // this to the difficulty values to ensure correct opcode outputs
             prevrandao: if eth_spec >= SpecId::MERGE {
@@ -219,24 +258,35 @@ where
         );
 
         // configure evm env based on parent block
-        let cfg_env =
-            CfgEnv::new().with_chain_id(self.chain_spec().chain().id()).with_spec(spec_id);
+        let cfg_env = CfgEnv::new()
+            .with_chain_id(self.chain_spec().chain().id())
+            .with_spec(spec_id);
 
-        let blob_params = self.chain_spec().blob_params_at_timestamp(attributes.timestamp);
+        let blob_params = self
+            .chain_spec()
+            .blob_params_at_timestamp(attributes.timestamp);
 
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
         // cancun now, we need to set the excess blob gas to the default value(0)
         let blob_excess_gas_and_price = parent
             .maybe_next_block_excess_blob_gas(blob_params)
-            .or_else(|| (SpecId::from(spec_id).is_enabled_in(SpecId::CANCUN)).then_some(0))
+            .or_else(|| {
+                (SpecId::from(spec_id).is_enabled_in(SpecId::CANCUN))
+                    .then_some(0)
+            })
             .map(|excess_blob_gas| {
-                let blob_gasprice =
-                    blob_params.unwrap_or_else(BlobParams::cancun).calc_blob_fee(excess_blob_gas);
-                BlobExcessGasAndPrice { excess_blob_gas, blob_gasprice }
+                let blob_gasprice = blob_params
+                    .unwrap_or_else(BlobParams::cancun)
+                    .calc_blob_fee(excess_blob_gas);
+                BlobExcessGasAndPrice {
+                    excess_blob_gas,
+                    blob_gasprice,
+                }
             });
 
         let mut basefee = parent.next_block_base_fee(
-            self.chain_spec().base_fee_params_at_timestamp(attributes.timestamp),
+            self.chain_spec()
+                .base_fee_params_at_timestamp(attributes.timestamp),
         );
 
         let mut gas_limit = U256::from(parent.gas_limit);
@@ -307,17 +357,28 @@ impl ConfigureEngineEvm<BotanixExecutionData> for BotanixEvmConfig
 where
     Self: Send + Sync + Unpin + Clone + 'static,
 {
-    fn evm_env_for_payload(&self, payload: &BotanixExecutionData) -> EvmEnv<BotanixHardfork> {
+    fn evm_env_for_payload(
+        &self,
+        payload: &BotanixExecutionData,
+    ) -> EvmEnv<BotanixHardfork> {
         self.evm_env(&payload.0.header)
     }
 
-    fn context_for_payload<'a>(&self, payload: &'a BotanixExecutionData) -> EthBlockExecutionCtx<'a> {
+    fn context_for_payload<'a>(
+        &self,
+        payload: &'a BotanixExecutionData,
+    ) -> EthBlockExecutionCtx<'a> {
         let block = &payload.0;
         EthBlockExecutionCtx {
             parent_hash: block.header.parent_hash(),
             parent_beacon_block_root: block.header.parent_beacon_block_root,
             ommers: &block.body.inner.ommers,
-            withdrawals: block.body.inner.withdrawals.as_ref().map(Cow::Borrowed),
+            withdrawals: block
+                .body
+                .inner
+                .withdrawals
+                .as_ref()
+                .map(Cow::Borrowed),
         }
     }
 
@@ -325,7 +386,14 @@ where
         &self,
         payload: &BotanixExecutionData,
     ) -> impl ExecutableTxIterator<Self> {
-        payload.0.body.inner.transactions.clone().into_iter().map(|tx| tx.try_into_recovered())
+        payload
+            .0
+            .body
+            .inner
+            .transactions
+            .clone()
+            .into_iter()
+            .map(|tx| tx.try_into_recovered())
     }
 }
 
@@ -339,14 +407,20 @@ pub fn revm_spec_by_timestamp_and_block_number(
         BotanixHardfork::Pectra
     } else {
         // Dynamically determine the order for the current chain
-        fn get_activation_block(fc: &reth_chainspec::ForkCondition) -> Option<u64> {
+        fn get_activation_block(
+            fc: &reth_chainspec::ForkCondition,
+        ) -> Option<u64> {
             match fc {
                 reth_chainspec::ForkCondition::Block(b) => Some(*b),
                 _ => None,
             }
         }
-        let jalapeno_block = get_activation_block(&chain_spec.botanix_fork_activation(BotanixHardfork::Jalapeno));
-        let pectra_block = get_activation_block(&chain_spec.botanix_fork_activation(BotanixHardfork::Pectra));
+        let jalapeno_block = get_activation_block(
+            &chain_spec.botanix_fork_activation(BotanixHardfork::Jalapeno),
+        );
+        let pectra_block = get_activation_block(
+            &chain_spec.botanix_fork_activation(BotanixHardfork::Pectra),
+        );
         // Sort by activation block descending (newest first)
         let mut forks = vec![
             (jalapeno_block, BotanixHardfork::Jalapeno),
@@ -354,7 +428,10 @@ pub fn revm_spec_by_timestamp_and_block_number(
         ];
         forks.sort_by(|a, b| b.0.cmp(&a.0));
         for &(_, fork) in &forks {
-            if chain_spec.botanix_fork_activation(fork).active_at_block(block_number) {
+            if chain_spec
+                .botanix_fork_activation(fork)
+                .active_at_block(block_number)
+            {
                 return fork;
             }
         }

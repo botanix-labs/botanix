@@ -6,14 +6,14 @@ rust-version = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-# reth deps
-reth-metrics = { workspace = true, features = ["common"] }
+botanix-activation-manager = { workspace = true }
 
 # botanix deps
 botanix-storage = { workspace = true }
-botanix-activation-manager = { workspace = true }
 
 # other deps
 metrics = { workspace = true }
 metrics-util = { workspace = true }
+# reth deps
+reth-metrics = { workspace = true, features = ["common"] }
 tokio = { workspace = true, features = ["full"] }

@@ -30,8 +30,12 @@ pub const MAX_BASE_TX_WEIGHT: u64 = 4 * 4 + 1 + 1 + 3 * 4 + 3 * 4 + 4 * 4;
 // sequence = 4 bytes * 4 weight units
 // witness item count = 1 byte * 1 weight units
 // signature = TAPROOT_KEYSPEND_SIGHASH_DEFAULT_WEIGHT
-pub const PER_P2TR_KEYSPEND_WEIGHT: u64 =
-    32 * 4 + 4 * 4 + 1 * 4 + 4 * 4 + 1 + TAPROOT_KEYSPEND_SIGHASH_DEFAULT_WEIGHT.to_wu();
+pub const PER_P2TR_KEYSPEND_WEIGHT: u64 = 32 * 4
+    + 4 * 4
+    + 1 * 4
+    + 4 * 4
+    + 1
+    + TAPROOT_KEYSPEND_SIGHASH_DEFAULT_WEIGHT.to_wu();
 
 // output_value = 8 bytes * 4 weight units
 // output_script_len = 1 byte * 4 weight units
@@ -55,8 +59,10 @@ mod test {
         let secp = secp256k1::Secp256k1::new();
         let key_pair = Keypair::new(&secp, &mut rand::thread_rng());
 
-        let desc =
-            Descriptor::Tr(miniscript::descriptor::Tr::new(key_pair.public_key(), None).unwrap());
+        let desc = Descriptor::Tr(
+            miniscript::descriptor::Tr::new(key_pair.public_key(), None)
+                .unwrap(),
+        );
         let weight = desc.max_weight_to_satisfy().unwrap();
         assert_eq!(weight, TAPROOT_KEYSPEND_SATISFACTION_WEIGHT);
     }

@@ -1,20 +1,21 @@
 //! Collection of methods for block validation.
 
 use alloy_consensus::{constants::MAXIMUM_EXTRA_DATA_SIZE, BlockHeader};
+use alloy_eips::eip4844::{
+    calc_excess_blob_gas, DATA_GAS_PER_BLOB,
+    MAX_DATA_GAS_PER_BLOCK_DENCUN as MAX_DATA_GAS_PER_BLOCK,
+};
 use reth_chainspec::{ChainSpec, EthereumHardforks};
 use reth_consensus::ConsensusError;
 use reth_primitives::{
     EthereumHardfork, GotExpected, Header, SealedBlock, SealedHeader,
 };
-use alloy_eips::eip4844::{
-    DATA_GAS_PER_BLOB,
-    MAX_DATA_GAS_PER_BLOCK_DENCUN as MAX_DATA_GAS_PER_BLOCK,
-    calc_excess_blob_gas,
-};
 
 /// Gas used needs to be less than gas limit. Gas used is going to be checked after execution.
 #[inline]
-pub const fn validate_header_gas(header: &Header) -> Result<(), ConsensusError> {
+pub const fn validate_header_gas(
+    header: &Header,
+) -> Result<(), ConsensusError> {
     if header.gas_used > header.gas_limit {
         return Err(ConsensusError::HeaderGasUsedExceedsGasLimit {
             gas_used: header.gas_used,
@@ -30,8 +31,9 @@ pub fn validate_header_base_fee(
     header: &Header,
     chain_spec: &ChainSpec,
 ) -> Result<(), ConsensusError> {
-    if chain_spec.is_fork_active_at_block(EthereumHardfork::London, header.number) &&
-        header.base_fee_per_gas.is_none()
+    if chain_spec
+        .is_fork_active_at_block(EthereumHardfork::London, header.number)
+        && header.base_fee_per_gas.is_none()
     {
         return Err(ConsensusError::BaseFeeMissing);
     }
@@ -57,7 +59,9 @@ pub fn validate_block_pre_execution(
     if chain_spec.is_cancun_active_at_timestamp(block.timestamp) {
         // Check that the blob gas used in the header matches the sum of the blob gas used by each
         // blob tx
-        let header_blob_gas_used = block.blob_gas_used.ok_or(ConsensusError::BlobGasUsedMissing)?;
+        let header_blob_gas_used = block
+            .blob_gas_used
+            .ok_or(ConsensusError::BlobGasUsedMissing)?;
         let total_blob_gas = block.blob_gas_used().unwrap_or_default();
         if total_blob_gas != header_blob_gas_used {
             return Err(ConsensusError::BlobGasUsedDiff(GotExpected {
@@ -78,9 +82,15 @@ pub fn validate_block_pre_execution(
 ///  * `blob_gas_used` is less than or equal to `MAX_DATA_GAS_PER_BLOCK`
 ///  * `blob_gas_used` is a multiple of `DATA_GAS_PER_BLOB`
 ///  * `excess_blob_gas` is a multiple of `DATA_GAS_PER_BLOB`
-pub fn validate_4844_header_standalone(header: &Header) -> Result<(), ConsensusError> {
-    let blob_gas_used = header.blob_gas_used.ok_or(ConsensusError::BlobGasUsedMissing)?;
-    let excess_blob_gas = header.excess_blob_gas.ok_or(ConsensusError::ExcessBlobGasMissing)?;
+pub fn validate_4844_header_standalone(
+    header: &Header,
+) -> Result<(), ConsensusError> {
+    let blob_gas_used = header
+        .blob_gas_used
+        .ok_or(ConsensusError::BlobGasUsedMissing)?;
+    let excess_blob_gas = header
+        .excess_blob_gas
+        .ok_or(ConsensusError::ExcessBlobGasMissing)?;
 
     if header.parent_beacon_block_root.is_none() {
         return Err(ConsensusError::ParentBeaconBlockRootMissing);
@@ -117,7 +127,9 @@ pub fn validate_4844_header_standalone(header: &Header) -> Result<(), ConsensusE
 /// From yellow paper: extraData: An arbitrary byte array containing data relevant to this block.
 /// This must be 32 bytes or fewer; formally Hx.
 #[inline]
-pub fn validate_header_extradata(header: &Header) -> Result<(), ConsensusError> {
+pub fn validate_header_extradata(
+    header: &Header,
+) -> Result<(), ConsensusError> {
     let extradata_len = header.extra_data.as_ref().len();
     if extradata_len > MAXIMUM_EXTRA_DATA_SIZE {
         Err(ConsensusError::ExtraDataExceedsMax { len: extradata_len })
@@ -145,7 +157,11 @@ pub fn validate_against_parent_hash_number(
 
     if parent.hash() != header.parent_hash {
         return Err(ConsensusError::ParentHashMismatch(
-            GotExpected { got: header.parent_hash, expected: parent.hash() }.into(),
+            GotExpected {
+                got: header.parent_hash,
+                expected: parent.hash(),
+            }
+            .into(),
         ));
     }
 
@@ -159,19 +175,28 @@ pub fn validate_against_parent_eip1559_base_fee(
     parent: &Header,
     chain_spec: &ChainSpec,
 ) -> Result<(), ConsensusError> {
-    if chain_spec.fork(EthereumHardfork::London).active_at_block(header.number) {
-        let base_fee = header.base_fee_per_gas.ok_or(ConsensusError::BaseFeeMissing)?;
+    if chain_spec
+        .fork(EthereumHardfork::London)
+        .active_at_block(header.number)
+    {
+        let base_fee = header
+            .base_fee_per_gas
+            .ok_or(ConsensusError::BaseFeeMissing)?;
 
-        let expected_base_fee =
-            if chain_spec.fork(EthereumHardfork::London).transitions_at_block(header.number) {
-                alloy_eips::eip1559::INITIAL_BASE_FEE
-            } else {
-                // This BaseFeeMissing will not happen as previous blocks are checked to have
-                // them.
-                parent
-                    .next_block_base_fee(chain_spec.base_fee_params_at_timestamp(header.timestamp))
-                    .ok_or(ConsensusError::BaseFeeMissing)?
-            };
+        let expected_base_fee = if chain_spec
+            .fork(EthereumHardfork::London)
+            .transitions_at_block(header.number)
+        {
+            alloy_eips::eip1559::INITIAL_BASE_FEE
+        } else {
+            // This BaseFeeMissing will not happen as previous blocks are checked to have
+            // them.
+            parent
+                .next_block_base_fee(
+                    chain_spec.base_fee_params_at_timestamp(header.timestamp),
+                )
+                .ok_or(ConsensusError::BaseFeeMissing)?
+        };
         if expected_base_fee != base_fee {
             return Err(ConsensusError::BaseFeeDiff(GotExpected {
                 expected: expected_base_fee,
@@ -218,13 +243,18 @@ pub fn validate_against_parent_4844(
     if header.blob_gas_used.is_none() {
         return Err(ConsensusError::BlobGasUsedMissing);
     }
-    let excess_blob_gas = header.excess_blob_gas.ok_or(ConsensusError::ExcessBlobGasMissing)?;
+    let excess_blob_gas = header
+        .excess_blob_gas
+        .ok_or(ConsensusError::ExcessBlobGasMissing)?;
 
     let expected_excess_blob_gas =
         calc_excess_blob_gas(parent_excess_blob_gas, parent_blob_gas_used);
     if expected_excess_blob_gas != excess_blob_gas {
         return Err(ConsensusError::ExcessBlobGasDiff {
-            diff: GotExpected { got: excess_blob_gas, expected: expected_excess_blob_gas },
+            diff: GotExpected {
+                got: excess_blob_gas,
+                expected: expected_excess_blob_gas,
+            },
             parent_excess_blob_gas,
             parent_blob_gas_used,
         });

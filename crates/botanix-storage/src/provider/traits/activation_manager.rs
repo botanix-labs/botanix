@@ -156,5 +156,8 @@ pub trait ActivationManagerReaderWriter<Auth>: Send + Sync {
     /// # Returns
     /// * `Ok(count)` - The number of votes that were removed
     /// * `Err` if there was an error removing votes
-    fn remove_upgrading_votes(&self, botanix_height: u64) -> ProviderResult<usize>;
+    fn remove_upgrading_votes(
+        &self,
+        botanix_height: u64,
+    ) -> ProviderResult<usize>;
 }

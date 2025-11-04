@@ -2,12 +2,14 @@
 use botanix_storage_migrate::{
     migrate_botanix_tables,
     test_utils::fixtures::{
-        create_test_block_snapshots, create_test_chunk_blocks, create_test_chunks,
-        create_test_runtime_transitions, create_test_snapshot_syncs, create_test_snapshots,
+        create_test_block_snapshots, create_test_chunk_blocks,
+        create_test_chunks, create_test_runtime_transitions,
+        create_test_snapshot_syncs, create_test_snapshots,
         create_test_staged_headers, create_test_wallet_state_syncs,
     },
 };
 
+use alloy_primitives::BlockNumber;
 use eyre::Context;
 use reth_db::{test_utils::create_test_rw_db, DatabaseEnv};
 use reth_db_api::{
@@ -16,7 +18,6 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
     Database,
 };
-use alloy_primitives::BlockNumber;
 
 /// Helper function to populate test data in botanix-storage tables
 pub fn populate_botanix_test_data(db: &DatabaseEnv) -> eyre::Result<()> {
@@ -95,34 +96,75 @@ pub fn count_table_entries<T: Table>(db: &DatabaseEnv) -> eyre::Result<usize> {
     Ok(count)
 }
 
-fn count_botanix_db_tables(db: &DatabaseEnv, expected_count: usize) -> eyre::Result<()> {
+fn count_botanix_db_tables(
+    db: &DatabaseEnv,
+    expected_count: usize,
+) -> eyre::Result<()> {
     use botanix_storage::tables::Tables;
 
     for table in Tables::ALL {
         match table {
             Tables::Snapshots => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::Snapshots>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::Snapshots>(
+                        db
+                    )?,
+                    expected_count
+                );
             }
             Tables::WalletStateSyncs => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::WalletStateSyncs>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::WalletStateSyncs,
+                    >(db)?,
+                    expected_count
+                );
             }
             Tables::StagedHeader => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::StagedHeader>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::StagedHeader>(
+                        db
+                    )?,
+                    expected_count
+                );
             }
             Tables::Chunks => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::Chunks>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::Chunks>(db)?,
+                    expected_count
+                );
             }
             Tables::BlockSnapshots => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::BlockSnapshots>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::BlockSnapshots,
+                    >(db)?,
+                    expected_count
+                );
             }
             Tables::ChunkBlocks => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::ChunkBlocks>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::ChunkBlocks>(
+                        db
+                    )?,
+                    expected_count
+                );
             }
             Tables::SnapshotSyncs => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::SnapshotSyncs>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::SnapshotSyncs,
+                    >(db)?,
+                    expected_count
+                );
             }
             Tables::RuntimeTransitions => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::RuntimeTransitions>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::RuntimeTransitions,
+                    >(db)?,
+                    expected_count
+                );
             }
             _ => {}
         }
@@ -131,34 +173,75 @@ fn count_botanix_db_tables(db: &DatabaseEnv, expected_count: usize) -> eyre::Res
     Ok(())
 }
 
-fn count_reth_db_botanix_tables(db: &DatabaseEnv, expected_count: usize) -> eyre::Result<()> {
+fn count_reth_db_botanix_tables(
+    db: &DatabaseEnv,
+    expected_count: usize,
+) -> eyre::Result<()> {
     use botanix_storage::tables::Tables;
 
     for table in Tables::ALL {
         match table {
             Tables::Snapshots => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::Snapshots>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::Snapshots>(
+                        db
+                    )?,
+                    expected_count
+                );
             }
             Tables::WalletStateSyncs => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::WalletStateSyncs>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::WalletStateSyncs,
+                    >(db)?,
+                    expected_count
+                );
             }
             Tables::StagedHeader => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::StagedHeader>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::StagedHeader>(
+                        db
+                    )?,
+                    expected_count
+                );
             }
             Tables::Chunks => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::Chunks>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::Chunks>(db)?,
+                    expected_count
+                );
             }
             Tables::BlockSnapshots => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::BlockSnapshots>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::BlockSnapshots,
+                    >(db)?,
+                    expected_count
+                );
             }
             Tables::ChunkBlocks => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::ChunkBlocks>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<botanix_storage::tables::ChunkBlocks>(
+                        db
+                    )?,
+                    expected_count
+                );
             }
             Tables::SnapshotSyncs => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::SnapshotSyncs>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::SnapshotSyncs,
+                    >(db)?,
+                    expected_count
+                );
             }
             Tables::RuntimeTransitions => {
-                assert_eq!(count_table_entries::<botanix_storage::tables::RuntimeTransitions>(db)?, expected_count);
+                assert_eq!(
+                    count_table_entries::<
+                        botanix_storage::tables::RuntimeTransitions,
+                    >(db)?,
+                    expected_count
+                );
             }
             _ => {}
         }
@@ -176,18 +259,22 @@ fn test_migration() -> eyre::Result<()> {
     let botanix_db = botanix_temp_db.db();
 
     // Populate test data in reth database
-    populate_botanix_test_data(reth_db).wrap_err("failed to populate botanix test data")?;
-    populate_reth_test_data(reth_db).wrap_err("failed to populate reth test data")?;
+    populate_botanix_test_data(reth_db)
+        .wrap_err("failed to populate botanix test data")?;
+    populate_reth_test_data(reth_db)
+        .wrap_err("failed to populate reth test data")?;
 
     // Verify initial state
 
     // Botanix and reth tables have data in reth db
 
     // Botanix db should be empty
-    count_botanix_db_tables(botanix_db, 0).wrap_err("failed to count botanix tables")?;
+    count_botanix_db_tables(botanix_db, 0)
+        .wrap_err("failed to count botanix tables")?;
 
     // Perform migration
-    migrate_botanix_tables(reth_db, botanix_db).wrap_err("failed to migrate botanix tables")?;
+    migrate_botanix_tables(reth_db, botanix_db)
+        .wrap_err("failed to migrate botanix tables")?;
 
     // Verify migration results
 
@@ -199,14 +286,17 @@ fn test_migration() -> eyre::Result<()> {
     assert_eq!(count_table_entries::<reth_db::tables::Headers>(reth_db)?, 5);
 
     // Botanix db should have all migrated data
-    count_botanix_db_tables(botanix_db, 3).wrap_err("failed to count botanix tables")?;
+    count_botanix_db_tables(botanix_db, 3)
+        .wrap_err("failed to count botanix tables")?;
 
     // Verify data integrity by checking specific entries
     let botanix_tx = botanix_db.tx().wrap_err("failed to get tx")?;
 
     // Check Chunks data
-    let mut chunks_cursor = botanix_tx.cursor_read::<botanix_storage::tables::Chunks>()?;
-    let chunk_data = chunks_cursor.walk(None)?.collect::<Result<Vec<_>, _>>()?;
+    let mut chunks_cursor =
+        botanix_tx.cursor_read::<botanix_storage::tables::Chunks>()?;
+    let chunk_data =
+        chunks_cursor.walk(None)?.collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(chunk_data.len(), 3);
 

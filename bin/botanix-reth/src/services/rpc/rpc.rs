@@ -1,30 +1,34 @@
-
-use std::{net::SocketAddr, sync::Arc};
+use crate::services::network_builder::{BotanixNetworkHandle, BotanixPool};
+use crate::{
+    node::{evm::config::BotanixEvmConfig, BotanixNode},
+    services::rpc::botanixrpc_ext::{BotanixRpcExt, BotanixRpcExtApiServer},
+};
+use botanix_chainspec::BotanixChainSpec;
 use botanix_rpc_config::botanix_config::Botanix;
 use futures::TryFutureExt;
-use botanix_chainspec::BotanixChainSpec;
-use reth::{args::RpcServerArgs, tasks::TaskExecutor};
 use reth::consensus::noop::NoopConsensus;
+use reth::{args::RpcServerArgs, tasks::TaskExecutor};
 use reth_ethereum::{
     network::api::noop::NoopNetwork,
     node::api::NodeTypesWithDBAdapter,
-    provider::{
-        db::DatabaseEnv,
-        providers::BlockchainProvider,
-    },
+    provider::{db::DatabaseEnv, providers::BlockchainProvider},
     rpc::{
-        builder::{RethRpcModule, RpcModuleBuilder, RpcServerConfig, TransportRpcModuleConfig},
+        builder::{
+            RethRpcModule, RpcModuleBuilder, RpcServerConfig,
+            TransportRpcModuleConfig,
+        },
         EthApiBuilder,
     },
 };
-use crate::services::network_builder::{BotanixNetworkHandle, BotanixPool};
-use crate::{node::{evm::config::BotanixEvmConfig, BotanixNode}, services::rpc::botanixrpc_ext::{BotanixRpcExt, BotanixRpcExtApiServer}};
+use std::{net::SocketAddr, sync::Arc};
 
 /// Sets up and runs the RPC server for the Botanix node, wiring providers,
 /// network and transaction pool, configuring transports (HTTP/WS/IPC), and
 /// starting the server; returns an error if server startup fails.
 pub async fn setup_and_run_rpc(
-    provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+    provider: BlockchainProvider<
+        NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+    >,
     rpc_server_args: &RpcServerArgs,
     task_executor: &TaskExecutor,
     chain_spec: Arc<BotanixChainSpec>,
@@ -48,12 +52,16 @@ pub async fn setup_and_run_rpc(
     .build();
 
     // Pick which namespaces to expose.
-    let module_config = TransportRpcModuleConfig::default().with_http([RethRpcModule::Eth]);
+    let module_config =
+        TransportRpcModuleConfig::default().with_http([RethRpcModule::Eth]);
 
     let mut server = rpc_builder.build(module_config, eth_api);
 
     // Add a custom rpc namespace
-    let custom_rpc = BotanixRpcExt { provider, botanix: botanix_provider };
+    let custom_rpc = BotanixRpcExt {
+        provider,
+        botanix: botanix_provider,
+    };
     server.merge_configured(custom_rpc.into_rpc())?;
 
     // Start the server & keep it alive
@@ -69,14 +77,13 @@ pub async fn setup_and_run_rpc(
     }
 
     if rpc_server_args.ws {
-        let ws_socket_addr = SocketAddr::new(
-            rpc_server_args.ws_addr,
-            rpc_server_args.ws_port,
-        );
+        let ws_socket_addr =
+            SocketAddr::new(rpc_server_args.ws_addr, rpc_server_args.ws_port);
         server_config = server_config.with_ws_address(ws_socket_addr);
     }
 
-    server_config = server_config.with_ipc_endpoint(rpc_server_args.ipcpath.clone());
+    server_config =
+        server_config.with_ipc_endpoint(rpc_server_args.ipcpath.clone());
 
     let launch_rpc = server_config.start(&server).map_ok(|handle| {
         if let Some(path) = handle.ipc_endpoint() {

@@ -37,7 +37,8 @@ fn forward_to_timeout(
 #[test]
 fn stage_one_resend_round1_packages_on_timeout() {
     let config = test_config();
-    let (alice_addr, bob_addr, eve_addr, mut alice, mut bob, mut eve) = setup(config);
+    let (alice_addr, bob_addr, eve_addr, mut alice, mut bob, mut eve) =
+        setup(config);
 
     let mut now = Instant::now();
 
@@ -148,8 +149,9 @@ fn stage_two_resend_round2_packages_on_timeout() {
     let mut now = Instant::now();
 
     // Complete stage one.
-    let (mut alice, mut bob, mut eve) =
-        complete_stage_one(alice_addr, bob_addr, eve_addr, alice, bob, eve, now);
+    let (mut alice, mut bob, mut eve) = complete_stage_one(
+        alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
+    );
 
     // *** Alice sends her round2 packages to Bob and Eve.
     {
@@ -264,12 +266,14 @@ fn stage_three_resend_round3_packages_on_timeout() {
     let mut now = Instant::now();
 
     // Complete stage one.
-    let (alice, bob, eve) =
-        complete_stage_one(alice_addr, bob_addr, eve_addr, alice, bob, eve, now);
+    let (alice, bob, eve) = complete_stage_one(
+        alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
+    );
 
     // Complete stage two.
-    let (mut alice, mut bob, mut eve) =
-        complete_stage_two(alice_addr, bob_addr, eve_addr, alice, bob, eve, now);
+    let (mut alice, mut bob, mut eve) = complete_stage_two(
+        alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
+    );
 
     // *** Alice sends her initial round3 packages to Bob and Eve.
     {

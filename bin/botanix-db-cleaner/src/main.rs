@@ -34,7 +34,9 @@ async fn main() -> AnyResult<()> {
     let db_args = DatabaseArguments::new(ClientVersion::default())
         .with_exclusive(Some(true))
         .with_log_level(Some(LogLevel::Debug))
-        .with_max_read_transaction_duration(Some(MaxReadTransactionDuration::Unbounded));
+        .with_max_read_transaction_duration(Some(
+            MaxReadTransactionDuration::Unbounded,
+        ));
     let db_dir = Path::new(&db_path).join("db");
 
     tracing::info!(target: "db_cleaner::cli", path = ?db_dir, "Opening database ...");
@@ -53,7 +55,8 @@ async fn main() -> AnyResult<()> {
     tracing::info!(target: "db_cleaner::cli", path = ?db_path, "Database successfully opened!");
     let database = Arc::new(db);
 
-    let provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>>::new(database);
+    let provider_factory =
+        BotanixProviderFactory::<Arc<DatabaseEnv>>::new(database);
 
     match cli.entity {
         cli::Entity::Snapshots => {

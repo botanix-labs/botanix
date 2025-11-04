@@ -14,7 +14,10 @@ where
 {
     type EngineApi = BotanixEngineApi;
 
-    async fn build_engine_api(self, _ctx: &AddOnsContext<'_, N>) -> eyre::Result<Self::EngineApi> {
+    async fn build_engine_api(
+        self,
+        _ctx: &AddOnsContext<'_, N>,
+    ) -> eyre::Result<Self::EngineApi> {
         Ok(BotanixEngineApi::default())
     }
 }

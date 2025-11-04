@@ -1,13 +1,15 @@
 use alloy_chains::NamedChain;
 use alloy_consensus::Header;
-use alloy_eips::{eip1559::INITIAL_BASE_FEE as EIP1559_INITIAL_BASE_FEE, eip7840::BlobParams};
+use alloy_eips::{
+    eip1559::INITIAL_BASE_FEE as EIP1559_INITIAL_BASE_FEE, eip7840::BlobParams,
+};
 use alloy_genesis::Genesis;
 use alloy_hardforks::Hardfork;
 use alloy_primitives::{Address, B256, U256};
 use core::fmt::{Debug, Display};
 use reth_chainspec::{
-    BaseFeeParams, ChainSpec, DepositContract, EthChainSpec, EthereumHardfork, EthereumHardforks,
-    ForkFilter, ForkId, Hardforks, Head,
+    BaseFeeParams, ChainSpec, DepositContract, EthChainSpec, EthereumHardfork,
+    EthereumHardforks, ForkFilter, ForkId, Hardforks, Head,
 };
 use reth_ethereum_forks::ForkCondition;
 use reth_evm::eth::spec::EthExecutorSpec;
@@ -16,7 +18,8 @@ use std::{ops::Deref, sync::Arc};
 
 use crate::{
     constants::{
-        botanix_mainnet_head, botanix_testnet_head, BOTANIX_INITIAL_BASE_FEE, BOTANIX_TESTNET,
+        botanix_mainnet_head, botanix_testnet_head, BOTANIX_INITIAL_BASE_FEE,
+        BOTANIX_TESTNET,
     },
     BotanixHardfork, BotanixHardforks,
 };
@@ -116,7 +119,11 @@ impl BotanixChainSpec {
         let genesis_base_fee = self.clone().initial_base_fee_by_chain_id();
 
         // If Jalepeno is activated at genesis, we set the initial base fee as per EIP-1559.
-        (self.inner.fork(BotanixHardfork::Jalapeno).active_at_block(0)).then_some(genesis_base_fee)
+        (self
+            .inner
+            .fork(BotanixHardfork::Jalapeno)
+            .active_at_block(0))
+        .then_some(genesis_base_fee)
     }
 }
 
@@ -193,7 +200,9 @@ impl Hardforks for BotanixChainSpec {
         self.inner.fork(fork)
     }
 
-    fn forks_iter(&self) -> impl Iterator<Item = (&dyn Hardfork, ForkCondition)> {
+    fn forks_iter(
+        &self,
+    ) -> impl Iterator<Item = (&dyn Hardfork, ForkCondition)> {
         self.inner.forks_iter()
     }
 
@@ -211,7 +220,10 @@ impl Hardforks for BotanixChainSpec {
 }
 
 impl EthereumHardforks for BotanixChainSpec {
-    fn ethereum_fork_activation(&self, fork: EthereumHardfork) -> ForkCondition {
+    fn ethereum_fork_activation(
+        &self,
+        fork: EthereumHardfork,
+    ) -> ForkCondition {
         self.inner.ethereum_fork_activation(fork)
     }
 }
@@ -247,7 +259,10 @@ impl BotanixChainSpec {
 
 impl From<ChainSpec> for BotanixChainSpec {
     fn from(value: ChainSpec) -> Self {
-        Self { inner: value, ..Default::default() }
+        Self {
+            inner: value,
+            ..Default::default()
+        }
     }
 }
 

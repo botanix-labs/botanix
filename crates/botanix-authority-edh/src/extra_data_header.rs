@@ -100,15 +100,21 @@ impl ExtraDataHeader {
         self.version.consensus_encode(writer)?;
         self.chain_version.consensus_encode(writer)?;
         self.bitcoin_block_hash.consensus_encode(writer)?;
-        self.aggregated_public_key.serialize().consensus_encode(writer)?;
-        let block_producer_address_bytes = self.block_fee_recipient_address.0 .0;
+        self.aggregated_public_key
+            .serialize()
+            .consensus_encode(writer)?;
+        let block_producer_address_bytes =
+            self.block_fee_recipient_address.0 .0;
         let _ = writer.write(&block_producer_address_bytes)?;
 
         Ok(())
     }
 
     /// Serialize the extra data header into the writer.
-    pub fn encode_into(&self, writer: &mut impl bitcoin::io::Write) -> Result<(), io::Error> {
+    pub fn encode_into(
+        &self,
+        writer: &mut impl bitcoin::io::Write,
+    ) -> Result<(), io::Error> {
         self.encode_into_without_signature(writer)?;
         Ok(())
     }
@@ -116,7 +122,8 @@ impl ExtraDataHeader {
     /// Serialize the extra data header
     pub fn serialize(&self) -> Vec<u8> {
         let mut buf = Vec::new();
-        self.encode_into(&mut buf).expect("buffers produce no io errors");
+        self.encode_into(&mut buf)
+            .expect("buffers produce no io errors");
         buf
     }
 
@@ -130,13 +137,15 @@ impl ExtraDataHeader {
         let chain_version = u32::consensus_decode(reader)?;
         let bitcoin_block_hash = Decodable::consensus_decode(reader)?;
         let pk_bytes = <[u8; 33]>::consensus_decode(reader)?;
-        let aggregated_public_key = secp256k1::PublicKey::from_slice(&pk_bytes).map_err(|e| {
-            println!("Error: {:?}", e);
-            encode::Error::ParseFailed("malformed aggregate public key")
-        })?;
+        let aggregated_public_key = secp256k1::PublicKey::from_slice(&pk_bytes)
+            .map_err(|e| {
+                println!("Error: {:?}", e);
+                encode::Error::ParseFailed("malformed aggregate public key")
+            })?;
         let mut block_fee_recipient_address_bytes: [u8; 20] = [0; 20];
         reader.read_exact(&mut block_fee_recipient_address_bytes)?;
-        let block_fee_recipient_address = Address::from_slice(&block_fee_recipient_address_bytes);
+        let block_fee_recipient_address =
+            Address::from_slice(&block_fee_recipient_address_bytes);
 
         Ok(Self {
             version,
@@ -210,8 +219,8 @@ mod tests {
         let mut buf: Vec<u8> = vec![];
         header.encode_into_without_signature(&mut buf).unwrap();
         // serialize the same header
-        let serialized =
-            ExtraDataHeader::deserialize(&mut buf.as_slice()).expect("Deserialization");
+        let serialized = ExtraDataHeader::deserialize(&mut buf.as_slice())
+            .expect("Deserialization");
         assert_eq!(serialized, header);
     }
 
@@ -238,6 +247,9 @@ mod tests {
             Address::ZERO,
         );
 
-        println!("serialized header: {}", hex::encode(extra_data_header.serialize()));
+        println!(
+            "serialized header: {}",
+            hex::encode(extra_data_header.serialize())
+        );
     }
 }

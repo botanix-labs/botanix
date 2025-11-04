@@ -54,7 +54,11 @@ pub struct AuthorityMetrics {
 
 impl AuthorityMetrics {
     /// Create metrics for federation member vote for a given proposal.
-    pub fn runtime_upgrade_vote(&self, member: &Address, payload: &Option<NetworkUpgradePayload>) {
+    pub fn runtime_upgrade_vote(
+        &self,
+        member: &Address,
+        payload: &Option<NetworkUpgradePayload>,
+    ) {
         if let Some(p) = payload {
             metrics::gauge!(
                 "authority_runtime_upgrade_vote_details",
@@ -74,7 +78,11 @@ impl AuthorityMetrics {
     }
 
     /// Create metrics for the runtime upgrade polling results.
-    pub fn runtime_upgrade_polling(&self, upgrade: &RuntimeVersion, polling: &Polling) {
+    pub fn runtime_upgrade_polling(
+        &self,
+        upgrade: &RuntimeVersion,
+        polling: &Polling,
+    ) {
         let p = polling;
 
         // Metrics for each individual requirement.
@@ -169,7 +177,8 @@ mod tests {
 
             // verify the gauge
             let gauge_key = Key::from_name("authority.signing_sessions");
-            let gauge_value = metrics_map.get(&CompositeKey::new(MetricKind::Gauge, gauge_key));
+            let gauge_value = metrics_map
+                .get(&CompositeKey::new(MetricKind::Gauge, gauge_key));
             assert!(gauge_value.is_some(), "signing_sessions gauge not found");
             if let Some((_, _, DebugValue::Gauge(value))) = gauge_value {
                 assert_eq!(*value, 5.0, "signing_sessions value incorrect");
@@ -192,11 +201,20 @@ mod tests {
 
             for (counter_name, expected_value) in counters_to_check {
                 let counter_key = Key::from_name(counter_name);
-                let counter_value =
-                    metrics_map.get(&CompositeKey::new(MetricKind::Counter, counter_key));
-                assert!(counter_value.is_some(), "{} counter not found", counter_name);
-                if let Some((_, _, DebugValue::Counter(value))) = counter_value {
-                    assert_eq!(*value, expected_value, "{} value incorrect", counter_name);
+                let counter_value = metrics_map
+                    .get(&CompositeKey::new(MetricKind::Counter, counter_key));
+                assert!(
+                    counter_value.is_some(),
+                    "{} counter not found",
+                    counter_name
+                );
+                if let Some((_, _, DebugValue::Counter(value))) = counter_value
+                {
+                    assert_eq!(
+                        *value, expected_value,
+                        "{} value incorrect",
+                        counter_name
+                    );
                 } else {
                     panic!("{} has wrong type", counter_name);
                 }
@@ -379,17 +397,18 @@ mod tests {
     fn test_duration_metered_exec_error_handling() {
         let mut accumulated_duration = Duration::from_secs(0);
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            duration_metered_exec!(
-                {
-                    if true {
-                        panic!("Test panic");
-                    }
-                    42
-                },
-                accumulated_duration
-            )
-        }));
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                duration_metered_exec!(
+                    {
+                        if true {
+                            panic!("Test panic");
+                        }
+                        42
+                    },
+                    accumulated_duration
+                )
+            }));
 
         assert!(result.is_err());
 

@@ -1,7 +1,11 @@
-use crate::bitcoind::{BitcoindClient, BitcoindError, BitcoindFactory, BitcoindRpc};
+use crate::bitcoind::{
+    BitcoindClient, BitcoindError, BitcoindFactory, BitcoindRpc,
+};
 use async_trait::async_trait;
 use bitcoin::{
-    block::{BlockHash, Header, Version}, hashes::Hash, Amount, CompactTarget, TxMerkleNode
+    block::{BlockHash, Header, Version},
+    hashes::Hash,
+    Amount, CompactTarget, TxMerkleNode,
 };
 use bitcoincore_rpc::{
     json::{self, GetBlockHeaderResult, GetBlockResult},
@@ -83,7 +87,9 @@ impl BitcoindRpc for MockBitcoind {
 
     async fn wait_until_synced(&self) {}
 
-    fn get_best_block_hash_rpc(&self) -> Result<bitcoin::BlockHash, BitcoindError> {
+    fn get_best_block_hash_rpc(
+        &self,
+    ) -> Result<bitcoin::BlockHash, BitcoindError> {
         Ok(bitcoin::BlockHash::all_zeros())
     }
 
@@ -101,14 +107,17 @@ impl BitcoindRpc for MockBitcoind {
         })
     }
 
-    fn get_block_hash_rpc(&self, _height: u64) -> Result<bitcoin::BlockHash, BitcoindError> {
+    fn get_block_hash_rpc(
+        &self,
+        _height: u64,
+    ) -> Result<bitcoin::BlockHash, BitcoindError> {
         Ok(bitcoin::BlockHash::all_zeros())
     }
 
     fn get_block_info_rpc(
         &self,
         _h: &bitcoin::BlockHash,
-    ) -> Result<GetBlockResult, BitcoindError> {       
+    ) -> Result<GetBlockResult, BitcoindError> {
         let block_info_result = GetBlockResult {
             hash: BlockHash::all_zeros(),
             confirmations: 0,
@@ -133,11 +142,16 @@ impl BitcoindRpc for MockBitcoind {
         Ok(block_info_result)
     }
 
-    fn get_txids_rpc(&self, _h: &bitcoin::BlockHash) -> Result<Vec<bitcoin::Txid>, BitcoindError> {
+    fn get_txids_rpc(
+        &self,
+        _h: &bitcoin::BlockHash,
+    ) -> Result<Vec<bitcoin::Txid>, BitcoindError> {
         Ok(vec![])
     }
 
-    fn get_estimate_smart_fee_rpc(&self) -> Result<crate::bitcoind::EstimateSmartFeeResult, BitcoindError> {
+    fn get_estimate_smart_fee_rpc(
+        &self,
+    ) -> Result<crate::bitcoind::EstimateSmartFeeResult, BitcoindError> {
         Ok(crate::bitcoind::EstimateSmartFeeResult {
             fee_rate: Some(Amount::from_sat(1000)),
             errors: None,
@@ -149,7 +163,7 @@ impl BitcoindRpc for MockBitcoind {
         Ok(0)
     }
 
-    // fn get_block_info_rpc(&self, _: &bitcoin::BlockHash) -> Result<GetBlockHeaderResult, BitcoindError> { 
+    // fn get_block_info_rpc(&self, _: &bitcoin::BlockHash) -> Result<GetBlockHeaderResult, BitcoindError> {
     //     Ok(GetBlockHeaderResult {
     //         hash: BlockHash::all_zeros(),
     //         confirmations: 0,

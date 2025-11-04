@@ -10,12 +10,14 @@ use bitcoin::{
     Address, Amount, BlockHash,
 };
 use botanix_authority_peg::{
-    mint_validation::{try_parse_burn_event, BURN_TOPIC, MINT_CONTRACT_ADDRESS, MINT_TOPIC},
+    mint_validation::{
+        try_parse_burn_event, BURN_TOPIC, MINT_CONTRACT_ADDRESS, MINT_TOPIC,
+    },
     peg_contract::{PeginMeta, PegoutData, PegoutWithId},
 };
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, GrpcClientError, MakeTxRequest, PendingPegout, ScriptBuf, SigningPackage,
-    TxOut, Utxo,
+    BtcServerExtendedApi, GrpcClientError, MakeTxRequest, PendingPegout,
+    ScriptBuf, SigningPackage, TxOut, Utxo,
 };
 use botanix_storage::models;
 use btcserverlib::{
@@ -25,7 +27,9 @@ use btcserverlib::{
 use futures_util::Future;
 use reth_network::{NetworkHandle, NetworkInfo};
 use reth_primitives::{SealedHeader, TransactionSigned};
-use reth_provider::{BlockReaderIdExt, HeaderProvider, ReceiptProvider, TransactionsProvider};
+use reth_provider::{
+    BlockReaderIdExt, HeaderProvider, ReceiptProvider, TransactionsProvider,
+};
 use reth_revm::primitives::FixedBytes;
 use std::{
     fmt::Debug,
@@ -34,7 +38,7 @@ use std::{
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::botanix_authority_consensus::wallet_state_sync::MAX_BLOCK_TS_CUTOFF_DURATION;
+use crate::consensus::wallet_state_sync::MAX_BLOCK_TS_CUTOFF_DURATION;
 
 /// Checks if the network is undergoing an active sync or not
 pub fn is_active_sync_in_progress(network_handle: &NetworkHandle) -> bool {
@@ -147,9 +151,13 @@ pub(crate) fn get_pending_pegouts_from_pegout_data(
 }
 
 fn utxo_from_pegin_meta(pegin_meta: &PeginMeta) -> Utxo {
-    let tx_out =
-        pegin_meta.tx().output.get(pegin_meta.outpoint().vout as usize).expect("valid vout");
-    let serialized_script_pub_key = bitcoin::consensus::serialize(&tx_out.script_pubkey);
+    let tx_out = pegin_meta
+        .tx()
+        .output
+        .get(pegin_meta.outpoint().vout as usize)
+        .expect("valid vout");
+    let serialized_script_pub_key =
+        bitcoin::consensus::serialize(&tx_out.script_pubkey);
 
     Utxo {
         outpoint: Some(botanix_btc_server_client::OutPoint {
@@ -157,14 +165,18 @@ fn utxo_from_pegin_meta(pegin_meta: &PeginMeta) -> Utxo {
             vout: pegin_meta.outpoint().vout,
         }),
         output: Some(TxOut {
-            script_pubkey: Some(ScriptBuf { script: serialized_script_pub_key }),
+            script_pubkey: Some(ScriptBuf {
+                script: serialized_script_pub_key,
+            }),
             value: tx_out.value.to_sat(),
         }),
         eth_address: hex::encode(pegin_meta.address()),
     }
 }
 
-pub(crate) fn get_staged_pegins_from_pegin_meta(pegins: &[PeginMeta]) -> Vec<models::PeginData> {
+pub(crate) fn get_staged_pegins_from_pegin_meta(
+    pegins: &[PeginMeta],
+) -> Vec<models::PeginData> {
     pegins
         .iter()
         .map(|pegin| {
@@ -173,15 +185,24 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(pegins: &[PeginMeta]) -> Vec<mod
             let txid = bitcoin::consensus::serialize(&pegin.outpoint().txid);
             let vout = pegin.outpoint().vout as u64;
             let value = tx_out.value.to_sat();
-            let script_pubkey = bitcoin::consensus::serialize(&tx_out.script_pubkey);
+            let script_pubkey =
+                bitcoin::consensus::serialize(&tx_out.script_pubkey);
             let eth_address = pegin.address().to_vec();
 
-            models::PeginData { txid, vout, value, script_pubkey, eth_address }
+            models::PeginData {
+                txid,
+                vout,
+                value,
+                script_pubkey,
+                eth_address,
+            }
         })
         .collect()
 }
 
-pub(crate) fn get_utxos_from_staged_pegins(pegins: Vec<models::PeginData>) -> Vec<Utxo> {
+pub(crate) fn get_utxos_from_staged_pegins(
+    pegins: Vec<models::PeginData>,
+) -> Vec<Utxo> {
     pegins
         .into_iter()
         .map(|pegin| Utxo {
@@ -191,7 +212,9 @@ pub(crate) fn get_utxos_from_staged_pegins(pegins: Vec<models::PeginData>) -> Ve
             }),
             output: Some(TxOut {
                 value: pegin.value,
-                script_pubkey: Some(ScriptBuf { script: pegin.script_pubkey }),
+                script_pubkey: Some(ScriptBuf {
+                    script: pegin.script_pubkey,
+                }),
             }),
             eth_address: hex::encode(pegin.eth_address),
         })
@@ -206,10 +229,16 @@ pub(crate) fn get_staged_pegouts_from_pegout_data(
         .iter()
         .map(|pegout| {
             let pegout_id = pegout.id.as_bytes().to_vec();
-            let script_pubkey = pegout.data.destination.script_pubkey().into_bytes();
+            let script_pubkey =
+                pegout.data.destination.script_pubkey().into_bytes();
             let amount = pegout.data.amount.to_sat();
 
-            models::PegoutData { pegout_id, script_pubkey, amount, height }
+            models::PegoutData {
+                pegout_id,
+                script_pubkey,
+                amount,
+                height,
+            }
         })
         .collect()
 }
@@ -235,14 +264,14 @@ fn bloom_contains_minting_contract_address(bloom: Bloom) -> bool {
 }
 
 pub(crate) fn bloom_contains_pegout(bloom: Bloom) -> bool {
-    bloom_contains_minting_contract_address(bloom) &&
-        bloom.contains_input(BloomInput::Raw(BURN_TOPIC.as_ref()))
+    bloom_contains_minting_contract_address(bloom)
+        && bloom.contains_input(BloomInput::Raw(BURN_TOPIC.as_ref()))
 }
 
 #[allow(dead_code)]
 pub(crate) fn bloom_contains_pegin(bloom: Bloom) -> bool {
-    bloom_contains_minting_contract_address(bloom) &&
-        bloom.contains_input(BloomInput::Raw(MINT_TOPIC.as_ref()))
+    bloom_contains_minting_contract_address(bloom)
+        && bloom.contains_input(BloomInput::Raw(MINT_TOPIC.as_ref()))
 }
 
 /// Finds the starting block number for the current epoch based on the current block number
@@ -256,7 +285,10 @@ pub(crate) fn bloom_contains_pegin(bloom: Bloom) -> bool {
 ///
 /// Returns the starting block number for the current epoch.
 #[allow(dead_code)]
-pub(crate) fn find_epoch_start(epoch_length: u64, current_block_number: u64) -> u64 {
+pub(crate) fn find_epoch_start(
+    epoch_length: u64,
+    current_block_number: u64,
+) -> u64 {
     let mut start_block_number = current_block_number;
     while start_block_number % epoch_length != 0 {
         start_block_number -= 1;
@@ -266,7 +298,10 @@ pub(crate) fn find_epoch_start(epoch_length: u64, current_block_number: u64) -> 
 
 #[allow(dead_code)]
 pub(crate) fn get_witness_data_from_psbt(psbt: Psbt) -> Vec<Witness> {
-    psbt.inputs.iter().filter_map(|input| input.final_script_witness.clone()).collect()
+    psbt.inputs
+        .iter()
+        .filter_map(|input| input.final_script_witness.clone())
+        .collect()
 }
 
 pub(crate) fn parse_signing_session_id(
@@ -358,7 +393,10 @@ pub(crate) async fn epoch_pegouts(
 /// # Returns
 ///
 /// Returns `true` if the block's age is less than the specified max cutoff age, otherwise `false`.
-pub fn is_block_age_acceptable(timestamp: u64, max_age_cutoff: Duration) -> bool {
+pub fn is_block_age_acceptable(
+    timestamp: u64,
+    max_age_cutoff: Duration,
+) -> bool {
     let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(now) => now.as_secs(),
         Err(_) => return false,
@@ -464,7 +502,8 @@ pub(crate) fn generate_signing_session_id(
     let id = Uuid::new_v4();
     let hex_string = id.simple().to_string(); // Removing dashes, results in 32 hex digits
     let bytes: Vec<u8> = hex_string.bytes().collect();
-    let bytes_array: [u8; 32] = bytes.try_into().expect("Expected a Vec<u8> of length 32");
+    let bytes_array: [u8; 32] =
+        bytes.try_into().expect("Expected a Vec<u8> of length 32");
     Ok(bytes_array)
 }
 
@@ -499,11 +538,15 @@ pub(crate) fn generate_utxo_merkel_root(
         .iter()
         .map(|u| {
             let mut engine = sha256::Hash::engine();
-            let ot = u.clone().outpoint.ok_or(UtxoMerkelRootError::MissingOutpoint)?;
+            let ot = u
+                .clone()
+                .outpoint
+                .ok_or(UtxoMerkelRootError::MissingOutpoint)?;
             let tx_id = bitcoin::hash_types::Txid::from_slice(&ot.txid)
                 .ok()
                 .ok_or(UtxoMerkelRootError::UnparsableTxId)?;
-            let btc_outpoint = bitcoin::transaction::OutPoint::new(tx_id, ot.vout);
+            let btc_outpoint =
+                bitcoin::transaction::OutPoint::new(tx_id, ot.vout);
             btc_outpoint
                 .consensus_encode(&mut engine)
                 .map_err(|_| UtxoMerkelRootError::OutpointEncoding)?;
@@ -526,9 +569,17 @@ pub fn is_known_minting_contract(
     deployed_bytecode: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
     if precompiled_bytecode != hex::encode(deployed_bytecode) {
-        error!("Precompiled Minting contract bytecode: {}", precompiled_bytecode);
-        error!("Deployed Minting contract bytecode: {}", hex::encode(deployed_bytecode));
-        return Err("Minting contract bytecode does not match known bytecode".into());
+        error!(
+            "Precompiled Minting contract bytecode: {}",
+            precompiled_bytecode
+        );
+        error!(
+            "Deployed Minting contract bytecode: {}",
+            hex::encode(deployed_bytecode)
+        );
+        return Err(
+            "Minting contract bytecode does not match known bytecode".into()
+        );
     }
 
     Ok(())
@@ -557,7 +608,9 @@ pub fn extract_pegout_ids(psbt: &Psbt) -> Vec<(usize, PegoutId)> {
         .iter()
         .enumerate()
         .filter_map(|(pos, output)| match output.pegout_id() {
-            Some(pegout_id) => PegoutId::from_bytes(pegout_id.as_slice()).ok().map(|id| (pos, id)),
+            Some(pegout_id) => PegoutId::from_bytes(pegout_id.as_slice())
+                .ok()
+                .map(|id| (pos, id)),
             _ => None,
         })
         .collect()

@@ -7,21 +7,21 @@ license = { workspace = true }
 
 [dependencies]
 
-# botanix deps
-botanix-btc-wallet = { workspace = true }
-
 # other deps
 arc-swap = "1.7.1"
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
+bitcoincore-rpc = { workspace = true }
 bitcoincore-zmq = { workspace = true }
+
+# botanix deps
+botanix-btc-wallet = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time"] }
 tracing = { workspace = true }
-bitcoincore-rpc = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }

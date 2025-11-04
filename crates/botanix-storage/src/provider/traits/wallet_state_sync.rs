@@ -27,7 +27,9 @@ pub trait WalletStateSyncReader: Send + Sync {
     ///
     /// * `Ok(Vec<WalletStateSyncRecord>)` - A vector of all sync records
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_state_sync_records(&self) -> ProviderResult<Vec<WalletStateSyncRecord>>;
+    fn get_state_sync_records(
+        &self,
+    ) -> ProviderResult<Vec<WalletStateSyncRecord>>;
 
     /// Get all state sync record peer ids
     ///
@@ -168,7 +170,10 @@ pub trait WalletStateSyncWriter: Send + Sync {
     ///
     /// * `Ok(())` - If the record was successfully removed or didn't exist
     /// * `Err(ProviderError)` - If there was a database error
-    fn remove_state_sync_record_per_peer_id(&self, peer_id: PeerID) -> ProviderResult<()>;
+    fn remove_state_sync_record_per_peer_id(
+        &self,
+        peer_id: PeerID,
+    ) -> ProviderResult<()>;
 
     /// Removes all state sync records
     ///

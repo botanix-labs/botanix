@@ -29,7 +29,9 @@ pub enum BlockExecutionError {
 
 impl From<reth_evm::execute::BlockExecutionError> for BlockExecutionError {
     fn from(err: reth_evm::execute::BlockExecutionError) -> Self {
-        Self::Internal(InternalBlockExecutionError::Other(err.to_string().into()))
+        Self::Internal(InternalBlockExecutionError::Other(
+            err.to_string().into(),
+        ))
     }
 }
 
@@ -88,7 +90,9 @@ pub enum BlockValidationError {
         hash: B256,
     },
     /// Error for EIP-4788 when parent beacon block root is missing
-    #[display("EIP-4788 parent beacon block root missing for active Cancun block")]
+    #[display(
+        "EIP-4788 parent beacon block root missing for active Cancun block"
+    )]
     MissingParentBeaconBlockRoot,
     /// Error for Cancun genesis block when parent beacon block root is not zero
     #[display(
@@ -158,7 +162,9 @@ pub enum BlockValidationError {
     /// EVM error during consolidation requests contract call [EIP-7251]
     ///
     /// [EIP-7251]: https://eips.ethereum.org/EIPS/eip-7251
-    #[display("failed to apply consolidation requests contract call: {message}")]
+    #[display(
+        "failed to apply consolidation requests contract call: {message}"
+    )]
     ConsolidationRequestsContractCall {
         /// The error message.
         message: String,
@@ -180,7 +186,9 @@ pub enum BlockValidationError {
 #[derive(Debug, Clone, derive_more::Display)]
 pub enum ConsensusError {
     /// Error when the gas used in the header exceeds the gas limit.
-    #[display("block used gas ({gas_used}) is greater than gas limit ({gas_limit})")]
+    #[display(
+        "block used gas ({gas_used}) is greater than gas limit ({gas_limit})"
+    )]
     HeaderGasUsedExceedsGasLimit {
         /// The gas used in the block header.
         gas_used: u64,
@@ -540,6 +548,8 @@ pub enum InvalidAggregatedPublicKeyError {
     #[display("Aggregated public key is missing")]
     MissingAggregatedPublicKey,
     /// Aggregated public key should not be NUMS point past genesis block
-    #[display("Aggregated public key should not be NUMS point past genesis block")]
+    #[display(
+        "Aggregated public key should not be NUMS point past genesis block"
+    )]
     NumsAggregatePublicKeyPastGenesis,
 }

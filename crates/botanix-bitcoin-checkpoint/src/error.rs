@@ -20,7 +20,9 @@ pub enum BitcoinCheckpointError {
     },
 
     /// An error occurred while calling the Bitcoin RPC.
-    #[error("Bitcoin RPC call {procedure_name} failed on checkpoint sync: {error}")]
+    #[error(
+        "Bitcoin RPC call {procedure_name} failed on checkpoint sync: {error}"
+    )]
     SyncRpcError {
         /// The underlying JSON-RPC error
         error: botanix_btc_wallet::bitcoind::BitcoindError,

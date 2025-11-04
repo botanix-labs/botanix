@@ -1,5 +1,5 @@
 use crate::{
-    botanix_authority_consensus::{
+    consensus::{
         comet_bft::abci::{ABCIClientBuilder, ABCIDriverMessage},
         frost_task::FrostTask,
         snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},
@@ -7,7 +7,10 @@ use crate::{
         wallet_state_sync::WalletStateSyncEngine,
         AuthorityConsensus, Storage,
     },
-    node::{evm::config::BotanixEvmConfig, network::BotanixNetworkPrimitives, BotanixNode},
+    node::{
+        evm::config::BotanixEvmConfig, network::BotanixNetworkPrimitives,
+        BotanixNode,
+    },
 };
 use botanix_activation_manager::{ActivationManager, VoteWatcher};
 use botanix_authority_edh::header_ext::HeaderExt;
@@ -20,11 +23,14 @@ use botanix_btc_server_client::{
 use botanix_btc_wallet::bitcoind::{BitcoindClient, BitcoindFactory};
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::state_sync::StateSyncArgs;
-use botanix_comet_bft_rpc::{Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory};
+use botanix_comet_bft_rpc::{
+    Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory,
+};
 use botanix_data_parser::{DataParser, SerializationType};
 use botanix_storage::{
-    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter, StagedHeaderReader,
-    StagedHeaderWriter, WalletStateSyncReader, WalletStateSyncWriter,
+    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
+    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
+    WalletStateSyncWriter,
 };
 use reth_db::DatabaseEnv;
 // use reth_evm::execute::BlockExecutorProvider;
@@ -35,8 +41,8 @@ use reth_network::{
 };
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_provider::{
-    BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions, ProviderFactory,
-    StateProviderFactory,
+    BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions,
+    ProviderFactory, StateProviderFactory,
 };
 use reth_tasks::TaskExecutor;
 use std::{
@@ -62,7 +68,8 @@ pub struct AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source> {
     random_source_provider: Source,
     metrics: Arc<AuthorityMetrics>,
     abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-    reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+    reth_provider_factory:
+        ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     state_sync: StateSyncArgs,
     block_fee_recipient_address: Option<alloy_primitives::Address>,
     bitcoind_client: BitcoindClient,
@@ -78,7 +85,8 @@ pub enum AuthorityConsensusBuilderError {
 }
 
 // ===== impl AuthorityConsensusBuilder =====
-impl<BF, RDB, BDB, ToFrostMan, Source> AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source>
+impl<BF, RDB, BDB, ToFrostMan, Source>
+    AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source>
 where
     ToFrostMan: ToFrostManager + Clone + 'static + Send + Sync,
     RDB: BlockReaderIdExt<Header = alloy_consensus::Header>
@@ -86,8 +94,9 @@ where
         + Clone
         + CanonChainTracker
         + CanonStateSubscriptions
-        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
-        + 'static,
+        + reth_provider::ChainSpecProvider<
+            ChainSpec: reth_chainspec::EthereumHardforks,
+        > + 'static,
     BDB: SnapshotReader
         + SnapshotWriter
         + WalletStateSyncWriter
@@ -134,10 +143,12 @@ where
 
         // Check the local database if a runtime upgrade has occurred which the
         // ActivationManager does not know about.
-        if let Some(runtime_version) =
-            botanix_provider_factory.get_last_runtime_version().expect("local db must be available")
+        if let Some(runtime_version) = botanix_provider_factory
+            .get_last_runtime_version()
+            .expect("local db must be available")
         {
-            let was_forced = activation_manager.force_upgrade_checked(runtime_version);
+            let was_forced =
+                activation_manager.force_upgrade_checked(runtime_version);
             if was_forced {
                 warn!("Detected completed network upgrade to version '{runtime_version}' that was unknown to initiated ActivationManager");
             }
@@ -150,15 +161,24 @@ where
             .unwrap_or_else(|| chain_spec.inner().sealed_genesis_header());
         let mut headers = vec![latest_header.clone()];
 
-        while !is_poa_epoch(latest_header.header().number, chain_spec.epoch_length) {
+        while !is_poa_epoch(
+            latest_header.header().number,
+            chain_spec.epoch_length,
+        ) {
             let parent_hash = latest_header.parent_hash;
 
-            if let Some(new_header) = reth_provider.header(&parent_hash).ok().flatten() {
-                let old_latest_header =
-                    std::mem::replace(&mut latest_header, seal_slow(&new_header));
+            if let Some(new_header) =
+                reth_provider.header(&parent_hash).ok().flatten()
+            {
+                let old_latest_header = std::mem::replace(
+                    &mut latest_header,
+                    seal_slow(&new_header),
+                );
                 headers.push(old_latest_header);
             } else {
-                return Err(AuthorityConsensusBuilderError::FailedToRetrieveEopchHeader);
+                return Err(
+                    AuthorityConsensusBuilderError::FailedToRetrieveEopchHeader,
+                );
             }
         }
 
@@ -181,11 +201,14 @@ where
         let mut signer_index = Some(genesis_authorities.len() + 1);
         // only a federation node has a btc_server
         if is_fed_node {
-            signer_index =
-                genesis_authorities.iter().position(|a| *a == sk.public_key(secp256k1::SECP256K1));
+            signer_index = genesis_authorities
+                .iter()
+                .position(|a| *a == sk.public_key(secp256k1::SECP256K1));
 
             if signer_index.is_none() {
-                return Err(AuthorityConsensusBuilderError::FailedToFindSignerIndex);
+                return Err(
+                    AuthorityConsensusBuilderError::FailedToFindSignerIndex,
+                );
             }
         }
         let pk = sk.public_key(secp256k1::SECP256K1);
@@ -237,7 +260,9 @@ where
         Option<FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient>>,
         Option<ABCIClientBuilder<BF, RDB, BDB>>,
         Option<SnapshotManager<BF, RDB, BDB>>,
-        Option<WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>>,
+        Option<
+            WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>,
+        >,
     )
     where
         BtcServerClient: BtcServerExtendedApi + Clone + Send + Sync + 'static,
@@ -265,7 +290,8 @@ where
 
         let is_fed_node = btc_server_factory.is_some();
         let chain_spec = storage.chain_spec.clone();
-        let parser = DataParser::default().with_serialization_type(SerializationType::Postcard);
+        let parser = DataParser::default()
+            .with_serialization_type(SerializationType::Postcard);
 
         let btc_server_client: Option<BtcServerClient> = async {
             if is_fed_node {
@@ -358,7 +384,8 @@ where
         // run a background health monitoring task for the btc server, comet and bitcoind
         if is_fed_node {
             let mut btc_server_client = btc_server_client;
-            let cbft_rpc_provider = cometbft_rpc_factory.build_and_connect().unwrap();
+            let cbft_rpc_provider =
+                cometbft_rpc_factory.build_and_connect().unwrap();
             let metrics = Arc::clone(&metrics);
             task_executor.spawn_critical(
                 "healthcheck monitoring task",
@@ -406,6 +433,11 @@ where
             );
         }
 
-        (frost_task, abci_client_builder, snapshot_manager, wallet_sync)
+        (
+            frost_task,
+            abci_client_builder,
+            snapshot_manager,
+            wallet_sync,
+        )
     }
 }

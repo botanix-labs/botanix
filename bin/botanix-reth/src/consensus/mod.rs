@@ -1,28 +1,35 @@
 //! A [Consensus] implementation of Clique Proof of Authority (POA)
 //! that authoritymatically seals blocks.
+use alloy_consensus::EMPTY_OMMER_ROOT_HASH;
+use alloy_primitives::{Address, U256};
 use async_trait as _;
 use botanix_authority_edh::{header_ext::HeaderExt, nums_secp256k1_pk};
 use botanix_chainspec::BotanixChainSpec;
+use botanix_consensus_common::{
+    utils::validate_chain_version,
+    validation::{
+        validate_4844_header_standalone, validate_against_parent_4844,
+        validate_against_parent_eip1559_base_fee,
+        validate_against_parent_hash_number, validate_against_parent_timestamp,
+        validate_block_pre_execution, validate_header_base_fee,
+        validate_header_gas,
+    },
+};
 use bytes as _;
 use displaydoc as _;
 use reth_chainspec::{EthereumHardfork, EthereumHardforks};
 use reth_consensus::{
-    Consensus, ConsensusError, InvalidAggregatedPublicKeyError, FullConsensus, HeaderValidator,
-};
-use botanix_consensus_common::{
-    utils::validate_chain_version,
-    validation::{
-        validate_4844_header_standalone, validate_against_parent_4844, validate_against_parent_eip1559_base_fee, validate_against_parent_hash_number, validate_against_parent_timestamp, validate_block_pre_execution, validate_header_base_fee, validate_header_gas
-    },
+    Consensus, ConsensusError, FullConsensus, HeaderValidator,
+    InvalidAggregatedPublicKeyError,
 };
 use reth_ethereum_consensus::validate_block_post_execution;
 use reth_network_peers as _;
 use reth_node_core as _;
 use reth_node_ethereum::EthEvmConfig;
-use reth_primitives::{BlockWithSenders, RecoveredBlock, Block, Header, SealedBlock, SealedHeader};
+use reth_primitives::{
+    Block, BlockWithSenders, Header, RecoveredBlock, SealedBlock, SealedHeader,
+};
 use reth_primitives_traits::constants::MINIMUM_GAS_LIMIT;
-use alloy_consensus::EMPTY_OMMER_ROOT_HASH;
-use alloy_primitives::{Address, U256};
 use reth_provider::BlockExecutionResult;
 use serde_json as _;
 use std::{net::SocketAddr, sync::Arc};
@@ -78,7 +85,7 @@ impl AuthorityConsensus {
 // impl Consensus<reth_primitives::Block> for AuthorityConsensus {
 
 //     type Error = ConsensusError;
-    
+
 //     fn validate_body_against_header(&self, body: &Block::Body, header: &SealedHeader<Header>) -> Result<(),Self::Error>  {
 //         todo!()
 //     }
@@ -104,13 +111,19 @@ impl AuthorityConsensus {
 // }
 
 impl HeaderValidator for AuthorityConsensus {
-
-    fn validate_header(&self, header: &SealedHeader) -> Result<(), ConsensusError> {
+    fn validate_header(
+        &self,
+        header: &SealedHeader,
+    ) -> Result<(), ConsensusError> {
         validate_header_gas(header)?;
         validate_header_base_fee(header, &self.chain_spec.inner())?;
 
         // Ensures that EIP-4844 fields are valid once cancun is active.
-        if self.chain_spec.inner().is_cancun_active_at_timestamp(header.timestamp) {
+        if self
+            .chain_spec
+            .inner()
+            .is_cancun_active_at_timestamp(header.timestamp)
+        {
             validate_4844_header_standalone(header)?;
         } else if header.blob_gas_used.is_some() {
             return Err(ConsensusError::BlobGasUsedUnexpected);
@@ -144,10 +157,18 @@ impl HeaderValidator for AuthorityConsensus {
         // Ace age did increment it by some formula that we need to follow.
         self.validate_against_parent_gas_limit(header, parent)?;
 
-        validate_against_parent_eip1559_base_fee(header, parent, &self.chain_spec.inner())?;
+        validate_against_parent_eip1559_base_fee(
+            header,
+            parent,
+            &self.chain_spec.inner(),
+        )?;
 
         // ensure that the blob gas fields for this block
-        if self.chain_spec.inner().is_cancun_active_at_timestamp(header.timestamp) {
+        if self
+            .chain_spec
+            .inner()
+            .is_cancun_active_at_timestamp(header.timestamp)
+        {
             validate_against_parent_4844(header, parent)?;
         }
 
@@ -200,7 +221,10 @@ impl<BF, RDB: Clone, BDB: Clone> Storage<BF, RDB, BDB> {
         reth_database: RDB,
         botanix_database_factory: BDB,
     ) -> Self {
-        let storage_inner = StorageInner { aggregate_public_key, is_block_syncing: false };
+        let storage_inner = StorageInner {
+            aggregate_public_key,
+            is_block_syncing: false,
+        };
 
         Self {
             reth_database,

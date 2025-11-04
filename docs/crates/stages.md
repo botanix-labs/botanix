@@ -179,43 +179,43 @@ At the end of the `execute()` function, a familiar value is returned, `Ok(ExecOu
 
 ## MerkleUnwindStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 ## AccountHashingStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 ## StorageHashingStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 ## MerkleExecuteStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 ## TransactionLookupStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 ## IndexStorageHistoryStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 ## IndexAccountHistoryStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 ## FinishStage
 
--   TODO: explain stage
-    <br>
+- TODO: explain stage
+  <br>
 
 # Next Chapter
 

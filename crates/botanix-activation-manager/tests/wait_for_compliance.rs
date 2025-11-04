@@ -1,6 +1,7 @@
 use botanix_activation_manager::{
     test_utils::{
-        Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE, UPGRADE_VERSION,
+        Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
+        UPGRADE_VERSION,
     },
     ConditionList,
 };

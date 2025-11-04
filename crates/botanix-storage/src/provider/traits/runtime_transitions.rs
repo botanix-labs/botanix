@@ -21,7 +21,11 @@ pub trait RuntimeTransitionsReadWrite: Send + Sync {
         version: RuntimeVersion,
     ) -> ProviderResult<bool>;
     /// Retrieves the complete history of recorded runtime version transitions.
-    fn get_runtime_versions(&self) -> ProviderResult<Vec<(BlockNumber, RuntimeVersion)>>;
+    fn get_runtime_versions(
+        &self,
+    ) -> ProviderResult<Vec<(BlockNumber, RuntimeVersion)>>;
     /// Retrieves the most recent (highest) runtime version that has been recorded.
-    fn get_last_runtime_version(&self) -> ProviderResult<Option<RuntimeVersion>>;
+    fn get_last_runtime_version(
+        &self,
+    ) -> ProviderResult<Option<RuntimeVersion>>;
 }

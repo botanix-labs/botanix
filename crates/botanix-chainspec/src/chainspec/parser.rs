@@ -1,4 +1,7 @@
-use crate::{constants::{BOTANIX_MAINNET, BOTANIX_TESTNET}, BotanixChainSpec};
+use crate::{
+    constants::{BOTANIX_MAINNET, BOTANIX_TESTNET},
+    BotanixChainSpec,
+};
 use alloy_genesis::Genesis;
 use clap::{builder::TypedValueParser, error::Result, Arg, Command};
 use reth_chainspec::ChainSpec;
@@ -13,7 +16,8 @@ pub struct BotanixChainSpecParser;
 impl ChainSpecParser for BotanixChainSpecParser {
     type ChainSpec = BotanixChainSpec;
 
-    const SUPPORTED_CHAINS: &'static [&'static str] = &["botanix-mainnet", "botanix-testnet"];
+    const SUPPORTED_CHAINS: &'static [&'static str] =
+        &["botanix-mainnet", "botanix-testnet"];
 
     fn parse(s: &str) -> eyre::Result<Arc<Self::ChainSpec>> {
         chain_value_parser(s)
@@ -24,20 +28,24 @@ impl ChainSpecParser for BotanixChainSpecParser {
 ///
 /// The value parser matches either a known chain, the path
 /// to a json file, or a json formatted string in-memory. The json needs to be a Genesis struct.
-fn chain_value_parser(s: &str) -> eyre::Result<Arc<BotanixChainSpec>, eyre::Error> {
+fn chain_value_parser(
+    s: &str,
+) -> eyre::Result<Arc<BotanixChainSpec>, eyre::Error> {
     match s {
         "botanix-mainnet" => Ok(BOTANIX_MAINNET.clone()),
         "botanix-testnet" => Ok(BOTANIX_TESTNET.clone()),
         _ => {
             // try to read json from path first
-            let raw = match fs::read_to_string(PathBuf::from(shellexpand::full(s)?.into_owned())) {
+            let raw = match fs::read_to_string(PathBuf::from(
+                shellexpand::full(s)?.into_owned(),
+            )) {
                 Ok(raw) => raw,
                 Err(io_err) => {
                     // valid json may start with "\n", but must contain "{"
                     if s.contains('{') {
                         s.to_string()
                     } else {
-                        return Err(io_err.into()) // assume invalid path
+                        return Err(io_err.into()); // assume invalid path
                     }
                 }
             };
@@ -49,7 +57,7 @@ fn chain_value_parser(s: &str) -> eyre::Result<Arc<BotanixChainSpec>, eyre::Erro
             // First convert to ChainSpec, then wrap in BotanixChainSpec
             let chain_spec: ChainSpec = genesis.into();
             let botanix_chain_spec = BotanixChainSpec::from(chain_spec);
-            
+
             Ok(Arc::new(botanix_chain_spec))
         }
     }
@@ -64,8 +72,9 @@ impl TypedValueParser for BotanixChainSpecParser {
         arg: Option<&Arg>,
         value: &OsStr,
     ) -> Result<Self::Value, clap::Error> {
-        let val =
-            value.to_str().ok_or_else(|| clap::Error::new(clap::error::ErrorKind::InvalidUtf8))?;
+        let val = value.to_str().ok_or_else(|| {
+            clap::Error::new(clap::error::ErrorKind::InvalidUtf8)
+        })?;
         <Self as ChainSpecParser>::parse(val).map_err(|err| {
             let arg = arg.map(|a| a.to_string()).unwrap_or_else(|| "...".to_owned());
             let possible_values = Self::SUPPORTED_CHAINS.join(",");
@@ -78,8 +87,11 @@ impl TypedValueParser for BotanixChainSpecParser {
 
     fn possible_values(
         &self,
-    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
-        let values = Self::SUPPORTED_CHAINS.iter().map(clap::builder::PossibleValue::new);
+    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>>
+    {
+        let values = Self::SUPPORTED_CHAINS
+            .iter()
+            .map(clap::builder::PossibleValue::new);
         Some(Box::new(values))
     }
 }

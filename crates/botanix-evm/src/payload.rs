@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
 use alloy_consensus::Transaction;
-use reth_basic_payload_builder::{is_better_payload, BuildArguments, BuildOutcome, PayloadConfig};
+use reth_basic_payload_builder::{
+    is_better_payload, BuildArguments, BuildOutcome, PayloadConfig,
+};
 use reth_chainspec::{EthChainSpec, EthereumHardforks};
-use reth_ethereum_engine_primitives::{EthBuiltPayload, EthPayloadBuilderAttributes};
+use reth_ethereum_engine_primitives::{
+    EthBuiltPayload, EthPayloadBuilderAttributes,
+};
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_evm::{
     execute::{BlockBuilder, BlockBuilderOutcome},
@@ -12,20 +16,28 @@ use reth_evm::{
 use reth_execution_errors::{BlockExecutionError, BlockValidationError};
 use reth_payload_builder::BlobSidecars;
 use reth_payload_primitives::{PayloadBuilderAttributes, PayloadBuilderError};
-use reth_primitives::{InvalidTransactionError, NodePrimitives, TransactionSigned};
+use reth_primitives::{
+    InvalidTransactionError, NodePrimitives, TransactionSigned,
+};
 use reth_primitives_traits::BlockBody as BlockBodyTrait;
 use reth_provider::{ChainSpecProvider, StateProviderFactory};
-use reth_revm::{context::Block, database::StateProviderDatabase, primitives::U256, State};
+use reth_revm::{
+    context::Block, database::StateProviderDatabase, primitives::U256, State,
+};
 use reth_transaction_pool::{
     error::{Eip4844PoolTransactionError, InvalidPoolTransactionError},
-    BestTransactions, BestTransactionsAttributes, PoolTransaction, TransactionPool,
-    ValidPoolTransaction,
+    BestTransactions, BestTransactionsAttributes, PoolTransaction,
+    TransactionPool, ValidPoolTransaction,
 };
 use tracing::{debug, trace, warn};
 
 // Copied from Reth since it's private
 type BestTransactionsIter<Pool> = Box<
-    dyn BestTransactions<Item = Arc<ValidPoolTransaction<<Pool as TransactionPool>::Transaction>>>,
+    dyn BestTransactions<
+        Item = Arc<
+            ValidPoolTransaction<<Pool as TransactionPool>::Transaction>,
+        >,
+    >,
 >;
 
 /// Constructs an Ethereum transaction payload using the best transactions from the pool.
@@ -46,19 +58,39 @@ pub fn default_ethereum_payload<Primitives, EvmConfig, Client, Pool, F>(
     floor_base_fee: Option<u64>,
 ) -> Result<BuildOutcome<EthBuiltPayload>, PayloadBuilderError>
 where
-    Primitives: NodePrimitives<BlockHeader = alloy_consensus::Header, SignedTx = TransactionSigned>,
-    EvmConfig: ConfigureEvm<Primitives = Primitives, NextBlockEnvCtx = NextBlockEnvAttributes>,
-    Client: StateProviderFactory + ChainSpecProvider<ChainSpec: EthereumHardforks>,
-    Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>>,
+    Primitives: NodePrimitives<
+        BlockHeader = alloy_consensus::Header,
+        SignedTx = TransactionSigned,
+    >,
+    EvmConfig: ConfigureEvm<
+        Primitives = Primitives,
+        NextBlockEnvCtx = NextBlockEnvAttributes,
+    >,
+    Client:
+        StateProviderFactory + ChainSpecProvider<ChainSpec: EthereumHardforks>,
+    Pool: TransactionPool<
+        Transaction: PoolTransaction<Consensus = TransactionSigned>,
+    >,
     F: FnOnce(BestTransactionsAttributes) -> BestTransactionsIter<Pool>,
 {
-    let BuildArguments { mut cached_reads, config, cancel, best_payload, max_tx_bytes: _ } = args;
-    let PayloadConfig { parent_header, attributes } = config;
+    let BuildArguments {
+        mut cached_reads,
+        config,
+        cancel,
+        best_payload,
+        max_tx_bytes: _,
+    } = args;
+    let PayloadConfig {
+        parent_header,
+        attributes,
+    } = config;
 
     let state_provider = client.state_by_block_hash(parent_header.hash())?;
     let state = StateProviderDatabase::new(&state_provider);
-    let mut db =
-        State::builder().with_database(cached_reads.as_db_mut(state)).with_bundle_update().build();
+    let mut db = State::builder()
+        .with_database(cached_reads.as_db_mut(state))
+        .with_bundle_update()
+        .build();
 
     let mut builder = evm_config
         .builder_for_next_block(
@@ -89,7 +121,11 @@ where
 
     let mut best_txs = best_txs(BestTransactionsAttributes::new(
         base_fee,
-        builder.evm_mut().block().blob_gasprice().map(|gasprice| gasprice as u64),
+        builder
+            .evm_mut()
+            .block()
+            .blob_gasprice()
+            .map(|gasprice| gasprice as u64),
     ));
     let mut total_fees = U256::ZERO;
 
@@ -105,8 +141,10 @@ where
     let mut block_blob_count = 0;
 
     let blob_params = chain_spec.blob_params_at_timestamp(attributes.timestamp);
-    let max_blob_count =
-        blob_params.as_ref().map(|params| params.max_blob_count).unwrap_or_default();
+    let max_blob_count = blob_params
+        .as_ref()
+        .map(|params| params.max_blob_count)
+        .unwrap_or_default();
 
     while let Some(pool_tx) = best_txs.next() {
         // ensure we still have capacity for this transaction
@@ -116,14 +154,17 @@ where
             // continue
             best_txs.mark_invalid(
                 &pool_tx,
-                InvalidPoolTransactionError::ExceedsGasLimit(pool_tx.gas_limit(), block_gas_limit),
+                InvalidPoolTransactionError::ExceedsGasLimit(
+                    pool_tx.gas_limit(),
+                    block_gas_limit,
+                ),
             );
-            continue
+            continue;
         }
 
         // check if the job was cancelled, if so we can exit early
         if cancel.is_cancelled() {
-            return Ok(BuildOutcome::Cancelled)
+            return Ok(BuildOutcome::Cancelled);
         }
 
         // convert tx to a signed transaction
@@ -151,17 +192,21 @@ blob transaction because it would exceed the max blob count per block");
                         },
                     ),
                 );
-                continue
+                continue;
             }
 
             let blob_sidecar_result = 'sidecar: {
-                let Some(sidecar) =
-                    pool.get_blob(*tx.hash()).map_err(PayloadBuilderError::other)?
+                let Some(sidecar) = pool
+                    .get_blob(*tx.hash())
+                    .map_err(PayloadBuilderError::other)?
                 else {
-                    break 'sidecar Err(Eip4844PoolTransactionError::MissingEip4844BlobSidecar)
+                    break 'sidecar Err(
+                        Eip4844PoolTransactionError::MissingEip4844BlobSidecar,
+                    );
                 };
 
-                if chain_spec.is_osaka_active_at_timestamp(attributes.timestamp) {
+                if chain_spec.is_osaka_active_at_timestamp(attributes.timestamp)
+                {
                     if sidecar.is_eip7594() {
                         Ok(sidecar)
                     } else {
@@ -177,17 +222,20 @@ blob transaction because it would exceed the max blob count per block");
             blob_tx_sidecar = match blob_sidecar_result {
                 Ok(sidecar) => Some(sidecar),
                 Err(error) => {
-                    best_txs.mark_invalid(&pool_tx, InvalidPoolTransactionError::Eip4844(error));
-                    continue
+                    best_txs.mark_invalid(
+                        &pool_tx,
+                        InvalidPoolTransactionError::Eip4844(error),
+                    );
+                    continue;
                 }
             };
         }
 
         let gas_used = match builder.execute_transaction(tx.clone()) {
             Ok(gas_used) => gas_used,
-            Err(BlockExecutionError::Validation(BlockValidationError::InvalidTx {
-                error, ..
-            })) => {
+            Err(BlockExecutionError::Validation(
+                BlockValidationError::InvalidTx { error, .. },
+            )) => {
                 if error.is_nonce_too_low() {
                     // if the nonce is too low, we can skip this transaction
                     trace!(target: "payload_builder", %error, ?tx, "skipping nonce too lowtransaction");
@@ -202,7 +250,7 @@ blob transaction because it would exceed the max blob count per block");
                         ),
                     );
                 }
-                continue
+                continue;
             }
             // this is an error that we should treat as fatal for this attempt
             Err(err) => return Err(PayloadBuilderError::evm(err)),
@@ -219,8 +267,9 @@ blob transaction because it would exceed the max blob count per block");
         }
 
         // update and add to total fees
-        let miner_fee =
-            tx.effective_tip_per_gas(base_fee).expect("fee is always valid; execution succeeded");
+        let miner_fee = tx
+            .effective_tip_per_gas(base_fee)
+            .expect("fee is always valid; execution succeeded");
         total_fees += U256::from(miner_fee) * U256::from(gas_used);
         cumulative_gas_used += gas_used;
 
@@ -235,10 +284,17 @@ blob transaction because it would exceed the max blob count per block");
         // Release db
         drop(builder);
         // can skip building the block
-        return Ok(BuildOutcome::Aborted { fees: total_fees, cached_reads })
+        return Ok(BuildOutcome::Aborted {
+            fees: total_fees,
+            cached_reads,
+        });
     }
 
-    let BlockBuilderOutcome { execution_result, block, .. } = builder.finish(&state_provider)?;
+    let BlockBuilderOutcome {
+        execution_result,
+        block,
+        ..
+    } = builder.finish(&state_provider)?;
 
     let requests = chain_spec
         .is_prague_active_at_timestamp(attributes.timestamp)
@@ -257,17 +313,29 @@ blob transaction because it would exceed the max blob count per block");
         let ommers = body.ommers().unwrap_or_default().to_vec();
         let withdrawals = body.withdrawals().cloned();
 
-        let eth_body = alloy_consensus::BlockBody { transactions, ommers, withdrawals };
+        let eth_body = alloy_consensus::BlockBody {
+            transactions,
+            ommers,
+            withdrawals,
+        };
 
-        let eth_block = alloy_consensus::Block { header, body: eth_body };
+        let eth_block = alloy_consensus::Block {
+            header,
+            body: eth_body,
+        };
 
         let block_hash = sealed_block.hash();
-        reth_primitives_traits::SealedBlock::new_unchecked(eth_block, block_hash)
+        reth_primitives_traits::SealedBlock::new_unchecked(
+            eth_block, block_hash,
+        )
     };
 
     let payload = EthBuiltPayload::new(attributes.id, Arc::new(eth_block), total_fees, requests)
         // add blob sidecars from the executed txs
         .with_sidecars(blob_sidecars);
 
-    Ok(BuildOutcome::Better { payload, cached_reads })
+    Ok(BuildOutcome::Better {
+        payload,
+        cached_reads,
+    })
 }
