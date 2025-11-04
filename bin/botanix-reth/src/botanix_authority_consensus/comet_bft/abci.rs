@@ -565,44 +565,45 @@ where
         &self,
         block: &RecoveredBlock<BotanixBlock>,
     ) -> ResponseProcessProposal {
-        // validate_block_post_execution() is called when inserting the block (ABCIDriver)
-        match self.authority_consensus.validate_block_pre_execution(block) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Error in validate_block_pre_execution(): {:?}", e);
-                return ResponseProcessProposal { status: VERIFY_REJECT };
-            }
-        }
+        // // validate_block_post_execution() is called when inserting the block (ABCIDriver)
+        // match self.authority_consensus.validate_block_pre_execution(block) {
+        //     Ok(_) => {}
+        //     Err(e) => {
+        //         error!("Error in validate_block_pre_execution(): {:?}", e);
+        //         return ResponseProcessProposal { status: VERIFY_REJECT };
+        //     }
+        // }
 
-        // standard header validation
-        match self.authority_consensus.validate_header(&block.header()) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Error in validate_header(): {:?}", e);
-                return ResponseProcessProposal { status: VERIFY_REJECT };
-            }
-        }
+        // // standard header validation
+        // match self.authority_consensus.validate_header(&block.header()) {
+        //     Ok(_) => {}
+        //     Err(e) => {
+        //         error!("Error in validate_header(): {:?}", e);
+        //         return ResponseProcessProposal { status: VERIFY_REJECT };
+        //     }
+        // }
 
-        // poa validation
-        let agg_pk = match self.aggregate_public_key() {
-            Ok(pk) => pk,
-            Err(e) => {
-                error!("Error getting aggregate public key: {:?}", e);
-                return ResponseProcessProposal { status: VERIFY_REJECT };
-            }
-        };
+        // // poa validation
+        // let agg_pk = match self.aggregate_public_key() {
+        //     Ok(pk) => pk,
+        //     Err(e) => {
+        //         error!("Error getting aggregate public key: {:?}", e);
+        //         return ResponseProcessProposal { status: VERIFY_REJECT };
+        //     }
+        // };
 
-        match self.authority_consensus.validate_header_standalone(
-            block.header(),
-            self.storage.genesis_authorities.as_slice(),
-            Some(&agg_pk),
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Error in validate_header_standalone(): {:?}", e);
-                return ResponseProcessProposal { status: VERIFY_REJECT };
-            }
-        }
+        // match self.authority_consensus.validate_header_standalone(
+        //     block.header(),
+        //     self.storage.genesis_authorities.as_slice(),
+        //     Some(&agg_pk),
+        // ) {
+        //     Ok(_) => {}
+        //     Err(e) => {
+        //         error!("Error in validate_header_standalone(): {:?}", e);
+        //         return ResponseProcessProposal { status: VERIFY_REJECT };
+        //     }
+        // }
+        return ResponseProcessProposal { status: VERIFY_REJECT };
     }
 
     pub(crate) fn aggregate_public_key(&self) -> Result<secp256k1::PublicKey, ConsensusError> {
