@@ -2429,7 +2429,6 @@ name = "botanix-activation-manager"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
- "botanix-activation-manager",
  "botanix-storage",
  "reth-storage-errors",
 ]
@@ -2888,7 +2887,6 @@ version = "0.1.0"
 dependencies = [
  "alloy-primitives",
  "botanix-storage",
- "botanix-storage-migrate",
  "eyre",
  "reth-db",
  "reth-db-api",
