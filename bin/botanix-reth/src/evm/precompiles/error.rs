@@ -16,15 +16,21 @@ pub enum BotanixPrecompileError {
 impl From<BotanixPrecompileError> for PrecompileError {
     fn from(error: BotanixPrecompileError) -> Self {
         match error {
-            BotanixPrecompileError::InvalidInput => PrecompileError::Other("invalid input".to_string()),
+            BotanixPrecompileError::InvalidInput => {
+                PrecompileError::Other("invalid input".to_string())
+            }
             BotanixPrecompileError::CometBftApplyBlockFailed => {
                 PrecompileError::Other("apply block failed".to_string())
             }
             BotanixPrecompileError::CometBftEncodeConsensusStateFailed => {
-                PrecompileError::Other("encode consensus state failed".to_string())
+                PrecompileError::Other(
+                    "encode consensus state failed".to_string(),
+                )
             }
             BotanixPrecompileError::DoubleSignInvalidEvidence => {
-                PrecompileError::Other("double sign invalid evidence".to_string())
+                PrecompileError::Other(
+                    "double sign invalid evidence".to_string(),
+                )
             }
         }
     }

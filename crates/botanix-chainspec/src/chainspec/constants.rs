@@ -1,13 +1,17 @@
+use crate::{BotanixChainSpec, BotanixHardfork};
 use alloy_chains::Chain;
-use alloy_eips::eip1559::{DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR, DEFAULT_ELASTICITY_MULTIPLIER};
+use alloy_eips::eip1559::{
+    DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR, DEFAULT_ELASTICITY_MULTIPLIER,
+};
 use alloy_genesis::Genesis;
 use alloy_primitives::{b256, B256, U256};
 use askama::Template;
 use once_cell::sync::Lazy;
-use reth_chainspec::{make_genesis_header, BaseFeeParams, BaseFeeParamsKind, ChainSpec, Head};
-use reth_primitives_traits::{SealedHeader};
+use reth_chainspec::{
+    make_genesis_header, BaseFeeParams, BaseFeeParamsKind, ChainSpec, Head,
+};
+use reth_primitives_traits::SealedHeader;
 use std::sync::Arc;
-use crate::{BotanixChainSpec, BotanixHardfork};
 
 /// Botanix Mainnet genesis hash:
 /// `0x0210ae550e730d0e18f96896b80caad6f59dcc0b83b67421975716d155d027c6`
@@ -30,7 +34,11 @@ pub const BOTANIX_MAINNET_CHAIN_ID: u64 = 3637;
 
 /// Botanix Testnet Genesis Configuration
 #[derive(Template, Clone, Debug)]
-#[template(path = "botanix_testnet_template.json", ext = "json", escape = "none")]
+#[template(
+    path = "botanix_testnet_template.json",
+    ext = "json",
+    escape = "none"
+)]
 pub struct BotanixTestnetGenesisConfig<'a> {
     /// Extra data header field
     pub edh: &'a str,
@@ -38,7 +46,11 @@ pub struct BotanixTestnetGenesisConfig<'a> {
 
 /// Botanix Mainnet Genesis Configuration
 #[derive(Template, Clone, Debug)]
-#[template(path = "botanix_mainnet_template.json", ext = "json", escape = "none")]
+#[template(
+    path = "botanix_mainnet_template.json",
+    ext = "json",
+    escape = "none"
+)]
 pub struct BotanixMainnetGenesisConfig<'a> {
     /// Extra data header field
     pub edh: &'a str,
@@ -46,12 +58,14 @@ pub struct BotanixMainnetGenesisConfig<'a> {
 
 /// The Botanix Testnet
 pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
-    let genesis = serde_json::from_str(include_str!("../../genesis/botanix_testnet.json"))
-            .expect("Can't deserialize Botanix Testnet genesis json");
+    let genesis = serde_json::from_str(include_str!(
+        "../../genesis/botanix_testnet.json"
+    ))
+    .expect("Can't deserialize Botanix Testnet genesis json");
     let hardforks = BotanixHardfork::botanix_testnet();
     let genesis_header = SealedHeader::new(
-            make_genesis_header(&genesis, &hardforks),
-            BOTANIX_TESTNET_GENESIS,
+        make_genesis_header(&genesis, &hardforks),
+        BOTANIX_TESTNET_GENESIS,
     );
     let mut spec = ChainSpec {
         chain: Chain::from_id(BOTANIX_TESTNET_CHAIN_ID),
@@ -60,7 +74,10 @@ pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks,
         deposit_contract: None, // only relevant for PoS chains
-        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(), DEFAULT_ELASTICITY_MULTIPLIER.into())),
+        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(
+            DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(),
+            DEFAULT_ELASTICITY_MULTIPLIER.into(),
+        )),
         prune_delete_limit: 20000,
         blob_params: Default::default(),
     };
@@ -80,12 +97,14 @@ pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
 
 /// The Botanix Mainnet
 pub static BOTANIX_MAINNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
-    let genesis = serde_json::from_str(include_str!("../../genesis/botanix_mainnet.json"))
-            .expect("Can't deserialize Botanix Mainnet genesis json");
+    let genesis = serde_json::from_str(include_str!(
+        "../../genesis/botanix_mainnet.json"
+    ))
+    .expect("Can't deserialize Botanix Mainnet genesis json");
     let hardforks = BotanixHardfork::botanix_mainnet();
     let genesis_header = SealedHeader::new(
-            make_genesis_header(&genesis, &hardforks),
-            BOTANIX_MAINNET_GENESIS,
+        make_genesis_header(&genesis, &hardforks),
+        BOTANIX_MAINNET_GENESIS,
     );
     let mut spec = ChainSpec {
         chain: Chain::from_id(BOTANIX_MAINNET_CHAIN_ID),
@@ -94,7 +113,10 @@ pub static BOTANIX_MAINNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks,
         deposit_contract: None, // only relevant for PoS chains
-        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(), DEFAULT_ELASTICITY_MULTIPLIER.into())),
+        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(
+            DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(),
+            DEFAULT_ELASTICITY_MULTIPLIER.into(),
+        )),
         prune_delete_limit: 3500,
         blob_params: Default::default(),
     };
@@ -124,8 +146,8 @@ pub fn create_botanix_config_with_genesis(
 ) -> BotanixChainSpec {
     let hardforks = BotanixHardfork::botanix_testnet();
     let genesis_header = SealedHeader::new(
-            make_genesis_header(&genesis, &hardforks),
-            genesis_hash.unwrap_or(BOTANIX_TESTNET_GENESIS),
+        make_genesis_header(&genesis, &hardforks),
+        genesis_hash.unwrap_or(BOTANIX_TESTNET_GENESIS),
     );
     let chainspec = ChainSpec {
         chain: Chain::from_id(chain_id),
@@ -134,7 +156,10 @@ pub fn create_botanix_config_with_genesis(
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks,
         deposit_contract: None, // Only relevant for PoS chains
-        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(), DEFAULT_ELASTICITY_MULTIPLIER.into())),
+        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(
+            DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(),
+            DEFAULT_ELASTICITY_MULTIPLIER.into(),
+        )),
         prune_delete_limit: 1700,
         ..Default::default()
     };
@@ -167,5 +192,9 @@ pub fn botanix_testnet_head() -> Head {
 // TODO: fix this
 /// Returns the canonical head for Botanix Mainnet.
 pub fn botanix_mainnet_head() -> Head {
-    Head { number: 40_000_000, timestamp: 1751250600, ..Default::default() }
+    Head {
+        number: 40_000_000,
+        timestamp: 1751250600,
+        ..Default::default()
+    }
 }

@@ -4,15 +4,22 @@ use std::{
 };
 
 use crate::{
-    pegout_scheduler::{TX_NOT_FOUND_BITCOIND_ERROR, TX_NOT_IN_MEMPOOL_BITCOIND_ERROR},
-    wallet::{address::generate_taproot_change_scriptpubkey, util::VerifyingKeyExt},
+    pegout_scheduler::{
+        TX_NOT_FOUND_BITCOIND_ERROR, TX_NOT_IN_MEMPOOL_BITCOIND_ERROR,
+    },
+    wallet::{
+        address::generate_taproot_change_scriptpubkey, util::VerifyingKeyExt,
+    },
 };
 use bitcoin::{
-    absolute::LockTime, block::Header, blockdata::transaction::TxOut, hashes::Hash, psbt::Psbt,
-    secp256k1, taproot::Signature as TaprootSignature, Amount, Block, FeeRate, OutPoint, ScriptBuf,
-    Sequence, TapSighashType, Transaction, TxIn, Txid, Witness,
+    absolute::LockTime, block::Header, blockdata::transaction::TxOut,
+    hashes::Hash, psbt::Psbt, secp256k1,
+    taproot::Signature as TaprootSignature, Amount, Block, FeeRate, OutPoint,
+    ScriptBuf, Sequence, TapSighashType, Transaction, TxIn, Txid, Witness,
 };
-use bitcoincore_rpc::json::{EstimateMode, EstimateSmartFeeResult, StringOrStringArray};
+use bitcoincore_rpc::json::{
+    EstimateMode, EstimateSmartFeeResult, StringOrStringArray,
+};
 use frost_secp256k1_tr as frost;
 use rand::{rngs::OsRng, thread_rng, RngCore};
 use serde::ser::Error;
@@ -23,7 +30,8 @@ use crate::{database, pegout_id::PegoutId, pegout_scheduler::PegoutRequest};
 #[macro_export]
 macro_rules! frost_id {
     ($index:expr) => {
-        frost::Identifier::derive(($index as u16).to_le_bytes().as_slice()).expect("valid id")
+        frost::Identifier::derive(($index as u16).to_le_bytes().as_slice())
+            .expect("valid id")
     };
 }
 
@@ -33,14 +41,21 @@ const FEERATE: FeeRate = FeeRate::from_sat_per_kwu(5 * 250);
 pub struct MockBitcoind {
     utxo_set: std::sync::Arc<
         std::sync::Mutex<
-            std::collections::HashMap<OutPoint, bitcoincore_rpc::json::GetTxOutResult>,
+            std::collections::HashMap<
+                OutPoint,
+                bitcoincore_rpc::json::GetTxOutResult,
+            >,
         >,
     >,
 }
 
 impl MockBitcoind {
     pub fn new() -> Self {
-        Self { utxo_set: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())) }
+        Self {
+            utxo_set: std::sync::Arc::new(
+                std::sync::Mutex::new(HashMap::new()),
+            ),
+        }
     }
 
     /// Remove an output from the UTXO set (simulating a spent UTXO)
@@ -49,7 +64,12 @@ impl MockBitcoind {
     }
 
     /// Add a output to the UTXO set
-    pub fn add_utxo(&self, outpoint: OutPoint, value: Amount, script_pubkey: ScriptBuf) {
+    pub fn add_utxo(
+        &self,
+        outpoint: OutPoint,
+        value: Amount,
+        script_pubkey: ScriptBuf,
+    ) {
         let script_hex = hex::encode(script_pubkey.to_bytes());
         let json_str = format!(
             r#"{{
@@ -79,7 +99,8 @@ impl bitcoincore_rpc::RpcApi for MockBitcoind {
         txid: &Txid,
         vout: u32,
         _include_mempool: Option<bool>,
-    ) -> bitcoincore_rpc::Result<Option<bitcoincore_rpc::json::GetTxOutResult>> {
+    ) -> bitcoincore_rpc::Result<Option<bitcoincore_rpc::json::GetTxOutResult>>
+    {
         let outpoint = OutPoint::new(*txid, vout);
         let utxo_set = self.utxo_set.lock().unwrap();
         Ok(utxo_set.get(&outpoint).cloned())
@@ -89,7 +110,10 @@ impl bitcoincore_rpc::RpcApi for MockBitcoind {
         Ok(1)
     }
 
-    fn get_block_hash(&self, _height: u64) -> bitcoincore_rpc::Result<bitcoin::BlockHash> {
+    fn get_block_hash(
+        &self,
+        _height: u64,
+    ) -> bitcoincore_rpc::Result<bitcoin::BlockHash> {
         Ok(bitcoin::BlockHash::all_zeros())
     }
 
@@ -108,7 +132,8 @@ impl bitcoincore_rpc::RpcApi for MockBitcoind {
 
     fn get_blockchain_info(
         &self,
-    ) -> bitcoincore_rpc::Result<bitcoincore_rpc::json::GetBlockchainInfoResult> {
+    ) -> bitcoincore_rpc::Result<bitcoincore_rpc::json::GetBlockchainInfoResult>
+    {
         Ok(bitcoincore_rpc::json::GetBlockchainInfoResult {
             initial_block_download: false,
             // Rest of the fields are unused in application code
@@ -150,24 +175,33 @@ impl bitcoincore_rpc::RpcApi for MockBitcoind {
         }
 
         if method == "getblockchaininfo" {
-            return Ok(serde_json::from_str("{\"initialblockdownload\": false}").unwrap());
+            return Ok(serde_json::from_str(
+                "{\"initialblockdownload\": false}",
+            )
+            .unwrap());
         }
         if method == "getbestblockhash" {
             let block_hash = bitcoin::BlockHash::all_zeros();
-            return Ok(serde_json::from_str(&format!("\"{block_hash}\"",)).unwrap());
+            return Ok(
+                serde_json::from_str(&format!("\"{block_hash}\"",)).unwrap()
+            );
         }
         if method == "getblockheaderinfo" {
             let block_hash = bitcoin::BlockHash::all_zeros();
-            let current_time =
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
             return Ok(serde_json::from_str(
                     &format!("{{\"hash\": \"{block_hash}\", \"confirmations\": 1, \"height\": 1, \"version\": 1, \"version_hex\": \"01000000\", \"merkleroot\": \"{block_hash}\", \"time\": {current_time}, \"mediantime\": {current_time}, \"nonce\": 1, \"bits\": \"1d00ffff\", \"difficulty\": 1, \"chainwork\": \"0000000000000000000000000000000000000000000000000000000000000001\", \"n_tx\": 1, \"previousblockhash\": \"{block_hash}\", \"nextblockhash\": \"{block_hash}\"}}",),
                 ).unwrap());
         }
         if method == "getblockheader" {
             let block_hash = bitcoin::BlockHash::all_zeros();
-            let current_time =
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
             return Ok(serde_json::from_str(
                     &format!("{{\"hash\": \"{block_hash}\", \"confirmations\": 1, \"height\": 1, \"version\": 1, \"version_hex\": \"01000000\", \"merkleroot\": \"{block_hash}\", \"time\": {current_time}, \"mediantime\": {current_time}, \"nonce\": 1, \"bits\": \"1d00ffff\", \"difficulty\": 1, \"chainwork\": \"0000000000000000000000000000000000000000000000000000000000000001\", \"nTx\": 1, \"previousblockhash\": \"{block_hash}\", \"nextblockhash\": \"{block_hash}\"}}",),
                 ).unwrap());
@@ -177,12 +211,15 @@ impl bitcoincore_rpc::RpcApi for MockBitcoind {
             // used by test `track_mempool_should_untrack_and_add_back_pegout_when_not_in_mempool`
             let error_txid =
                 String::from("855b53d27666779a179ec93d88dbe28f456040155c4b712a1261ad211f4ba6f2");
-            if !raw_args.is_empty() &&
-                raw_args[0].get().to_string().trim_matches('\"') == error_txid
+            if !raw_args.is_empty()
+                && raw_args[0].get().to_string().trim_matches('\"')
+                    == error_txid
             {
-                return Err(bitcoincore_rpc::Error::Json(serde_json::error::Error::custom(
-                    TX_NOT_IN_MEMPOOL_BITCOIND_ERROR,
-                )));
+                return Err(bitcoincore_rpc::Error::Json(
+                    serde_json::error::Error::custom(
+                        TX_NOT_IN_MEMPOOL_BITCOIND_ERROR,
+                    ),
+                ));
             }
 
             let txid = Txid::from_byte_array([0u8; 32]);
@@ -194,23 +231,27 @@ impl bitcoincore_rpc::RpcApi for MockBitcoind {
             // used by test `track_mempool_should_untrack_and_add_back_pegout_when_not_in_mempool`
             let error_txid_1 =
                 String::from("855b53d27666779a179ec93d88dbe28f456040155c4b712a1261ad211f4ba6f2");
-            if !raw_args.is_empty() &&
-                raw_args[0].get().to_string().trim_matches('\"') == error_txid_1
+            if !raw_args.is_empty()
+                && raw_args[0].get().to_string().trim_matches('\"')
+                    == error_txid_1
             {
-                return Err(bitcoincore_rpc::Error::Json(serde_json::error::Error::custom(
-                    TX_NOT_FOUND_BITCOIND_ERROR,
-                )));
+                return Err(bitcoincore_rpc::Error::Json(
+                    serde_json::error::Error::custom(
+                        TX_NOT_FOUND_BITCOIND_ERROR,
+                    ),
+                ));
             }
 
             // used by test `track_mempool_should_not_add_back_pegout_when_still_in_mempool`
             let error_txid_2 =
                 String::from("26bbaab2e585d465cceecc2acc7b398069aa85fc4dd1f52e39666a65e54a4569");
-            if !raw_args.is_empty() &&
-                raw_args[0].get().to_string().trim_matches('\"') == error_txid_2
+            if !raw_args.is_empty()
+                && raw_args[0].get().to_string().trim_matches('\"')
+                    == error_txid_2
             {
-                return Err(bitcoincore_rpc::Error::Json(serde_json::error::Error::custom(
-                    "Tx in mempool",
-                )));
+                return Err(bitcoincore_rpc::Error::Json(
+                    serde_json::error::Error::custom("Tx in mempool"),
+                ));
             }
 
             let txid = Txid::from_byte_array([0u8; 32]);
@@ -247,7 +288,10 @@ pub fn create_random_pegout_id() -> PegoutId {
     PegoutId::from_bytes(&pegout_id).unwrap()
 }
 
-pub fn pegout_requests_from_tx(tx: &Transaction, pegout_idxs: &[usize]) -> Vec<PegoutRequest> {
+pub fn pegout_requests_from_tx(
+    tx: &Transaction,
+    pegout_idxs: &[usize],
+) -> Vec<PegoutRequest> {
     let mut pegout_requests = Vec::new();
     for idx in pegout_idxs {
         pegout_requests.push(PegoutRequest {
@@ -304,7 +348,10 @@ pub fn random_p2wpkh_scriptpubkey() -> ScriptBuf {
 pub fn trusted_dealer_setup(
     min_signers: u16,
     max_signers: u16,
-) -> (BTreeMap<frost::Identifier, frost::keys::SecretShare>, frost::keys::PublicKeyPackage) {
+) -> (
+    BTreeMap<frost::Identifier, frost::keys::SecretShare>,
+    frost::keys::PublicKeyPackage,
+) {
     let rng: rand::prelude::ThreadRng = thread_rng();
     let ids = (0..max_signers).map(|i| frost_id!(i)).collect::<Vec<_>>();
     frost::keys::generate_with_dealer(
@@ -317,7 +364,11 @@ pub fn trusted_dealer_setup(
 }
 
 // Util function to create a btc tx with random inputs and outputs as defined by fn params
-pub fn create_tx(num_inputs: usize, num_outputs: usize, change: Option<TxOut>) -> Transaction {
+pub fn create_tx(
+    num_inputs: usize,
+    num_outputs: usize,
+    change: Option<TxOut>,
+) -> Transaction {
     let txid = random_compute_txid();
 
     let mut inputs = vec![];
@@ -351,9 +402,15 @@ pub fn create_tx(num_inputs: usize, num_outputs: usize, change: Option<TxOut>) -
     }
 }
 
-pub fn create_block(txs: Vec<Transaction>, prev_hash: bitcoin::BlockHash) -> Block {
+pub fn create_block(
+    txs: Vec<Transaction>,
+    prev_hash: bitcoin::BlockHash,
+) -> Block {
     let coin_base_input = TxIn {
-        previous_output: OutPoint::new(Txid::from_byte_array([0u8; 32]), 0xFFFFFFFF),
+        previous_output: OutPoint::new(
+            Txid::from_byte_array([0u8; 32]),
+            0xFFFFFFFF,
+        ),
         script_sig: bitcoin::Script::builder()
             .push_opcode(bitcoin::opcodes::all::OP_PUSHBYTES_3)
             // This hardcodes the height of the block. Could change in the future
@@ -383,12 +440,17 @@ pub fn create_block(txs: Vec<Transaction>, prev_hash: bitcoin::BlockHash) -> Blo
     }
 }
 
-pub fn create_psbt(num_inputs: usize, num_outputs: usize, change: Option<TxOut>) -> Psbt {
+pub fn create_psbt(
+    num_inputs: usize,
+    num_outputs: usize,
+    change: Option<TxOut>,
+) -> Psbt {
     let tx = create_tx(num_inputs, num_outputs, change);
 
     let weight = tx.weight();
     let fee = FEERATE * weight;
-    let input_needed = fee.to_sat() + tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>();
+    let input_needed =
+        fee.to_sat() + tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>();
     let value_per_input = input_needed / num_inputs as u64 + 1;
 
     let mut psbt = Psbt::from_unsigned_tx(tx).expect("valid psbt");
@@ -409,8 +471,12 @@ pub fn get_change(db: &database::Db) -> TxOut {
         .verifying_key()
         .to_secp_pk()
         .expect("valid secp pk");
-    let change_script = crate::wallet::address::generate_taproot_change_scriptpubkey(&secp_pk);
-    TxOut { value: Amount::from_sat(500), script_pubkey: change_script }
+    let change_script =
+        crate::wallet::address::generate_taproot_change_scriptpubkey(&secp_pk);
+    TxOut {
+        value: Amount::from_sat(500),
+        script_pubkey: change_script,
+    }
 }
 
 pub fn store_pending_pegout(db: &database::Db) -> PegoutId {
@@ -428,16 +494,23 @@ pub fn store_pending_pegout(db: &database::Db) -> PegoutId {
 }
 
 // Add dummy signatures to a PSBT to help calculate weight and fee rate
-pub fn add_dummy_signatures_to_psbt(psbt: &mut Psbt, sighash_type: TapSighashType) {
+pub fn add_dummy_signatures_to_psbt(
+    psbt: &mut Psbt,
+    sighash_type: TapSighashType,
+) {
     for input in psbt.inputs.iter_mut() {
         // For Taproot (P2TR) transactions
         if let Some(_witness_utxo) = &input.witness_utxo {
             let dummy_schnorr_sig_bytes = vec![0x42u8; 64];
-            let dummy_schnorr_sig =
-                secp256k1::schnorr::Signature::from_slice(&dummy_schnorr_sig_bytes)
-                    .expect("Valid dummy signature");
+            let dummy_schnorr_sig = secp256k1::schnorr::Signature::from_slice(
+                &dummy_schnorr_sig_bytes,
+            )
+            .expect("Valid dummy signature");
 
-            let taproot_sig = TaprootSignature { signature: dummy_schnorr_sig, sighash_type };
+            let taproot_sig = TaprootSignature {
+                signature: dummy_schnorr_sig,
+                sighash_type,
+            };
 
             // Set the taproot signature
             input.tap_key_sig = Some(taproot_sig.clone());

@@ -1,8 +1,8 @@
 //! Additional helpers for converting errors.
 
-use std::fmt;
 use alloy_eips::BlockId;
 use jsonrpsee_core::RpcResult;
+use std::fmt;
 
 /// Helper trait to easily convert various `Result` types into [`RpcResult`]
 pub trait ToRpcResult<Ok, Err>: Sized {
@@ -47,7 +47,10 @@ macro_rules! impl_to_rpc_result {
     ($err:ty) => {
         impl<Ok> $crate::result::ToRpcResult<Ok, $err> for Result<Ok, $err> {
             #[inline]
-            fn map_rpc_err<'a, F, M>(self, op: F) -> jsonrpsee_core::RpcResult<Ok>
+            fn map_rpc_err<'a, F, M>(
+                self,
+                op: F,
+            ) -> jsonrpsee_core::RpcResult<Ok>
             where
                 F: FnOnce($err) -> (i32, M, Option<&'a [u8]>),
                 M: Into<String>,
@@ -62,7 +65,10 @@ macro_rules! impl_to_rpc_result {
             }
 
             #[inline]
-            fn map_internal_err<'a, F, M>(self, op: F) -> jsonrpsee_core::RpcResult<Ok>
+            fn map_internal_err<'a, F, M>(
+                self,
+                op: F,
+            ) -> jsonrpsee_core::RpcResult<Ok>
             where
                 F: FnOnce($err) -> M,
                 M: Into<String>,
@@ -71,7 +77,10 @@ macro_rules! impl_to_rpc_result {
             }
 
             #[inline]
-            fn map_internal_err_with_data<'a, F, M>(self, op: F) -> jsonrpsee_core::RpcResult<Ok>
+            fn map_internal_err_with_data<'a, F, M>(
+                self,
+                op: F,
+            ) -> jsonrpsee_core::RpcResult<Ok>
             where
                 F: FnOnce($err) -> (M, &'a [u8]),
                 M: Into<String>,
@@ -80,7 +89,9 @@ macro_rules! impl_to_rpc_result {
                     Ok(t) => Ok(t),
                     Err(err) => {
                         let (msg, data) = op(err);
-                        Err($crate::result::internal_rpc_err_with_data(msg, data))
+                        Err($crate::result::internal_rpc_err_with_data(
+                            msg, data,
+                        ))
                     }
                 }
             }
@@ -107,7 +118,9 @@ pub fn invalid_params_rpc_err(
 }
 
 /// Constructs an internal JSON-RPC error.
-pub fn internal_rpc_err(msg: impl Into<String>) -> jsonrpsee_types::error::ErrorObject<'static> {
+pub fn internal_rpc_err(
+    msg: impl Into<String>,
+) -> jsonrpsee_types::error::ErrorObject<'static> {
     rpc_err(jsonrpsee_types::error::INTERNAL_ERROR_CODE, msg, None)
 }
 
@@ -137,8 +150,10 @@ pub fn rpc_err(
         code,
         msg.into(),
         data.map(|data| {
-            jsonrpsee_core::to_json_raw_value(&alloy_primitives::hex::encode_prefixed(data))
-                .expect("serializing String can't fail")
+            jsonrpsee_core::to_json_raw_value(
+                &alloy_primitives::hex::encode_prefixed(data),
+            )
+            .expect("serializing String can't fail")
         }),
     )
 }

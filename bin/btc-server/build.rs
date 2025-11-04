@@ -44,9 +44,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     // > git describe --always --tags
     // if not on a tag: v0.2.0-beta.3-82-g1939939b
     // if on a tag: v0.2.0-beta.3
-    let not_on_tag = env::var("VERGEN_GIT_DESCRIBE")?.ends_with(&format!("-g{sha_short}"));
+    let not_on_tag =
+        env::var("VERGEN_GIT_DESCRIBE")?.ends_with(&format!("-g{sha_short}"));
     let is_dev = is_dirty || not_on_tag;
-    println!("cargo:rustc-env=BTCSERVER_VERSION_SUFFIX={}", if is_dev { "-dev" } else { "" });
+    println!(
+        "cargo:rustc-env=BTCSERVER_VERSION_SUFFIX={}",
+        if is_dev { "-dev" } else { "" }
+    );
 
     Ok(())
 }

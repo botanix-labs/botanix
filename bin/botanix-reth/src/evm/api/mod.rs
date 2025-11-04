@@ -1,6 +1,5 @@
-use std::ops::{Deref, DerefMut};
-use crate::evm::transaction::BotanixTxEnv;
 use super::precompiles::BotanixPrecompiles;
+use crate::evm::transaction::BotanixTxEnv;
 use botanix_chainspec::BotanixHardfork;
 use reth_evm::{precompiles::PrecompilesMap, Database, EvmEnv};
 use revm::{
@@ -14,11 +13,13 @@ use revm::{
     interpreter::{interpreter::EthInterpreter, interpreter_action::FrameInit},
     Context, Inspector, Journal,
 };
+use std::ops::{Deref, DerefMut};
 
 mod exec;
 
 /// Type alias for the default context type of the BotanixEvm.
-pub type BotanixContext<DB> = Context<BlockEnv, BotanixTxEnv, CfgEnv<BotanixHardfork>, DB>;
+pub type BotanixContext<DB> =
+    Context<BlockEnv, BotanixTxEnv, CfgEnv<BotanixHardfork>, DB>;
 
 /// Botanix EVM implementation.
 ///
@@ -38,9 +39,15 @@ pub struct BotanixEvm<DB: revm::database::Database, I> {
 
 impl<DB: Database, I> BotanixEvm<DB, I> {
     /// Creates a new [`BotanixEvm`].
-    pub fn new(env: EvmEnv<BotanixHardfork>, db: DB, inspector: I, inspect: bool) -> Self {
-        let precompiles =
-            PrecompilesMap::from_static(BotanixPrecompiles::new(env.cfg_env.spec).precompiles());
+    pub fn new(
+        env: EvmEnv<BotanixHardfork>,
+        db: DB,
+        inspector: I,
+        inspect: bool,
+    ) -> Self {
+        let precompiles = PrecompilesMap::from_static(
+            BotanixPrecompiles::new(env.cfg_env.spec).precompiles(),
+        );
 
         Self {
             inner: EvmCtx {
@@ -108,11 +115,15 @@ where
         self.inner.ctx_ref()
     }
 
-    fn ctx_instructions(&mut self) -> (&mut Self::Context, &mut Self::Instructions) {
+    fn ctx_instructions(
+        &mut self,
+    ) -> (&mut Self::Context, &mut Self::Instructions) {
         self.inner.ctx_instructions()
     }
 
-    fn ctx_precompiles(&mut self) -> (&mut Self::Context, &mut Self::Precompiles) {
+    fn ctx_precompiles(
+        &mut self,
+    ) -> (&mut Self::Context, &mut Self::Precompiles) {
         self.inner.ctx_precompiles()
     }
 
@@ -124,13 +135,15 @@ where
     fn frame_init(
         &mut self,
         frame_input: FrameInit,
-    ) -> Result<FrameInitResult<'_, Self::Frame>, ContextDbError<Self::Context>> {
+    ) -> Result<FrameInitResult<'_, Self::Frame>, ContextDbError<Self::Context>>
+    {
         self.inner.frame_init(frame_input)
     }
 
     fn frame_run(
         &mut self,
-    ) -> Result<FrameInitOrResult<Self::Frame>, ContextDbError<Self::Context>> {
+    ) -> Result<FrameInitOrResult<Self::Frame>, ContextDbError<Self::Context>>
+    {
         self.inner.frame_run()
     }
 
@@ -165,7 +178,12 @@ where
 
     fn ctx_inspector_frame_instructions(
         &mut self,
-    ) -> (&mut Self::Context, &mut Self::Inspector, &mut Self::Frame, &mut Self::Instructions) {
+    ) -> (
+        &mut Self::Context,
+        &mut Self::Inspector,
+        &mut Self::Frame,
+        &mut Self::Instructions,
+    ) {
         self.inner.ctx_inspector_frame_instructions()
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
-    test_utils::db::Db, ActivationManager, ActivationManagerBuilder, ConditionList,
-    OnFinalizeBlockDecision, OnPrepareProposalDecision, OnProcessProposalDecision, Polling,
-    VOTE_RETENTION_PERIOD,
+    test_utils::db::Db, ActivationManager, ActivationManagerBuilder,
+    ConditionList, OnFinalizeBlockDecision, OnPrepareProposalDecision,
+    OnProcessProposalDecision, Polling, VOTE_RETENTION_PERIOD,
 };
 use botanix_storage::{
     models::{RuntimeVersion, Vote},
@@ -147,7 +147,11 @@ impl UpgradeTestFixture {
     ///
     /// # Returns
     /// * The fixture with the configured validator
-    pub fn setup_signaling_validator(mut self, validator: usize, vote: Vote) -> Self {
+    pub fn setup_signaling_validator(
+        mut self,
+        validator: usize,
+        vote: Vote,
+    ) -> Self {
         let db = self.dbs[validator].clone();
 
         let manager = ActivationManagerBuilder::new(db, ACTIVE_VERSION)
@@ -155,8 +159,11 @@ impl UpgradeTestFixture {
             .build_signal_network_upgrade(UPGRADE_VERSION, vote);
 
         self.managers[validator] = Some(manager);
-        self.expected_votes[validator] =
-            Some(VoteDetails { version: UPGRADE_VERSION, vote, is_compliant: false });
+        self.expected_votes[validator] = Some(VoteDetails {
+            version: UPGRADE_VERSION,
+            vote,
+            is_compliant: false,
+        });
 
         self
     }
@@ -172,7 +179,11 @@ impl UpgradeTestFixture {
     ///
     /// # Returns
     /// * The fixture with the configured validator
-    pub fn setup_compliant_validator(self, validator: usize, vote: Vote) -> Self {
+    pub fn setup_compliant_validator(
+        self,
+        validator: usize,
+        vote: Vote,
+    ) -> Self {
         self._do_setup_compliant_validator(validator, vote, UPGRADE_VERSION)
     }
 
@@ -189,7 +200,11 @@ impl UpgradeTestFixture {
     /// # Returns
     /// * The fixture with the configured validator
     #[allow(non_snake_case)]
-    pub fn setup_INVALID_compliant_validator(self, validator: usize, vote: Vote) -> Self {
+    pub fn setup_INVALID_compliant_validator(
+        self,
+        validator: usize,
+        vote: Vote,
+    ) -> Self {
         self._do_setup_compliant_validator(validator, vote, INVALID_VERSION)
     }
 
@@ -224,8 +239,11 @@ impl UpgradeTestFixture {
             );
 
         self.managers[validator] = Some(manager);
-        self.expected_votes[validator] =
-            Some(VoteDetails { version: upgrade_version, vote, is_compliant: true });
+        self.expected_votes[validator] = Some(VoteDetails {
+            version: upgrade_version,
+            vote,
+            is_compliant: true,
+        });
 
         self
     }
@@ -322,7 +340,11 @@ impl ProposingTestFixture<'_> {
     ///
     /// # Returns
     /// * The fixture with updated expectations
-    pub fn upgrade_conditions(mut self, vals: &[usize], conditions: ConditionList) -> Self {
+    pub fn upgrade_conditions(
+        mut self,
+        vals: &[usize],
+        conditions: ConditionList,
+    ) -> Self {
         for v in vals {
             self.expected_conditions[*v] = Some(conditions);
         }
@@ -357,7 +379,11 @@ impl ProposingTestFixture<'_> {
     ///
     /// # Returns
     /// * The fixture with updated expectations
-    pub fn expectations(mut self, vals: &[usize], expectations: Expectations) -> Self {
+    pub fn expectations(
+        mut self,
+        vals: &[usize],
+        expectations: Expectations,
+    ) -> Self {
         for v in vals {
             self.expectations[*v] = Some(expectations);
         }
@@ -422,18 +448,26 @@ impl ProposingTestFixture<'_> {
         } = proposer.on_prepare_proposal(self.i.block_height).unwrap();
 
         // Verify proposed version
-        assert_eq!(proposer_version, self.expected_proposal_version, "proposed different version");
+        assert_eq!(
+            proposer_version, self.expected_proposal_version,
+            "proposed different version"
+        );
 
         // Verify proposer's vote
         if let Some(p) = &proposer_vote {
-            let e = self.i.expected_votes[self.proposer_index].as_ref().unwrap();
+            let e =
+                self.i.expected_votes[self.proposer_index].as_ref().unwrap();
             assert_eq!(p.version, e.version, "voted for different version");
             assert_eq!(p.vote, e.vote, "voted with different vote");
-            assert_eq!(p.is_compliant, e.is_compliant, "voted with different compliance");
+            assert_eq!(
+                p.is_compliant, e.is_compliant,
+                "voted with different compliance"
+            );
         }
 
         // Verify proposer's conditions
-        let expected_cond = self.expected_conditions[self.proposer_index].as_ref();
+        let expected_cond =
+            self.expected_conditions[self.proposer_index].as_ref();
         assert_eq!(
             proposer_conditions.as_ref(),
             expected_cond,
@@ -441,7 +475,13 @@ impl ProposingTestFixture<'_> {
         );
 
         // Each party processes and finalizes the block
-        for (i, (manager, db)) in self.i.managers.iter_mut().zip(self.i.dbs.iter()).enumerate() {
+        for (i, (manager, db)) in self
+            .i
+            .managers
+            .iter_mut()
+            .zip(self.i.dbs.iter())
+            .enumerate()
+        {
             let Some(manager) = manager.as_mut() else {
                 assert!(
                     self.expectations[i].is_none(),
@@ -455,26 +495,41 @@ impl ProposingTestFixture<'_> {
                 continue;
             };
 
-            let expect = self.expectations[i].as_ref().expect("expected expectations for manager");
+            let expect = self.expectations[i]
+                .as_ref()
+                .expect("expected expectations for manager");
             let expected_cond = self.expected_conditions[i].as_ref();
 
             // COMET-BFT: Process the proposal.
-            let decision =
-                manager.on_process_proposal(self.i.block_height, proposer_version).unwrap();
+            let decision = manager
+                .on_process_proposal(self.i.block_height, proposer_version)
+                .unwrap();
 
             match decision {
-                OnProcessProposalDecision::Process { version, conditions } => {
+                OnProcessProposalDecision::Process {
+                    version,
+                    conditions,
+                } => {
                     assert!(expect.process_pass, "expected process pass");
-                    assert_eq!(version, proposer_version, "processed different version");
+                    assert_eq!(
+                        version, proposer_version,
+                        "processed different version"
+                    );
                     assert_eq!(
                         conditions.as_ref(),
                         expected_cond,
                         "processed with different conditions"
                     );
                 }
-                OnProcessProposalDecision::RejectBlock { version, conditions } => {
+                OnProcessProposalDecision::RejectBlock {
+                    version,
+                    conditions,
+                } => {
                     assert!(!expect.process_pass, "expected process fail");
-                    assert_eq!(version, proposer_version, "processed different version");
+                    assert_eq!(
+                        version, proposer_version,
+                        "processed different version"
+                    );
                     assert_eq!(
                         conditions.as_ref(),
                         expected_cond,
@@ -496,38 +551,73 @@ impl ProposingTestFixture<'_> {
             match decision {
                 OnFinalizeBlockDecision::Finalize { version } => {
                     assert!(expect.finalize_pass, "expected finalize pass");
-                    assert_eq!(version, proposer_version, "finalized different version");
+                    assert_eq!(
+                        version, proposer_version,
+                        "finalized different version"
+                    );
                 }
                 OnFinalizeBlockDecision::RejectBlockDeadEnd { version } => {
                     assert!(!expect.finalize_pass, "expected finalize fail");
-                    assert_eq!(version, proposer_version, "(none-)finalized different version");
+                    assert_eq!(
+                        version, proposer_version,
+                        "(none-)finalized different version"
+                    );
                 }
             }
 
             // Verify approval rates
-            let (ayes, votes) =
-                db.get_upgrading_approval_rate_ayes(self.i.min_validator_count).unwrap();
+            let (ayes, votes) = db
+                .get_upgrading_approval_rate_ayes(self.i.min_validator_count)
+                .unwrap();
 
-            let (compliance, v2) =
-                db.get_upgrading_approval_rate_compliance(self.i.min_validator_count).unwrap();
+            let (compliance, v2) = db
+                .get_upgrading_approval_rate_compliance(
+                    self.i.min_validator_count,
+                )
+                .unwrap();
 
             assert_eq!(votes, v2);
-            assert!(votes >= self.i.min_validator_count, "voter count does not meet minimum");
+            assert!(
+                votes >= self.i.min_validator_count,
+                "voter count does not meet minimum"
+            );
 
-            assert_eq!(ayes, expect.aye_approval_rate, "ayes approval_rate mismatch");
-            assert_eq!(compliance, expect.comp_approval_rate, "compliant approval_rate mismatch");
+            assert_eq!(
+                ayes, expect.aye_approval_rate,
+                "ayes approval_rate mismatch"
+            );
+            assert_eq!(
+                compliance, expect.comp_approval_rate,
+                "compliant approval_rate mismatch"
+            );
 
             // Verify polling
-            let (_, polling) = manager.get_upgrade_polling().unwrap().unwrap_or((
-                RuntimeVersion::from((0, 0)), // throwaway
-                Polling { ayes: 0, nays: 0, abstained: 0, compliant: 0, total: 0 },
-            ));
+            let (_, polling) =
+                manager.get_upgrade_polling().unwrap().unwrap_or((
+                    RuntimeVersion::from((0, 0)), // throwaway
+                    Polling {
+                        ayes: 0,
+                        nays: 0,
+                        abstained: 0,
+                        compliant: 0,
+                        total: 0,
+                    },
+                ));
 
             assert_eq!(polling.ayes, expect.aye_votes, "aye votes mismatch");
             assert_eq!(polling.nays, expect.nay_votes, "nay votes mismatch");
-            assert_eq!(polling.abstained, expect.abstained_votes, "abstain votes mismatch");
-            assert_eq!(polling.compliant, expect.compliant_count, "compliant count mismatch");
-            assert_eq!(polling.total, expect.total_votes, "total votes mismatch");
+            assert_eq!(
+                polling.abstained, expect.abstained_votes,
+                "abstain votes mismatch"
+            );
+            assert_eq!(
+                polling.compliant, expect.compliant_count,
+                "compliant count mismatch"
+            );
+            assert_eq!(
+                polling.total, expect.total_votes,
+                "total votes mismatch"
+            );
         }
 
         self.i.block_height += 1;

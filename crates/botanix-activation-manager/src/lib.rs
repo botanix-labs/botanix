@@ -4,7 +4,7 @@ mod manager;
 pub mod test_utils;
 mod vote_tracker;
 
+pub use alloy_primitives::Address;
 pub use builder::ActivationManagerBuilder;
 pub use manager::*;
-pub use alloy_primitives::Address;
 pub use vote_tracker::*;

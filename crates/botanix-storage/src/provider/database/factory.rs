@@ -1,18 +1,21 @@
 use crate::{
     models::{
-        ChunkId, HeaderWithPegs, PeerID, RuntimeVersion, Snapshot, SnapshotChunk, SnapshotId,
-        SnapshotSync, SnapshotSyncId, UuidID, WalletStateSyncRecord,
+        ChunkId, HeaderWithPegs, PeerID, RuntimeVersion, Snapshot,
+        SnapshotChunk, SnapshotId, SnapshotSync, SnapshotSyncId, UuidID,
+        WalletStateSyncRecord,
     },
     provider::database::provider::{
-        BotanixDatabaseProvider, BotanixDatabaseProviderRO, BotanixDatabaseProviderRW,
+        BotanixDatabaseProvider, BotanixDatabaseProviderRO,
+        BotanixDatabaseProviderRW,
     },
-    DatabaseProviderFactoryRO, DatabaseProviderFactoryRW, RuntimeTransitionsReadWrite,
-    SnapshotReader, SnapshotWriter, StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
+    DatabaseProviderFactoryRO, DatabaseProviderFactoryRW,
+    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
+    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
     WalletStateSyncWriter,
 };
+use alloy_primitives::{BlockNumber, Bytes, B256};
 use reth_db::{init_db, mdbx::DatabaseArguments, DatabaseEnv};
 use reth_db_api::database::Database;
-use alloy_primitives::{BlockNumber, Bytes, B256};
 use reth_storage_errors::provider::ProviderResult;
 use std::{collections::HashSet, ops::RangeInclusive, path::Path, sync::Arc};
 
@@ -142,7 +145,9 @@ impl BotanixProviderFactory<DatabaseEnv> {
         path: P,
         args: DatabaseArguments,
     ) -> eyre::Result<Self> {
-        Ok(Self { db: Arc::new(init_db(path, args)?) })
+        Ok(Self {
+            db: Arc::new(init_db(path, args)?),
+        })
     }
 }
 
@@ -166,7 +171,9 @@ where
 
     #[track_caller]
     fn provider_rw(&self) -> ProviderResult<Self::Provider> {
-        Ok(BotanixDatabaseProviderRW(BotanixDatabaseProvider::new_rw(self.db.tx_mut()?)))
+        Ok(BotanixDatabaseProviderRW(BotanixDatabaseProvider::new_rw(
+            self.db.tx_mut()?,
+        )))
     }
 }
 
@@ -177,27 +184,41 @@ impl<DB: Database> SnapshotReader for BotanixProviderFactory<DB> {
     }
 
     #[inline(always)]
-    fn get_snapshot_by_id(&self, snapshot_id: SnapshotId) -> ProviderResult<Option<Snapshot>> {
+    fn get_snapshot_by_id(
+        &self,
+        snapshot_id: SnapshotId,
+    ) -> ProviderResult<Option<Snapshot>> {
         self.provider()?.get_snapshot_by_id(snapshot_id)
     }
 
     #[inline(always)]
-    fn get_last_snapshot_sync_id(&self) -> ProviderResult<Option<SnapshotSyncId>> {
+    fn get_last_snapshot_sync_id(
+        &self,
+    ) -> ProviderResult<Option<SnapshotSyncId>> {
         self.provider()?.get_last_snapshot_sync_id()
     }
 
     #[inline(always)]
-    fn get_snapshot_sync_by_height(&self, height: u64) -> ProviderResult<Option<SnapshotSync>> {
+    fn get_snapshot_sync_by_height(
+        &self,
+        height: u64,
+    ) -> ProviderResult<Option<SnapshotSync>> {
         self.provider()?.get_snapshot_sync_by_height(height)
     }
 
     #[inline(always)]
-    fn get_snapshot_sync_by_id(&self, id: u64) -> ProviderResult<Option<SnapshotSync>> {
+    fn get_snapshot_sync_by_id(
+        &self,
+        id: u64,
+    ) -> ProviderResult<Option<SnapshotSync>> {
         self.provider()?.get_snapshot_sync_by_id(id)
     }
 
     #[inline(always)]
-    fn get_chunk_by_id(&self, chunk_id: ChunkId) -> ProviderResult<Option<SnapshotChunk>> {
+    fn get_chunk_by_id(
+        &self,
+        chunk_id: ChunkId,
+    ) -> ProviderResult<Option<SnapshotChunk>> {
         self.provider()?.get_chunk_by_id(chunk_id)
     }
 
@@ -215,22 +236,32 @@ impl<DB: Database> SnapshotReader for BotanixProviderFactory<DB> {
     }
 
     #[inline(always)]
-    fn get_chunk_block_number(&self, chunk_id: ChunkId) -> ProviderResult<Option<BlockNumber>> {
+    fn get_chunk_block_number(
+        &self,
+        chunk_id: ChunkId,
+    ) -> ProviderResult<Option<BlockNumber>> {
         self.provider()?.get_chunk_block_number(chunk_id)
     }
 
     #[inline(always)]
-    fn get_last_snapshot_height(&self) -> ProviderResult<Option<(SnapshotId, BlockNumber)>> {
+    fn get_last_snapshot_height(
+        &self,
+    ) -> ProviderResult<Option<(SnapshotId, BlockNumber)>> {
         self.provider()?.get_last_snapshot_height()
     }
 
     #[inline(always)]
-    fn get_first_snapshot_height(&self) -> ProviderResult<Option<(SnapshotId, BlockNumber)>> {
+    fn get_first_snapshot_height(
+        &self,
+    ) -> ProviderResult<Option<(SnapshotId, BlockNumber)>> {
         self.provider()?.get_first_snapshot_height()
     }
 
     #[inline(always)]
-    fn get_snapshot_size(&self, snapshot_id: SnapshotId) -> ProviderResult<usize> {
+    fn get_snapshot_size(
+        &self,
+        snapshot_id: SnapshotId,
+    ) -> ProviderResult<usize> {
         self.provider()?.get_snapshot_size(snapshot_id)
     }
 
@@ -260,8 +291,12 @@ impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
     ) -> ProviderResult<SnapshotId> {
         let provider = self.provider_rw()?;
 
-        let snapshot_id =
-            provider.create_new_snapshot_sync(block_id, snapshot_hash, total_chunks, format)?;
+        let snapshot_id = provider.create_new_snapshot_sync(
+            block_id,
+            snapshot_hash,
+            total_chunks,
+            format,
+        )?;
 
         provider.commit()?;
 
@@ -290,7 +325,8 @@ impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
     ) -> ProviderResult<ChunkId> {
         let provider = self.provider_rw()?;
 
-        let chunk_id = provider.create_new_chunk(snapshot_id, block_id, chunk_data)?;
+        let chunk_id =
+            provider.create_new_chunk(snapshot_id, block_id, chunk_data)?;
 
         provider.commit()?;
 
@@ -368,7 +404,10 @@ impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
         Ok(())
     }
 
-    fn remove_snapshots(&self, range: RangeInclusive<SnapshotId>) -> ProviderResult<()> {
+    fn remove_snapshots(
+        &self,
+        range: RangeInclusive<SnapshotId>,
+    ) -> ProviderResult<()> {
         let provider = self.provider_rw()?;
 
         provider.remove_snapshots(range)?;
@@ -388,7 +427,10 @@ impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
         Ok(())
     }
 
-    fn remove_chunks(&self, range: RangeInclusive<ChunkId>) -> ProviderResult<()> {
+    fn remove_chunks(
+        &self,
+        range: RangeInclusive<ChunkId>,
+    ) -> ProviderResult<()> {
         let provider = self.provider_rw()?;
 
         provider.remove_chunks(range)?;
@@ -398,7 +440,10 @@ impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
         Ok(())
     }
 
-    fn delete_chunks_in_blocks(&self, range: RangeInclusive<ChunkId>) -> ProviderResult<()> {
+    fn delete_chunks_in_blocks(
+        &self,
+        range: RangeInclusive<ChunkId>,
+    ) -> ProviderResult<()> {
         let provider = self.provider_rw()?;
 
         provider.delete_chunks_in_blocks(range)?;
@@ -411,7 +456,9 @@ impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
 
 impl<DB: Database> WalletStateSyncReader for BotanixProviderFactory<DB> {
     #[inline(always)]
-    fn get_state_sync_records(&self) -> ProviderResult<Vec<WalletStateSyncRecord>> {
+    fn get_state_sync_records(
+        &self,
+    ) -> ProviderResult<Vec<WalletStateSyncRecord>> {
         self.provider()?.get_state_sync_records()
     }
 
@@ -438,7 +485,8 @@ impl<DB: Database> WalletStateSyncReader for BotanixProviderFactory<DB> {
         &self,
         min_required_criterion: u64,
     ) -> ProviderResult<(bool, HashSet<(u64, Bytes)>)> {
-        self.provider()?.get_minimum_superset(min_required_criterion)
+        self.provider()?
+            .get_minimum_superset(min_required_criterion)
     }
 }
 
@@ -452,7 +500,12 @@ impl<DB: Database> WalletStateSyncWriter for BotanixProviderFactory<DB> {
     ) -> ProviderResult<PeerID> {
         let provider = self.provider_rw()?;
 
-        let peer_id = provider.create_new_state_sync_record(uuid, peer_id, chunks_count, data)?;
+        let peer_id = provider.create_new_state_sync_record(
+            uuid,
+            peer_id,
+            chunks_count,
+            data,
+        )?;
 
         provider.commit()?;
 
@@ -473,7 +526,10 @@ impl<DB: Database> WalletStateSyncWriter for BotanixProviderFactory<DB> {
         Ok(())
     }
 
-    fn remove_state_sync_record_per_peer_id(&self, peer_id: PeerID) -> ProviderResult<()> {
+    fn remove_state_sync_record_per_peer_id(
+        &self,
+        peer_id: PeerID,
+    ) -> ProviderResult<()> {
         let provider = self.provider_rw()?;
 
         provider.remove_state_sync_record_per_peer_id(peer_id)?;
@@ -496,13 +552,19 @@ impl<DB: Database> WalletStateSyncWriter for BotanixProviderFactory<DB> {
 
 impl<DB: Database> StagedHeaderReader for BotanixProviderFactory<DB> {
     #[inline(always)]
-    fn get_staged_headers(&self) -> ProviderResult<Vec<(B256, HeaderWithPegs)>> {
+    fn get_staged_headers(
+        &self,
+    ) -> ProviderResult<Vec<(B256, HeaderWithPegs)>> {
         self.provider()?.get_staged_headers()
     }
 }
 
 impl<DB: Database> StagedHeaderWriter for BotanixProviderFactory<DB> {
-    fn insert_staged_header(&self, id: B256, header: HeaderWithPegs) -> ProviderResult<()> {
+    fn insert_staged_header(
+        &self,
+        id: B256,
+        header: HeaderWithPegs,
+    ) -> ProviderResult<()> {
         let provider = self.provider_rw()?;
 
         provider.insert_staged_header(id, header)?;
@@ -532,7 +594,8 @@ impl<DB: Database> RuntimeTransitionsReadWrite for BotanixProviderFactory<DB> {
         version: RuntimeVersion,
     ) -> ProviderResult<bool> {
         let provider = self.provider_rw()?;
-        let did_change = provider.insert_runtime_upgrade_version(height, version)?;
+        let did_change =
+            provider.insert_runtime_upgrade_version(height, version)?;
 
         if did_change {
             provider.commit()?;
@@ -541,11 +604,15 @@ impl<DB: Database> RuntimeTransitionsReadWrite for BotanixProviderFactory<DB> {
         Ok(did_change)
     }
 
-    fn get_runtime_versions(&self) -> ProviderResult<Vec<(BlockNumber, RuntimeVersion)>> {
+    fn get_runtime_versions(
+        &self,
+    ) -> ProviderResult<Vec<(BlockNumber, RuntimeVersion)>> {
         self.provider_rw()?.get_runtime_versions()
     }
 
-    fn get_last_runtime_version(&self) -> ProviderResult<Option<RuntimeVersion>> {
+    fn get_last_runtime_version(
+        &self,
+    ) -> ProviderResult<Option<RuntimeVersion>> {
         self.provider_rw()?.get_last_runtime_version()
     }
 }
@@ -559,7 +626,9 @@ mod tests {
     #[test]
     fn test_provider_factory_with_database_path() {
         let factory = BotanixProviderFactory::new_with_database_path(
-            tempfile::TempDir::new().expect("can't create temp directory").keep(),
+            tempfile::TempDir::new()
+                .expect("can't create temp directory")
+                .keep(),
             DatabaseArguments::new(Default::default()),
         )
         .unwrap();

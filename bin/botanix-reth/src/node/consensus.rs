@@ -1,4 +1,6 @@
-use crate::{node::BotanixNode, BotanixBlock, BotanixBlockBody, BotanixPrimitives};
+use crate::{
+    node::BotanixNode, BotanixBlock, BotanixBlockBody, BotanixPrimitives,
+};
 use alloy_consensus::Header;
 use alloy_primitives::B256;
 use botanix_chainspec::BotanixHardforks;
@@ -25,9 +27,13 @@ impl<Node> ConsensusBuilder<Node> for BotanixConsensusBuilder
 where
     Node: FullNodeTypes<Types = BotanixNode>,
 {
-    type Consensus = Arc<dyn FullConsensus<BotanixPrimitives, Error = ConsensusError>>;
+    type Consensus =
+        Arc<dyn FullConsensus<BotanixPrimitives, Error = ConsensusError>>;
 
-    async fn build_consensus(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::Consensus> {
+    async fn build_consensus(
+        self,
+        ctx: &BuilderContext<Node>,
+    ) -> eyre::Result<Self::Consensus> {
         Ok(Arc::new(BotanixConsensus::new(ctx.chain_spec())))
     }
 }
@@ -44,12 +50,20 @@ pub struct BotanixConsensus<ChainSpec> {
 impl<ChainSpec: EthChainSpec + BotanixHardforks> BotanixConsensus<ChainSpec> {
     /// Create a new instance of [`BotanixConsensus`]
     pub fn new(chain_spec: Arc<ChainSpec>) -> Self {
-        Self { inner: EthBeaconConsensus::new(chain_spec.clone()), chain_spec }
+        Self {
+            inner: EthBeaconConsensus::new(chain_spec.clone()),
+            chain_spec,
+        }
     }
 }
 
-impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator for BotanixConsensus<ChainSpec> {
-    fn validate_header(&self, _header: &SealedHeader) -> Result<(), ConsensusError> {
+impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator
+    for BotanixConsensus<ChainSpec>
+{
+    fn validate_header(
+        &self,
+        _header: &SealedHeader,
+    ) -> Result<(), ConsensusError> {
         // TODO: doesn't work because of extradata check
         // self.inner.validate_header(header)
 
@@ -69,20 +83,26 @@ impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator for BotanixCons
             return Err(ConsensusError::TimestampIsInPast {
                 parent_timestamp: parent_ts,
                 timestamp: header_ts,
-            })
+            });
         }
 
         // ensure that the blob gas fields for this block
-        if let Some(blob_params) = self.chain_spec.blob_params_at_timestamp(header.timestamp) {
-            validate_against_parent_4844(header.header(), parent.header(), blob_params)?;
+        if let Some(blob_params) =
+            self.chain_spec.blob_params_at_timestamp(header.timestamp)
+        {
+            validate_against_parent_4844(
+                header.header(),
+                parent.header(),
+                blob_params,
+            )?;
         }
 
         Ok(())
     }
 }
 
-impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks> Consensus<BotanixBlock>
-    for BotanixConsensus<ChainSpec>
+impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
+    Consensus<BotanixBlock> for BotanixConsensus<ChainSpec>
 {
     type Error = ConsensusError;
 
@@ -91,7 +111,11 @@ impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks> Consensus<Bota
         body: &BotanixBlockBody,
         header: &SealedHeader,
     ) -> Result<(), ConsensusError> {
-        Consensus::<BotanixBlock>::validate_body_against_header(&self.inner, body, header)
+        Consensus::<BotanixBlock>::validate_body_against_header(
+            &self.inner,
+            body,
+            header,
+        )
     }
 
     fn validate_block_pre_execution(
@@ -125,21 +149,27 @@ impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks> Consensus<Bota
     }
 }
 
-impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks> FullConsensus<BotanixPrimitives>
-    for BotanixConsensus<ChainSpec>
+impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
+    FullConsensus<BotanixPrimitives> for BotanixConsensus<ChainSpec>
 {
     fn validate_block_post_execution(
         &self,
         block: &RecoveredBlock<BotanixBlock>,
         result: &BlockExecutionResult<Receipt>,
     ) -> Result<(), ConsensusError> {
-        FullConsensus::<BotanixPrimitives>::validate_block_post_execution(&self.inner, block, result)
+        FullConsensus::<BotanixPrimitives>::validate_block_post_execution(
+            &self.inner,
+            block,
+            result,
+        )
     }
 }
 
 /// Calculate the millisecond timestamp of a block header.
 /// Refer to https://github.com/bnb-chain/BEPs/blob/master/BEPs/BEP-520.md.
-pub fn calculate_millisecond_timestamp<H: alloy_consensus::BlockHeader>(header: &H) -> u64 {
+pub fn calculate_millisecond_timestamp<H: alloy_consensus::BlockHeader>(
+    header: &H,
+) -> u64 {
     let seconds = header.timestamp();
     let mix_digest = header.mix_hash().unwrap_or(B256::ZERO);
 
@@ -168,10 +198,16 @@ mod tests {
     #[test]
     fn test_calculate_millisecond_timestamp_without_mix_hash() {
         // Create a header with current timestamp and zero mix_hash
-        let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
-        let header = Header { timestamp, mix_hash: B256::ZERO, ..Default::default() };
+        let header = Header {
+            timestamp,
+            mix_hash: B256::ZERO,
+            ..Default::default()
+        };
 
         let result = calculate_millisecond_timestamp(&header);
         assert_eq!(result, timestamp * 1000);
@@ -180,15 +216,21 @@ mod tests {
     #[test]
     fn test_calculate_millisecond_timestamp_with_milliseconds() {
         // Create a header with current timestamp and mix_hash containing milliseconds
-        let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let milliseconds = 750u64;
         let mut mix_hash_bytes = [0u8; 32];
         mix_hash_bytes[24..32].copy_from_slice(&milliseconds.to_be_bytes());
         let mix_hash = B256::new(mix_hash_bytes);
 
-        let header = Header { timestamp, mix_hash, ..Default::default() };
+        let header = Header {
+            timestamp,
+            mix_hash,
+            ..Default::default()
+        };
 
         let result = calculate_millisecond_timestamp(&header);
         assert_eq!(result, timestamp * 1000 + milliseconds);

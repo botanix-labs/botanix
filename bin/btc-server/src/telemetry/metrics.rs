@@ -1,10 +1,12 @@
 use prometheus::{
-    register_gauge_vec, register_histogram_vec, register_int_counter_vec, register_int_gauge_vec,
-    GaugeVec, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    register_gauge_vec, register_histogram_vec, register_int_counter_vec,
+    register_int_gauge_vec, GaugeVec, HistogramVec, IntCounterVec, IntGaugeVec,
+    Registry,
 };
 
 use crate::version::{
-    CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP, VERGEN_GIT_SHA, VERGEN_RUSTC_SEMVER,
+    CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP, VERGEN_GIT_SHA,
+    VERGEN_RUSTC_SEMVER,
 };
 
 #[macro_export]
@@ -165,14 +167,18 @@ pub struct BtcServerMetrics {
 
 impl Default for BtcServerMetrics {
     fn default() -> Self {
-        BtcServerMetrics::new(None).expect("Failed to create default BtcServerMetrics")
+        BtcServerMetrics::new(None)
+            .expect("Failed to create default BtcServerMetrics")
     }
 }
 
 impl BtcServerMetrics {
     pub fn new(prefix: Option<String>) -> anyhow::Result<Self> {
         let metric_prefix = prefix.clone().unwrap_or("btc_server".to_string());
-        println!("Initializing metrics registry with prefix: {}", metric_prefix);
+        println!(
+            "Initializing metrics registry with prefix: {}",
+            metric_prefix
+        );
 
         // ================================== signing ==================================
         let total_signing_sessions = register_int_gauge_vec!(
@@ -247,7 +253,10 @@ impl BtcServerMetrics {
             "round1_signing_package_size_bytes",
             "Histogram of round1 signing packages sizes in bytes",
             &["btc_chain", "self_id"],
-            vec![10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0, 1000000.0]
+            vec![
+                10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
+                1000000.0
+            ]
         )
         .expect("metric must be created");
 
@@ -255,7 +264,10 @@ impl BtcServerMetrics {
             "round2_signing_package_size_bytes",
             "Histogram of round2 signing packages sizes in bytes",
             &["btc_chain", "self_id"],
-            vec![10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0, 1000000.0]
+            vec![
+                10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
+                1000000.0
+            ]
         )
         .expect("metric must be created");
 
@@ -348,7 +360,10 @@ impl BtcServerMetrics {
             "bitcoind_rpc_latency",
             "A metric representing the latency of bitcoind RPC calls",
             &["btc_chain", "self_id", "rpc_method"],
-            vec![10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0, 1000000.0]
+            vec![
+                10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
+                1000000.0
+            ]
         )
         .expect("metric must be created");
 
@@ -444,7 +459,10 @@ impl BtcServerMetrics {
             "round1_dkg_package_size_bytes",
             "Histogram of round1 dkg packages sizes in bytes",
             &["btc_chain", "self_id"],
-            vec![10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0, 1000000.0]
+            vec![
+                10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
+                1000000.0
+            ]
         )
         .expect("metric must be created");
 
@@ -452,7 +470,10 @@ impl BtcServerMetrics {
             "round2_dkg_package_size_bytes",
             "Histogram of round2 dkg packages sizes in bytes",
             &["btc_chain", "self_id"],
-            vec![10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0, 1000000.0]
+            vec![
+                10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
+                1000000.0
+            ]
         )
         .expect("metric must be created");
 
@@ -500,7 +521,16 @@ impl BtcServerMetrics {
             &["btc_chain", "self_id"],
             // buckets for measurement in satoshis (e.g., 1.0, 100.0, 10000.0, 100000.0, 1000000.0,
             // 10000000.0, 100000000.0)
-            vec![1.0, 10.0, 100.0, 10000.0, 100000.0, 1000000.0, 10000000.0, 100000000.0] // up to 1 BTC,
+            vec![
+                1.0,
+                10.0,
+                100.0,
+                10000.0,
+                100000.0,
+                1000000.0,
+                10000000.0,
+                100000000.0
+            ] // up to 1 BTC,
         )
         .expect("metric must be created");
 
@@ -549,38 +579,53 @@ impl BtcServerMetrics {
         .set(1f64);
 
         // ====================================================================
-        let registry = Registry::new_custom(prefix, None).expect("registry to be created");
+        let registry =
+            Registry::new_custom(prefix, None).expect("registry to be created");
         // Signing Operation Metrics
         registry.register(Box::new(total_signing_sessions.clone()))?;
         registry.register(Box::new(total_aborted_signing_sessions.clone()))?;
-        registry.register(Box::new(total_finalized_signing_sessions.clone()))?;
+        registry
+            .register(Box::new(total_finalized_signing_sessions.clone()))?;
         registry.register(Box::new(signing_error_rates.clone()))?;
         registry.register(Box::new(round1_signing_latency.clone()))?;
         registry.register(Box::new(round2_signing_latency.clone()))?;
         registry.register(Box::new(signing_success_rate.clone()))?;
-        registry.register(Box::new(total_received_round1_signing_packages.clone()))?;
-        registry.register(Box::new(total_received_round2_signing_packages.clone()))?;
+        registry.register(Box::new(
+            total_received_round1_signing_packages.clone(),
+        ))?;
+        registry.register(Box::new(
+            total_received_round2_signing_packages.clone(),
+        ))?;
         registry.register(Box::new(round1_signing_throughput.clone()))?;
         registry.register(Box::new(round2_signing_throughput.clone()))?;
-        registry.register(Box::new(round1_signing_package_size_histogram.clone()))?;
-        registry.register(Box::new(round2_signing_package_size_histogram.clone()))?;
+        registry.register(Box::new(
+            round1_signing_package_size_histogram.clone(),
+        ))?;
+        registry.register(Box::new(
+            round2_signing_package_size_histogram.clone(),
+        ))?;
         registry.register(Box::new(multisig_utxos_count.clone()))?;
         registry.register(Box::new(multisig_utxos_total_value.clone()))?;
         registry.register(Box::new(input_selection_time.clone()))?;
         registry.register(Box::new(fee_rate_abnormalities.clone()))?;
 
         // Dkg Metrics
-        registry.register(Box::new(total_received_round1_dkg_packages.clone()))?;
-        registry.register(Box::new(total_received_round2_dkg_packages.clone()))?;
-        registry.register(Box::new(total_received_round3_dkg_packages.clone()))?;
+        registry
+            .register(Box::new(total_received_round1_dkg_packages.clone()))?;
+        registry
+            .register(Box::new(total_received_round2_dkg_packages.clone()))?;
+        registry
+            .register(Box::new(total_received_round3_dkg_packages.clone()))?;
         registry.register(Box::new(round1_dkg_throughput.clone()))?;
         registry.register(Box::new(round2_dkg_throughput.clone()))?;
         registry.register(Box::new(round3_dkg_throughput.clone()))?;
         registry.register(Box::new(round1_dkg_latency_histogram.clone()))?;
         registry.register(Box::new(round2_dkg_latency_histogram.clone()))?;
         registry.register(Box::new(round3_dkg_latency_histogram.clone()))?;
-        registry.register(Box::new(round1_dkg_package_size_histogram.clone()))?;
-        registry.register(Box::new(round2_dkg_package_size_histogram.clone()))?;
+        registry
+            .register(Box::new(round1_dkg_package_size_histogram.clone()))?;
+        registry
+            .register(Box::new(round2_dkg_package_size_histogram.clone()))?;
         registry.register(Box::new(dkg_error_rates.clone()))?;
         registry.register(Box::new(pegout_scheduler_error_rates.clone()))?;
         registry.register(Box::new(member_uptime.clone()))?;
@@ -589,8 +634,10 @@ impl BtcServerMetrics {
 
         registry.register(Box::new(pegins_count.clone()))?;
         registry.register(Box::new(pegouts_count.clone()))?;
-        registry.register(Box::new(success_broadcasted_pegout_txs_count.clone()))?;
-        registry.register(Box::new(failed_broadcasted_pegout_txs_count.clone()))?;
+        registry
+            .register(Box::new(success_broadcasted_pegout_txs_count.clone()))?;
+        registry
+            .register(Box::new(failed_broadcasted_pegout_txs_count.clone()))?;
         registry.register(Box::new(started_round1_signings_count.clone()))?;
         registry.register(Box::new(completed_round2_signings_count.clone()))?;
 
@@ -685,7 +732,8 @@ mod tests {
                 .map(char::from)
                 .collect();
 
-            BtcServerMetrics::new(Some(prefix)).expect("Failed to create random BtcServerMetrics")
+            BtcServerMetrics::new(Some(prefix))
+                .expect("Failed to create random BtcServerMetrics")
         }
     }
 
@@ -693,7 +741,10 @@ mod tests {
     fn test_round1_dkg_throughout_metric() {
         let metrics = BtcServerMetrics::random();
 
-        metrics.round1_dkg_throughput.with_label_values(&["regtest", "0"]).inc_by(5);
+        metrics
+            .round1_dkg_throughput
+            .with_label_values(&["regtest", "0"])
+            .inc_by(5);
 
         let metric_families = gather();
         let mut buffer = Vec::new();
@@ -711,7 +762,10 @@ mod tests {
     fn test_round1_dkg_latency_histogram_metric() {
         let metrics = BtcServerMetrics::random();
 
-        metrics.round1_dkg_latency_histogram.with_label_values(&["regtest", "0"]).observe(0.75);
+        metrics
+            .round1_dkg_latency_histogram
+            .with_label_values(&["regtest", "0"])
+            .observe(0.75);
 
         let metric_families = gather();
         let mut buffer = Vec::new();
@@ -750,7 +804,10 @@ mod tests {
     fn test_total_aborted_signing_sessions_metric() {
         let metrics = BtcServerMetrics::random();
 
-        metrics.total_aborted_signing_sessions.with_label_values(&["regtest", "5"]).set(10);
+        metrics
+            .total_aborted_signing_sessions
+            .with_label_values(&["regtest", "5"])
+            .set(10);
 
         let metric_families = gather();
         let mut buffer = Vec::new();
@@ -768,7 +825,10 @@ mod tests {
     fn test_round1_signing_throughput_metric() {
         let metrics = BtcServerMetrics::random();
 
-        metrics.round1_signing_throughput.with_label_values(&["regtest", "3", "abc"]).inc_by(10);
+        metrics
+            .round1_signing_throughput
+            .with_label_values(&["regtest", "3", "abc"])
+            .inc_by(10);
 
         let metric_families = gather();
         let mut buffer = Vec::new();
@@ -787,7 +847,10 @@ mod tests {
     fn test_error_rates_metric() {
         let metrics = BtcServerMetrics::random();
 
-        metrics.signing_error_rates.with_label_values(&["regtest", "4", "write_error"]).inc_by(1);
+        metrics
+            .signing_error_rates
+            .with_label_values(&["regtest", "4", "write_error"])
+            .inc_by(1);
 
         let metric_families = gather();
         let mut buffer = Vec::new();

@@ -1,3 +1,35 @@
+
+[workspace]
+resolver = "3"
+members = [
+  "bin/botanix-cli",
+  "bin/botanix-db-cleaner",
+  "bin/botanix-reth",
+  "bin/btc-server",
+  "bin/btc-server/client",
+  "crates/botanix-activation-manager",
+  "crates/botanix-authority-edh",
+  "crates/botanix-authority-metrics",
+  "crates/botanix-authority-peg",
+  "crates/botanix-authority-rsp",
+  "crates/botanix-bitcoin-checkpoint",
+  "crates/botanix-btc-wallet",
+  "crates/botanix-chainspec",
+  "crates/botanix-cli-args",
+  "crates/botanix-cli-parsers",
+  "crates/botanix-comet-bft-rpc",
+  "crates/botanix-configs",
+  "crates/botanix-consensus-common",
+  "crates/botanix-data-parser",
+  "crates/botanix-fs-util",
+  "crates/botanix-rpc-client",
+  "crates/botanix-rpc-config",
+  "crates/botanix-rpc-types",
+  "crates/botanix-storage",
+  "crates/botanix-storage-migrate",
+  "crates/botanix-utils",
+]
+default-members = ["bin/botanix-reth"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
@@ -6,38 +38,6 @@ license = "MIT OR Apache-2.0"
 homepage = "https://github.com/botanix-labs/reth"
 repository = "https://github.com/botanix-labs/reth"
 exclude = [".github/"]
-
-[workspace]
-resolver = "3"
-members = [
-    "bin/botanix-reth",
-    "bin/btc-server",
-    "bin/btc-server/client",
-    "bin/botanix-cli",
-    "bin/botanix-db-cleaner",
-    "crates/botanix-storage",
-    "crates/botanix-activation-manager",
-    "crates/botanix-storage-migrate",
-    "crates/botanix-utils",
-    "crates/botanix-rpc-types",
-    "crates/botanix-authority-rsp",
-    "crates/botanix-authority-peg",
-    "crates/botanix-fs-util",
-    "crates/botanix-btc-wallet",
-    "crates/botanix-authority-metrics",
-    "crates/botanix-bitcoin-checkpoint",
-    "crates/botanix-authority-edh",
-    "crates/botanix-configs",
-    "crates/botanix-data-parser",
-    "crates/botanix-comet-bft-rpc",
-    "crates/botanix-rpc-config",
-    "crates/botanix-chainspec",
-    "crates/botanix-cli-parsers",
-    "crates/botanix-cli-args",
-    "crates/botanix-rpc-client",
-    "crates/botanix-consensus-common",
-]
-default-members = ["bin/botanix-reth"]
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"
@@ -122,142 +122,101 @@ significant_drop_in_scrutinee = "allow"
 significant_drop_tightening = "allow"
 
 [workspace.dependencies]
-
-# Botanix deps
-reth-botanix = { path = "bin/botanix-reth" }
-btc-server = { path = "bin/btc-server" }
-botanix-btc-server-client = { path = "bin/btc-server/client" }
-botanix-cli = { path = "bin/botanix-cli" }
-botanix-db-cleaner = { path = "bin/botanix-db-cleaner" }
-botanix-storage = { path = "crates/botanix-storage" }
-botanix-activation-manager = { path = "crates/botanix-activation-manager" }
-botanix-storage-migrate = { path = "crates/botanix-storage-migrate" }
-botanix-utils = { path = "crates/botanix-utils" }
-botanix-rpc-types = { path = "crates/botanix-rpc-types" }
-botanix-authority-rsp = { path = "crates/botanix-authority-rsp" }
-botanix-authority-peg = { path = "crates/botanix-authority-peg" }
-botanix-fs-util = { path = "crates/botanix-fs-util" }
-botanix-btc-wallet = { path = "crates/botanix-btc-wallet" }
-botanix-authority-metrics = { path = "crates/botanix-authority-metrics" }
-botanix-bitcoin-checkpoint = { path = "crates/botanix-bitcoin-checkpoint" }
-botanix-authority-edh ={ path = "crates/botanix-authority-edh" }
-botanix-configs = { path = "crates/botanix-configs" }
-botanix-data-parser = { path = "crates/botanix-data-parser" }
-botanix-comet-bft-rpc = { path = "crates/botanix-comet-bft-rpc" }
-botanix-rpc-config = { path = "crates/botanix-rpc-config" }
-botanix-chainspec = { path = "crates/botanix-chainspec" }
-botanix-cli-parsers = { path = "crates/botanix-cli-parsers" }
-botanix-cli-args = { path = "crates/botanix-cli-args" }
-botanix-rpc-client = { path = "crates/botanix-rpc-client" }
-botanix-consensus-common = { path = "crates/botanix-consensus-common" }
-botanix-evm = { path = "crates/botanix-evm" }
-
-# reth dependencies - using botanix fork
-reth = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-cli = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-cli-runner = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-cli-commands = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-consensus-common = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-chain-state = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-config = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-codecs = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-codecs-derive = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-basic-payload-builder = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-db = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-db-common = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-db-models = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-db-api = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-engine-local = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-chainspec = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-consensus = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-execution-types = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-cli-util = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-discv4 = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
-reth-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-ethereum-forks = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["serde"] }
-reth-engine-tree = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-ethereum = { git = "https://github.com/botanix-labs/reth",  branch="botanix", features = ["test-utils", "node", "provider", "pool", "network", "rpc"] }
-reth-ethereum-payload-builder = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-ethereum-consensus = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-ethereum-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-ethereum-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-eth-wire = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-eth-wire-types = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-evm = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-evm-ethereum = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-execution-errors = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-node-core = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-node-metrics = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-node-builder = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-revm = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-network = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
-reth-network-p2p = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-network-api = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-node-ethereum = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
-reth-node-types =  { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-network-peers = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-payload-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-primitives = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["secp256k1"] }
-reth-primitives-traits = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-provider = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
-reth-prune = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-prune-types = { git = "https://github.com/botanix-labs/reth", branch="botanix", features = ["test-utils"] }
-reth-payload-builder = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-rpc-eth-api = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-rpc-engine-api = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-rpc-server-types = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-tasks = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-transaction-pool = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-tracing = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-trie-common = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-trie-db = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-reth-trie = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-storage-api = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-stages = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-storage-errors = { git = "https://github.com/botanix-labs/reth",  branch="botanix" }
-reth-metrics = { git = "https://github.com/botanix-labs/reth", branch="botanix" }
-
-# revm - exact version to match fork
-revm = "=28.0.1"
-revm-primitives = { version = "20.2.1", features = ["std"] }
-revm-database = { version = "7.0.5", default-features = false }
-
-# Tendermint
-# tendermint = { version = "0.40.1", features = ["clock"] }
-tendermint-abci = "0.40.1"
-tendermint-rpc = { version = "0.40.1", features = ["http-client"] }
-tendermint-proto = "0.40.1"
-tendermint-light-client = { version = "0.40.1", features = ["secp256k1", "rpc-client"] }
-tendermint = { git = "https://github.com/bnb-chain/tendermint-rs-parlia", rev = "8c21ccbd58a174e07eed2c9343e63ccd00f0fbd5", features = ["secp256k1"] }
+alloy-chains = "=0.2.5"
+alloy-consensus = "=1.0.23"
+alloy-dyn-abi = "=1.3.0"
+alloy-eip2124 = "=0.2.0"
+alloy-eips = "=1.0.23"
 
 # alloy dependencies - match working standalone version
 alloy-evm = "=0.18.2"
-alloy-eip2124 = "=0.2.0"
 alloy-genesis = "=1.0.23"
-alloy-consensus = "=1.0.23"
-alloy-eips = "=1.0.23"
+alloy-hardforks = "0.2.7"
+alloy-json-abi = { version = "=1.3.0", default-features = false }
 alloy-network = "=1.0.23"
+alloy-primitives = { version = "=1.3.0", default-features = false, features = [
+  "map",
+  "map-foldhash",
+  "std",
+  "getrandom",
+] }
+alloy-rlp = { version = "=0.3.10", default-features = false, features = [
+  "core-net",
+] }
 alloy-rpc-types = { version = "=1.0.23", features = ["engine"] }
-alloy-rpc-types-eth = "=1.0.23"
 alloy-rpc-types-engine = "=1.0.23"
+alloy-rpc-types-eth = "=1.0.23"
 alloy-serde = "=1.0.23"
 alloy-signer = "=1.0.23"
-alloy-chains = "=0.2.5"
-alloy-hardforks = "0.2.7"
-alloy-rlp = { version = "=0.3.10", default-features = false, features = ["core-net"] }
-alloy-dyn-abi = "=1.3.0"
-alloy-json-abi = { version = "=1.3.0", default-features = false }
-alloy-primitives = { version = "=1.3.0", default-features = false, features = ["map", "map-foldhash", "std", "getrandom"] }
 alloy-sol-macro = "=1.3.0"
 alloy-sol-types = { version = "=1.3.0", default-features = false }
+arbitrary = "1.4"
+askama = "0.12.1"
+assert_matches = "1.5"
+async-trait = "0.1"
+
+# misc dependencies
+auto_impl = "1"
+bitcoin = { version = "0.32.5", features = ["base64", "rand", "serde"] }
+bitcoin_hashes = "0.16.0"
+bitcoincore-rpc = "0.19.0"
+bitcoincore-zmq = { version = "1.5.2", features = ["async"] }
+
+# precompiles deps
+bls_on_arkworks = "0.3.0"
+botanix-activation-manager = { path = "crates/botanix-activation-manager" }
+botanix-authority-edh = { path = "crates/botanix-authority-edh" }
+botanix-authority-metrics = { path = "crates/botanix-authority-metrics" }
+botanix-authority-peg = { path = "crates/botanix-authority-peg" }
+botanix-authority-rsp = { path = "crates/botanix-authority-rsp" }
+botanix-bitcoin-checkpoint = { path = "crates/botanix-bitcoin-checkpoint" }
+botanix-btc-server-client = { path = "bin/btc-server/client" }
+botanix-btc-wallet = { path = "crates/botanix-btc-wallet" }
+botanix-chainspec = { path = "crates/botanix-chainspec" }
+botanix-cli = { path = "bin/botanix-cli" }
+botanix-cli-args = { path = "crates/botanix-cli-args" }
+botanix-cli-parsers = { path = "crates/botanix-cli-parsers" }
+botanix-comet-bft-rpc = { path = "crates/botanix-comet-bft-rpc" }
+botanix-configs = { path = "crates/botanix-configs" }
+botanix-consensus-common = { path = "crates/botanix-consensus-common" }
+botanix-data-parser = { path = "crates/botanix-data-parser" }
+botanix-db-cleaner = { path = "bin/botanix-db-cleaner" }
+botanix-evm = { path = "crates/botanix-evm" }
+botanix-fs-util = { path = "crates/botanix-fs-util" }
+botanix-rpc-client = { path = "crates/botanix-rpc-client" }
+botanix-rpc-config = { path = "crates/botanix-rpc-config" }
+botanix-rpc-types = { path = "crates/botanix-rpc-types" }
+botanix-storage = { path = "crates/botanix-storage" }
+botanix-storage-migrate = { path = "crates/botanix-storage-migrate" }
+botanix-utils = { path = "crates/botanix-utils" }
+btc-server = { path = "bin/btc-server" }
+bytes = "1.5"
+cfg-if = { version = "1.0", default-features = false }
+clap = { version = "4.4", features = ["derive"] }
+
+# cometbft
+cometbft = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
+cometbft-light-client = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
+cometbft-light-client-verifier = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
+cometbft-proto = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
+confy = "0.6"
+derive_more = { version = "2.0.1", features = ["full"] }
+eyre = "0.6"
+
+# frost
+frost-secp256k1-tr = { git = "https://github.com/botanix-labs/frost", rev = "b4c5ab017bb0d182f3c56fd80b95d6375a4bfeea", features = [
+  "serde",
+  "serialization",
+] }
+futures = "0.3"
+futures-util = "0.3"
+itertools = { version = "0.10.5" }
 
 # json rpc
 jsonrpsee = "=0.25.1"
 jsonrpsee-core = "=0.25.1"
 jsonrpsee-types = "=0.25.1"
-
-# tonic
-tonic = { version = "0.12.3", features = ["gzip"] }
+lazy_static = "1.4.0"
 
 # metrics
 metrics = "0.24.0"
@@ -265,76 +224,157 @@ metrics-exporter-prometheus = { version = "0.16.0", default-features = false }
 metrics-process = "2.4.0"
 metrics-util = "0.19.0"
 
-# misc dependencies
-auto_impl = "1"
-async-trait = "0.1"
-bytes = "1.5"
-clap = { version = "4.4", features = ["derive"] }
-cfg-if = { version = "1.0", default-features = false }
-derive_more = { version = "2.0.1", features = ["full"] }
-eyre = "0.6"
-futures = "0.3"
-lazy_static = "1.4.0"
-phf = { version = "0.11", features = ["macros"] }
+# bitcoin libs
+miniscript = "12.3.2"
+mockall = "0.13.1"
+modular-bitfield = { version = "0.11.2" }
 once_cell = { version = "1.19", default-features = false, features = ["alloc"] }
 parity-bytes = { version = "0.1.2", default-features = false }
 parking_lot = "0.12"
-secp256k1 = { version = "0.30", features = ["global-context", "std", "recovery"] }
-serde = { version = "1.0", features = ["derive", "std"], default-features = true }
+phf = { version = "0.11", features = ["macros"] }
+proptest = "1.6"
+proptest-arbitrary-interop = "0.1.0"
+proptest-derive = "0.5"
+
+# other
+prost = "0.12.6"
+rand = "0.8.5"
+
+# reth dependencies - using botanix fork
+reth = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-basic-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+
+# Botanix deps
+reth-botanix = { path = "bin/botanix-reth" }
+reth-chain-state = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-chainspec = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-cli = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-cli-commands = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-cli-runner = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-cli-util = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-codecs = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-codecs-derive = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-config = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-consensus = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-consensus-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-db-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-db-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-db-models = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-discv4 = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "test-utils",
+] }
+reth-engine-local = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-engine-tree = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-eth-wire = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-eth-wire-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "test-utils",
+  "node",
+  "provider",
+  "pool",
+  "network",
+  "rpc",
+] }
+reth-ethereum-consensus = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-ethereum-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-ethereum-forks = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "serde",
+] }
+reth-ethereum-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-ethereum-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-evm = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-evm-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-execution-errors = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-execution-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-metrics = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-network = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "test-utils",
+] }
+reth-network-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-network-p2p = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-network-peers = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-node-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-node-core = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-node-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "test-utils",
+] }
+reth-node-metrics = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-node-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-payload-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "secp256k1",
+] }
+reth-primitives-traits = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-provider = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "test-utils",
+] }
+reth-prune = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-prune-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "test-utils",
+] }
+reth-revm = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-rpc-engine-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-rpc-eth-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-rpc-server-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-stages = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-storage-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-storage-errors = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-tasks = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-tracing = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-transaction-pool = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-trie = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-trie-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-trie-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+
+# revm - exact version to match fork
+revm = "=28.0.1"
+revm-database = { version = "7.0.5", default-features = false }
+revm-primitives = { version = "20.2.1", features = ["std"] }
+schnellru = "0.2"
+secp256k1 = { version = "0.30", features = [
+  "global-context",
+  "std",
+  "recovery",
+] }
+serde = { version = "1.0", features = [
+  "derive",
+  "std",
+], default-features = true }
 serde_json = "1.0"
 serde_with = "3.3.0"
-thiserror = "2.0"
-tracing = "0.1"
-futures-util = "0.3"
-itertools = { version = "0.10.5" }
-modular-bitfield = { version = "0.11.2" }
 sha2 = { version = "0.9.9" }
-uuid = { version = "1.8.0", features = ["v4"] }
-arbitrary = "1.4"
-assert_matches = "1.5"
-proptest = "1.6"
-proptest-derive = "0.5"
-proptest-arbitrary-interop = "0.1.0"
-tempfile = "3.16"
-test-fuzz = "7"
-mockall = "0.13.1"
-rand = "0.8.5"
-askama = "0.12.1"
 shellexpand = "3.0.0"
-toml = "0.8"
-url = "2.5.4"
-schnellru = "0.2"
-confy = "0.6"
+tempfile = "3.16"
+tendermint = { git = "https://github.com/bnb-chain/tendermint-rs-parlia", rev = "8c21ccbd58a174e07eed2c9343e63ccd00f0fbd5", features = [
+  "secp256k1",
+] }
+
+# Tendermint
+# tendermint = { version = "0.40.1", features = ["clock"] }
+tendermint-abci = "0.40.1"
+tendermint-light-client = { version = "0.40.1", features = [
+  "secp256k1",
+  "rpc-client",
+] }
+tendermint-proto = "0.40.1"
+tendermint-rpc = { version = "0.40.1", features = ["http-client"] }
+test-fuzz = "7"
+thiserror = "2.0"
 
 # tokio
 tokio = { version = "1.44", features = ["full"] }
 tokio-stream = "0.1"
 tokio-util = { version = "0.7.4", features = ["codec"] }
+toml = "0.8"
 
-# frost
-frost-secp256k1-tr = { git = "https://github.com/botanix-labs/frost", rev = "b4c5ab017bb0d182f3c56fd80b95d6375a4bfeea", features = [
-    "serde",
-    "serialization",
-]}
-
-# bitcoin libs
-miniscript = "12.3.2"
-bitcoin = { version = "0.32.5", features = ["base64", "rand", "serde"] }
-bitcoincore-rpc = "0.19.0"
-bitcoin_hashes = "0.16.0"
-bitcoincore-zmq = { version = "1.5.2", features = ["async"] }
-
-# precompiles deps
-bls_on_arkworks = "0.3.0"
-
-# cometbft
-cometbft = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
-cometbft-light-client-verifier = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
-cometbft-proto = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
-cometbft-light-client = { git = "https://github.com/bnb-chain/greenfield-cometbft-rs.git", rev = "1282547" }
-
-# other
-prost = "0.12.6"
+# tonic
+tonic = { version = "0.12.3", features = ["gzip"] }
+tracing = "0.1"
+url = "2.5.4"
+uuid = { version = "1.8.0", features = ["v4"] }
 
 [profile.profiling]
 inherits = "release"

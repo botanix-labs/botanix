@@ -64,7 +64,12 @@ mod rlp {
                         header,
                         body:
                             BotanixBlockBody {
-                                inner: BlockBody { transactions, ommers, withdrawals },
+                                inner:
+                                    BlockBody {
+                                        transactions,
+                                        ommers,
+                                        withdrawals,
+                                    },
                                 sidecars,
                             },
                     },
@@ -97,7 +102,13 @@ mod rlp {
     impl Decodable for BotanixNewBlock {
         fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
             let BotanixNewBlockHelper {
-                block: BlockHelper { header, transactions, ommers, withdrawals },
+                block:
+                    BlockHelper {
+                        header,
+                        transactions,
+                        ommers,
+                        withdrawals,
+                    },
                 td,
                 sidecars,
             } = BotanixNewBlockHelper::decode(buf)?;
@@ -129,8 +140,11 @@ impl NewBlockPayload for BotanixNewBlock {
 }
 
 /// Network primitives for Botanix.
-pub type BotanixNetworkPrimitives =
-    BasicNetworkPrimitives<BotanixPrimitives, PooledTransactionVariant, BotanixNewBlock>;
+pub type BotanixNetworkPrimitives = BasicNetworkPrimitives<
+    BotanixPrimitives,
+    PooledTransactionVariant,
+    BotanixNewBlock,
+>;
 
 /// A basic Botanix network builder.
 #[derive(Debug, Default)]

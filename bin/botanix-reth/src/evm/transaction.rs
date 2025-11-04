@@ -18,7 +18,10 @@ pub struct BotanixTxEnv {
 
 impl BotanixTxEnv {
     pub fn new(base: TxEnv) -> Self {
-        Self { base, is_system_transaction: false }
+        Self {
+            base,
+            is_system_transaction: false,
+        }
     }
 }
 
@@ -62,7 +65,9 @@ impl Transaction for BotanixTxEnv {
         self.base.gas_price()
     }
 
-    fn access_list(&self) -> Option<impl Iterator<Item = Self::AccessListItem<'_>>> {
+    fn access_list(
+        &self,
+    ) -> Option<impl Iterator<Item = Self::AccessListItem<'_>>> {
         self.base.access_list()
     }
 
@@ -78,7 +83,9 @@ impl Transaction for BotanixTxEnv {
         self.base.authorization_list_len()
     }
 
-    fn authorization_list(&self) -> impl Iterator<Item = Self::Authorization<'_>> {
+    fn authorization_list(
+        &self,
+    ) -> impl Iterator<Item = Self::Authorization<'_>> {
         self.base.authorization_list()
     }
 
@@ -108,16 +115,33 @@ impl FromRecoveredTx<TransactionSigned> for BotanixTxEnv {
 }
 
 impl FromTxWithEncoded<TransactionSigned> for BotanixTxEnv {
-    fn from_encoded_tx(tx: &TransactionSigned, sender: Address, _encoded: Bytes) -> Self {
+    fn from_encoded_tx(
+        tx: &TransactionSigned,
+        sender: Address,
+        _encoded: Bytes,
+    ) -> Self {
         let base = match tx.clone().into_typed_transaction() {
-            reth_primitives::Transaction::Legacy(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip2930(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip1559(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip4844(tx) => TxEnv::from_recovered_tx(&tx, sender),
-            reth_primitives::Transaction::Eip7702(tx) => TxEnv::from_recovered_tx(&tx, sender),
+            reth_primitives::Transaction::Legacy(tx) => {
+                TxEnv::from_recovered_tx(&tx, sender)
+            }
+            reth_primitives::Transaction::Eip2930(tx) => {
+                TxEnv::from_recovered_tx(&tx, sender)
+            }
+            reth_primitives::Transaction::Eip1559(tx) => {
+                TxEnv::from_recovered_tx(&tx, sender)
+            }
+            reth_primitives::Transaction::Eip4844(tx) => {
+                TxEnv::from_recovered_tx(&tx, sender)
+            }
+            reth_primitives::Transaction::Eip7702(tx) => {
+                TxEnv::from_recovered_tx(&tx, sender)
+            }
         };
 
-        Self { base, is_system_transaction: false }
+        Self {
+            base,
+            is_system_transaction: false,
+        }
     }
 }
 
@@ -153,7 +177,10 @@ impl SystemCallTx for BotanixTxEnv {
             .build()
             .unwrap();
 
-        Self { base, is_system_transaction: true }
+        Self {
+            base,
+            is_system_transaction: true,
+        }
     }
 }
 
@@ -193,6 +220,9 @@ mod tests {
 
         assert_eq!(botanix_tx.tx_type(), 0);
         assert_eq!(botanix_tx.gas_limit(), 10);
-        assert_eq!(botanix_tx.kind(), revm::primitives::TxKind::Call(Address::ZERO));
+        assert_eq!(
+            botanix_tx.kind(),
+            revm::primitives::TxKind::Call(Address::ZERO)
+        );
     }
 }

@@ -4,7 +4,9 @@ use alloy_primitives::B256;
 use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
 use reth_ethereum_primitives::{BlockBody, Receipt};
 use reth_primitives::{NodePrimitives, TransactionSigned};
-use reth_primitives_traits::{Block, BlockBody as BlockBodyTrait, InMemorySize};
+use reth_primitives_traits::{
+    Block, BlockBody as BlockBodyTrait, InMemorySize,
+};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
@@ -22,7 +24,16 @@ impl NodePrimitives for BotanixPrimitives {
 }
 
 /// Botanix representation of a EIP-4844 sidecar.
-#[derive(Debug, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
+)]
 pub struct BotanixBlobTransactionSidecar {
     pub inner: BlobTransactionSidecar,
     pub block_number: u64,
@@ -54,10 +65,11 @@ pub struct BotanixBlockBody {
 
 impl InMemorySize for BotanixBlockBody {
     fn size(&self) -> usize {
-        self.inner.size() +
-            self.sidecars
-                .as_ref()
-                .map_or(0, |s| s.capacity() * core::mem::size_of::<BotanixBlobTransactionSidecar>())
+        self.inner.size()
+            + self.sidecars.as_ref().map_or(0, |s| {
+                s.capacity()
+                    * core::mem::size_of::<BotanixBlobTransactionSidecar>()
+            })
     }
 }
 
@@ -154,13 +166,21 @@ mod rlp {
         pub(crate) transactions: Cow<'a, Vec<TransactionSigned>>,
         pub(crate) ommers: Cow<'a, Vec<Header>>,
         pub(crate) withdrawals: Option<Cow<'a, Withdrawals>>,
-        pub(crate) sidecars: Option<Cow<'a, Vec<BotanixBlobTransactionSidecar>>>,
+        pub(crate) sidecars:
+            Option<Cow<'a, Vec<BotanixBlobTransactionSidecar>>>,
     }
 
     impl<'a> From<&'a BotanixBlockBody> for BlockBodyHelper<'a> {
         fn from(value: &'a BotanixBlockBody) -> Self {
-            let BotanixBlockBody { inner: BlockBody { transactions, ommers, withdrawals }, sidecars } =
-                value;
+            let BotanixBlockBody {
+                inner:
+                    BlockBody {
+                        transactions,
+                        ommers,
+                        withdrawals,
+                    },
+                sidecars,
+            } = value;
 
             Self {
                 transactions: Cow::Borrowed(transactions),
@@ -176,7 +196,15 @@ mod rlp {
             let BotanixBlock {
                 header,
                 body:
-                    BotanixBlockBody { inner: BlockBody { transactions, ommers, withdrawals }, sidecars },
+                    BotanixBlockBody {
+                        inner:
+                            BlockBody {
+                                transactions,
+                                ommers,
+                                withdrawals,
+                            },
+                        sidecars,
+                    },
             } = value;
 
             Self {
@@ -201,8 +229,12 @@ mod rlp {
 
     impl Decodable for BotanixBlockBody {
         fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-            let BlockBodyHelper { transactions, ommers, withdrawals, sidecars } =
-                BlockBodyHelper::decode(buf)?;
+            let BlockBodyHelper {
+                transactions,
+                ommers,
+                withdrawals,
+                sidecars,
+            } = BlockBodyHelper::decode(buf)?;
             Ok(Self {
                 inner: BlockBody {
                     transactions: transactions.into_owned(),
@@ -226,8 +258,13 @@ mod rlp {
 
     impl Decodable for BotanixBlock {
         fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-            let BlockHelper { header, transactions, ommers, withdrawals, sidecars } =
-                BlockHelper::decode(buf)?;
+            let BlockHelper {
+                header,
+                transactions,
+                ommers,
+                withdrawals,
+                sidecars,
+            } = BlockHelper::decode(buf)?;
             Ok(Self {
                 header: header.into_owned(),
                 body: BotanixBlockBody {
@@ -245,7 +282,9 @@ mod rlp {
 
 pub mod serde_bincode_compat {
     use super::*;
-    use reth_primitives_traits::serde_bincode_compat::{BincodeReprFor, SerdeBincodeCompat};
+    use reth_primitives_traits::serde_bincode_compat::{
+        BincodeReprFor, SerdeBincodeCompat,
+    };
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct BotanixBlockBodyBincode<'a> {
@@ -271,7 +310,10 @@ pub mod serde_bincode_compat {
 
         fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
             let BotanixBlockBodyBincode { inner, sidecars } = repr;
-            Self { inner: BlockBody::from_repr(inner), sidecars: sidecars.map(|s| s.into_owned()) }
+            Self {
+                inner: BlockBody::from_repr(inner),
+                sidecars: sidecars.map(|s| s.into_owned()),
+            }
         }
     }
 
@@ -279,12 +321,18 @@ pub mod serde_bincode_compat {
         type BincodeRepr<'a> = BotanixBlockBincode<'a>;
 
         fn as_repr(&self) -> Self::BincodeRepr<'_> {
-            BotanixBlockBincode { header: self.header.as_repr(), body: self.body.as_repr() }
+            BotanixBlockBincode {
+                header: self.header.as_repr(),
+                body: self.body.as_repr(),
+            }
         }
 
         fn from_repr(repr: Self::BincodeRepr<'_>) -> Self {
             let BotanixBlockBincode { header, body } = repr;
-            Self { header: Header::from_repr(header), body: BotanixBlockBody::from_repr(body) }
+            Self {
+                header: Header::from_repr(header),
+                body: BotanixBlockBody::from_repr(body),
+            }
         }
     }
 }

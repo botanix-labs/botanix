@@ -113,7 +113,8 @@ pub fn complete_stage_one(
 
 #[test]
 fn dkg_complete_stage_one() {
-    let (alice_addr, bob_addr, eve_addr, alice, bob, eve) = setup(test_config());
+    let (alice_addr, bob_addr, eve_addr, alice, bob, eve) =
+        setup(test_config());
 
     assert_eq!(alice.stage(), Stage::RoundOne);
     assert_eq!(bob.stage(), Stage::AwaitingInit);
@@ -121,6 +122,7 @@ fn dkg_complete_stage_one() {
 
     let now = Instant::now();
 
-    let (_alice, _bob, _eve) =
-        complete_stage_one(alice_addr, bob_addr, eve_addr, alice, bob, eve, now);
+    let (_alice, _bob, _eve) = complete_stage_one(
+        alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
+    );
 }

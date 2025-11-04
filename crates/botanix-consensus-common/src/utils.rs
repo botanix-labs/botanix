@@ -1,12 +1,15 @@
+use alloy_consensus::Header;
+use alloy_primitives::{Address, FixedBytes, U256};
 use botanix_authority_edh::extra_data_header::CHAIN_VERSION;
 use reth_consensus::ConsensusError;
-use alloy_primitives::{Address, FixedBytes, U256};
-use alloy_consensus::Header;  
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Returns the unix timestamp in seconds
 pub fn unix_timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 /// Splits block fees three ways:
@@ -33,11 +36,17 @@ pub const fn block_fees_split(total_block_fees: u128) -> (u128, u128, u128) {
         .checked_sub(botanix_fees)
         .expect("underflow when subtracting botanix_fees");
 
-    (lst_fee_receiver_fees, botanix_fees, block_fee_recipient_fees)
+    (
+        lst_fee_receiver_fees,
+        botanix_fees,
+        block_fee_recipient_fees,
+    )
 }
 
 /// Validate poa block beneficiary
-pub fn validate_poa_block_beneficiary(header: &Header) -> Result<(), ConsensusError> {
+pub fn validate_poa_block_beneficiary(
+    header: &Header,
+) -> Result<(), ConsensusError> {
     if header.beneficiary != Address::ZERO {
         return Err(ConsensusError::BlockBeneficiaryIsNotBurnAddress);
     }
@@ -46,7 +55,9 @@ pub fn validate_poa_block_beneficiary(header: &Header) -> Result<(), ConsensusEr
 }
 
 /// Check the extra data header field has the current chain version
-pub const fn validate_chain_version(edh_chain_version: u32) -> Result<(), ConsensusError> {
+pub const fn validate_chain_version(
+    edh_chain_version: u32,
+) -> Result<(), ConsensusError> {
     if edh_chain_version != CHAIN_VERSION {
         return Err(ConsensusError::InvalidChainVersion);
     }
@@ -128,7 +139,8 @@ mod tests {
     fn should_fail_validate_poa_block_beneficiary() {
         let mut header = Header::default();
         header.beneficiary =
-            Address::from_str("0x4e0f6e05C8ca4b3dc2B7b7Ad6249B149b1980394").unwrap();
+            Address::from_str("0x4e0f6e05C8ca4b3dc2B7b7Ad6249B149b1980394")
+                .unwrap();
         let result = validate_poa_block_beneficiary(&header);
         assert!(result.is_err());
     }

@@ -33,7 +33,11 @@ mod tests {
                 max_priority_fee_per_gas: 1000,
                 ..Default::default()
             },
-            Signature::new(Default::default(), Default::default(), Default::default()),
+            Signature::new(
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            ),
         );
         assert_eq!(tx_type(&tx), TxType::Eip1559);
 

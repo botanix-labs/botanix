@@ -10,12 +10,12 @@ exclude = { workspace = true }
 description = "A PoA consensus engine"
 
 [dependencies]
-alloy-rpc-types-engine = { workspace = true }
-async-trait = { workspace = true }
-alloy-primitives = { workspace = true }
-alloy-rpc-types-eth = { workspace = true }
-alloy-eips = { workspace = true }
 alloy-consensus = { workspace = true }
+alloy-eips = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-rpc-types-engine = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+async-trait = { workspace = true }
 
 ## Bitcoin
 bitcoin = { workspace = true }
@@ -27,16 +27,16 @@ botanix-authority-metrics = { workspace = true }
 botanix-authority-peg = { workspace = true, features = ["secp256k1"] }
 botanix-authority-rsp = { workspace = true }
 botanix-bitcoin-checkpoint = { workspace = true }
+botanix-btc-server-client = { workspace = true }
 botanix-btc-wallet = { workspace = true }
 botanix-chainspec = { workspace = true }
 botanix-cli-args = { workspace = true }
 botanix-comet-bft-rpc = { workspace = true }
-botanix-data-parser = { workspace = true }
-botanix-storage = { workspace = true }
 botanix-consensus-common = { workspace = true }
-btc-server = { workspace = true }
-botanix-btc-server-client = { workspace = true }
+botanix-data-parser = { workspace = true }
 botanix-evm = { workspace = true }
+botanix-storage = { workspace = true }
+btc-server = { workspace = true }
 
 # others
 bytes = "1.6.0"
@@ -63,29 +63,29 @@ reth-chainspec = { workspace = true }
 reth-consensus = { workspace = true }
 reth-consensus-common = { workspace = true }
 reth-db = { workspace = true }
-reth-ethereum-consensus = { workspace = true }
 reth-ethereum = { workspace = true, features = ["rpc"] }
+reth-ethereum-consensus = { workspace = true }
 reth-ethereum-payload-builder = { workspace = true }
 reth-evm = { workspace = true }
 reth-evm-ethereum = { workspace = true }
 reth-execution-errors = { workspace = true }
 reth-network = { workspace = true, features = ["serde"] }
 reth-network-peers = { workspace = true, features = ["secp256k1"] }
-reth-node-core = { workspace = true }
-reth-node-types = { workspace = true }
 reth-node-builder = { workspace = true }
+reth-node-core = { workspace = true }
 reth-node-ethereum = { workspace = true }
+reth-node-types = { workspace = true }
 reth-payload-builder = { workspace = true }
 reth-primitives = { workspace = true, features = ["secp256k1"] }
 reth-primitives-traits = { workspace = true }
 reth-provider = { workspace = true, features = ["test-utils"] }
 reth-revm = { workspace = true }
 # reth-rpc-types = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
 reth-tasks = { workspace = true }
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }
 reth-trie = { workspace = true }
 reth-trie-db = { workspace = true }
-reth-ethereum-primitives = { workspace = true }
 
 # LRU Cache
 schnellru = { workspace = true }

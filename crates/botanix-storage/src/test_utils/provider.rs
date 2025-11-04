@@ -28,10 +28,10 @@ use std::sync::Arc;
 /// fn test_snapshot_creation() {
 ///     let factory = create_test_provider_factory();
 ///     let provider = factory.provider_rw().unwrap();
-///     
+///
 ///     let snapshot_id = provider.create_new_snapshot(100, block_hash).unwrap();
 ///     provider.commit().unwrap();
-///     
+///
 ///     assert!(snapshot_id > 0);
 /// }
 /// ```
@@ -40,7 +40,8 @@ use std::sync::Arc;
 ///
 /// Each call to this function creates a separate database instance, so
 /// multiple tests can run concurrently without interfering with each other.
-pub fn create_test_provider_factory() -> BotanixProviderFactory<Arc<TempDatabase<DatabaseEnv>>> {
+pub fn create_test_provider_factory(
+) -> BotanixProviderFactory<Arc<TempDatabase<DatabaseEnv>>> {
     let db = create_test_rw_db();
     BotanixProviderFactory::new(db)
 }

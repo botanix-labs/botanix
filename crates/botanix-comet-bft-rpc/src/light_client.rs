@@ -23,11 +23,17 @@ impl LightCBFTClientBuilder {
     pub fn new(rpc_client_factory: HttpCometBFTRpcClientFactory) -> Self {
         let light_store = Box::new(MemoryStore::new());
 
-        Self { rpc_client_factory, light_store }
+        Self {
+            rpc_client_factory,
+            light_store,
+        }
     }
 
     /// Set the light store
-    pub fn with_light_store(mut self, light_store: Box<dyn LightStore>) -> Self {
+    pub fn with_light_store(
+        mut self,
+        light_store: Box<dyn LightStore>,
+    ) -> Self {
         self.light_store = light_store;
         self
     }
@@ -36,9 +42,16 @@ impl LightCBFTClientBuilder {
     pub async fn build_and_verify(&self) -> Instance {
         let light_store = Box::new(MemoryStore::new());
 
-        let rpc_client =
-            self.rpc_client_factory.build_and_connect().expect("should connect to RPC client");
-        let node_id = rpc_client.status().await.expect("Failed to get node info").node_info.id;
+        let rpc_client = self
+            .rpc_client_factory
+            .build_and_connect()
+            .expect("should connect to RPC client");
+        let node_id = rpc_client
+            .status()
+            .await
+            .expect("Failed to get node info")
+            .node_info
+            .id;
 
         let trusted_block_height = 1u32;
         let block_hash = rpc_client

@@ -12,22 +12,22 @@ It is assumed that the commit that is being considered for release has been mark
 
 #### Release PR
 
--   [ ] Create a new branch (e.g. `release/vx.y.z`) and open a pull request for it
--   [ ] Ensure _all_ tests and lints pass for the chosen commit
--   [ ] Version bump
-    -   [ ] Update the version in _all_ `Cargo.toml`'s
--   [ ] Commit the changes
-    -   The message format should be `release: vx.y.z`, substituting `x.y.z` for the semver.
--   [ ] The PR should be reviewed to see if anything was missed
--   [ ] Once reviewed, merge the PR
+- [ ] Create a new branch (e.g. `release/vx.y.z`) and open a pull request for it
+- [ ] Ensure _all_ tests and lints pass for the chosen commit
+- [ ] Version bump
+    - [ ] Update the version in _all_ `Cargo.toml`'s
+- [ ] Commit the changes
+    - The message format should be `release: vx.y.z`, substituting `x.y.z` for the semver.
+- [ ] The PR should be reviewed to see if anything was missed
+- [ ] Once reviewed, merge the PR
 
 #### Releasing
 
--   [ ] Tag the new commit on main with `vx.y.z` (`git tag vx.y.z SHA`)
--   [ ] Push the tag (`git push origin vx.y.z`)[^1]
--   [ ] Update [Homebrew Tap](https://github.com/paradigmxyz/homebrew-brew)
--   [ ] Run the release commit on testing infrastructure for 1-3 days to check for inconsistencies and bugs
-    -   This testing infrastructure is going to sync and keep up with a live testnet, and includes monitoring of bandwidth, CPU, disk space etc.
+- [ ] Tag the new commit on main with `vx.y.z` (`git tag vx.y.z SHA`)
+- [ ] Push the tag (`git push origin vx.y.z`)[^1]
+- [ ] Update [Homebrew Tap](https://github.com/paradigmxyz/homebrew-brew)
+- [ ] Run the release commit on testing infrastructure for 1-3 days to check for inconsistencies and bugs
+    - This testing infrastructure is going to sync and keep up with a live testnet, and includes monitoring of bandwidth, CPU, disk space etc.
 
 > **Note**
 >
@@ -35,9 +35,9 @@ It is assumed that the commit that is being considered for release has been mark
 
 When the tag is pushed, the artifacts are built automatically and a draft release is added to the repository. This draft release includes a template that must be filled out, including:
 
--   A summary of the release (highlights etc.)
--   The update priority (see below)
--   An auto-generated changelog
+- A summary of the release (highlights etc.)
+- The update priority (see below)
+- An auto-generated changelog
 
 The release artifacts are automatically added to the draft release. Once ready, simply publish the release.
 

@@ -19,7 +19,8 @@ pub trait StagedHeaderReader: Send + Sync {
     ///   - First element is the header hash (B256)
     ///   - Second element is the header with pegin/pegout data
     /// * `Err(ProviderError)` - If there was a database error
-    fn get_staged_headers(&self) -> ProviderResult<Vec<(B256, HeaderWithPegs)>>;
+    fn get_staged_headers(&self)
+        -> ProviderResult<Vec<(B256, HeaderWithPegs)>>;
 }
 
 /// Trait for managing staged headers. This is used to store pegins and pegouts
@@ -42,7 +43,11 @@ pub trait StagedHeaderWriter: Send + Sync {
     ///
     /// * `Ok(())` - If the header was successfully inserted
     /// * `Err(ProviderError)` - If there was a database error
-    fn insert_staged_header(&self, id: B256, header: HeaderWithPegs) -> ProviderResult<()>;
+    fn insert_staged_header(
+        &self,
+        id: B256,
+        header: HeaderWithPegs,
+    ) -> ProviderResult<()>;
     /// Remove a staged header by its header hash.
     ///
     /// Removes a staged header from the database after it has been processed.

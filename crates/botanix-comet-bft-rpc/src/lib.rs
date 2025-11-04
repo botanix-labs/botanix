@@ -33,13 +33,17 @@ impl CometBftRpcFactory for HttpCometBFTRpcClientFactory {
 
     fn build_and_connect(&self) -> Result<HttpClient, Error> {
         let url = self.build_url()?;
-        HttpClient::builder(url).compat_mode(tendermint_rpc::client::CompatMode::V0_34).build()
+        HttpClient::builder(url)
+            .compat_mode(tendermint_rpc::client::CompatMode::V0_34)
+            .build()
     }
 }
 
 impl Default for HttpCometBFTRpcClientFactory {
     fn default() -> Self {
-        Self { url: format!("http://{}:{}", DEFAULT_RPC_HOST, DEFAULT_RPC_PORT) }
+        Self {
+            url: format!("http://{}:{}", DEFAULT_RPC_HOST, DEFAULT_RPC_PORT),
+        }
     }
 }
 
@@ -57,7 +61,8 @@ mod tests {
     use tendermint_rpc::{HttpClientUrl, Url};
 
     use crate::{
-        CometBftRpcFactory, HttpCometBFTRpcClientFactory, DEFAULT_RPC_HOST, DEFAULT_RPC_PORT,
+        CometBftRpcFactory, HttpCometBFTRpcClientFactory, DEFAULT_RPC_HOST,
+        DEFAULT_RPC_PORT,
     };
 
     #[test]
@@ -79,16 +84,16 @@ mod tests {
 
     #[test]
     fn test_http_rpc_client_factory_chained_methods() {
-        let client_factory =
-            HttpCometBFTRpcClientFactory::default().with_url("http://api.example.com:9000");
+        let client_factory = HttpCometBFTRpcClientFactory::default()
+            .with_url("http://api.example.com:9000");
 
         assert_eq!(client_factory.url, "http://api.example.com:9000");
     }
 
     #[test]
     fn test_http_rpc_client_factory_clone() {
-        let client_factory =
-            HttpCometBFTRpcClientFactory::default().with_url("http://test.example.com:8888");
+        let client_factory = HttpCometBFTRpcClientFactory::default()
+            .with_url("http://test.example.com:8888");
 
         let cloned_factory = client_factory.clone();
 
@@ -106,8 +111,10 @@ mod tests {
 
     #[test]
     fn test_invalid_url_format() {
-        let client_factory =
-            HttpCometBFTRpcClientFactory::new(format!("{}:{}", "invalid:url", DEFAULT_RPC_PORT));
+        let client_factory = HttpCometBFTRpcClientFactory::new(format!(
+            "{}:{}",
+            "invalid:url", DEFAULT_RPC_PORT
+        ));
         let result = client_factory.build_and_connect();
         assert!(result.is_err());
     }
@@ -116,10 +123,12 @@ mod tests {
     fn test_url_construction() {
         let host = "test-host.com";
         let port = 9876;
-        let client_factory = HttpCometBFTRpcClientFactory::new(format!("{}:{}", host, port));
+        let client_factory =
+            HttpCometBFTRpcClientFactory::new(format!("{}:{}", host, port));
 
         let expected_url_str = format!("http://{}:{}", host, port);
-        let expected_url: Url = HttpClientUrl::from_str(&expected_url_str).unwrap().into();
+        let expected_url: Url =
+            HttpClientUrl::from_str(&expected_url_str).unwrap().into();
         assert_eq!(host, expected_url.host());
         assert_eq!(port, expected_url.port());
 
@@ -129,7 +138,8 @@ mod tests {
         } else {
             let error = client_result.unwrap_err();
             println!("{:?}", error);
-            let is_connection_error = matches!(error, tendermint_rpc::Error(__, _));
+            let is_connection_error =
+                matches!(error, tendermint_rpc::Error(__, _));
             assert!(is_connection_error);
         }
     }

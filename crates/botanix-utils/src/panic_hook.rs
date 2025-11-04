@@ -16,7 +16,11 @@ pub fn set_panic_hook() {
 
         let location = panic_info.location().map(|l| l.to_string());
 
-        error!(panic.payload = payload, panic.location = location, "Uncaught panic");
+        error!(
+            panic.payload = payload,
+            panic.location = location,
+            "Uncaught panic"
+        );
 
         std::process::exit(1);
     }));

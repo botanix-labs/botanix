@@ -12,10 +12,12 @@ add an example CLI or API response...
 
 ### Changes
 
-Notable changes: 
-* add each change in a bullet point here
-* ...
+Notable changes:
+
+- add each change in a bullet point here
+- ...
 
 ### Potential Impacts
-* add potential impacts for other components here
-* ...
+
+- add potential impacts for other components here
+- ...

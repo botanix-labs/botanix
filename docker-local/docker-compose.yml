@@ -89,9 +89,9 @@ services:
       - --txpool.minimum-priority-fee=2500000
       - --txpool.minimal-protocol-fee=5000000
     ports:
-      - 127.0.0.1:${POA_RPC_PORT:?err}:8545 # RPC
-      - 127.0.0.1:${POA_WS_PORT:?err}:8546 # Websocket
-      - 127.0.0.1:${POA_METRICS_PORT:?err}:9001 # Metrics
+      - 127.0.0.1:${POA_RPC_PORT:?err}:8545  # RPC
+      - 127.0.0.1:${POA_WS_PORT:?err}:8546  # Websocket
+      - 127.0.0.1:${POA_METRICS_PORT:?err}:9001  # Metrics
     depends_on:
       - btc_server
       - cometbft
@@ -107,8 +107,8 @@ services:
   cometbft:
     image: us-central1-docker.pkg.dev/botanix-391913/botanix-betanet-cometbft/botanix-betanet-cometbft:v1
     ports:
-      - ${COMET_BFT_RPC_PORT:?err}:26657 # RPC
-      - ${COMET_BFT_METRICS_PORT:?err}:26660 # Metrics
+      - ${COMET_BFT_RPC_PORT:?err}:26657  # RPC
+      - ${COMET_BFT_METRICS_PORT:?err}:26660  # Metrics
     volumes:
       - ${BOTANIX_HOME:?err}/cometbft/config:/home/nonroot/.cometbft/config:ro
       - cometbft_db:/home/nonroot/.cometbft/data:rw

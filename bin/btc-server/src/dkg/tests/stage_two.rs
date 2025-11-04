@@ -126,13 +126,16 @@ pub fn complete_stage_two(
 
 #[test]
 fn dkg_complete_stage_two() {
-    let (alice_addr, bob_addr, eve_addr, alice, bob, eve) = setup(test_config());
+    let (alice_addr, bob_addr, eve_addr, alice, bob, eve) =
+        setup(test_config());
 
     let now = Instant::now();
 
-    let (alice, bob, eve) =
-        complete_stage_one(alice_addr, bob_addr, eve_addr, alice, bob, eve, now);
+    let (alice, bob, eve) = complete_stage_one(
+        alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
+    );
 
-    let (_alice, _bob, _eve) =
-        complete_stage_two(alice_addr, bob_addr, eve_addr, alice, bob, eve, now);
+    let (_alice, _bob, _eve) = complete_stage_two(
+        alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
+    );
 }

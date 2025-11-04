@@ -34,8 +34,8 @@ use reth_consensus::InvalidAggregatedPublicKeyError;
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker, ExecutionOutcome,
-    ProviderError, ProviderFactory, StateProviderFactory,
+    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker,
+    ExecutionOutcome, ProviderError, ProviderFactory, StateProviderFactory,
 };
 use reth_revm::primitives::FixedBytes;
 use reth_tasks::{TaskExecutor, TaskSpawner};
@@ -45,15 +45,16 @@ use schnellru::{ByLength, LruMap};
 use tendermint_abci::{Application, ServerBuilder};
 use tendermint_proto::{
     abci::{
-        ExecTxResult, RequestPrepareProposal, RequestProcessProposal, ResponseCommit,
-        ResponsePrepareProposal, ResponseProcessProposal,
+        ExecTxResult, RequestPrepareProposal, RequestProcessProposal,
+        ResponseCommit, ResponsePrepareProposal, ResponseProcessProposal,
     },
     v0_38::abci::{
-        RequestApplySnapshotChunk, RequestCheckTx, RequestFinalizeBlock, RequestInfo,
-        RequestInitChain, RequestLoadSnapshotChunk, RequestOfferSnapshot,
-        ResponseApplySnapshotChunk, ResponseCheckTx, ResponseFinalizeBlock, ResponseInfo,
-        ResponseInitChain, ResponseListSnapshots, ResponseLoadSnapshotChunk, ResponseOfferSnapshot,
-        Snapshot,
+        RequestApplySnapshotChunk, RequestCheckTx, RequestFinalizeBlock,
+        RequestInfo, RequestInitChain, RequestLoadSnapshotChunk,
+        RequestOfferSnapshot, ResponseApplySnapshotChunk, ResponseCheckTx,
+        ResponseFinalizeBlock, ResponseInfo, ResponseInitChain,
+        ResponseListSnapshots, ResponseLoadSnapshotChunk,
+        ResponseOfferSnapshot, Snapshot,
     },
 };
 
@@ -119,8 +120,10 @@ pub enum ApplySnapshotResult {
 }
 use crate::consensus::{
     comet_bft::proto_debug::{
-        RequestApplySnapshotChunkTruncatedDebug, RequestFinalizeBlockTruncatedDebug,
-        RequestProcessProposalTruncatedDebug, ResponseLoadSnapshotChunkTruncatedDebug,
+        RequestApplySnapshotChunkTruncatedDebug,
+        RequestFinalizeBlockTruncatedDebug,
+        RequestProcessProposalTruncatedDebug,
+        ResponseLoadSnapshotChunkTruncatedDebug,
         ResponsePrepareProposalTruncatedDebug,
     },
     excecution_utils::authority_execution_utils::build_and_execute,
@@ -132,15 +135,18 @@ use crate::consensus::{
     AuthorityConsensus, Storage,
 };
 use botanix_activation_manager::{
-    ActivationManager, NetworkUpgradePayload, OnFinalizeBlockDecision, OnProcessProposalDecision,
-    VoteWatcher,
+    ActivationManager, NetworkUpgradePayload, OnFinalizeBlockDecision,
+    OnProcessProposalDecision, VoteWatcher,
 };
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_storage::{
-    models::{HeaderWithPegs, PeginData, PegoutData, SnapshotSync, SnapshotSyncId},
-    BotanixProviderFactory, DatabaseProviderFactoryRW, RuntimeTransitionsReadWrite, SnapshotReader,
-    SnapshotWriter, StagedHeaderWriter,
+    models::{
+        HeaderWithPegs, PeginData, PegoutData, SnapshotSync, SnapshotSyncId,
+    },
+    BotanixProviderFactory, DatabaseProviderFactoryRW,
+    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
+    StagedHeaderWriter,
 };
 use reth_consensus::HeaderValidator;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -174,7 +180,10 @@ impl SnapshotSyncStateLock {
     }
 
     /// Set snapshot hash
-    pub fn set_snapshot_hash(&mut self, snapshot_hash: prost::bytes::Bytes) -> &mut Self {
+    pub fn set_snapshot_hash(
+        &mut self,
+        snapshot_hash: prost::bytes::Bytes,
+    ) -> &mut Self {
         self.snapshot_hash = snapshot_hash;
         self
     }
@@ -246,7 +255,8 @@ pub struct ABCIClientBuilder<BF, RDB, BDB> {
     compressor: DataParser,
     task_executor: TaskExecutor,
     abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-    provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+    provider_factory:
+        ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
     snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
     snapshot_format: u32,
@@ -261,8 +271,9 @@ where
         + Clone
         + CanonChainTracker
         + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
-        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
-        + 'static,
+        + reth_provider::ChainSpecProvider<
+            ChainSpec: reth_chainspec::EthereumHardforks,
+        > + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
 {
@@ -278,7 +289,9 @@ where
         task_executor: TaskExecutor,
         compressor: DataParser,
         abci_driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
-        provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+        provider_factory: ProviderFactory<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >,
         snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
         snapshot_format: u32,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
@@ -288,10 +301,14 @@ where
             .latest_header()
             .ok()
             .flatten()
-            .unwrap_or_else(|| storage.chain_spec.inner().sealed_genesis_header());
-        let blockchain_db =
-            BlockchainProvider::with_latest(provider_factory.clone(), latest_sealed_header)
-                .expect("blockchain db to exist");
+            .unwrap_or_else(|| {
+                storage.chain_spec.inner().sealed_genesis_header()
+            });
+        let blockchain_db = BlockchainProvider::with_latest(
+            provider_factory.clone(),
+            latest_sealed_header,
+        )
+        .expect("blockchain db to exist");
 
         Self {
             storage,
@@ -306,7 +323,9 @@ where
             provider_factory,
             compressor,
             snapshot_manager_state_lock,
-            snapshot_sync_state_lock: Some(Arc::new(RwLock::new(SnapshotSyncStateLock::default()))),
+            snapshot_sync_state_lock: Some(Arc::new(RwLock::new(
+                SnapshotSyncStateLock::default(),
+            ))),
             snapshot_format,
             block_fee_recipient_address,
             blockchain_db,
@@ -317,7 +336,9 @@ where
     pub async fn start_server<
         Pool: TransactionPool<
                 Transaction: reth_transaction_pool::PoolTransaction<
-                    Consensus = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
+                    Consensus = alloy_consensus::EthereumTxEnvelope<
+                        alloy_consensus::TxEip4844,
+                    >,
                 >,
             > + Clone
             + 'static,
@@ -351,7 +372,8 @@ where
         let server_builder = ServerBuilder::default();
         // server will always bind to default address
         // CometBFT will always run on the same machine and container
-        let server = server_builder.bind(format!("{abci_host}:{abci_port}"), app)?;
+        let server =
+            server_builder.bind(format!("{abci_host}:{abci_port}"), app)?;
 
         if self.is_fed_node {
             loop {
@@ -366,7 +388,8 @@ where
                     "Waiting for aggregate public key to be stored in the storage before starting ABCI server"
                 );
                 drop(storage);
-                tokio::time::sleep(tokio::time::Duration::from_millis(350)).await;
+                tokio::time::sleep(tokio::time::Duration::from_millis(350))
+                    .await;
             }
         }
 
@@ -417,7 +440,8 @@ pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
     metrics: Arc<AuthorityMetrics>,
     task_executor: TaskExecutor,
     // TODO: We already have provider factory in Storage
-    reth_provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, /* BotanixProviderFactory<Arc<DatabaseEnv>>, */
+    reth_provider_factory:
+        ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, /* BotanixProviderFactory<Arc<DatabaseEnv>>, */
     compressor: DataParser,
     snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
     snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
@@ -435,8 +459,9 @@ where
         + Clone
         + CanonChainTracker
         + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
-        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
-        + 'static,
+        + reth_provider::ChainSpecProvider<
+            ChainSpec: reth_chainspec::EthereumHardforks,
+        > + 'static,
     DBD: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
@@ -454,7 +479,9 @@ where
         metrics: Arc<AuthorityMetrics>,
         compressor: DataParser,
         task_executor: TaskExecutor,
-        provider_factory: ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+        provider_factory: ProviderFactory<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >,
         snapshot_manager_state_lock: Arc<RwLock<SnapshotManagerStateLock>>,
         snapshot_sync_state_lock: Option<Arc<RwLock<SnapshotSyncStateLock>>>,
         snapshot_format: u32,
@@ -487,7 +514,8 @@ where
             snapshot_format,
             block_fee_recipient_address,
             blockchain_db,
-            is_testnet: storage.chain_spec.inner().chain.id() == BOTANIX_TESTNET_CHAIN_ID,
+            is_testnet: storage.chain_spec.inner().chain.id()
+                == BOTANIX_TESTNET_CHAIN_ID,
         }
     }
 
@@ -495,19 +523,24 @@ where
     /// TODO: move to crate botanix-evm > src > payload.rs
     fn payload_builder_arguments(
         &self,
-    ) -> Result<PayloadConfig<EthPayloadBuilderAttributes>, PayloadBuilderError> {
+    ) -> Result<PayloadConfig<EthPayloadBuilderAttributes>, PayloadBuilderError>
+    {
         let client = self.storage.reth_database.clone();
 
-        let best_header =
-            client.latest_header()?.ok_or(PayloadBuilderError::LatestHeaderDoesNotExist)?;
-        let best_block = BlockReaderIdExt::block_by_id(&client, BlockId::latest())?
-            .ok_or(PayloadBuilderError::LatestBlockDoesNotExist)?
-            .seal();
-
-        let parent_block =
-            BlockReaderIdExt::block_by_id(&client, BlockId::hash(best_header.parent_hash()))?
-                .ok_or(PayloadBuilderError::ParentBlockDoesNotExist)?
+        let best_header = client
+            .latest_header()?
+            .ok_or(PayloadBuilderError::LatestHeaderDoesNotExist)?;
+        let best_block =
+            BlockReaderIdExt::block_by_id(&client, BlockId::latest())?
+                .ok_or(PayloadBuilderError::LatestBlockDoesNotExist)?
                 .seal();
+
+        let parent_block = BlockReaderIdExt::block_by_id(
+            &client,
+            BlockId::hash(best_header.parent_hash()),
+        )?
+        .ok_or(PayloadBuilderError::ParentBlockDoesNotExist)?
+        .seal();
 
         let payload_attributes = PayloadAttributes {
             // Attributes here dont really matter
@@ -520,10 +553,15 @@ where
             parent_beacon_block_root: parent_block.parent_beacon_block_root(),
         };
 
-        let payload_builder_attributes =
-            EthPayloadBuilderAttributes::new(best_block.hash(), payload_attributes);
+        let payload_builder_attributes = EthPayloadBuilderAttributes::new(
+            best_block.hash(),
+            payload_attributes,
+        );
 
-        Ok(PayloadConfig::new(Arc::new(best_header), payload_builder_attributes))
+        Ok(PayloadConfig::new(
+            Arc::new(best_header),
+            payload_builder_attributes,
+        ))
     }
 
     pub(crate) fn non_deterministic_data(
@@ -603,10 +641,14 @@ where
         //         return ResponseProcessProposal { status: VERIFY_REJECT };
         //     }
         // }
-        return ResponseProcessProposal { status: VERIFY_REJECT };
+        return ResponseProcessProposal {
+            status: VERIFY_REJECT,
+        };
     }
 
-    pub(crate) fn aggregate_public_key(&self) -> Result<secp256k1::PublicKey, ConsensusError> {
+    pub(crate) fn aggregate_public_key(
+        &self,
+    ) -> Result<secp256k1::PublicKey, ConsensusError> {
         match self.storage.inner.blocking_read().aggregate_public_key {
             Some(pk) => Ok(pk),
             None => Err(ConsensusError::InvalidAggregatedPublicKey(
@@ -615,7 +657,9 @@ where
         }
     }
 
-    pub(crate) fn bitcoin_blockhash(&self) -> Result<bitcoin::BlockHash, ConsensusError> {
+    pub(crate) fn bitcoin_blockhash(
+        &self,
+    ) -> Result<bitcoin::BlockHash, ConsensusError> {
         self.bitcoin_checkpoints
             .strong()
             .ok_or(ConsensusError::MissingBitcoinCheckpoint)
@@ -648,12 +692,15 @@ where
         total_chunks: u64,
         format: u64,
     ) -> Result<u64, SnapshotManagerError> {
-        let snapshot_sync_id = self.storage.botanix_database_factory.create_new_snapshot_sync(
-            block_id,
-            snapshot_hash,
-            total_chunks,
-            format,
-        )?;
+        let snapshot_sync_id = self
+            .storage
+            .botanix_database_factory
+            .create_new_snapshot_sync(
+                block_id,
+                snapshot_hash,
+                total_chunks,
+                format,
+            )?;
 
         Ok(snapshot_sync_id)
     }
@@ -678,13 +725,16 @@ where
         + Clone
         + CanonChainTracker
         + reth_provider::HeaderProvider<Header = alloy_consensus::Header>
-        + reth_provider::ChainSpecProvider<ChainSpec: reth_chainspec::EthereumHardforks>
-        + 'static,
+        + reth_provider::ChainSpecProvider<
+            ChainSpec: reth_chainspec::EthereumHardforks,
+        > + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
     BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool<
             Transaction: reth_transaction_pool::PoolTransaction<
-                Consensus = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
+                Consensus = alloy_consensus::EthereumTxEnvelope<
+                    alloy_consensus::TxEip4844,
+                >,
             >,
         > + Clone
         + 'static,
@@ -727,7 +777,10 @@ where
             "Chain {cometbft_chain_id} is initialized in {execution_time} secs",
         );
 
-        ResponseInitChain { app_hash, ..Default::default() }
+        ResponseInitChain {
+            app_hash,
+            ..Default::default()
+        }
     }
 
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#info
@@ -741,11 +794,17 @@ where
             Ok(Some(header)) => header,
             Ok(None) => {
                 error!("No latest header found");
-                return ResponseInfo { data: String::default(), ..Default::default() };
+                return ResponseInfo {
+                    data: String::default(),
+                    ..Default::default()
+                };
             }
             Err(e) => {
                 error!("Error getting latest header: {:?}", e);
-                return ResponseInfo { data: String::default(), ..Default::default() };
+                return ResponseInfo {
+                    data: String::default(),
+                    ..Default::default()
+                };
             }
         };
 
@@ -753,7 +812,10 @@ where
             Ok(application_hash) => application_hash,
             Err(e) => {
                 error!("Error getting application hash: {:?}", e);
-                return ResponseInfo { data: String::default(), ..Default::default() };
+                return ResponseInfo {
+                    data: String::default(),
+                    ..Default::default()
+                };
             }
         };
 
@@ -771,12 +833,18 @@ where
     fn list_snapshots(&self) -> ResponseListSnapshots {
         trace!("list_snapshots request");
 
-        let botanix_database_factory = self.storage.botanix_database_factory.clone();
+        let botanix_database_factory =
+            self.storage.botanix_database_factory.clone();
         match botanix_database_factory.get_snapshots() {
             Ok(snapshots) => {
                 // ensure no historical sync is ongoing
-                let snapshot_manager_state_lock = match self.snapshot_manager_state_lock.read() {
-                    Ok(snapshot_manager_state_lock) => snapshot_manager_state_lock,
+                let snapshot_manager_state_lock = match self
+                    .snapshot_manager_state_lock
+                    .read()
+                {
+                    Ok(snapshot_manager_state_lock) => {
+                        snapshot_manager_state_lock
+                    }
                     Err(e) => {
                         error!("Error getting a snapshot state lock: {:?}", e);
                         return ResponseListSnapshots { snapshots: vec![] };
@@ -792,23 +860,31 @@ where
                 // ready having all the chunks yet
                 let resp = snapshots
                     .into_iter()
-                    .filter(|s| s.height() != snapshot_manager_state_lock.get_block_id())
-                    .fold(ResponseListSnapshots { snapshots: vec![] }, |mut acc, snapshot| {
-                        acc.snapshots.push(Snapshot {
-                            height: snapshot.height(),
-                            format: self.snapshot_format,
-                            chunks: snapshot.chunk_ids().len() as u32,
-                            hash: snapshot.get_hash().to_vec().into(),
-                            metadata: prost::bytes::Bytes::new(),
-                        });
-                        acc
-                    });
+                    .filter(|s| {
+                        s.height() != snapshot_manager_state_lock.get_block_id()
+                    })
+                    .fold(
+                        ResponseListSnapshots { snapshots: vec![] },
+                        |mut acc, snapshot| {
+                            acc.snapshots.push(Snapshot {
+                                height: snapshot.height(),
+                                format: self.snapshot_format,
+                                chunks: snapshot.chunk_ids().len() as u32,
+                                hash: snapshot.get_hash().to_vec().into(),
+                                metadata: prost::bytes::Bytes::new(),
+                            });
+                            acc
+                        },
+                    );
                 drop(snapshot_manager_state_lock);
 
                 if tracing::enabled!(tracing::Level::TRACE) {
                     trace!(
                         "Responded with snapshots for block heights {:?}",
-                        resp.snapshots.iter().map(|s| s.height).collect::<Vec<_>>()
+                        resp.snapshots
+                            .iter()
+                            .map(|s| s.height)
+                            .collect::<Vec<_>>()
                     );
                 }
 
@@ -823,7 +899,10 @@ where
 
     /// https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#offersnapshot
     #[instrument(level = "trace", ret, skip(self, request), fields(height))]
-    fn offer_snapshot(&self, request: RequestOfferSnapshot) -> ResponseOfferSnapshot {
+    fn offer_snapshot(
+        &self,
+        request: RequestOfferSnapshot,
+    ) -> ResponseOfferSnapshot {
         // trace!("request={:?}", request);
 
         // let Some(snapshot) = request.snapshot else {
@@ -997,25 +1076,31 @@ where
 
     /// https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#loadsnapshotchunk
     #[instrument(level = "trace", skip(self, request), fields(height = request.height, chunk = request.chunk))]
-    fn load_snapshot_chunk(&self, request: RequestLoadSnapshotChunk) -> ResponseLoadSnapshotChunk {
+    fn load_snapshot_chunk(
+        &self,
+        request: RequestLoadSnapshotChunk,
+    ) -> ResponseLoadSnapshotChunk {
         trace!("request={:?}", request);
 
-        let snapshot_manager_state_lock = match self.snapshot_manager_state_lock.read() {
-            Ok(snapshot_manager_state_lock) => snapshot_manager_state_lock,
-            Err(e) => {
-                error!("Error getting a snapshot state lock: {:?}", e);
+        let snapshot_manager_state_lock =
+            match self.snapshot_manager_state_lock.read() {
+                Ok(snapshot_manager_state_lock) => snapshot_manager_state_lock,
+                Err(e) => {
+                    error!("Error getting a snapshot state lock: {:?}", e);
 
-                let response = ResponseLoadSnapshotChunk::default();
+                    let response = ResponseLoadSnapshotChunk::default();
 
-                trace!("return={:?}", response);
+                    trace!("return={:?}", response);
 
-                return response;
-            }
-        };
+                    return response;
+                }
+            };
 
         if snapshot_manager_state_lock.is_syncing_history() {
             drop(snapshot_manager_state_lock);
-            debug!("Historical syncing ongoing. No snapshots available yet ...");
+            debug!(
+                "Historical syncing ongoing. No snapshots available yet ..."
+            );
 
             let response = ResponseLoadSnapshotChunk::default();
 
@@ -1024,10 +1109,12 @@ where
             return response;
         }
 
-        let botanix_database_provider_factory = self.storage.botanix_database_factory.clone();
+        let botanix_database_provider_factory =
+            self.storage.botanix_database_factory.clone();
 
         // check if the snapshot is already applied
-        let snapshot_manager_state_lock_block_id = snapshot_manager_state_lock.get_block_id();
+        let snapshot_manager_state_lock_block_id =
+            snapshot_manager_state_lock.get_block_id();
         drop(snapshot_manager_state_lock);
 
         // check that we are not being asked to load the snapshot that we are currently syncing as
@@ -1047,53 +1134,72 @@ where
         {
             Ok(Some(snapshot_id)) => {
                 // now take the entire snapshot data
-                match botanix_database_provider_factory.get_snapshot_by_id(snapshot_id) {
+                match botanix_database_provider_factory
+                    .get_snapshot_by_id(snapshot_id)
+                {
                     Ok(Some(snapshot)) => {
                         // NOTE: all cometbft numeration starts at 0
                         let requested_chunk_index = request.chunk;
-                        let chunk_id =
-                            match snapshot.chunk_ids().get(requested_chunk_index as usize) {
-                                Some(chunk_id) => *chunk_id,
-                                None => {
-                                    error!(
+                        let chunk_id = match snapshot
+                            .chunk_ids()
+                            .get(requested_chunk_index as usize)
+                        {
+                            Some(chunk_id) => *chunk_id,
+                            None => {
+                                error!(
                                     "Requested chunk with index {:?} not found in snapshot {:?}",
                                     request.chunk, snapshot_id
                                 );
 
-                                    let response = ResponseLoadSnapshotChunk::default();
+                                let response =
+                                    ResponseLoadSnapshotChunk::default();
 
-                                    trace!("return={:?}", response);
+                                trace!("return={:?}", response);
 
-                                    return response;
-                                }
-                            };
+                                return response;
+                            }
+                        };
 
-                        match botanix_database_provider_factory.get_chunk_by_id(chunk_id) {
+                        match botanix_database_provider_factory
+                            .get_chunk_by_id(chunk_id)
+                        {
                             Ok(Some(chunk)) => {
-                                let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+                                let (oneshot_tx, oneshot_rx) =
+                                    tokio::sync::oneshot::channel();
                                 let compressor = self.compressor.clone();
 
-                                self.task_executor.spawn_blocking(Box::pin(async move {
-                                    let mut blocks: Vec<BlockWithSenders> = Vec::new();
-                                    for chunk in chunk.chunk_data() {
-                                        if let Ok(block_with_sender) =
-                                            compressor.decode(chunk.as_ref()).await
-                                        {
-                                            blocks.push(block_with_sender);
+                                self.task_executor.spawn_blocking(Box::pin(
+                                    async move {
+                                        let mut blocks: Vec<BlockWithSenders> =
+                                            Vec::new();
+                                        for chunk in chunk.chunk_data() {
+                                            if let Ok(block_with_sender) =
+                                                compressor
+                                                    .decode(chunk.as_ref())
+                                                    .await
+                                            {
+                                                blocks.push(block_with_sender);
+                                            }
                                         }
-                                    }
-                                    if let Ok(serialized_blocks) = compressor.encode(&blocks).await
-                                    {
-                                        let _ = oneshot_tx.send(serialized_blocks);
-                                    }
-                                }));
+                                        if let Ok(serialized_blocks) =
+                                            compressor.encode(&blocks).await
+                                        {
+                                            let _ = oneshot_tx
+                                                .send(serialized_blocks);
+                                        }
+                                    },
+                                ));
 
-                                let serialized_blocks = match oneshot_rx.blocking_recv() {
+                                let serialized_blocks = match oneshot_rx
+                                    .blocking_recv()
+                                {
                                     Ok(serialized_blocks) => serialized_blocks,
                                     Err(e) => {
                                         error!("Error on receiving serialized blocks from channel {:?}", e);
 
-                                        let response = ResponseLoadSnapshotChunk::default();
+                                        let response =
+                                            ResponseLoadSnapshotChunk::default(
+                                            );
 
                                         trace!("return={:?}", response);
 
@@ -1110,7 +1216,10 @@ where
                                 res
                             }
                             Ok(None) => {
-                                error!("Chunk with id {:?} not found", chunk_id);
+                                error!(
+                                    "Chunk with id {:?} not found",
+                                    chunk_id
+                                );
                                 ResponseLoadSnapshotChunk::default()
                             }
                             Err(e) => {
@@ -1149,7 +1258,10 @@ where
             }
         };
 
-        trace!("return={:?}", ResponseLoadSnapshotChunkTruncatedDebug(&response));
+        trace!(
+            "return={:?}",
+            ResponseLoadSnapshotChunkTruncatedDebug(&response)
+        );
 
         response
     }
@@ -1160,7 +1272,10 @@ where
         &self,
         request: RequestApplySnapshotChunk,
     ) -> ResponseApplySnapshotChunk {
-        trace!("request={:?}", RequestApplySnapshotChunkTruncatedDebug(&request));
+        trace!(
+            "request={:?}",
+            RequestApplySnapshotChunkTruncatedDebug(&request)
+        );
 
         // // ensure no historical sync is ongoing
         // let snapshot_manager_state_lock = match self.snapshot_manager_state_lock.read() {
@@ -1413,7 +1528,10 @@ where
 
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#prepareProposal
     #[instrument(level = "trace", skip(self, request), fields(cbft_block_height = request.height))]
-    fn prepare_proposal(&self, request: RequestPrepareProposal) -> ResponsePrepareProposal {
+    fn prepare_proposal(
+        &self,
+        request: RequestPrepareProposal,
+    ) -> ResponsePrepareProposal {
         let execution_start_time = std::time::Instant::now();
         trace!("request={:?}", request);
 
@@ -1424,7 +1542,8 @@ where
             );
         }
 
-        let block_time = request.time.expect("block time is not set in the request");
+        let block_time =
+            request.time.expect("block time is not set in the request");
 
         let max_tx_bytes: usize = request.max_tx_bytes.try_into().expect(
             "Invalid request proposal max_tx_bytes
@@ -1443,7 +1562,9 @@ where
 
         // Construct the NDD version 2 with a runtime version indicator
         // and an (optional) network upgrade payload.
-        let non_deterministic_data = match self.non_deterministic_data(use_version, upgrade_vote) {
+        let non_deterministic_data = match self
+            .non_deterministic_data(use_version, upgrade_vote)
+        {
             Ok(ndd) => ndd,
             Err(e) => {
                 panic!(
@@ -1469,22 +1590,24 @@ where
 
         // serialize non-deterministic data tx at index 0 to bytes so historical
         // sync will pass verification
-        let non_deterministic_data_bytes =
-            match self.serialize_non_deterministic_data_to_bytes(non_deterministic_data) {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    panic!(
+        let non_deterministic_data_bytes = match self
+            .serialize_non_deterministic_data_to_bytes(non_deterministic_data)
+        {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                panic!(
                         "Error serializing non-deterministic data bytes for proposal on height {}:
         {:?}",
                         request.height, e
                     );
-                }
-            };
+            }
+        };
 
         // NDD goes to a block as the first transaction
         // so we need to take into account its size
 
-        let non_deterministic_data_bytes_len = non_deterministic_data_bytes.len();
+        let non_deterministic_data_bytes_len =
+            non_deterministic_data_bytes.len();
         if non_deterministic_data_bytes_len > max_tx_bytes {
             // We should panic bc there is a critical bug and there should be a chain halt.
             panic!(
@@ -1501,12 +1624,15 @@ where
         if self.pool.pool_size().total == 0 {
             debug!("No transactions in pool, proposing empty cbft block with NDD only");
 
-            let response = ResponsePrepareProposal { txs: vec![non_deterministic_data_bytes] };
+            let response = ResponsePrepareProposal {
+                txs: vec![non_deterministic_data_bytes],
+            };
 
             trace!("return={:?}", response);
 
             if tracing::enabled!(tracing::Level::INFO) {
-                let execution_time = execution_start_time.elapsed().as_secs_f32();
+                let execution_time =
+                    execution_start_time.elapsed().as_secs_f32();
 
                 info!(
                     block_time = block_time.seconds,
@@ -1549,12 +1675,17 @@ where
             self.pool.clone(),
             builder_config,
             build_args,
-            |attributes| self.pool.best_transactions_with_attributes(attributes),
+            |attributes| {
+                self.pool.best_transactions_with_attributes(attributes)
+            },
             floor_base_fee,
         ) {
             Ok(res) => {
                 match res {
-                    reth_basic_payload_builder::BuildOutcome::Aborted { fees, cached_reads: _ } => {
+                    reth_basic_payload_builder::BuildOutcome::Aborted {
+                        fees,
+                        cached_reads: _,
+                    } => {
                         // TODO: Aborted why, shall we just propose NDD?
                         panic!(
                             "aborted payload building because resulted in worse block wrt. fees
@@ -1572,8 +1703,10 @@ where
                     reth_basic_payload_builder::BuildOutcome::Better {
                         payload,
                         cached_reads: _,
-                    } |
-                    reth_basic_payload_builder::BuildOutcome::Freeze(payload) => {
+                    }
+                    | reth_basic_payload_builder::BuildOutcome::Freeze(
+                        payload,
+                    ) => {
                         let block = payload.block();
 
                         trace!("eth_block_header={:?}", block.header());
@@ -1601,10 +1734,14 @@ where
 
                         let response = ResponsePrepareProposal { txs };
 
-                        trace!("return={:?}", ResponsePrepareProposalTruncatedDebug(&response));
+                        trace!(
+                            "return={:?}",
+                            ResponsePrepareProposalTruncatedDebug(&response)
+                        );
 
                         if tracing::enabled!(tracing::Level::INFO) {
-                            let execution_time = execution_start_time.elapsed().as_secs_f32();
+                            let execution_time =
+                                execution_start_time.elapsed().as_secs_f32();
 
                             info!(
                                 block_time = block_time.seconds,
@@ -1622,7 +1759,10 @@ where
                 }
             }
             Err(e) => {
-                panic!("error building payload for proposal on height {}: {:?}", request.height, e);
+                panic!(
+                    "error building payload for proposal on height {}: {:?}",
+                    request.height, e
+                );
             }
         }
     }
@@ -1639,9 +1779,15 @@ where
 
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#prepareproposal
     #[instrument(level = "trace", ret, skip(self, request), fields(cfbt_block_height = request.height, cbft_block_hash = hex::encode(&request.hash)))]
-    fn process_proposal(&self, request: RequestProcessProposal) -> ResponseProcessProposal {
+    fn process_proposal(
+        &self,
+        request: RequestProcessProposal,
+    ) -> ResponseProcessProposal {
         let execution_start_time = std::time::Instant::now();
-        trace!("request={:?}", RequestProcessProposalTruncatedDebug(&request));
+        trace!(
+            "request={:?}",
+            RequestProcessProposalTruncatedDebug(&request)
+        );
 
         let txs_len = request.txs.len();
 
@@ -1659,8 +1805,11 @@ where
                 }
 
                 if tracing::enabled!(tracing::Level::WARN) {
-                    let execution_time = execution_start_time.elapsed().as_secs_f32();
-                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    let execution_time =
+                        execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self
+                        .application_hash(&self.storage.reth_database)
+                    {
                         Ok(app_hash) => app_hash,
                         Err(e) => {
                             panic!("failed to get application hash on process proposal: {:?}", e);
@@ -1676,7 +1825,9 @@ where
                     );
                 }
 
-                return ResponseProcessProposal { status: VERIFY_REJECT };
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
             }
         };
 
@@ -1686,11 +1837,14 @@ where
             Some(time) => time,
             None => {
                 error!("Block time is not set in process proposal");
-                return ResponseProcessProposal { status: VERIFY_REJECT };
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
             }
         };
 
-        let cbft_block_hash = FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
+        let cbft_block_hash =
+            FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
 
         // extract first tx which contains non-deterministic data and validate
         let txs_bytes = request.txs;
@@ -1700,8 +1854,11 @@ where
                 warn!("No non-deterministic data in proposal request");
 
                 if tracing::enabled!(tracing::Level::WARN) {
-                    let execution_time = execution_start_time.elapsed().as_secs_f32();
-                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    let execution_time =
+                        execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self
+                        .application_hash(&self.storage.reth_database)
+                    {
                         Ok(app_hash) => app_hash,
                         Err(e) => {
                             panic!("failed to get application hash on process proposal: {:?}", e);
@@ -1720,27 +1877,40 @@ where
                     );
                 }
 
-                return ResponseProcessProposal { status: VERIFY_REJECT };
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
             }
         };
 
-        let reader_inner: Vec<u8> =
-            vec![non_deterministic_data_bytes].into_iter().flatten().collect();
+        let reader_inner: Vec<u8> = vec![non_deterministic_data_bytes]
+            .into_iter()
+            .flatten()
+            .collect();
         let reader = &mut io::Cursor::new(reader_inner);
 
-        let non_deterministic_data = match NonDeterministicData::deserialize(reader) {
+        let non_deterministic_data = match NonDeterministicData::deserialize(
+            reader,
+        ) {
             Ok(data) => data,
             Err(e) => {
                 trace!(
                     "non_deterministic_data_bytes={:?}",
-                    hex::encode(txs_bytes.first().expect("txs_bytes contains first transaction"))
+                    hex::encode(
+                        txs_bytes
+                            .first()
+                            .expect("txs_bytes contains first transaction")
+                    )
                 );
 
                 warn!("Error deserializing non-deterministic data: {:?}", e);
 
                 if tracing::enabled!(tracing::Level::WARN) {
-                    let execution_time = execution_start_time.elapsed().as_secs_f32();
-                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    let execution_time =
+                        execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self
+                        .application_hash(&self.storage.reth_database)
+                    {
                         Ok(app_hash) => app_hash,
                         Err(e) => {
                             panic!("failed to get application hash on process proposal: {:?}", e);
@@ -1759,7 +1929,9 @@ where
                     );
                 }
 
-                return ResponseProcessProposal { status: VERIFY_REJECT };
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
             }
         };
 
@@ -1767,15 +1939,19 @@ where
 
         // Only NDD versions starting from 1 are supported for block production so validate
         // `block_fee_recipient_address` exists
-        let block_fee_recipient_address = match non_deterministic_data.block_fee_recipient_address()
+        let block_fee_recipient_address = match non_deterministic_data
+            .block_fee_recipient_address()
         {
             Some(address) => address,
             None => {
                 warn!("Block fee recipient address is not set in process proposal");
 
                 if tracing::enabled!(tracing::Level::WARN) {
-                    let execution_time = execution_start_time.elapsed().as_secs_f32();
-                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    let execution_time =
+                        execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self
+                        .application_hash(&self.storage.reth_database)
+                    {
                         Ok(app_hash) => app_hash,
                         Err(e) => {
                             panic!("failed to get application hash on process proposal: {:?}", e);
@@ -1794,12 +1970,17 @@ where
                     );
                 }
 
-                return ResponseProcessProposal { status: VERIFY_REJECT };
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
             }
         };
 
         // check non-deterministic data: btc block hash and aggregate public key
-        if !self.bitcoin_checkpoints.contains_by_hash(non_deterministic_data.bitcoin_block_hash()) {
+        if !self
+            .bitcoin_checkpoints
+            .contains_by_hash(non_deterministic_data.bitcoin_block_hash())
+        {
             warn!(
                 checkpoints_chain = %self.bitcoin_checkpoints,
                 proposed_checkpoint_hash = %non_deterministic_data.bitcoin_block_hash(),
@@ -1807,8 +1988,11 @@ where
         probably a proposer's or local bitcoin node is out of sync."     );
 
             if tracing::enabled!(tracing::Level::WARN) {
-                let execution_time = execution_start_time.elapsed().as_secs_f32();
-                let app_hash = match self.application_hash(&self.storage.reth_database) {
+                let execution_time =
+                    execution_start_time.elapsed().as_secs_f32();
+                let app_hash = match self
+                    .application_hash(&self.storage.reth_database)
+                {
                     Ok(app_hash) => app_hash,
                     Err(e) => {
                         panic!("failed to get application hash on process proposal: {:?}", e);
@@ -1827,15 +2011,20 @@ where
                 );
             }
 
-            return ResponseProcessProposal { status: VERIFY_REJECT };
+            return ResponseProcessProposal {
+                status: VERIFY_REJECT,
+            };
         }
 
         if agg_pk != non_deterministic_data.aggregated_public_key() {
             warn!("Aggregate public key mismatch");
 
             if tracing::enabled!(tracing::Level::WARN) {
-                let execution_time = execution_start_time.elapsed().as_secs_f32();
-                let app_hash = match self.application_hash(&self.storage.reth_database) {
+                let execution_time =
+                    execution_start_time.elapsed().as_secs_f32();
+                let app_hash = match self
+                    .application_hash(&self.storage.reth_database)
+                {
                     Ok(app_hash) => app_hash,
                     Err(e) => {
                         panic!("failed to get application hash on process proposal: {:?}", e);
@@ -1854,18 +2043,25 @@ where
                 );
             }
 
-            return ResponseProcessProposal { status: VERIFY_REJECT };
+            return ResponseProcessProposal {
+                status: VERIFY_REJECT,
+            };
         }
 
         // get txs skipping the first non-deterministic data tx
-        let txs = match transactions_signed_from_bytes(txs_bytes.iter().skip(1).cloned()) {
+        let txs = match transactions_signed_from_bytes(
+            txs_bytes.iter().skip(1).cloned(),
+        ) {
             Ok(txs) => txs,
             Err(e) => {
                 error!("Error decoding transactions: {:?}", e);
 
                 if tracing::enabled!(tracing::Level::WARN) {
-                    let execution_time = execution_start_time.elapsed().as_secs_f32();
-                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    let execution_time =
+                        execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self
+                        .application_hash(&self.storage.reth_database)
+                    {
                         Ok(app_hash) => app_hash,
                         Err(e) => {
                             panic!("failed to get application hash on process proposal: {:?}", e);
@@ -1884,7 +2080,9 @@ where
                     );
                 }
 
-                return ResponseProcessProposal { status: VERIFY_REJECT };
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
             }
         };
 
@@ -1893,14 +2091,18 @@ where
         let floor_base_fee_per_gas;
         let comet_height = request.height as u64;
         let runtime_version = non_deterministic_data.runtime_version();
-        let network_upgrade_payload = non_deterministic_data.network_upgrade_payload().copied();
+        let network_upgrade_payload =
+            non_deterministic_data.network_upgrade_payload().copied();
         //
         match self
             .activation_manager
             .on_process_proposal(comet_height, runtime_version)
             .expect("db cannot fail")
         {
-            OnProcessProposalDecision::Process { version, conditions: _ } => {
+            OnProcessProposalDecision::Process {
+                version,
+                conditions: _,
+            } => {
                 debug!("process_proposal: Processing with version: {version}");
 
                 match version {
@@ -1910,21 +2112,28 @@ where
                     }
                     // Active
                     RUNTIME_VERSION_V2 => {
-                        floor_base_fee_per_gas = Some(FLOOR_BASE_FEE_PER_GAS_V2);
+                        floor_base_fee_per_gas =
+                            Some(FLOOR_BASE_FEE_PER_GAS_V2);
                     }
                     // Upgrade
                     RUNTIME_VERSION_V3 => {
-                        floor_base_fee_per_gas = Some(FLOOR_BASE_FEE_PER_GAS_V3);
+                        floor_base_fee_per_gas =
+                            Some(FLOOR_BASE_FEE_PER_GAS_V3);
                     }
                     _ => unreachable!(),
                 }
             }
-            OnProcessProposalDecision::RejectBlock { version, conditions: _ } => {
+            OnProcessProposalDecision::RejectBlock {
+                version,
+                conditions: _,
+            } => {
                 warn!(
                     "process_proposal: Rejecting block using Botanix runtime version:
         {version}"
                 );
-                return ResponseProcessProposal { status: VERIFY_REJECT };
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
             }
         }
 
@@ -1955,13 +2164,18 @@ where
                 // validate block before caching
                 if !matches!(
                     self.validate_block(block),
-                    ResponseProcessProposal { status: VERIFY_ACCEPTED }
+                    ResponseProcessProposal {
+                        status: VERIFY_ACCEPTED
+                    }
                 ) {
                     // we have logs inside validate_block so no need to repeat error here
 
                     if tracing::enabled!(tracing::Level::WARN) {
-                        let execution_time = execution_start_time.elapsed().as_secs_f32();
-                        let app_hash = match self.application_hash(&self.storage.reth_database) {
+                        let execution_time =
+                            execution_start_time.elapsed().as_secs_f32();
+                        let app_hash = match self
+                            .application_hash(&self.storage.reth_database)
+                        {
                             Ok(app_hash) => app_hash,
                             Err(e) => {
                                 panic!(
@@ -1983,7 +2197,9 @@ where
                         );
                     }
 
-                    return ResponseProcessProposal { status: VERIFY_REJECT };
+                    return ResponseProcessProposal {
+                        status: VERIFY_REJECT,
+                    };
                 }
 
                 match self.block_cache.write() {
@@ -1996,12 +2212,15 @@ where
                             "update eth block cache",
                         );
 
-                        block_cache_write.cache.insert(cbft_block_hash, block_with_context);
+                        block_cache_write
+                            .cache
+                            .insert(cbft_block_hash, block_with_context);
 
                         self.metrics.commet_processed_proposals.increment(1);
 
                         if tracing::enabled!(tracing::Level::INFO) {
-                            let execution_time = execution_start_time.elapsed().as_secs_f32();
+                            let execution_time =
+                                execution_start_time.elapsed().as_secs_f32();
 
                             info!(
                                 app_hash = hex::encode(eth_block_hash),
@@ -2015,14 +2234,18 @@ where
                             );
                         }
 
-                        ResponseProcessProposal { status: VERIFY_ACCEPTED }
+                        ResponseProcessProposal {
+                            status: VERIFY_ACCEPTED,
+                        }
                     }
                     Err(e) => {
                         error!("Error getting block cache write lock: {:?}", e);
 
                         if tracing::enabled!(tracing::Level::WARN) {
-                            let execution_time = execution_start_time.elapsed().as_secs_f32();
-                            let app_hash = match self.application_hash(&self.storage.reth_database)
+                            let execution_time =
+                                execution_start_time.elapsed().as_secs_f32();
+                            let app_hash = match self
+                                .application_hash(&self.storage.reth_database)
                             {
                                 Ok(app_hash) => app_hash,
                                 Err(e) => {
@@ -2046,7 +2269,9 @@ where
                             );
                         }
 
-                        ResponseProcessProposal { status: VERIFY_REJECT }
+                        ResponseProcessProposal {
+                            status: VERIFY_REJECT,
+                        }
                     }
                 }
             }
@@ -2054,8 +2279,11 @@ where
                 error!("Error building eth block: {:?}", e);
 
                 if tracing::enabled!(tracing::Level::WARN) {
-                    let execution_time = execution_start_time.elapsed().as_secs_f32();
-                    let app_hash = match self.application_hash(&self.storage.reth_database) {
+                    let execution_time =
+                        execution_start_time.elapsed().as_secs_f32();
+                    let app_hash = match self
+                        .application_hash(&self.storage.reth_database)
+                    {
                         Ok(app_hash) => app_hash,
                         Err(e) => {
                             panic!("failed to get application hash on process proposal: {:?}", e);
@@ -2074,21 +2302,27 @@ where
                     );
                 }
 
-                ResponseProcessProposal { status: VERIFY_REJECT }
+                ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                }
             }
         }
     }
 
     ///docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#finalizeblock
     #[instrument(level = "trace", skip(self, request), fields(cbft_block_height = request.height, cbft_block_hash = hex::encode(&request.hash)))]
-    fn finalize_block(&self, request: RequestFinalizeBlock) -> ResponseFinalizeBlock {
+    fn finalize_block(
+        &self,
+        request: RequestFinalizeBlock,
+    ) -> ResponseFinalizeBlock {
         trace!("request={:?}", RequestFinalizeBlockTruncatedDebug(&request));
 
         if request.txs.is_empty() {
             panic!("No transactions in finalize_block request, but expected at least NDD tx");
         }
 
-        let cbft_block_hash = FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
+        let cbft_block_hash =
+            FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
         let mut block_cache_write = match self.block_cache.write() {
             Ok(block_cache_write) => block_cache_write,
             Err(e) => {
@@ -2096,12 +2330,16 @@ where
             }
         };
 
-        let block_with_context = match block_cache_write.cache.get(&cbft_block_hash) {
+        let block_with_context = match block_cache_write
+            .cache
+            .get(&cbft_block_hash)
+        {
             Some(block_with_context) => {
                 debug!(
                     cbft_block_hash = hex::encode(cbft_block_hash),
-                    eth_block_hash =
-                        hex::encode(block_with_context.sealed_block_with_peg.block().hash()),
+                    eth_block_hash = hex::encode(
+                        block_with_context.sealed_block_with_peg.block().hash()
+                    ),
                     "read eth block from block cache",
                 );
 
@@ -2118,53 +2356,60 @@ where
 
                 // get non-deterministic data
                 let txs_bytes = request.txs.clone();
-                let non_deterministic_data_bytes = match txs_bytes.clone().first() {
-                    Some(tx) => tx.clone(),
-                    None => {
-                        panic!("No non-deterministic tx in finalize block request");
-                    }
-                };
-                let reader_inner: Vec<u8> =
-                    vec![non_deterministic_data_bytes].into_iter().flatten().collect();
+                let non_deterministic_data_bytes =
+                    match txs_bytes.clone().first() {
+                        Some(tx) => tx.clone(),
+                        None => {
+                            panic!(
+                            "No non-deterministic tx in finalize block request"
+                        );
+                        }
+                    };
+                let reader_inner: Vec<u8> = vec![non_deterministic_data_bytes]
+                    .into_iter()
+                    .flatten()
+                    .collect();
                 let reader = &mut io::Cursor::new(reader_inner);
 
-                let non_deterministic_data = match NonDeterministicData::deserialize(reader) {
-                    Ok(data) => data,
-                    Err(e) => {
-                        panic!("Error deserializing non-deterministic data: {:?}", e);
-                    }
-                };
+                let non_deterministic_data =
+                    match NonDeterministicData::deserialize(reader) {
+                        Ok(data) => data,
+                        Err(e) => {
+                            panic!("Error deserializing non-deterministic data: {:?}", e);
+                        }
+                    };
 
                 // NDD V0 (no block_fee_recipient_address) is supported only for historical sync on
                 // // testnet
-                let block_fee_recipient_address =
-                    match non_deterministic_data.block_fee_recipient_address() {
-                        Some(address) => {
-                            debug!(%address, "use proposed block fee recipient address");
-                            address
-                        }
-                        // Need to extract from `request.proposer_address` which is legacy block
-                        // building behavior
-                        None if self.is_testnet => {
-                            let address = Address::new(
-                                FixedBytes::<20>::from_slice(
-                                    request.proposer_address.to_vec().as_slice(),
-                                )
-                                .0,
-                            );
+                let block_fee_recipient_address = match non_deterministic_data
+                    .block_fee_recipient_address()
+                {
+                    Some(address) => {
+                        debug!(%address, "use proposed block fee recipient address");
+                        address
+                    }
+                    // Need to extract from `request.proposer_address` which is legacy block
+                    // building behavior
+                    None if self.is_testnet => {
+                        let address = Address::new(
+                            FixedBytes::<20>::from_slice(
+                                request.proposer_address.to_vec().as_slice(),
+                            )
+                            .0,
+                        );
 
-                            debug!(%address, "use a proposer address as the block fee recipient
+                        debug!(%address, "use a proposer address as the block fee recipient
         address (testnet)");
 
-                            address
-                        }
-                        None => {
-                            panic!(
+                        address
+                    }
+                    None => {
+                        panic!(
                                 "Block fee recipient address is not set in finalize block for
         mainnet"
                             );
-                        }
-                    };
+                    }
+                };
 
                 let block_time = match request.time {
                     Some(time) => time,
@@ -2227,12 +2472,18 @@ where
                     block_time,
                 ) {
                     Ok(block_with_context) => {
-                        block_cache_write.cache.insert(cbft_block_hash, block_with_context.clone());
+                        block_cache_write.cache.insert(
+                            cbft_block_hash,
+                            block_with_context.clone(),
+                        );
 
                         debug!(
                             cbft_block_hash = hex::encode(cbft_block_hash),
                             eth_block_hash = hex::encode(
-                                block_with_context.sealed_block_with_peg.block().hash()
+                                block_with_context
+                                    .sealed_block_with_peg
+                                    .block()
+                                    .hash()
                             ),
                             "update eth block cache",
                         );
@@ -2240,7 +2491,10 @@ where
                         block_with_context
                     }
                     Err(e) => {
-                        panic!("Error building block in finalize block: {:?}", e);
+                        panic!(
+                            "Error building block in finalize block: {:?}",
+                            e
+                        );
                     }
                 }
             }
@@ -2260,7 +2514,12 @@ where
 
         match self
             .activation_manager
-            .on_finalize_block(runtime_version, comet_height, proposer_address, proposer_vote)
+            .on_finalize_block(
+                runtime_version,
+                comet_height,
+                proposer_address,
+                proposer_vote,
+            )
             .expect("db cannot fail")
         {
             OnFinalizeBlockDecision::Finalize { version: _ } => {
@@ -2281,28 +2540,36 @@ where
         // Metrics
         //
         // Only create metrics if there's an actual upgrade event ongoing.
-        if let Some((upgrade_version, polling)) =
-            self.activation_manager.get_upgrade_polling().expect("db cannot fail")
+        if let Some((upgrade_version, polling)) = self
+            .activation_manager
+            .get_upgrade_polling()
+            .expect("db cannot fail")
         {
             // Track the raw vote by the proposer. Note that the proposer might
             // be voting for a different version than the one we're interested
             // in, or for none at all. The rendered metric is labeled accurately.
-            self.metrics.runtime_upgrade_vote(&proposer_address, &proposer_vote);
+            self.metrics
+                .runtime_upgrade_vote(&proposer_address, &proposer_vote);
 
             // Track the polling results for the specific version we're interested in.
-            self.metrics.runtime_upgrade_polling(&upgrade_version, &polling);
+            self.metrics
+                .runtime_upgrade_polling(&upgrade_version, &polling);
         }
 
         // Track the finalized block hash for the commit stage.
         block_cache_write.tracked_final = Some(cbft_block_hash);
 
         // Rpc node needs to store aggregate public key from block height 1
-        let block_height = block_with_context.sealed_block_with_peg.block().number;
-        let sealed_block_with_peg_binding = block_with_context.sealed_block_with_peg.clone();
+        let block_height =
+            block_with_context.sealed_block_with_peg.block().number;
+        let sealed_block_with_peg_binding =
+            block_with_context.sealed_block_with_peg.clone();
         let sealed_block_with_senders = sealed_block_with_peg_binding.block();
         // TODO: Shouldn't it be done on block commit?
         if !self.is_fed_node && block_height == 1 {
-            let edh = match sealed_block_with_senders.deserialize_extra_data_header() {
+            let edh = match sealed_block_with_senders
+                .deserialize_extra_data_header()
+            {
                 Ok(edh) => edh,
                 Err(e) => {
                     panic!("Error deserializing extra data header in finalize block: {:?}", e);
@@ -2314,10 +2581,17 @@ where
         }
 
         if matches!(
-            self.validate_block(block_with_context.sealed_block_with_peg.block()),
-            ResponseProcessProposal { status: VERIFY_REJECT }
+            self.validate_block(
+                block_with_context.sealed_block_with_peg.block()
+            ),
+            ResponseProcessProposal {
+                status: VERIFY_REJECT
+            }
         ) {
-            panic!("failed to finalize invalid block block {:?}", request.height);
+            panic!(
+                "failed to finalize invalid block block {:?}",
+                request.height
+            );
         }
 
         let mut exec_results = vec![];
@@ -2325,15 +2599,26 @@ where
         let non_deterministic_data_tx = match request.txs.first() {
             Some(tx) => tx.clone(),
             None => {
-                panic!("failed to finalize block {} without NDD", request.height);
+                panic!(
+                    "failed to finalize block {} without NDD",
+                    request.height
+                );
             }
         };
 
-        let first_exec_tx_result =
-            ExecTxResult { code: SUCCESS, data: non_deterministic_data_tx, ..Default::default() };
+        let first_exec_tx_result = ExecTxResult {
+            code: SUCCESS,
+            data: non_deterministic_data_tx,
+            ..Default::default()
+        };
         exec_results.push(first_exec_tx_result);
 
-        for _tx in block_with_context.sealed_block_with_peg.block().body().transactions() {
+        for _tx in block_with_context
+            .sealed_block_with_peg
+            .block()
+            .body()
+            .transactions()
+        {
             // https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#transaction-results
             exec_results.push(ExecTxResult {
                 code: SUCCESS,
@@ -2347,7 +2632,8 @@ where
             });
         }
 
-        let block_hash = block_with_context.sealed_block_with_peg.block().hash();
+        let block_hash =
+            block_with_context.sealed_block_with_peg.block().hash();
         self.metrics.commet_finalized_blocks.increment(1);
 
         let execution_time = std::time::Instant::now().elapsed().as_secs_f32();
@@ -2391,10 +2677,13 @@ where
         };
 
         // Retrieve the finalized block via hash.
-        let cbft_block_hash =
-            block_cache_write.tracked_final.take().expect("No tracked final block hash");
+        let cbft_block_hash = block_cache_write
+            .tracked_final
+            .take()
+            .expect("No tracked final block hash");
 
-        let Some(sealed_block_with_context) = block_cache_write.cache.remove(&cbft_block_hash)
+        let Some(sealed_block_with_context) =
+            block_cache_write.cache.remove(&cbft_block_hash)
         else {
             panic!("Error getting block from cache");
         };
@@ -2412,14 +2701,20 @@ where
 
         trace!("eth_block_header={:?}", block.header());
 
-        let eth_block_height = sealed_block_with_context.sealed_block_with_peg.block().number;
+        let eth_block_height = sealed_block_with_context
+            .sealed_block_with_peg
+            .block()
+            .number;
 
         // We want to explicitly panic if we cannot send the commit message
         let (commit_tx, commit_rx) = std::sync::mpsc::channel::<()>();
         let driver_tx = self.driver_tx.clone();
         self.task_executor.spawn_blocking(Box::pin(async move {
             if let Err(e) = driver_tx
-                .send(ABCIDriverMessage::CommitBlock((sealed_block_with_context, commit_tx)))
+                .send(ABCIDriverMessage::CommitBlock((
+                    sealed_block_with_context,
+                    commit_tx,
+                )))
                 .await
             {
                 panic!("Error sending commit eth block message: {:?}", e);
@@ -2469,15 +2764,21 @@ pub struct ABCIDriver {
     //  instead of duplicating it here
     reth_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
     botanix_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
-    blockchain_provider: BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+    blockchain_provider: BlockchainProvider<
+        NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+    >,
 }
 
 impl ABCIDriver {
     /// Create a new ABCI drivers
     pub fn new(
         driver_rx: tokio::sync::mpsc::Receiver<ABCIDriverMessage>,
-        reth_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
-        botanix_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+        reth_database_provider_factory: BotanixProviderFactory<
+            Arc<DatabaseEnv>,
+        >,
+        botanix_database_provider_factory: BotanixProviderFactory<
+            Arc<DatabaseEnv>,
+        >,
         blockchain_provider: BlockchainProvider<
             NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
         >,
@@ -2495,7 +2796,10 @@ impl ABCIDriver {
         loop {
             if let Some(message) = self.driver_rx.lock().await.recv().await {
                 match message {
-                    ABCIDriverMessage::CommitBlock((sealed_block_with_context, commit_tx)) => {
+                    ABCIDriverMessage::CommitBlock((
+                        sealed_block_with_context,
+                        commit_tx,
+                    )) => {
                         // let _span = tracing::trace_span!(
                         //     "ABCI driver commit block",
                         //     eth_block_height =

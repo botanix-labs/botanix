@@ -1,12 +1,16 @@
 //! Defines structure for botanix RPC configurables and business logic
 
-use std::{fmt, str::FromStr};
-use botanix_btc_wallet::bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory};
-use frost_secp256k1_tr::{self as frost};
-use botanix_authority_edh::header_ext::HeaderExt;
-use btcserverlib::wallet::address::{generate_taproot_address, generate_tweaked_public_key};
 use alloy_primitives::U256;
+use botanix_authority_edh::header_ext::HeaderExt;
+use botanix_btc_wallet::bitcoind::{
+    BitcoindClientFactory, BitcoindConfig, BitcoindFactory,
+};
+use btcserverlib::wallet::address::{
+    generate_taproot_address, generate_tweaked_public_key,
+};
+use frost_secp256k1_tr::{self as frost};
 use reth_storage_api::BlockReaderIdExt;
+use std::{fmt, str::FromStr};
 use thiserror::Error;
 use tracing::error;
 use url::Url;
@@ -30,7 +34,9 @@ impl Default for BotanixConfig {
             bitcoin_network: bitcoin::Network::Regtest,
             // Use a public signet endpoint by default
             bitcoind_factory: BitcoindClientFactory::new(BitcoindConfig::new(
-                "http://localhost:18443".parse::<Url>().expect("must be valid url address"),
+                "http://localhost:18443"
+                    .parse::<Url>()
+                    .expect("must be valid url address"),
                 "foo".to_string(),
                 "bar".to_string(),
             )),
@@ -44,7 +50,10 @@ impl BotanixConfig {
         bitcoin_network: bitcoin::Network,
         bitcoind_factory: BitcoindClientFactory,
     ) -> Self {
-        Self { bitcoin_network, bitcoind_factory }
+        Self {
+            bitcoin_network,
+            bitcoind_factory,
+        }
     }
 }
 
@@ -150,7 +159,9 @@ pub struct Botanix {
 impl Botanix {
     /// Creates and returns instance of [Botanix]
     pub const fn new(config: BotanixConfig) -> Self {
-        Self { botanix_rpc_config: config }
+        Self {
+            botanix_rpc_config: config,
+        }
     }
 
     /// Returns the configuration of botanix provider
@@ -189,7 +200,10 @@ impl Botanix {
         &self,
         eth_address: alloy_primitives::Address,
         provider: &impl BlockReaderIdExt,
-    ) -> std::result::Result<(bitcoin::Address, secp256k1::PublicKey), GatewayAddressRPCError> {
+    ) -> std::result::Result<
+        (bitcoin::Address, secp256k1::PublicKey),
+        GatewayAddressRPCError,
+    > {
         let eth_address_bytes = eth_address.0 .0;
         let latest_header = provider
             .latest_header()
@@ -212,8 +226,10 @@ impl Botanix {
         let vpk = frost::VerifyingKey::deserialize(&agg_pk.serialize())?;
         let tweaked_pk = generate_tweaked_public_key(&vpk, &eth_address_bytes)
             .map_err(|_| GatewayAddressRPCError::FailedToTweakPublicKey)?;
-        let address =
-            generate_taproot_address(&tweaked_pk, self.botanix_rpc_config.bitcoin_network);
+        let address = generate_taproot_address(
+            &tweaked_pk,
+            self.botanix_rpc_config.bitcoin_network,
+        );
 
         Ok((address, agg_pk))
     }
@@ -235,7 +251,8 @@ impl Botanix {
         let block_hash = bitcoin::BlockHash::from_str(&block_hash)
             .map_err(|_e| MerkleProofRPCError::MalformedBlockHash)?;
 
-        let txids = bitcoind_client.get_rpc_client_dyn()
+        let txids = bitcoind_client
+            .get_rpc_client_dyn()
             .get_block_info_rpc(&block_hash)
             .map_err(|_e| MerkleProofRPCError::BitcoindClientInitialization)?
             .tx;
@@ -244,35 +261,47 @@ impl Botanix {
             return Err(MerkleProofRPCError::TxIdNotInBlock);
         }
 
-        let matches = txids.iter().map(|txid| txid == &tx_id).collect::<Vec<_>>();
+        let matches =
+            txids.iter().map(|txid| txid == &tx_id).collect::<Vec<_>>();
 
-        let pmt = bitcoin::merkle_tree::PartialMerkleTree::from_txids(&txids, &matches);
+        let pmt = bitcoin::merkle_tree::PartialMerkleTree::from_txids(
+            &txids, &matches,
+        );
         Ok(bitcoin::consensus::serialize(&pmt))
     }
 
     /// Function calls `btc_server` to get btc fee rate in BTC/kB for a pegout transaction.
     ///
     /// Converts fee rate to sat/vB and returns it.
-    pub async fn get_btc_fee_rate(&self) -> std::result::Result<U256, BtcFeeRateRPCError> {
+    pub async fn get_btc_fee_rate(
+        &self,
+    ) -> std::result::Result<U256, BtcFeeRateRPCError> {
         let bitcoind_client = self.botanix_rpc_config.bitcoind_factory.clone();
         let bitcoind_client = bitcoind_client
             .build_and_connect()
             .map_err(|_| BtcFeeRateRPCError::BitcoindClientInitialization)?;
-        let fee_result = bitcoind_client.get_rpc_client_dyn()
+        let fee_result = bitcoind_client
+            .get_rpc_client_dyn()
             .get_estimate_smart_fee_rpc()
             .map_err(BtcFeeRateRPCError::FailedToGetEstimateSmartFee)?;
 
         if let Some(fee) = fee_result.fee_rate {
             // Conversion formula
-            let sat_per_vb = fee.to_float_in(bitcoin::Denomination::Bitcoin) * 100_000.0;
+            let sat_per_vb =
+                fee.to_float_in(bitcoin::Denomination::Bitcoin) * 100_000.0;
             // this really doesn't need to be a U256 can be U64
             Ok(U256::from(sat_per_vb.ceil() as u64))
         } else {
             // Use errors if available
             if let Some(errors) = fee_result.errors {
                 let concatenated_errors = errors.join(", ");
-                error!("Failed to get estimate smart fee rate: {}", concatenated_errors);
-                Err(BtcFeeRateRPCError::FailedToEstimateSmartFee(concatenated_errors))
+                error!(
+                    "Failed to get estimate smart fee rate: {}",
+                    concatenated_errors
+                );
+                Err(BtcFeeRateRPCError::FailedToEstimateSmartFee(
+                    concatenated_errors,
+                ))
             } else {
                 // else use default generic error
                 Err(BtcFeeRateRPCError::FailedToEstimateSmartFee(

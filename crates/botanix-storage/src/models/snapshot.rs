@@ -1,7 +1,7 @@
 //! Models for snapshots and chunks.
 
+use alloy_primitives::{BlockNumber, Bytes, B256};
 use reth_codecs::{add_arbitrary_tests, Compact};
-use alloy_primitives::{Bytes, B256, BlockNumber};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -58,7 +58,9 @@ pub type SnapshotChunkHash = B256;
 ///
 /// Multiple chunks are expected for the same snapshot, allowing parallel
 /// processing and incremental synchronization of large blockchain states.
-#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact)]
+#[derive(
+    Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub struct SnapshotChunk {
@@ -135,7 +137,8 @@ impl SnapshotChunk {
         // TODO: missing snapshot_id_size + starting_block_number_size + ending_block_number_size
 
         let chunk_id_size = std::mem::size_of::<u64>();
-        let data_size = self.chunk_data.iter().map(|data| data.len()).sum::<usize>();
+        let data_size =
+            self.chunk_data.iter().map(|data| data.len()).sum::<usize>();
         chunk_id_size + data_size
     }
 
@@ -210,7 +213,9 @@ impl SnapshotChunk {
 /// - Fast blockchain synchronization by downloading pre-computed state
 /// - Backup and archival of blockchain data
 /// - Reducing storage requirements for full nodes
-#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact)]
+#[derive(
+    Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub struct Snapshot {
@@ -245,7 +250,13 @@ impl Snapshot {
     ///
     /// A new `Snapshot` instance ready for use.
     pub const fn new(id: u64, height: u64, block_hash: B256) -> Self {
-        Self { id, height, chunk_ids: Vec::new(), block_ids: Vec::new(), block_hash }
+        Self {
+            id,
+            height,
+            chunk_ids: Vec::new(),
+            block_ids: Vec::new(),
+            block_hash,
+        }
     }
 
     /// Sets the snapshot id.
@@ -385,8 +396,12 @@ impl Snapshot {
     ///
     /// * `true` if the block ID was added (it wasn't already present)
     /// * `false` if the block ID already existed in the snapshot
-    pub fn add_block_id_if_not_exists(&mut self, block_id: BlockNumber) -> bool {
-        let mut block_ids_set: BTreeSet<u64> = self.block_ids.iter().copied().collect();
+    pub fn add_block_id_if_not_exists(
+        &mut self,
+        block_id: BlockNumber,
+    ) -> bool {
+        let mut block_ids_set: BTreeSet<u64> =
+            self.block_ids.iter().copied().collect();
         if block_ids_set.insert(block_id) {
             self.block_ids.push(block_id);
             true
@@ -410,7 +425,8 @@ impl Snapshot {
     /// * `true` if the chunk ID was added (it wasn't already present)
     /// * `false` if the chunk ID already existed in the snapshot
     pub fn add_chunk_id_if_not_exists(&mut self, chunk_id: ChunkId) -> bool {
-        let mut chunk_ids_set: BTreeSet<u64> = self.chunk_ids.iter().copied().collect();
+        let mut chunk_ids_set: BTreeSet<u64> =
+            self.chunk_ids.iter().copied().collect();
         if chunk_ids_set.insert(chunk_id) {
             self.chunk_ids.push(chunk_id);
             true
@@ -553,7 +569,9 @@ impl Snapshot {
 /// a SnapshotSync record to track the download and application progress. This
 /// ensures that synchronization can be resumed if interrupted and provides
 /// visibility into the sync process.
-#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact)]
+#[derive(
+    Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub struct SnapshotSync {
@@ -604,8 +622,19 @@ impl SnapshotSync {
     /// # Returns
     ///
     /// A new `SnapshotSync` instance with progress set to 0.
-    pub const fn new(height: u64, snapshot_hash: B256, format: u64, total_chunks: u64) -> Self {
-        Self { height, total_chunks, last_applied_chunk_index: 0, snapshot_hash, format }
+    pub const fn new(
+        height: u64,
+        snapshot_hash: B256,
+        format: u64,
+        total_chunks: u64,
+    ) -> Self {
+        Self {
+            height,
+            total_chunks,
+            last_applied_chunk_index: 0,
+            snapshot_hash,
+            format,
+        }
     }
 
     /// Sets the snapshot height.
@@ -642,7 +671,10 @@ impl SnapshotSync {
     /// # Parameters
     ///
     /// * `last_applied_chunk_index` - The index of the most recently applied chunk
-    pub fn set_last_applied_chunk_index(&mut self, last_applied_chunk_index: u64) {
+    pub fn set_last_applied_chunk_index(
+        &mut self,
+        last_applied_chunk_index: u64,
+    ) {
         self.last_applied_chunk_index = last_applied_chunk_index;
     }
 

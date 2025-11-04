@@ -1,6 +1,6 @@
 use crate::{
-    SnapshotReader, SnapshotWriter, StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
-    WalletStateSyncWriter,
+    SnapshotReader, SnapshotWriter, StagedHeaderReader, StagedHeaderWriter,
+    WalletStateSyncReader, WalletStateSyncWriter,
 };
 use reth_storage_errors::provider::ProviderResult;
 

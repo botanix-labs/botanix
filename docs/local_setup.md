@@ -78,7 +78,7 @@ cd ~/macbeth
  NODE_2_DIR= {folder_path}/federation/node1
 ```
 
--   Ensure that you provide the correct path for the `federation/node0` directory that was previously created in `NODE_1_DIR` & NODE_2_DIR, along with the Bitcoin RPC username, RPC password, and Bitcoin port.
+- Ensure that you provide the correct path for the `federation/node0` directory that was previously created in `NODE_1_DIR` & NODE_2_DIR, along with the Bitcoin RPC username, RPC password, and Bitcoin port.
 
 3.  Now we need to start 2 btcoin-server-client below is command, make sure you execute below command in two separate terminal.
 

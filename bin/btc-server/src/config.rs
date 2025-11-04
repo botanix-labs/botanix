@@ -96,7 +96,9 @@ pub struct GrpcConfig {
     pub draw_lookahead_period_count: u64,
 }
 
-fn deserialize_duration_from_usize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+fn deserialize_duration_from_usize<'de, D>(
+    deserializer: D,
+) -> Result<Duration, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -104,7 +106,9 @@ where
     Ok(Duration::from_secs(seconds))
 }
 
-fn deserialize_duration_option<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+fn deserialize_duration_option<'de, D>(
+    deserializer: D,
+) -> Result<Option<Duration>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -135,11 +139,16 @@ impl FromStr for TomlConfig {
     }
 }
 
-async fn read_to_string(path: impl AsRef<Path> + Send) -> Result<String, Error> {
+async fn read_to_string(
+    path: impl AsRef<Path> + Send,
+) -> Result<String, Error> {
     let mut file = File::open(path).await.map_err(Error::OpenConfig)?;
     let meta = file.metadata().await.map_err(Error::ReadMeta)?;
-    let mut contents = Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0));
-    file.read_to_end(&mut contents).await.map_err(Error::ReadConfig)?;
+    let mut contents =
+        Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0));
+    file.read_to_end(&mut contents)
+        .await
+        .map_err(Error::ReadConfig)?;
     String::from_utf8(contents).map_err(Error::ParseUtf8)
 }
 
@@ -273,8 +282,12 @@ pub fn load_config() -> Result<Config, Error> {
         bitcoind_user: cli_config.bitcoind_user,
         bitcoind_pass: cli_config.bitcoind_pass,
         metrics_port: cli_config.metrics_port,
-        fee_rate_diff_percentage: cli_config.fee_rate_diff_percentage.unwrap_or(2),
-        fall_back_fee_rate_sat_per_vbyte: cli_config.fall_back_fee_rate_sat_per_vbyte.unwrap_or(10),
+        fee_rate_diff_percentage: cli_config
+            .fee_rate_diff_percentage
+            .unwrap_or(2),
+        fall_back_fee_rate_sat_per_vbyte: cli_config
+            .fall_back_fee_rate_sat_per_vbyte
+            .unwrap_or(10),
         excluded_eth_addresses: cli_config.excluded_eth_addresses,
     };
     Ok(config)
@@ -286,11 +299,15 @@ mod tests {
 
     #[test]
     fn test_parse_ethereum_address_for_clap_valid() {
-        let result = parse_ethereum_address_for_clap("0x1234567890123456789012345678901234567890");
+        let result = parse_ethereum_address_for_clap(
+            "0x1234567890123456789012345678901234567890",
+        );
         assert!(result.is_ok());
 
         // Test without 0x prefix
-        let result = parse_ethereum_address_for_clap("1234567890123456789012345678901234567890");
+        let result = parse_ethereum_address_for_clap(
+            "1234567890123456789012345678901234567890",
+        );
         assert!(result.is_ok());
     }
 

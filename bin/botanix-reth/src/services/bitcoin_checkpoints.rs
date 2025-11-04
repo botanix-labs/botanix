@@ -1,12 +1,14 @@
-use std::{sync::Arc, time::Duration};
-use botanix_bitcoin_checkpoint::{BitcoinCheckpointsChain, BitcoinCheckpointsChainSynchronizer, BitcoinHashBlockStream, DummyHashBlockStream};
+use bitcoincore_zmq::subscribe_async_wait_handshake;
+use botanix_bitcoin_checkpoint::{
+    BitcoinCheckpointsChain, BitcoinCheckpointsChainSynchronizer,
+    BitcoinHashBlockStream, DummyHashBlockStream,
+};
 use botanix_btc_wallet::bitcoind::BitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::bitcoind::BitcoindArgs;
 use eyre::Ok;
-use bitcoincore_zmq::subscribe_async_wait_handshake;
+use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
-
 
 /// Sets up the Bitcoin checkpoints synchronizer and block hash stream using the provided Bitcoind client,
 /// configuration, and chain specification. Waits for the Bitcoind client to sync and connects to the ZMQ socket
@@ -25,10 +27,19 @@ pub async fn setup_bitcoin_checkpoints(
     bitcoind_client: BitcoindClient,
     bitcoind_cfg: &BitcoindArgs,
     chain: &BotanixChainSpec,
-) -> eyre::Result<(BitcoinCheckpointsChainSynchronizer, BitcoinHashBlockStream, Arc<BitcoinCheckpointsChain>)> {
+) -> eyre::Result<(
+    BitcoinCheckpointsChainSynchronizer,
+    BitcoinHashBlockStream,
+    Arc<BitcoinCheckpointsChain>,
+)> {
     tracing::info!(target: "reth::cli", "Waiting for bitcoind client to sync...");
 
-    match tokio::time::timeout(Duration::from_secs(60), bitcoind_client.get_rpc_client_dyn().wait_until_synced()).await {
+    match tokio::time::timeout(
+        Duration::from_secs(60),
+        bitcoind_client.get_rpc_client_dyn().wait_until_synced(),
+    )
+    .await
+    {
         std::result::Result::Ok(_) => {
             tracing::info!(target: "reth::cli", "Bitcoind client synced");
         }
@@ -109,5 +120,9 @@ pub async fn setup_bitcoin_checkpoints(
         Box::new(stream)
     };
 
-    Ok((checkpoints_synchronizer, bitcoin_zmq_block_hash_stream, bitcoin_checkpoints))
+    Ok((
+        checkpoints_synchronizer,
+        bitcoin_zmq_block_hash_stream,
+        bitcoin_checkpoints,
+    ))
 }

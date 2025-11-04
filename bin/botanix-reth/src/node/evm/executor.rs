@@ -1,13 +1,15 @@
 use super::patch::{
-    patch_chapel_after_tx, patch_chapel_before_tx, patch_mainnet_after_tx, patch_mainnet_before_tx,
+    patch_chapel_after_tx, patch_chapel_before_tx, patch_mainnet_after_tx,
+    patch_mainnet_before_tx,
 };
 use crate::{
     evm::transaction::BotanixTxEnv,
     system_contracts::{
-        get_upgrade_system_contracts, is_system_transaction, SystemContract, STAKE_HUB_CONTRACT,
-        SYSTEM_REWARD_CONTRACT,
+        get_upgrade_system_contracts, is_system_transaction, SystemContract,
+        STAKE_HUB_CONTRACT, SYSTEM_REWARD_CONTRACT,
     },
 };
+use alloy_consensus::constants::ETH_TO_WEI;
 use alloy_consensus::{Transaction, TxReceipt};
 use alloy_eips::{
     eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE},
@@ -18,7 +20,9 @@ use alloy_evm::{
     block::{ExecutableTx, StateChangeSource},
     eth::receipt_builder::ReceiptBuilderCtx,
 };
-use alloy_primitives::{keccak256, address, uint, Address, BlockNumber, Bytes, TxKind, U256};
+use alloy_primitives::{
+    address, keccak256, uint, Address, BlockNumber, Bytes, TxKind, U256,
+};
 use alloy_sol_macro::sol;
 use alloy_sol_types::SolCall;
 use botanix_chainspec::BotanixHardforks;
@@ -28,7 +32,8 @@ use reth_evm::{
     eth::{receipt_builder::ReceiptBuilder, EthBlockExecutionCtx},
     execute::{BlockExecutionError, BlockExecutor},
     system_calls::SystemCaller,
-    Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook, RecoveredTx,
+    Database, Evm, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, OnStateHook,
+    RecoveredTx,
 };
 use reth_primitives::TransactionSigned;
 use reth_primitives_traits::SignerRecoverable;
@@ -43,10 +48,10 @@ use revm::{
     Database as _, DatabaseCommit,
 };
 use tracing::debug;
-use alloy_consensus::constants::ETH_TO_WEI;
 
 /// The system account address used by the reward contract.
-pub(super) const SYSTEM_ADDRESS: Address = address!("0xfffffffffffffffffffffffffffffffffffffffe");
+pub(super) const SYSTEM_ADDRESS: Address =
+    address!("0xfffffffffffffffffffffffffffffffffffffffe");
 /// The reward percent to system
 pub(super) const SYSTEM_REWARD_PERCENT: usize = 4;
 /// The max reward in system reward contract
@@ -76,7 +81,8 @@ where
     system_caller: SystemCaller<Spec>,
 }
 
-impl<'a, DB, EVM, Spec, R: ReceiptBuilder> BotanixBlockExecutor<'a, EVM, Spec, R>
+impl<'a, DB, EVM, Spec, R: ReceiptBuilder>
+    BotanixBlockExecutor<'a, EVM, Spec, R>
 where
     DB: Database + 'a,
     EVM: Evm<
@@ -85,10 +91,12 @@ where
                 + FromRecoveredTx<TransactionSigned>
                 + FromTxWithEncoded<TransactionSigned>,
     >,
-    Spec: EthereumHardforks + BotanixHardforks + EthChainSpec + Hardforks + Clone,
+    Spec:
+        EthereumHardforks + BotanixHardforks + EthChainSpec + Hardforks + Clone,
     R: ReceiptBuilder<Transaction = TransactionSigned, Receipt: TxReceipt>,
     <R as ReceiptBuilder>::Transaction: Unpin + From<TransactionSigned>,
-    <EVM as alloy_evm::Evm>::Tx: FromTxWithEncoded<<R as ReceiptBuilder>::Transaction>,
+    <EVM as alloy_evm::Evm>::Tx:
+        FromTxWithEncoded<<R as ReceiptBuilder>::Transaction>,
     BotanixTxEnv: IntoTxEnv<<EVM as alloy_evm::Evm>::Tx>,
     R::Transaction: Into<TransactionSigned>,
 {
@@ -123,7 +131,9 @@ where
             self.evm.block().timestamp.to::<u64>() - 3_000, /* TODO: how to get parent block
                                                              * timestamp? */
         )
-        .map_err(|_| BlockExecutionError::msg("Failed to get upgrade system contracts"))?;
+        .map_err(|_| {
+            BlockExecutionError::msg("Failed to get upgrade system contracts")
+        })?;
 
         for (address, maybe_code) in contracts {
             if let Some(code) = maybe_code {
@@ -209,24 +219,32 @@ where
             is_system_transaction: true,
         };
 
-        let result_and_state = self.evm.transact(tx_env).map_err(BlockExecutionError::other)?;
+        let result_and_state = self
+            .evm
+            .transact(tx_env)
+            .map_err(BlockExecutionError::other)?;
 
         let ResultAndState { result, state } = result_and_state;
 
         let mut temp_state = state.clone();
         temp_state.remove(&SYSTEM_ADDRESS);
-        self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &temp_state);
+        self.system_caller.on_state(
+            StateChangeSource::Transaction(self.receipts.len()),
+            &temp_state,
+        );
 
         let tx = tx.clone();
         let gas_used = result.gas_used();
         self.gas_used += gas_used;
-        self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-            tx: &tx,
-            evm: &self.evm,
-            result,
-            state: &state,
-            cumulative_gas_used: self.gas_used,
-        }));
+        self.receipts.push(self.receipt_builder.build_receipt(
+            ReceiptBuilderCtx {
+                tx: &tx,
+                evm: &self.evm,
+                result,
+                state: &state,
+                cumulative_gas_used: self.gas_used,
+            },
+        ));
         self.evm.db_mut().commit(state);
 
         Ok(())
@@ -238,20 +256,28 @@ where
         address: Address,
         code: Bytecode,
     ) -> Result<(), BlockExecutionError> {
-        let account =
-            self.evm.db_mut().load_cache_account(address).map_err(BlockExecutionError::other)?;
+        let account = self
+            .evm
+            .db_mut()
+            .load_cache_account(address)
+            .map_err(BlockExecutionError::other)?;
 
         let mut info = account.account_info().unwrap_or_default();
         info.code_hash = code.hash_slow();
         info.code = Some(code);
 
         let transition = account.change(info, Default::default());
-        self.evm.db_mut().apply_transition(vec![(address, transition)]);
+        self.evm
+            .db_mut()
+            .apply_transition(vec![(address, transition)]);
         Ok(())
     }
 
     /// Handle slash system tx
-    fn handle_slash_tx(&mut self, tx: &TransactionSigned) -> Result<(), BlockExecutionError> {
+    fn handle_slash_tx(
+        &mut self,
+        tx: &TransactionSigned,
+    ) -> Result<(), BlockExecutionError> {
         sol!(
             function slash(
                 address amounts,
@@ -262,7 +288,8 @@ where
         let is_slash_tx = input.len() >= 4 && input[..4] == slashCall::SELECTOR;
 
         if is_slash_tx {
-            let signer = tx.recover_signer().map_err(BlockExecutionError::other)?;
+            let signer =
+                tx.recover_signer().map_err(BlockExecutionError::other)?;
             self.transact_system_tx(tx, signer)?;
         }
 
@@ -282,11 +309,12 @@ where
         );
 
         let input = tx.input();
-        let is_finality_reward_tx =
-            input.len() >= 4 && input[..4] == distributeFinalityRewardCall::SELECTOR;
+        let is_finality_reward_tx = input.len() >= 4
+            && input[..4] == distributeFinalityRewardCall::SELECTOR;
 
         if is_finality_reward_tx {
-            let signer = tx.recover_signer().map_err(BlockExecutionError::other)?;
+            let signer =
+                tx.recover_signer().map_err(BlockExecutionError::other)?;
             self.transact_system_tx(tx, signer)?;
         }
 
@@ -307,11 +335,12 @@ where
         );
 
         let input = tx.input();
-        let is_update_validator_set_v2_tx =
-            input.len() >= 4 && input[..4] == updateValidatorSetV2Call::SELECTOR;
+        let is_update_validator_set_v2_tx = input.len() >= 4
+            && input[..4] == updateValidatorSetV2Call::SELECTOR;
 
         if is_update_validator_set_v2_tx {
-            let signer = tx.recover_signer().map_err(BlockExecutionError::other)?;
+            let signer =
+                tx.recover_signer().map_err(BlockExecutionError::other)?;
             self.transact_system_tx(tx, signer)?;
         }
 
@@ -319,22 +348,28 @@ where
     }
 
     /// Distributes block rewards to the validator.
-    fn distribute_block_rewards(&mut self, validator: Address) -> Result<(), BlockExecutionError> {
+    fn distribute_block_rewards(
+        &mut self,
+        validator: Address,
+    ) -> Result<(), BlockExecutionError> {
         let system_account = self
             .evm
             .db_mut()
             .load_cache_account(SYSTEM_ADDRESS)
             .map_err(BlockExecutionError::other)?;
 
-        if system_account.account.is_none() ||
-            system_account.account.as_ref().unwrap().info.balance == U256::ZERO
+        if system_account.account.is_none()
+            || system_account.account.as_ref().unwrap().info.balance
+                == U256::ZERO
         {
             return Ok(());
         }
 
         let (mut block_reward, mut transition) = system_account.drain_balance();
         transition.info = None;
-        self.evm.db_mut().apply_transition(vec![(SYSTEM_ADDRESS, transition)]);
+        self.evm
+            .db_mut()
+            .apply_transition(vec![(SYSTEM_ADDRESS, transition)]);
         let balance_increment = vec![(validator, block_reward)];
 
         self.evm
@@ -352,8 +387,10 @@ where
 
         // Kepler introduced a max system reward limit, so we need to pay the system reward to the
         // system contract if the limit is not exceeded.
-        if !self.spec.is_pectra_active_at_timestamp(self.evm.block().timestamp.to()) &&
-            system_reward_balance < U256::from(MAX_SYSTEM_REWARD)
+        if !self
+            .spec
+            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to())
+            && system_reward_balance < U256::from(MAX_SYSTEM_REWARD)
         {
             let reward_to_system = block_reward >> SYSTEM_REWARD_PERCENT;
             if reward_to_system > 0 {
@@ -364,7 +401,9 @@ where
             block_reward -= reward_to_system;
         }
 
-        let tx = self.system_contracts.pay_validator_tx(validator, block_reward);
+        let tx = self
+            .system_contracts
+            .pay_validator_tx(validator, block_reward);
         self.transact_system_tx(&tx, validator)?;
         Ok(())
     }
@@ -386,12 +425,15 @@ where
 
         let mut new_info = account.account_info().unwrap_or_default();
         new_info.code_hash = keccak256(HISTORY_STORAGE_CODE.clone());
-        new_info.code = Some(Bytecode::new_raw(Bytes::from_static(&HISTORY_STORAGE_CODE)));
+        new_info.code =
+            Some(Bytecode::new_raw(Bytes::from_static(&HISTORY_STORAGE_CODE)));
         new_info.nonce = 1_u64;
         new_info.balance = U256::ZERO;
 
         let transition = account.change(new_info, Default::default());
-        self.evm.db_mut().apply_transition(vec![(HISTORY_STORAGE_ADDRESS, transition)]);
+        self.evm
+            .db_mut()
+            .apply_transition(vec![(HISTORY_STORAGE_ADDRESS, transition)]);
         Ok(true)
     }
 }
@@ -408,7 +450,8 @@ where
     Spec: EthereumHardforks + BotanixHardforks + EthChainSpec + Hardforks,
     R: ReceiptBuilder<Transaction = TransactionSigned, Receipt: TxReceipt>,
     <R as ReceiptBuilder>::Transaction: Unpin + From<TransactionSigned>,
-    <E as alloy_evm::Evm>::Tx: FromTxWithEncoded<<R as ReceiptBuilder>::Transaction>,
+    <E as alloy_evm::Evm>::Tx:
+        FromTxWithEncoded<<R as ReceiptBuilder>::Transaction>,
     BotanixTxEnv: IntoTxEnv<<E as alloy_evm::Evm>::Tx>,
     R::Transaction: Into<TransactionSigned>,
 {
@@ -416,13 +459,19 @@ where
     type Receipt = R::Receipt;
     type Evm = E;
 
-    fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
+    fn apply_pre_execution_changes(
+        &mut self,
+    ) -> Result<(), BlockExecutionError> {
         // Set state clear flag if the block is after the Spurious Dragon hardfork.
-        let state_clear_flag =
-            self.spec.is_spurious_dragon_active_at_block(self.evm.block().number.to());
+        let state_clear_flag = self
+            .spec
+            .is_spurious_dragon_active_at_block(self.evm.block().number.to());
         self.evm.db_mut().set_state_clear_flag(state_clear_flag);
 
-        if !self.spec.is_pectra_active_at_timestamp(self.evm.block().timestamp.to()) {
+        if !self
+            .spec
+            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to())
+        {
             self.upgrade_contracts()?;
         }
 
@@ -431,11 +480,18 @@ where
             self.evm.block().timestamp.to(),
             self.evm.block().timestamp.to::<u64>() - 3,
         ) {
-            self.apply_history_storage_account(self.evm.block().number.to::<u64>())?;
+            self.apply_history_storage_account(
+                self.evm.block().number.to::<u64>(),
+            )?;
         }
-        if self.spec.is_prague_active_at_timestamp(self.evm.block().timestamp.to()) {
-            self.system_caller
-                .apply_blockhashes_contract_call(self._ctx.parent_hash, &mut self.evm)?;
+        if self
+            .spec
+            .is_prague_active_at_timestamp(self.evm.block().timestamp.to())
+        {
+            self.system_caller.apply_blockhashes_contract_call(
+                self._ctx.parent_hash,
+                &mut self.evm,
+            )?;
         }
 
         Ok(())
@@ -444,7 +500,9 @@ where
     fn execute_transaction_with_commit_condition(
         &mut self,
         _tx: impl ExecutableTx<Self>,
-        _f: impl FnOnce(&ExecutionResult<<Self::Evm as Evm>::HaltReason>) -> CommitChanges,
+        _f: impl FnOnce(
+            &ExecutionResult<<Self::Evm as Evm>::HaltReason>,
+        ) -> CommitChanges,
     ) -> Result<Option<u64>, BlockExecutionError> {
         Ok(Some(0))
     }
@@ -454,11 +512,14 @@ where
         tx: impl ExecutableTx<Self>
             + IntoTxEnv<<E as alloy_evm::Evm>::Tx>
             + RecoveredTx<TransactionSigned>,
-        f: impl for<'b> FnOnce(&'b ExecutionResult<<E as alloy_evm::Evm>::HaltReason>),
+        f: impl for<'b> FnOnce(
+            &'b ExecutionResult<<E as alloy_evm::Evm>::HaltReason>,
+        ),
     ) -> Result<u64, BlockExecutionError> {
         // Check if it's a system transaction
         let signer = tx.signer();
-        if is_system_transaction(tx.tx(), *signer, self.evm.block().beneficiary) {
+        if is_system_transaction(tx.tx(), *signer, self.evm.block().beneficiary)
+        {
             self.system_txs.push(tx.tx().clone());
             return Ok(0);
         }
@@ -477,25 +538,32 @@ where
         }
         let tx_hash = tx.tx().trie_hash();
         let tx_ref = tx.tx().clone();
-        let result_and_state =
-            self.evm.transact(tx).map_err(|err| BlockExecutionError::evm(err, tx_hash))?;
+        let result_and_state = self
+            .evm
+            .transact(tx)
+            .map_err(|err| BlockExecutionError::evm(err, tx_hash))?;
         let ResultAndState { result, state } = result_and_state;
 
         f(&result);
 
         let mut temp_state = state.clone();
         temp_state.remove(&SYSTEM_ADDRESS);
-        self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &temp_state);
+        self.system_caller.on_state(
+            StateChangeSource::Transaction(self.receipts.len()),
+            &temp_state,
+        );
 
         let gas_used = result.gas_used();
         self.gas_used += gas_used;
-        self.receipts.push(self.receipt_builder.build_receipt(ReceiptBuilderCtx {
-            tx: &tx_ref,
-            evm: &self.evm,
-            result,
-            state: &state,
-            cumulative_gas_used: self.gas_used,
-        }));
+        self.receipts.push(self.receipt_builder.build_receipt(
+            ReceiptBuilderCtx {
+                tx: &tx_ref,
+                evm: &self.evm,
+                result,
+                state: &state,
+                cumulative_gas_used: self.gas_used,
+            },
+        ));
         self.evm.db_mut().commit(state);
 
         // apply patches after
@@ -507,7 +575,10 @@ where
 
     fn finish(
         mut self,
-    ) -> Result<(Self::Evm, BlockExecutionResult<R::Receipt>), BlockExecutionError> {
+    ) -> Result<
+        (Self::Evm, BlockExecutionResult<R::Receipt>),
+        BlockExecutionError,
+    > {
         // TODO:
         // Consensus: Verify validators
         // Consensus: Verify turn length
@@ -517,14 +588,19 @@ where
             self.deploy_genesis_contracts(self.evm.block().beneficiary)?;
         }
 
-        if self.spec.is_pectra_active_at_timestamp(self.evm.block().timestamp.to()) {
+        if self
+            .spec
+            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to())
+        {
             self.upgrade_contracts()?;
         }
 
-        if self.spec.is_pectra_active_at_timestamp(self.evm.block().timestamp.to()) &&
-            !self
-                .spec
-                .is_pectra_active_at_timestamp(self.evm.block().timestamp.to::<u64>() - 100)
+        if self
+            .spec
+            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to())
+            && !self.spec.is_pectra_active_at_timestamp(
+                self.evm.block().timestamp.to::<u64>() - 100,
+            )
         {
             self.initialize_jalapeno_contracts(self.evm.block().beneficiary)?;
         }
@@ -536,7 +612,10 @@ where
 
         self.distribute_block_rewards(self.evm.block().beneficiary)?;
 
-        if self.spec.is_jalapeno_active_at_block(self.evm.block().number.to()) {
+        if self
+            .spec
+            .is_jalapeno_active_at_block(self.evm.block().number.to())
+        {
             for tx in system_txs {
                 self.handle_finality_reward_tx(&tx)?;
             }

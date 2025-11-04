@@ -6,25 +6,25 @@ rust-version = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+alloy-eips = { workspace = true }
 
-# reth deps
-reth-primitives = { workspace = true, features = ["secp256k1"] }
-reth-storage-api = { workspace = true }
+# other deps
+alloy-primitives = { workspace = true }
+alloy-rpc-types-engine = { workspace = true }
+bitcoin = { workspace = true }
+bitcoincore-rpc = { workspace = true }
 
 # botanix
 botanix-authority-edh = { workspace = true }
 botanix-btc-wallet = { workspace = true }
-
-# other deps
-alloy-primitives = { workspace = true }
-alloy-eips = { workspace = true }
-alloy-rpc-types-engine = { workspace = true }
-jsonrpsee-core = { workspace = true }
-bitcoin = { workspace = true }
-bitcoincore-rpc = { workspace = true }
 btc-server = { path = "../../bin/btc-server" }
 frost-secp256k1-tr = { workspace = true }
+jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
+
+# reth deps
+reth-primitives = { workspace = true, features = ["secp256k1"] }
+reth-storage-api = { workspace = true }
 revm-primitives = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "recovery"] }
 thiserror = { workspace = true }

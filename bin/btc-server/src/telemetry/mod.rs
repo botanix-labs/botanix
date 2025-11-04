@@ -18,10 +18,14 @@ impl Telemetry {
         let system = Arc::new(RwLock::new(System::new().await));
 
         let btc_server_metrics = Some(Arc::new(
-            BtcServerMetrics::new(prefix).expect("msg: failed to create BtcServerMetrics"),
+            BtcServerMetrics::new(prefix)
+                .expect("msg: failed to create BtcServerMetrics"),
         ));
 
-        Ok(Arc::new(Self { system, btc_server_metrics }))
+        Ok(Arc::new(Self {
+            system,
+            btc_server_metrics,
+        }))
     }
 
     pub async fn start(&self) -> anyhow::Result<()> {
@@ -64,19 +68,28 @@ impl Telemetry {
             // Update package size histogram
             metrics
                 .round1_signing_package_size_histogram
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(data_size as f64);
 
             // update latency histogram (in milliseconds)
             metrics
                 .round1_signing_latency
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(latency_millis as f64);
 
             // Increment total received packages
             metrics
                 .total_received_round1_signing_packages
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
 
             // Increment throughput for sessionid
@@ -103,19 +116,28 @@ impl Telemetry {
             // Update package size histogram
             metrics
                 .round2_signing_package_size_histogram
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(data_size as f64);
 
             // update latency histogram
             metrics
                 .round2_signing_latency
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(latency_millis as f64);
 
             // Increment total received packages
             metrics
                 .total_received_round2_signing_packages
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
 
             // Increment throughput for sessionid
@@ -141,25 +163,37 @@ impl Telemetry {
             // Update package size histogram
             metrics
                 .round1_dkg_package_size_histogram
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(data_size as f64);
 
             // update latency histogram
             metrics
                 .round1_dkg_latency_histogram
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(latency_millis as f64);
 
             // Increment total received packages
             metrics
                 .total_received_round1_dkg_packages
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
 
             // Increment throughput for sessionid
             metrics
                 .round1_dkg_throughput
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -175,25 +209,37 @@ impl Telemetry {
             // Update package size histogram
             metrics
                 .round2_dkg_package_size_histogram
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(data_size as f64);
 
             // update latency histogram
             metrics
                 .round2_dkg_latency_histogram
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(latency_millis as f64);
 
             // Increment total received packages
             metrics
                 .total_received_round2_dkg_packages
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
 
             // Increment throughput for sessionid
             metrics
                 .round2_dkg_throughput
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -208,24 +254,38 @@ impl Telemetry {
             // update latency histogram
             metrics
                 .round3_dkg_latency_histogram
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(latency_millis as f64);
 
             // Increment total received packages
             metrics
                 .total_received_round3_dkg_packages
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
 
             // Increment throughput for sessionid
             metrics
                 .round3_dkg_throughput
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
 
-    pub fn update_dkg_error_metrics(&self, btc_chain: bitcoin::Network, self_id: u16, error: &str) {
+    pub fn update_dkg_error_metrics(
+        &self,
+        btc_chain: bitcoin::Network,
+        self_id: u16,
+        error: &str,
+    ) {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .dkg_error_rates
@@ -292,29 +352,50 @@ impl Telemetry {
         });
     }
 
-    pub fn record_aborted_signing_sessions(&self, btc_chain: bitcoin::Network, self_id: u16) {
+    pub fn record_aborted_signing_sessions(
+        &self,
+        btc_chain: bitcoin::Network,
+        self_id: u16,
+    ) {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .total_aborted_signing_sessions
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
 
-    pub fn record_total_signing_sessions(&self, btc_chain: bitcoin::Network, self_id: u16) {
+    pub fn record_total_signing_sessions(
+        &self,
+        btc_chain: bitcoin::Network,
+        self_id: u16,
+    ) {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .total_signing_sessions
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
 
-    pub fn record_finalized_signing_sessions(&self, btc_chain: bitcoin::Network, self_id: u16) {
+    pub fn record_finalized_signing_sessions(
+        &self,
+        btc_chain: bitcoin::Network,
+        self_id: u16,
+    ) {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .total_finalized_signing_sessions
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -328,7 +409,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .last_attempted_pegout_height
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(pegout_height);
         });
     }
@@ -342,7 +426,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .last_successful_pegout_height
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(pegout_height);
         });
     }
@@ -356,7 +443,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .last_pegin_height
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(pegin_height);
         });
     }
@@ -371,12 +461,18 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .multisig_utxos_count
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(utxos);
 
             metrics
                 .multisig_utxos_total_value
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(total_value);
         });
     }
@@ -390,7 +486,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .pegins_count
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc_by(pegins_count);
         });
     }
@@ -404,7 +503,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .pegouts_count
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc_by(pegouts_count);
         });
     }
@@ -417,7 +519,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .success_broadcasted_pegout_txs_count
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -430,7 +535,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .failed_broadcasted_pegout_txs_count
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -443,7 +551,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .started_round1_signings_count
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -456,7 +567,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .completed_round2_signings_count
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -471,7 +585,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .member_uptime
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(upstream_time as i64);
 
             service_status.iter().for_each(|(service, status)| {
@@ -487,11 +604,19 @@ impl Telemetry {
         });
     }
 
-    pub fn set_pending_pegouts(&self, btc_chain: bitcoin::Network, self_id: u16, pegouts: i64) {
+    pub fn set_pending_pegouts(
+        &self,
+        btc_chain: bitcoin::Network,
+        self_id: u16,
+        pegouts: i64,
+    ) {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .pending_pegouts
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(pegouts);
         });
     }
@@ -505,7 +630,10 @@ impl Telemetry {
         self.maybe_use_metrics(|metrics| {
             metrics
                 .finalized_pegout_ids
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .add(pegout_ids);
         });
     }
@@ -520,7 +648,10 @@ impl Telemetry {
             // Set pegin confirmation depth
             metrics
                 .pegin_confirmation_depth
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .set(pegin_confirmation_depth as i64);
         });
     }
@@ -535,17 +666,27 @@ impl Telemetry {
             // Set pegin confirmation depth
             metrics
                 .transaction_fee_rates
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .observe(transaction_fee_rate);
         });
     }
 
-    pub fn update_fee_rate_abnormalities(&self, btc_chain: bitcoin::Network, self_id: u16) {
+    pub fn update_fee_rate_abnormalities(
+        &self,
+        btc_chain: bitcoin::Network,
+        self_id: u16,
+    ) {
         self.maybe_use_metrics(|metrics| {
             // Set pegin confirmation depth
             metrics
                 .fee_rate_abnormalities
-                .with_label_values(&[&btc_chain.to_string(), &self_id.to_string()])
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
                 .inc();
         });
     }
@@ -590,9 +731,10 @@ impl Telemetry {
 
         // fetch all measured metrics
         let mut buffer = Vec::new();
-        if let Err(e) = encoder
-            .encode(&self.btc_server_metrics.as_ref().unwrap().registry.gather(), &mut buffer)
-        {
+        if let Err(e) = encoder.encode(
+            &self.btc_server_metrics.as_ref().unwrap().registry.gather(),
+            &mut buffer,
+        ) {
             error!("could not encode custom metrics: {}", e);
         };
         let mut res = match String::from_utf8(buffer.clone()) {
@@ -633,7 +775,10 @@ impl Telemetry {
                 }
             }
             Err(err) => {
-                error!("prometheus system metrics could not be stringified: {:?}", err);
+                error!(
+                    "prometheus system metrics could not be stringified: {:?}",
+                    err
+                );
                 String::default()
             }
         };

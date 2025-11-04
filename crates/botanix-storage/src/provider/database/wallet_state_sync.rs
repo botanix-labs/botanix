@@ -1,22 +1,25 @@
 use crate::{
     models::{PeerID, UuidID, WalletStateSyncRecord},
     provider::{
-        database::provider::BotanixDatabaseProvider, WalletStateSyncReader, WalletStateSyncWriter,
+        database::provider::BotanixDatabaseProvider, WalletStateSyncReader,
+        WalletStateSyncWriter,
     },
     tables::WalletStateSyncs,
     BotanixDatabaseProviderRW,
 };
+use alloy_primitives::Bytes;
 use reth_db_api::{
     cursor::DbCursorRO,
     transaction::{DbTx, DbTxMut},
     Database,
 };
-use alloy_primitives::Bytes;
 use reth_storage_errors::provider::ProviderResult;
 use std::collections::{HashMap, HashSet};
 
 impl<TX: DbTx> WalletStateSyncReader for BotanixDatabaseProvider<TX> {
-    fn get_state_sync_records(&self) -> ProviderResult<Vec<WalletStateSyncRecord>> {
+    fn get_state_sync_records(
+        &self,
+    ) -> ProviderResult<Vec<WalletStateSyncRecord>> {
         Ok(self
             .tx
             .cursor_read::<WalletStateSyncs>()?
@@ -52,7 +55,11 @@ impl<TX: DbTx> WalletStateSyncReader for BotanixDatabaseProvider<TX> {
     }
 
     fn get_state_sync_records_count(&self) -> ProviderResult<usize> {
-        Ok(self.tx.cursor_read::<WalletStateSyncs>()?.walk(None)?.count())
+        Ok(self
+            .tx
+            .cursor_read::<WalletStateSyncs>()?
+            .walk(None)?
+            .count())
     }
 
     fn get_minimum_superset(
@@ -65,8 +72,8 @@ impl<TX: DbTx> WalletStateSyncReader for BotanixDatabaseProvider<TX> {
             .walk(None)?
             .filter_map(|item| match item {
                 Ok((peer_id, wallet_state_sync_record)) => {
-                    if wallet_state_sync_record.get_data().len() as u64 >=
-                        wallet_state_sync_record.get_chunks_count()
+                    if wallet_state_sync_record.get_data().len() as u64
+                        >= wallet_state_sync_record.get_chunks_count()
                     {
                         return Some((peer_id, wallet_state_sync_record));
                     }
@@ -76,17 +83,18 @@ impl<TX: DbTx> WalletStateSyncReader for BotanixDatabaseProvider<TX> {
             })
             .collect::<HashMap<_, _>>();
 
-        if already_reached_wallet_state_sync_peers.len() < min_required_criterion as usize {
+        if already_reached_wallet_state_sync_peers.len()
+            < min_required_criterion as usize
+        {
             return Ok((false, HashSet::new()));
         }
 
-        let synced_peers_superset = already_reached_wallet_state_sync_peers.into_iter().fold(
-            HashSet::new(),
-            |mut acc, (_, mut record)| {
+        let synced_peers_superset = already_reached_wallet_state_sync_peers
+            .into_iter()
+            .fold(HashSet::new(), |mut acc, (_, mut record)| {
                 acc.extend(record.blocks_and_data_to_set());
                 acc
-            },
-        );
+            });
 
         Ok((true, synced_peers_superset))
     }
@@ -94,7 +102,9 @@ impl<TX: DbTx> WalletStateSyncReader for BotanixDatabaseProvider<TX> {
 
 impl<DB: Database> WalletStateSyncReader for BotanixDatabaseProviderRW<DB> {
     #[inline(always)]
-    fn get_state_sync_records(&self) -> ProviderResult<Vec<WalletStateSyncRecord>> {
+    fn get_state_sync_records(
+        &self,
+    ) -> ProviderResult<Vec<WalletStateSyncRecord>> {
         self.0.get_state_sync_records()
     }
 
@@ -135,7 +145,8 @@ impl<DB: Database> WalletStateSyncWriter for BotanixDatabaseProviderRW<DB> {
     ) -> ProviderResult<PeerID> {
         let wallet_state_sync_record =
             WalletStateSyncRecord::new(peer_id, uuid, chunks_count, data);
-        self.tx.put::<WalletStateSyncs>(peer_id, wallet_state_sync_record)?;
+        self.tx
+            .put::<WalletStateSyncs>(peer_id, wallet_state_sync_record)?;
         Ok(peer_id)
     }
 
@@ -152,14 +163,19 @@ impl<DB: Database> WalletStateSyncWriter for BotanixDatabaseProviderRW<DB> {
 
         if let Some(mut wallet_state_sync_record) = wallet_state_sync_record {
             for (block, data_chunk) in data {
-                wallet_state_sync_record.append_data_with_block(data_chunk, block);
+                wallet_state_sync_record
+                    .append_data_with_block(data_chunk, block);
             }
-            self.tx.put::<WalletStateSyncs>(peer_id, wallet_state_sync_record)?;
+            self.tx
+                .put::<WalletStateSyncs>(peer_id, wallet_state_sync_record)?;
         }
         Ok(())
     }
 
-    fn remove_state_sync_record_per_peer_id(&self, peer_id: PeerID) -> ProviderResult<()> {
+    fn remove_state_sync_record_per_peer_id(
+        &self,
+        peer_id: PeerID,
+    ) -> ProviderResult<()> {
         self.remove::<WalletStateSyncs>(peer_id..=peer_id)?;
         Ok(())
     }
@@ -170,7 +186,9 @@ impl<DB: Database> WalletStateSyncWriter for BotanixDatabaseProviderRW<DB> {
             return Ok(());
         }
         for state_sync_record in state_sync_records {
-            self.remove::<WalletStateSyncs>(state_sync_record..=state_sync_record)?;
+            self.remove::<WalletStateSyncs>(
+                state_sync_record..=state_sync_record,
+            )?;
         }
         Ok(())
     }

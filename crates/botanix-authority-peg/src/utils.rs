@@ -13,7 +13,9 @@ const SATOSHI_IN_WEI: U256 = U256([10_000_000_000, 0, 0, 0]);
 const MAX_SATOSHI: U256 = U256([u64::MAX, 0, 0, 0]);
 
 /// An extension trait for [`bitcoin::Amount`].
-pub trait AmountExt: Copy + From<bitcoin::Amount> + Into<bitcoin::Amount> {
+pub trait AmountExt:
+    Copy + From<bitcoin::Amount> + Into<bitcoin::Amount>
+{
     /// Convert this amount to the representation in wei.
     fn to_wei(self) -> U256 {
         U256::from(self.into().to_sat()) * SATOSHI_IN_WEI
@@ -58,7 +60,9 @@ where
     S: Serializer,
 {
     let mut buffer = Vec::new();
-    value.consensus_encode(&mut buffer).map_err(serde::ser::Error::custom)?;
+    value
+        .consensus_encode(&mut buffer)
+        .map_err(serde::ser::Error::custom)?;
     serializer.serialize_bytes(&buffer)
 }
 
@@ -83,6 +87,9 @@ mod test {
         let some_wei = Amount::from_sat(350).to_wei();
         assert_eq!(Amount::from_wei(some_wei).unwrap(), Amount::from_sat(350));
         assert!(Amount::from_wei(some_wei + 1).is_none());
-        assert_eq!(Amount::from_wei_floor(some_wei + 1).unwrap(), Amount::from_sat(350));
+        assert_eq!(
+            Amount::from_wei_floor(some_wei + 1).unwrap(),
+            Amount::from_sat(350)
+        );
     }
 }

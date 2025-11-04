@@ -3,7 +3,9 @@ use std::{collections::HashSet, str::FromStr};
 use ethers::abi::decode;
 
 use crate::{
-    peg_contract::{PeginData, PeginDataError, PeginMeta, PegoutData, PegoutDataError},
+    peg_contract::{
+        PeginData, PeginDataError, PeginMeta, PegoutData, PegoutDataError,
+    },
     utils::AmountExt,
 };
 use alloy_primitives::{keccak256, Address, B256};
@@ -100,12 +102,19 @@ pub enum MintContractError {
 impl From<ParseMintEventError> for MintContractError {
     fn from(e: ParseMintEventError) -> Self {
         match e {
-            ParseMintEventError::InvalidLog(e) => {
-                Self::InvalidLog { event: "Mint", error: e.into() }
-            }
-            ParseMintEventError::InvalidPeginData { error, revert_address, revert_amount } => {
-                Self::InvalidPeginData { error: error.to_string(), revert_address, revert_amount }
-            }
+            ParseMintEventError::InvalidLog(e) => Self::InvalidLog {
+                event: "Mint",
+                error: e.into(),
+            },
+            ParseMintEventError::InvalidPeginData {
+                error,
+                revert_address,
+                revert_amount,
+            } => Self::InvalidPeginData {
+                error: error.to_string(),
+                revert_address,
+                revert_amount,
+            },
         }
     }
 }
@@ -113,10 +122,13 @@ impl From<ParseMintEventError> for MintContractError {
 impl From<ParseBurnEventError> for MintContractError {
     fn from(e: ParseBurnEventError) -> Self {
         match e {
-            ParseBurnEventError::InvalidLog(e) => {
-                Self::InvalidLog { event: "Burn", error: e.into() }
+            ParseBurnEventError::InvalidLog(e) => Self::InvalidLog {
+                event: "Burn",
+                error: e.into(),
+            },
+            ParseBurnEventError::InvalidPegoutData(e) => {
+                Self::InvalidPegoutData(e)
             }
-            ParseBurnEventError::InvalidPegoutData(e) => Self::InvalidPegoutData(e),
         }
     }
 }
@@ -124,7 +136,8 @@ impl From<ParseBurnEventError> for MintContractError {
 fn topic_to_address(t: B256) -> Option<Address> {
     // topics are 32 byte values that pad the actual value within,
     // so for addresses we have 12 zero bytes of padding in front
-    let tokens = decode(&[ethers::abi::param_type::ParamType::Address], &t.0).ok()?;
+    let tokens =
+        decode(&[ethers::abi::param_type::ParamType::Address], &t.0).ok()?;
     let bytes = tokens.first()?.clone().into_address()?;
     Some(Address::from_slice(bytes.0.as_slice()))
 }
@@ -157,8 +170,9 @@ pub fn try_parse_mint_event(
         return Err(ParseMintEventError::InvalidLog("wrong number of topics"));
     }
 
-    let destination = topic_to_address(log.topics()[1])
-        .ok_or(ParseMintEventError::InvalidLog("invalid destination encoding"))?;
+    let destination = topic_to_address(log.topics()[1]).ok_or(
+        ParseMintEventError::InvalidLog("invalid destination encoding"),
+    )?;
 
     let params = decode(
         &[
@@ -174,21 +188,21 @@ pub fn try_parse_mint_event(
         return Err(ParseMintEventError::InvalidLog("wrong number of params"));
     }
 
-    let amount = params[0]
-        .clone()
-        .into_uint()
-        .ok_or(ParseMintEventError::InvalidLog("invalid mint amount params"))?;
+    let amount = params[0].clone().into_uint().ok_or(
+        ParseMintEventError::InvalidLog("invalid mint amount params"),
+    )?;
 
     let bitcoin_block_height = params[1]
         .clone()
         .into_uint()
-        .ok_or(ParseMintEventError::InvalidLog("parsing bitcoin block height param"))?
+        .ok_or(ParseMintEventError::InvalidLog(
+            "parsing bitcoin block height param",
+        ))?
         .as_u32();
 
-    let meta_bytes = params[2]
-        .clone()
-        .into_bytes()
-        .ok_or(ParseMintEventError::InvalidLog("converting metadata param to bytes"))?;
+    let meta_bytes = params[2].clone().into_bytes().ok_or(
+        ParseMintEventError::InvalidLog("converting metadata param to bytes"),
+    )?;
 
     let mut outpoints = HashSet::new();
     let meta = {
@@ -218,7 +232,12 @@ pub fn try_parse_mint_event(
         proofs
     };
 
-    Ok(Some(PeginData { account: destination, amount, bitcoin_block_height, meta }))
+    Ok(Some(PeginData {
+        account: destination,
+        amount,
+        bitcoin_block_height,
+        meta,
+    }))
 }
 
 /// Parse the given log for a [Burn] event.
@@ -259,8 +278,10 @@ pub fn try_parse_burn_event(
     if params.len() != 3 {
         return Err(ParseBurnEventError::InvalidLog("wrong number of params"));
     }
-    let amount =
-        params[0].clone().into_uint().ok_or(ParseBurnEventError::InvalidLog("pegout amount"))?;
+    let amount = params[0]
+        .clone()
+        .into_uint()
+        .ok_or(ParseBurnEventError::InvalidLog("pegout amount"))?;
     let btc_amount = bitcoin::Amount::from_wei_floor(amount)
         .ok_or(ParseBurnEventError::InvalidLog("invalid amount"))?;
 
@@ -270,19 +291,24 @@ pub fn try_parse_burn_event(
         .ok_or(ParseBurnEventError::InvalidLog("pegout destination"))?;
 
     // should be the pegout version which is a single byte
-    let metadata = params[2].clone().into_bytes().ok_or(ParseBurnEventError::InvalidPegoutData(
-        PegoutDataError::Invalid("invalid metadata", amount),
-    ))?;
+    let metadata = params[2].clone().into_bytes().ok_or(
+        ParseBurnEventError::InvalidPegoutData(PegoutDataError::Invalid(
+            "invalid metadata",
+            amount,
+        )),
+    )?;
 
     if metadata.len() != 1 {
-        return Err(ParseBurnEventError::InvalidPegoutData(PegoutDataError::Invalid(
-            "invalid metadata length",
-            amount,
-        )));
+        return Err(ParseBurnEventError::InvalidPegoutData(
+            PegoutDataError::Invalid("invalid metadata length", amount),
+        ));
     }
 
     if metadata[0] != PegoutData::version() {
-        info!("unexpected pegout version submitted, version: {}", metadata[0].to_string());
+        info!(
+            "unexpected pegout version submitted, version: {}",
+            metadata[0].to_string()
+        );
         // Add support for legacy pegout versions
     }
 
@@ -330,26 +356,39 @@ mod test {
         )
         .unwrap();
 
-        let amount = decoded_params.first().unwrap().clone().into_uint().unwrap();
-        assert_eq!(amount, ethers::types::U256::from_str_radix("100", 10).unwrap());
+        let amount =
+            decoded_params.first().unwrap().clone().into_uint().unwrap();
+        assert_eq!(
+            amount,
+            ethers::types::U256::from_str_radix("100", 10).unwrap()
+        );
 
-        let nonce = decoded_params.get(1).unwrap().clone().into_uint().unwrap().as_u64();
+        let nonce = decoded_params
+            .get(1)
+            .unwrap()
+            .clone()
+            .into_uint()
+            .unwrap()
+            .as_u64();
         assert_eq!(nonce, 1000u64);
 
-        let meta_bytes = decoded_params.get(2).unwrap().clone().into_bytes().unwrap();
+        let meta_bytes =
+            decoded_params.get(2).unwrap().clone().into_bytes().unwrap();
         let meta = PeginMeta::deserialize(meta_bytes.as_slice());
         assert!(meta.is_ok());
     }
 
     #[test]
     fn decode_address_topic() {
-        let topic = "000000000000000000000000a65812bac44dadb79c3e4930dbd98d5a75376b2a";
+        let topic =
+            "000000000000000000000000a65812bac44dadb79c3e4930dbd98d5a75376b2a";
         let decoded = topic_to_address(B256::from_str(topic).unwrap());
 
         assert!(decoded.is_some());
         assert_eq!(
             decoded.unwrap(),
-            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a").unwrap()
+            Address::from_str("0xa65812bac44dadb79c3e4930dbd98d5a75376b2a")
+                .unwrap()
         );
     }
 
@@ -357,8 +396,11 @@ mod test {
     fn decode_burn_log_payload() {
         // create log data from burn event
         // encoded values (amount, destination, version)
-        let amount = ethabi::Token::Uint(ethabi::ethereum_types::U256::from(100));
-        let destination = ethabi::Token::String("mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string());
+        let amount =
+            ethabi::Token::Uint(ethabi::ethereum_types::U256::from(100));
+        let destination = ethabi::Token::String(
+            "mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string(),
+        );
         let version = ethabi::Token::Bytes(vec![0]);
         let payload = ethabi::encode(&[amount, destination, version]);
 
@@ -378,7 +420,10 @@ mod test {
             .clone()
             .into_uint()
             .expect("valid uint");
-        assert_eq!(amount, ethers::types::U256::from_str_radix("100", 10).unwrap());
+        assert_eq!(
+            amount,
+            ethers::types::U256::from_str_radix("100", 10).unwrap()
+        );
 
         let destination = decoded_params
             .get(1)
@@ -386,7 +431,10 @@ mod test {
             .clone()
             .into_string()
             .expect("valid string");
-        assert_eq!(destination, "mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string());
+        assert_eq!(
+            destination,
+            "mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string()
+        );
 
         let version = decoded_params
             .get(2)
@@ -401,9 +449,12 @@ mod test {
     fn try_parse_burn_event_should_parse_successfully() {
         // create log generated from burn event
         // encoded values (amount, destination, version)
-        let amount =
-            ethabi::Token::Uint(ethabi::ethereum_types::U256::from(10_000_000_000_000_u64));
-        let destination = ethabi::Token::String("mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string());
+        let amount = ethabi::Token::Uint(ethabi::ethereum_types::U256::from(
+            10_000_000_000_000_u64,
+        ));
+        let destination = ethabi::Token::String(
+            "mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string(),
+        );
         let version = ethabi::Token::Bytes(vec![0]);
         let payload = ethabi::encode(&[amount, destination, version]);
 
@@ -425,7 +476,8 @@ mod test {
         let result = try_parse_burn_event(&log, bitcoin::Network::Regtest);
         assert!(result.is_ok());
 
-        let pegout_data = result.expect("result is ok").expect("pegout data exists");
+        let pegout_data =
+            result.expect("result is ok").expect("pegout data exists");
         assert_eq!(pegout_data.amount, bitcoin::Amount::from_sat(1000));
         assert_eq!(
             pegout_data.destination,
@@ -440,9 +492,12 @@ mod test {
     fn try_parse_burn_event_failure_error_should_contain_amount() {
         // Create a burn event payload with an invalid metadata (empty bytes) to simulate invalid
         // pegout metadata.
-        let amount =
-            ethabi::Token::Uint(ethabi::ethereum_types::U256::from(10_000_000_000_000_u64));
-        let destination = ethabi::Token::String("mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string());
+        let amount = ethabi::Token::Uint(ethabi::ethereum_types::U256::from(
+            10_000_000_000_000_u64,
+        ));
+        let destination = ethabi::Token::String(
+            "mrpkDJFJdNGA22FaxCWw6T9oXogXfHU1rh".to_string(),
+        );
         let invalid_metadata = ethabi::Token::Bytes(vec![]); // invalid: length != 1
         let payload = ethabi::encode(&[amount, destination, invalid_metadata]);
 

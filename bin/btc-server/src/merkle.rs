@@ -59,7 +59,9 @@ pub fn get_wallet_state_commitment(db: &Db) -> Result<WalletState, Error> {
     let mut engine = sha256::Hash::engine();
     let _ = engine.write(&utxo_root).map_err(Error::HashEngine)?;
     let _ = engine.write(&tracked_tx_root).map_err(Error::HashEngine)?;
-    let _ = engine.write(&pending_pegouts_root).map_err(Error::HashEngine)?;
+    let _ = engine
+        .write(&pending_pegouts_root)
+        .map_err(Error::HashEngine)?;
     let hash = sha256::Hash::from_engine(engine);
 
     Ok(WalletState {

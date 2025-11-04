@@ -5,26 +5,30 @@ use crate::consensus::{
 };
 use bitcoin::hashes::{sha256::Hash as Sha256Hash, FromSliceError};
 use botanix_authority_edh::extra_data_header::ExtraDataHeaderDeserializeError;
+use botanix_btc_server_client::{
+    BtcServerExtendedApi, FinalizedPegout, GetFinalizedPegoutIdsResponse,
+    GrpcClientError, ResetWalletStateRequest,
+};
 use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_data_parser::{
-    prost_parser::ProstMessageSerdelizer, DataParser, Error as CompressorError, SerializationType,
+    prost_parser::ProstMessageSerdelizer, DataParser, Error as CompressorError,
+    SerializationType,
 };
-use botanix_storage::{models::uuid_to_b256, WalletStateSyncReader, WalletStateSyncWriter};
-use botanix_btc_server_client::{
-    BtcServerExtendedApi, FinalizedPegout, GetFinalizedPegoutIdsResponse, GrpcClientError,
-    ResetWalletStateRequest,
+use botanix_storage::{
+    models::uuid_to_b256, WalletStateSyncReader, WalletStateSyncWriter,
 };
 use btcserverlib::pegout_id::PegoutId;
 use once_cell::sync::Lazy;
 // use reth_evm::execute::BlockExecutorProvider;
+use alloy_primitives::Bytes;
 use reth_evm::ConfigureEvm;
 use reth_network::frost::{
     manager::{FrostCommand, FrostConfig, ToFrostManager},
     PeerMessageResponse,
 };
-use alloy_primitives::Bytes;
 use reth_provider::{
-    BlockReaderIdExt, CanonStateNotification, CanonStateSubscriptions, ProviderError,
+    BlockReaderIdExt, CanonStateNotification, CanonStateSubscriptions,
+    ProviderError,
 };
 use reth_tasks::TaskExecutor;
 use std::{
@@ -99,7 +103,10 @@ impl<BF, RDB, BDB, ToFrostMan, BtcServerClient>
 where
     BF: BitcoindFactory + Clone + 'static,
     ToFrostMan: ToFrostManager + Sync + Clone + 'static,
-    RDB: BlockReaderIdExt<Header = alloy_consensus::Header> + CanonStateSubscriptions + Clone + 'static,
+    RDB: BlockReaderIdExt<Header = alloy_consensus::Header>
+        + CanonStateSubscriptions
+        + Clone
+        + 'static,
     BDB: WalletStateSyncWriter + WalletStateSyncReader + Clone + 'static,
     BtcServerClient: BtcServerExtendedApi + Clone,
 {
@@ -110,8 +117,8 @@ where
         task_executor: TaskExecutor,
         frost_config: FrostConfig,
     ) -> Self {
-        let data_parser =
-            DataParser::default().with_serialization_type(SerializationType::Postcard);
+        let data_parser = DataParser::default()
+            .with_serialization_type(SerializationType::Postcard);
         Self {
             storage,
             btc_server,
@@ -139,9 +146,13 @@ async fn hydrate_minimum_superset(
     // Create futures for each block
     let futures = superset_map.into_iter().map(|(block, data)| async move {
         // Get valid pegout IDs for this block
-        let pegouts_result =
-            get_block_pegouts(block, client, btc_network, Some(*MAX_BLOCK_TS_CUTOFF_DURATION))
-                .await;
+        let pegouts_result = get_block_pegouts(
+            block,
+            client,
+            btc_network,
+            Some(*MAX_BLOCK_TS_CUTOFF_DURATION),
+        )
+        .await;
 
         match pegouts_result {
             Ok(pegouts_in_block) => {
@@ -151,7 +162,9 @@ async fn hydrate_minimum_superset(
                     .filter_map(|item| match PegoutId::from_bytes(&item) {
                         Ok(pegout_id) => pegouts_in_block
                             .iter()
-                            .find(|(block_pegout_id, _)| *block_pegout_id == pegout_id)
+                            .find(|(block_pegout_id, _)| {
+                                *block_pegout_id == pegout_id
+                            })
                             .cloned(),
                         Err(_) => None,
                     })
@@ -196,16 +209,20 @@ where
         trace!(target: "consensus::authority::WalletStateSync::sync_wallet_state", "syncing wallet state");
         let mut btc_server = self.btc_server.clone();
 
-        let (peer_messages_tx, peer_messages_rx) = tokio::sync::oneshot::channel();
+        let (peer_messages_tx, peer_messages_rx) =
+            tokio::sync::oneshot::channel();
 
-        self.to_frost_manager
-            .send_command(FrostCommand::GetPeerMessagesStream(peer_messages_tx))?;
-        let mut peer_messages_rx = peer_messages_rx.await.expect("peer messages rx to be open");
+        self.to_frost_manager.send_command(
+            FrostCommand::GetPeerMessagesStream(peer_messages_tx),
+        )?;
+        let mut peer_messages_rx =
+            peer_messages_rx.await.expect("peer messages rx to be open");
 
         let data_parser = self.data_parser.clone();
         let frost_config = self.frost_config.clone();
         let current_response_cycle = self.current_response_cycle.clone();
-        let mut canon_events = self.storage.reth_database.subscribe_to_canonical_state();
+        let mut canon_events =
+            self.storage.reth_database.subscribe_to_canonical_state();
         let btc_network = self.storage.btc_network;
         let storage = self.storage.clone();
         let reth_database = storage.reth_database.clone();
@@ -412,16 +429,18 @@ where
                     // }
                     // Request the wallet state from all peers for poa epoch blocks only
                     let uuid = uuid::Uuid::new_v4();
-                    if let Err(e) = self
-                        .to_frost_manager
-                        .send_command(FrostCommand::GetWalletStateFromPeer(uuid))
-                    {
+                    if let Err(e) = self.to_frost_manager.send_command(
+                        FrostCommand::GetWalletStateFromPeer(uuid),
+                    ) {
                         error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to send get wallet state command to frost manager");
                     }
                     // (re-)start the current response cycle
                     current_response_cycle.write().await.replace(uuid);
                 }
-                CanonStateNotification::Reorg { old: _old, new: _new } => {
+                CanonStateNotification::Reorg {
+                    old: _old,
+                    new: _new,
+                } => {
                     warn!(target: "consensus::authority::snapshot_manager::run", "reorg detected, this should not happen");
                     continue;
                 }

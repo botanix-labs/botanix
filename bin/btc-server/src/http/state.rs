@@ -21,7 +21,11 @@ pub struct ServerState {
 
 impl ServerState {
     pub async fn new(telemetry: Arc<Telemetry>) -> Self {
-        Self { start_time: Instant::now(), connection_count: Arc::new(RwLock::new(0)), telemetry }
+        Self {
+            start_time: Instant::now(),
+            connection_count: Arc::new(RwLock::new(0)),
+            telemetry,
+        }
     }
 }
 
@@ -31,7 +35,9 @@ impl ServerState {
     }
 
     pub async fn get_health(&self) -> HealthResponse {
-        HealthResponse { uptime: self.uptime().as_secs() }
+        HealthResponse {
+            uptime: self.uptime().as_secs(),
+        }
     }
 
     pub fn uptime(&self) -> Duration {

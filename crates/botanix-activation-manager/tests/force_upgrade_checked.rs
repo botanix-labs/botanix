@@ -26,7 +26,13 @@ fn force_upgrade_checked() {
 
     // Reject upgraded version.
     let res = manager.on_process_proposal(100, UPGRADE_VERSION).unwrap();
-    assert!(matches!(res, OnProcessProposalDecision::RejectBlock { version: UPGRADE_VERSION, .. }));
+    assert!(matches!(
+        res,
+        OnProcessProposalDecision::RejectBlock {
+            version: UPGRADE_VERSION,
+            ..
+        }
+    ));
 
     // FORCE wrong upgrade version.
     manager.force_upgrade_checked(ACTIVE_VERSION);
@@ -37,7 +43,13 @@ fn force_upgrade_checked() {
 
     // Reject upgraded version.
     let res = manager.on_process_proposal(100, UPGRADE_VERSION).unwrap();
-    assert!(matches!(res, OnProcessProposalDecision::RejectBlock { version: UPGRADE_VERSION, .. }));
+    assert!(matches!(
+        res,
+        OnProcessProposalDecision::RejectBlock {
+            version: UPGRADE_VERSION,
+            ..
+        }
+    ));
 
     // FORCE tracked upgrade version; manager will immediately fast-forward to the upgrade.
     manager.force_upgrade_checked(UPGRADE_VERSION);
@@ -48,5 +60,11 @@ fn force_upgrade_checked() {
 
     // Back upgraded version!
     let res = manager.on_process_proposal(100, UPGRADE_VERSION).unwrap();
-    assert!(matches!(res, OnProcessProposalDecision::Process { version: UPGRADE_VERSION, .. }));
+    assert!(matches!(
+        res,
+        OnProcessProposalDecision::Process {
+            version: UPGRADE_VERSION,
+            ..
+        }
+    ));
 }

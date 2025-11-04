@@ -22,7 +22,8 @@ use std::{
 ///
 /// Use this type when you only need to read data from the database and want
 /// to ensure no accidental writes can occur.
-pub type BotanixDatabaseProviderRO<DB> = BotanixDatabaseProvider<<DB as Database>::TX>;
+pub type BotanixDatabaseProviderRO<DB> =
+    BotanixDatabaseProvider<<DB as Database>::TX>;
 /// A [`BotanixDatabaseProvider`] that holds a read-write database transaction.
 ///
 /// Ideally this would be an alias type. However, there's some weird compiler error (<https://github.com/rust-lang/rust/issues/102211>), that forces us to wrap this in a struct instead.
@@ -217,7 +218,10 @@ impl<TX: DbTx> BotanixDatabaseProvider<TX> {
         &self,
         range: impl RangeBounds<T::Key>,
     ) -> Result<Vec<KeyValue<T>>, DatabaseError> {
-        self.tx.cursor_read::<T>()?.walk_range(range)?.collect::<Result<Vec<_>, _>>()
+        self.tx
+            .cursor_read::<T>()?
+            .walk_range(range)?
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 
@@ -346,7 +350,10 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// The specified key is NOT inclusive - entries with the exact key value
     /// will remain in the database. Only entries with keys > num are removed.
     #[inline]
-    pub fn unwind_table_by_num<T>(&self, num: u64) -> Result<usize, DatabaseError>
+    pub fn unwind_table_by_num<T>(
+        &self,
+        num: u64,
+    ) -> Result<usize, DatabaseError>
     where
         T: Table<Key = u64>,
     {
@@ -394,7 +401,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
 
         while let Some(Ok((entry_key, _))) = reverse_walker.next() {
             if selector(entry_key.clone()) <= key {
-                break
+                break;
             }
             reverse_walker.delete_current()?;
             deleted += 1;
@@ -490,7 +497,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
                     table = %T::NAME,
                     "Pruning limit reached"
                 );
-                break
+                break;
             }
 
             let row = cursor.seek_exact(key)?;
@@ -560,7 +567,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
                     table = %T::NAME,
                     "Pruning limit reached"
                 );
-                break false
+                break false;
             }
 
             let done = self.prune_table_with_range_step(
@@ -571,7 +578,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
             )?;
 
             if done {
-                break true
+                break true;
             } else {
                 deleted_entries += 1;
             }
@@ -609,7 +616,9 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
         skip_filter: &mut impl FnMut(&TableRow<T>) -> bool,
         delete_callback: &mut impl FnMut(TableRow<T>),
     ) -> Result<bool, DatabaseError> {
-        let Some(res) = walker.next() else { return Ok(true) };
+        let Some(res) = walker.next() else {
+            return Ok(true);
+        };
 
         let row = res?;
 

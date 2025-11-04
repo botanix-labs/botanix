@@ -16,7 +16,9 @@ use std::cmp::Ordering;
 ///
 /// The default vote is `Nay`, indicating that validators must explicitly
 /// opt-in to upgrades rather than being opted-in by default.
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Compact)]
+#[derive(
+    Default, Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub enum Vote {
@@ -95,13 +97,16 @@ impl Decompress for RuntimeVersion {
     fn decompress(
         value: &[u8],
     ) -> Result<Self, reth_storage_errors::db::DatabaseError> {
-
         if value.len() < 4 {
             unreachable!("passed on wrong value to decompress");
         }
 
-        let major = u16::from_le_bytes(value[0..2].try_into().expect("size must be valid"));
-        let minor = u16::from_le_bytes(value[2..4].try_into().expect("size must be valid"));
+        let major = u16::from_le_bytes(
+            value[0..2].try_into().expect("size must be valid"),
+        );
+        let minor = u16::from_le_bytes(
+            value[2..4].try_into().expect("size must be valid"),
+        );
 
         Ok(Self(MajorVersion(major), MinorVersion(minor)))
     }
@@ -129,11 +134,15 @@ impl std::fmt::Display for RuntimeVersion {
 }
 
 /// Represents a major version component of a runtime version.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub struct MajorVersion(pub u16);
 
 /// Represents a minor version component of a runtime version.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub struct MinorVersion(pub u16);
 
 #[test]

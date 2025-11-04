@@ -1,11 +1,19 @@
 #![allow(missing_docs)]
-use botanix_chainspec::{constants::{BOTANIX_MAINNET, BOTANIX_TESTNET}, BotanixHardforks};
 use abi::{STAKE_HUB_ABI, VALIDATOR_SET_ABI};
 use alloy_consensus::TxLegacy;
 use alloy_dyn_abi::{DynSolValue, JsonAbiExt};
 use alloy_json_abi::JsonAbi;
-use alloy_primitives::{address, hex, Address, BlockNumber, Bytes, Signature, TxKind, U256};
-use botanix_chainspec::{constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID}, hardforks::botanix::{BotanixHardfork}};
+use alloy_primitives::{
+    address, hex, Address, BlockNumber, Bytes, Signature, TxKind, U256,
+};
+use botanix_chainspec::{
+    constants::{BOTANIX_MAINNET, BOTANIX_TESTNET},
+    BotanixHardforks,
+};
+use botanix_chainspec::{
+    constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID},
+    hardforks::botanix::BotanixHardfork,
+};
 use lazy_static::lazy_static;
 use reth_chainspec::{ChainSpec, EthChainSpec};
 use reth_ethereum_forks::Hardforks;
@@ -30,15 +38,31 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     pub(crate) fn new(chain_spec: Spec) -> Self {
         let validator_abi = serde_json::from_str(*VALIDATOR_SET_ABI).unwrap();
         let stake_hub_abi = serde_json::from_str(*STAKE_HUB_ABI).unwrap();
-        Self { validator_abi, stake_hub_abi, chain_spec }
+        Self {
+            validator_abi,
+            stake_hub_abi,
+            chain_spec,
+        }
     }
 
     /// Creates a deposit tx to pay block reward to a validator.
-    pub(crate) fn pay_validator_tx(&self, address: Address, block_reward: u128) -> TransactionSigned {
-        let function = self.validator_abi.function("deposit").unwrap().first().unwrap();
-        let input = function.abi_encode_input(&[DynSolValue::Address(address)]).unwrap();
+    pub(crate) fn pay_validator_tx(
+        &self,
+        address: Address,
+        block_reward: u128,
+    ) -> TransactionSigned {
+        let function = self
+            .validator_abi
+            .function("deposit")
+            .unwrap()
+            .first()
+            .unwrap();
+        let input = function
+            .abi_encode_input(&[DynSolValue::Address(address)])
+            .unwrap();
 
-        let signature = Signature::new(Default::default(), Default::default(), false);
+        let signature =
+            Signature::new(Default::default(), Default::default(), false);
 
         TransactionSigned::new_unhashed(
             Transaction::Legacy(TxLegacy {
@@ -55,8 +79,12 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     }
 
     /// Creates a transaction to pay system reward transfering the reward to the system contract.
-    pub(crate) fn pay_system_tx(&self, system_reward: u128) -> TransactionSigned {
-        let signature = Signature::new(Default::default(), Default::default(), false);
+    pub(crate) fn pay_system_tx(
+        &self,
+        system_reward: u128,
+    ) -> TransactionSigned {
+        let signature =
+            Signature::new(Default::default(), Default::default(), false);
 
         TransactionSigned::new_unhashed(
             Transaction::Legacy(TxLegacy {
@@ -73,7 +101,12 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     }
 
     pub(crate) fn genesis_contracts_txs(&self) -> Vec<TransactionSigned> {
-        let function = self.validator_abi.function("init").unwrap().first().unwrap();
+        let function = self
+            .validator_abi
+            .function("init")
+            .unwrap()
+            .first()
+            .unwrap();
         let input = function.abi_encode_input(&[]).unwrap();
 
         let contracts = vec![
@@ -86,7 +119,8 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
             CROSS_CHAIN_CONTRACT,
         ];
 
-        let signature = Signature::new(Default::default(), Default::default(), false);
+        let signature =
+            Signature::new(Default::default(), Default::default(), false);
 
         contracts
             .into_iter()
@@ -107,10 +141,16 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     }
 
     pub(crate) fn jalapeno_contracts_txs(&self) -> Vec<TransactionSigned> {
-        let function = self.stake_hub_abi.function("initialize").unwrap().first().unwrap();
+        let function = self
+            .stake_hub_abi
+            .function("initialize")
+            .unwrap()
+            .first()
+            .unwrap();
         let input = function.abi_encode_input(&[]).unwrap();
 
-        let signature = Signature::new(Default::default(), Default::default(), false);
+        let signature =
+            Signature::new(Default::default(), Default::default(), false);
 
         let contracts = vec![
             STAKE_HUB_CONTRACT,
@@ -139,23 +179,38 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     }
 }
 
-pub const VALIDATOR_CONTRACT: Address = address!("0x0000000000000000000000000000000000001000");
-pub const SLASH_CONTRACT: Address = address!("0x0000000000000000000000000000000000001001");
-pub const SYSTEM_REWARD_CONTRACT: Address = address!("0x0000000000000000000000000000000000001002");
-pub const LIGHT_CLIENT_CONTRACT: Address = address!("0x0000000000000000000000000000000000001003");
-pub const TOKEN_HUB_CONTRACT: Address = address!("0x0000000000000000000000000000000000001004");
+pub const VALIDATOR_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001000");
+pub const SLASH_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001001");
+pub const SYSTEM_REWARD_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001002");
+pub const LIGHT_CLIENT_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001003");
+pub const TOKEN_HUB_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001004");
 pub const RELAYER_INCENTIVIZE_CONTRACT: Address =
     address!("0x0000000000000000000000000000000000001005");
-pub const RELAYER_HUB_CONTRACT: Address = address!("0x0000000000000000000000000000000000001006");
-pub const GOV_HUB_CONTRACT: Address = address!("0x0000000000000000000000000000000000001007");
-pub const TOKEN_MANAGER_CONTRACT: Address = address!("0x0000000000000000000000000000000000001008");
-pub const CROSS_CHAIN_CONTRACT: Address = address!("0x0000000000000000000000000000000000002000");
-pub const STAKING_CONTRACT: Address = address!("0x0000000000000000000000000000000000002001");
-pub const STAKE_HUB_CONTRACT: Address = address!("0x0000000000000000000000000000000000002002");
-pub const STAKE_CREDIT_CONTRACT: Address = address!("0x0000000000000000000000000000000000002003");
-pub const GOVERNOR_CONTRACT: Address = address!("0x0000000000000000000000000000000000002004");
-pub const GOV_TOKEN_CONTRACT: Address = address!("0x0000000000000000000000000000000000002005");
-pub const TIMELOCK_CONTRACT: Address = address!("0x0000000000000000000000000000000000002006");
+pub const RELAYER_HUB_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001006");
+pub const GOV_HUB_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001007");
+pub const TOKEN_MANAGER_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000001008");
+pub const CROSS_CHAIN_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000002000");
+pub const STAKING_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000002001");
+pub const STAKE_HUB_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000002002");
+pub const STAKE_CREDIT_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000002003");
+pub const GOVERNOR_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000002004");
+pub const GOV_TOKEN_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000002005");
+pub const TIMELOCK_CONTRACT: Address =
+    address!("0x0000000000000000000000000000000000002006");
 pub const TOKEN_RECOVER_PORTAL_CONTRACT: Address =
     address!("0x0000000000000000000000000000000000003000");
 pub const MINTING_CONTRACT: Address =
@@ -209,26 +264,68 @@ impl SystemContractName {
 
 fn get_all_system_contracts() -> Vec<SystemContractName> {
     let res = vec![
-        SystemContractName::new("ValidatorContract".to_string(), VALIDATOR_CONTRACT),
+        SystemContractName::new(
+            "ValidatorContract".to_string(),
+            VALIDATOR_CONTRACT,
+        ),
         SystemContractName::new("SlashContract".to_string(), SLASH_CONTRACT),
-        SystemContractName::new("SystemRewardContract".to_string(), SYSTEM_REWARD_CONTRACT),
-        SystemContractName::new("LightClientContract".to_string(), LIGHT_CLIENT_CONTRACT),
-        SystemContractName::new("TokenHubContract".to_string(), TOKEN_HUB_CONTRACT),
+        SystemContractName::new(
+            "SystemRewardContract".to_string(),
+            SYSTEM_REWARD_CONTRACT,
+        ),
+        SystemContractName::new(
+            "LightClientContract".to_string(),
+            LIGHT_CLIENT_CONTRACT,
+        ),
+        SystemContractName::new(
+            "TokenHubContract".to_string(),
+            TOKEN_HUB_CONTRACT,
+        ),
         SystemContractName::new(
             "RelayerIncentivizeContract".to_string(),
             RELAYER_INCENTIVIZE_CONTRACT,
         ),
-        SystemContractName::new("RelayerHubContract".to_string(), RELAYER_HUB_CONTRACT),
+        SystemContractName::new(
+            "RelayerHubContract".to_string(),
+            RELAYER_HUB_CONTRACT,
+        ),
         SystemContractName::new("GovHubContract".to_string(), GOV_HUB_CONTRACT),
-        SystemContractName::new("TokenHubContract".to_string(), TOKEN_HUB_CONTRACT),
-        SystemContractName::new("TokenManagerContract".to_string(), TOKEN_MANAGER_CONTRACT),
-        SystemContractName::new("CrossChainContract".to_string(), CROSS_CHAIN_CONTRACT),
-        SystemContractName::new("StakingContract".to_string(), STAKING_CONTRACT),
-        SystemContractName::new("StakeHubContract".to_string(), STAKE_HUB_CONTRACT),
-        SystemContractName::new("StakeCreditContract".to_string(), STAKE_CREDIT_CONTRACT),
-        SystemContractName::new("GovTokenContract".to_string(), GOV_TOKEN_CONTRACT),
-        SystemContractName::new("GovernorContract".to_string(), GOVERNOR_CONTRACT),
-        SystemContractName::new("TimelockContract".to_string(), TIMELOCK_CONTRACT),
+        SystemContractName::new(
+            "TokenHubContract".to_string(),
+            TOKEN_HUB_CONTRACT,
+        ),
+        SystemContractName::new(
+            "TokenManagerContract".to_string(),
+            TOKEN_MANAGER_CONTRACT,
+        ),
+        SystemContractName::new(
+            "CrossChainContract".to_string(),
+            CROSS_CHAIN_CONTRACT,
+        ),
+        SystemContractName::new(
+            "StakingContract".to_string(),
+            STAKING_CONTRACT,
+        ),
+        SystemContractName::new(
+            "StakeHubContract".to_string(),
+            STAKE_HUB_CONTRACT,
+        ),
+        SystemContractName::new(
+            "StakeCreditContract".to_string(),
+            STAKE_CREDIT_CONTRACT,
+        ),
+        SystemContractName::new(
+            "GovTokenContract".to_string(),
+            GOV_TOKEN_CONTRACT,
+        ),
+        SystemContractName::new(
+            "GovernorContract".to_string(),
+            GOVERNOR_CONTRACT,
+        ),
+        SystemContractName::new(
+            "TimelockContract".to_string(),
+            TIMELOCK_CONTRACT,
+        ),
         SystemContractName::new(
             "TokenRecoverPortalContract".to_string(),
             TOKEN_RECOVER_PORTAL_CONTRACT,
@@ -260,14 +357,13 @@ pub(crate) enum SystemContractError {
 
 /// Return hardforks which contain upgrades of system contracts.
 fn hardforks_with_system_contracts() -> Vec<BotanixHardfork> {
-    vec![
-        BotanixHardfork::Jalapeno,
-        BotanixHardfork::Pectra,
-    ]
+    vec![BotanixHardfork::Jalapeno, BotanixHardfork::Pectra]
 }
 
 /// Load the folder names which stores the codes of system contracts.
-fn hardfork_to_dir_name(hardfork: &BotanixHardfork) -> Result<String, SystemContractError> {
+fn hardfork_to_dir_name(
+    hardfork: &BotanixHardfork,
+) -> Result<String, SystemContractError> {
     let name = match hardfork {
         BotanixHardfork::Jalapeno => "jalepeno",
         BotanixHardfork::Pectra => "pectra",
@@ -301,12 +397,15 @@ fn read_all_system_contracts(
         for c in &all_contracts {
             // Use embedded contracts instead of reading from files
             let key = format!("{}_{}_{}", parent_dir, dir, c.name);
-            if let Some(hex_data) = embedded_contracts::EMBEDDED_CONTRACTS.get(&key) {
+            if let Some(hex_data) =
+                embedded_contracts::EMBEDDED_CONTRACTS.get(&key)
+            {
                 let bytes = match hex::decode(hex_data) {
                     Ok(bytes) => bytes,
                     Err(_) => continue, // skip if hex decode fails
                 };
-                inner_map.insert(c.address, Some(Bytecode::new_raw(bytes.into())));
+                inner_map
+                    .insert(c.address, Some(Bytecode::new_raw(bytes.into())));
             }
         }
         outer_map.insert(hardfork.name().to_string(), inner_map);
@@ -351,10 +450,11 @@ where
 {
     let mut m = HashMap::new();
     for (fork, condition) in spec.forks_iter() {
-        if condition.transitions_at_block(block_number) ||
-            condition.transitions_at_timestamp(block_time, parent_block_time)
+        if condition.transitions_at_block(block_number)
+            || condition.transitions_at_timestamp(block_time, parent_block_time)
         {
-            if let Ok(contracts) = get_system_contract_codes(spec, fork.name()) {
+            if let Ok(contracts) = get_system_contract_codes(spec, fork.name())
+            {
                 for (address, v) in &contracts {
                     m.insert(*address, v.clone());
                 }
@@ -380,7 +480,10 @@ pub(crate) fn is_system_transaction<T: reth_primitives_traits::Transaction>(
     let to = tx.to();
     let max_fee_per_gas = tx.max_fee_per_gas();
     if let Some(to) = to {
-        if signer == coinbase && is_invoke_system_contract(&to) && max_fee_per_gas == 0 {
+        if signer == coinbase
+            && is_invoke_system_contract(&to)
+            && max_fee_per_gas == 0
+        {
             return true;
         }
     }
@@ -395,7 +498,11 @@ mod tests {
 
     #[test]
     fn test_get_system_contract_code() {
-        let res = get_system_contract_codes(  &*BOTANIX_MAINNET, BotanixHardfork::Jalapeno.name()).unwrap();
+        let res = get_system_contract_codes(
+            &*BOTANIX_MAINNET,
+            BotanixHardfork::Jalapeno.name(),
+        )
+        .unwrap();
         assert!(!res.is_empty());
 
         let bytes = res.get(&STAKE_HUB_CONTRACT).unwrap();

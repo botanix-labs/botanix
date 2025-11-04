@@ -3,8 +3,9 @@ use reth_chainspec::EthereumHardforks;
 use reth_db::transaction::{DbTx, DbTxMut};
 use reth_provider::{
     providers::{ChainStorage, NodeTypesForProvider},
-    BlockBodyReader, BlockBodyWriter, ChainSpecProvider, ChainStorageReader, ChainStorageWriter,
-    DBProvider, DatabaseProvider, EthStorage, ProviderResult, ReadBodyInput, StorageLocation,
+    BlockBodyReader, BlockBodyWriter, ChainSpecProvider, ChainStorageReader,
+    ChainStorageWriter, DBProvider, DatabaseProvider, EthStorage,
+    ProviderResult, ReadBodyInput, StorageLocation,
 };
 
 /// Storage wrapper for Botanix-specific block bodies and sidecars.
@@ -26,7 +27,10 @@ where
             .into_iter()
             .map(|(block_number, body)| {
                 if let Some(BotanixBlockBody { inner, sidecars }) = body {
-                    ((block_number, Some(inner)), (block_number, Some(sidecars)))
+                    (
+                        (block_number, Some(inner)),
+                        (block_number, Some(sidecars)),
+                    )
                 } else {
                     ((block_number, None), (block_number, None))
                 }
@@ -45,7 +49,8 @@ where
         block: u64,
         remove_from: StorageLocation,
     ) -> ProviderResult<()> {
-        self.0.remove_block_bodies_above(provider, block, remove_from)?;
+        self.0
+            .remove_block_bodies_above(provider, block, remove_from)?;
 
         // TODO: Remove sidecars
 
@@ -68,7 +73,13 @@ where
 
         // TODO: Read pegins, pegouts
 
-        Ok(eth_bodies.into_iter().map(|inner| BotanixBlockBody { inner, sidecars: None }).collect())
+        Ok(eth_bodies
+            .into_iter()
+            .map(|inner| BotanixBlockBody {
+                inner,
+                sidecars: None,
+            })
+            .collect())
     }
 }
 

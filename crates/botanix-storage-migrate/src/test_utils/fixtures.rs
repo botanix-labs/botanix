@@ -2,22 +2,25 @@
 
 #![allow(deprecated)]
 
-use reth_db_api::{
-    cursor::DbCursorRW,
-    transaction::DbTxMut,
-};
-use botanix_storage::models::{PeerID, UuidID};
 use alloy_primitives::{BlockNumber, B256};
+use botanix_storage::models::{PeerID, UuidID};
+use reth_db_api::{cursor::DbCursorRW, transaction::DbTxMut};
 use reth_primitives::Header;
 
 /// Helper function to create test snapshots
-pub fn create_test_snapshots<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()> {
+pub fn create_test_snapshots<TX: DbTxMut>(
+    tx: &TX,
+    count: usize,
+) -> eyre::Result<()> {
     let mut cursor = tx.cursor_write::<botanix_storage::tables::Snapshots>()?;
 
     for i in 1..=count {
         let snapshot_id = i as u64;
-        let snapshot =
-            botanix_storage::models::Snapshot::new(snapshot_id, snapshot_id * 100, B256::random());
+        let snapshot = botanix_storage::models::Snapshot::new(
+            snapshot_id,
+            snapshot_id * 100,
+            B256::random(),
+        );
         cursor.append(snapshot_id, &snapshot)?;
     }
 
@@ -25,18 +28,27 @@ pub fn create_test_snapshots<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result
 }
 
 /// Helper function to create test wallet state syncs
-pub fn create_test_wallet_state_syncs<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()> {
+pub fn create_test_wallet_state_syncs<TX: DbTxMut>(
+    tx: &TX,
+    count: usize,
+) -> eyre::Result<()> {
     // Generate block hashes and sort them to ensure proper append order
-    let mut peer_ids: Vec<PeerID> = (1..=count).map(|_| PeerID::random()).collect();
+    let mut peer_ids: Vec<PeerID> =
+        (1..=count).map(|_| PeerID::random()).collect();
 
     // Sort the hashes to ensure they are in the correct order for append
     peer_ids.sort();
 
-    let mut cursor = tx.cursor_write::<botanix_storage::tables::WalletStateSyncs>()?;
+    let mut cursor =
+        tx.cursor_write::<botanix_storage::tables::WalletStateSyncs>()?;
 
     for (i, peer_id) in peer_ids.into_iter().enumerate() {
-        let record =
-            botanix_storage::models::WalletStateSyncRecord::new(peer_id, UuidID::random(), i as u64, None);
+        let record = botanix_storage::models::WalletStateSyncRecord::new(
+            peer_id,
+            UuidID::random(),
+            i as u64,
+            None,
+        );
         cursor.append(peer_id, &record)?;
     }
 
@@ -44,14 +56,19 @@ pub fn create_test_wallet_state_syncs<TX: DbTxMut>(tx: &TX, count: usize) -> eyr
 }
 
 /// Helper function to create test staged headers
-pub fn create_test_staged_headers<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()> {
+pub fn create_test_staged_headers<TX: DbTxMut>(
+    tx: &TX,
+    count: usize,
+) -> eyre::Result<()> {
     // Generate block hashes and sort them to ensure proper append order
-    let mut block_hashes: Vec<B256> = (1..=count).map(|_| B256::random()).collect();
+    let mut block_hashes: Vec<B256> =
+        (1..=count).map(|_| B256::random()).collect();
 
     // Sort the hashes to ensure they are in the correct order for append
     block_hashes.sort();
 
-    let mut cursor = tx.cursor_write::<botanix_storage::tables::StagedHeader>()?;
+    let mut cursor =
+        tx.cursor_write::<botanix_storage::tables::StagedHeader>()?;
 
     for (i, block_hash) in block_hashes.into_iter().enumerate() {
         let header = botanix_storage::models::HeaderWithPegs {
@@ -72,7 +89,10 @@ pub fn create_test_staged_headers<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::R
 }
 
 /// Helper function to create test chunks
-pub fn create_test_chunks<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()> {
+pub fn create_test_chunks<TX: DbTxMut>(
+    tx: &TX,
+    count: usize,
+) -> eyre::Result<()> {
     let mut cursor = tx.cursor_write::<botanix_storage::tables::Chunks>()?;
 
     for i in 1..=count {
@@ -89,8 +109,12 @@ pub fn create_test_chunks<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()
 }
 
 /// Helper function to create test block snapshots
-pub fn create_test_block_snapshots<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()> {
-    let mut cursor = tx.cursor_write::<botanix_storage::tables::BlockSnapshots>()?;
+pub fn create_test_block_snapshots<TX: DbTxMut>(
+    tx: &TX,
+    count: usize,
+) -> eyre::Result<()> {
+    let mut cursor =
+        tx.cursor_write::<botanix_storage::tables::BlockSnapshots>()?;
 
     for i in 1..=count {
         let block_number = BlockNumber::from(i as u64);
@@ -102,8 +126,12 @@ pub fn create_test_block_snapshots<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::
 }
 
 /// Helper function to create test chunk blocks
-pub fn create_test_chunk_blocks<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()> {
-    let mut cursor = tx.cursor_write::<botanix_storage::tables::ChunkBlocks>()?;
+pub fn create_test_chunk_blocks<TX: DbTxMut>(
+    tx: &TX,
+    count: usize,
+) -> eyre::Result<()> {
+    let mut cursor =
+        tx.cursor_write::<botanix_storage::tables::ChunkBlocks>()?;
 
     for i in 1..=count {
         let chunk_id = i as u64;
@@ -115,12 +143,21 @@ pub fn create_test_chunk_blocks<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Res
 }
 
 /// Helper function to create test snapshot syncs
-pub fn create_test_snapshot_syncs<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::Result<()> {
-    let mut cursor = tx.cursor_write::<botanix_storage::tables::SnapshotSyncs>()?;
+pub fn create_test_snapshot_syncs<TX: DbTxMut>(
+    tx: &TX,
+    count: usize,
+) -> eyre::Result<()> {
+    let mut cursor =
+        tx.cursor_write::<botanix_storage::tables::SnapshotSyncs>()?;
 
     for i in 1..=count {
         let sync_id = i as u64;
-        let sync = botanix_storage::models::SnapshotSync::new(i as u64, B256::random(), 3, i as u64);
+        let sync = botanix_storage::models::SnapshotSync::new(
+            i as u64,
+            B256::random(),
+            3,
+            i as u64,
+        );
         cursor.append(sync_id, &sync)?;
     }
 
@@ -128,12 +165,17 @@ pub fn create_test_snapshot_syncs<TX: DbTxMut>(tx: &TX, count: usize) -> eyre::R
 }
 
 /// Helper function to create test runtime transitions
-pub fn create_test_runtime_transitions(tx: &impl DbTxMut, count: usize) -> eyre::Result<()> {
-    let mut cursor = tx.cursor_write::<botanix_storage::tables::RuntimeTransitions>()?;
+pub fn create_test_runtime_transitions(
+    tx: &impl DbTxMut,
+    count: usize,
+) -> eyre::Result<()> {
+    let mut cursor =
+        tx.cursor_write::<botanix_storage::tables::RuntimeTransitions>()?;
 
     for i in 1..=count {
         let height = i as u64;
-        let transition = botanix_storage::models::RuntimeVersion::new(1, i as u16);
+        let transition =
+            botanix_storage::models::RuntimeVersion::new(1, i as u16);
         cursor.append(height, &transition)?;
     }
 

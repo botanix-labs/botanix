@@ -26,21 +26,31 @@ use super::payload::BotanixPayloadTypes;
 #[non_exhaustive]
 pub struct BotanixPayloadValidatorBuilder;
 
-impl<Node, Types> PayloadValidatorBuilder<Node> for BotanixPayloadValidatorBuilder
+impl<Node, Types> PayloadValidatorBuilder<Node>
+    for BotanixPayloadValidatorBuilder
 where
-    Types:
-        NodeTypes<ChainSpec = BotanixChainSpec, Payload = BotanixPayloadTypes, Primitives = BotanixPrimitives>,
+    Types: NodeTypes<
+        ChainSpec = BotanixChainSpec,
+        Payload = BotanixPayloadTypes,
+        Primitives = BotanixPrimitives,
+    >,
     Node: FullNodeComponents<Types = Types>,
 {
     type Validator = BotanixEngineValidator;
 
-    async fn build(self, ctx: &AddOnsContext<'_, Node>) -> eyre::Result<Self::Validator> {
-        Ok(BotanixEngineValidator::new(Arc::new(ctx.config.chain.clone().as_ref().clone())))
+    async fn build(
+        self,
+        ctx: &AddOnsContext<'_, Node>,
+    ) -> eyre::Result<Self::Validator> {
+        Ok(BotanixEngineValidator::new(Arc::new(
+            ctx.config.chain.clone().as_ref().clone(),
+        )))
     }
 }
 
 /// Botanix engine validator builder that wraps the payload validator
-pub type BotanixEngineValidatorBuilder = BasicEngineValidatorBuilder<BotanixPayloadValidatorBuilder>;
+pub type BotanixEngineValidatorBuilder =
+    BasicEngineValidatorBuilder<BotanixPayloadValidatorBuilder>;
 
 /// Validator for Optimism engine API.
 #[derive(Debug, Clone)]
@@ -51,7 +61,9 @@ pub struct BotanixEngineValidator {
 impl BotanixEngineValidator {
     /// Instantiates a new validator.
     pub fn new(chain_spec: Arc<BotanixChainSpec>) -> Self {
-        Self { inner: BotanixExecutionPayloadValidator { inner: chain_spec } }
+        Self {
+            inner: BotanixExecutionPayloadValidator { inner: chain_spec },
+        }
     }
 }
 
@@ -95,9 +107,13 @@ impl PayloadValidator<BotanixPayloadTypes> for BotanixEngineValidator {
         &self,
         payload: BotanixExecutionData,
     ) -> Result<RecoveredBlock<Self::Block>, NewPayloadError> {
-        let sealed_block =
-            self.inner.ensure_well_formed_payload(payload).map_err(NewPayloadError::other)?;
-        sealed_block.try_recover().map_err(|e| NewPayloadError::Other(e.into()))
+        let sealed_block = self
+            .inner
+            .ensure_well_formed_payload(payload)
+            .map_err(NewPayloadError::other)?;
+        sealed_block
+            .try_recover()
+            .map_err(|e| NewPayloadError::Other(e.into()))
     }
 
     fn validate_block_post_execution_with_hashed_state(
@@ -137,7 +153,7 @@ where
             return Err(PayloadError::BlockHash {
                 execution: sealed_block.hash(),
                 consensus: expected_hash,
-            })?
+            })?;
         }
 
         Ok(sealed_block)

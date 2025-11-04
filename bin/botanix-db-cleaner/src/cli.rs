@@ -26,11 +26,17 @@ impl Cli {
         let path = Path::new(&self.db_path);
 
         if !path.exists() {
-            return Err(anyhow::anyhow!("Database path '{}' does not exist", self.db_path));
+            return Err(anyhow::anyhow!(
+                "Database path '{}' does not exist",
+                self.db_path
+            ));
         }
 
         if !path.is_dir() {
-            return Err(anyhow::anyhow!("Database path '{}' is not a directory", self.db_path));
+            return Err(anyhow::anyhow!(
+                "Database path '{}' is not a directory",
+                self.db_path
+            ));
         }
 
         Ok(())

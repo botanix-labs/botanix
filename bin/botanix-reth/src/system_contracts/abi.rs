@@ -1689,7 +1689,6 @@ lazy_static! {
     "anonymous": false
   }
 ]"#;
-   
     pub static ref STAKE_HUB_ABI: &'static str = r#"
         [
     {
@@ -3739,10 +3738,18 @@ mod tests {
     fn abi_encode() {
         let expected = "63a036b500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
-        let stake_hub_abi: JsonAbi = serde_json::from_str(*STAKE_HUB_ABI).unwrap();
-        let function = stake_hub_abi.function("getValidatorElectionInfo").unwrap().first().unwrap();
+        let stake_hub_abi: JsonAbi =
+            serde_json::from_str(*STAKE_HUB_ABI).unwrap();
+        let function = stake_hub_abi
+            .function("getValidatorElectionInfo")
+            .unwrap()
+            .first()
+            .unwrap();
         let input = function
-            .abi_encode_input(&[DynSolValue::from(U256::from(0)), DynSolValue::from(U256::from(0))])
+            .abi_encode_input(&[
+                DynSolValue::from(U256::from(0)),
+                DynSolValue::from(U256::from(0)),
+            ])
             .unwrap();
 
         let input_str = hex::encode(&input);
@@ -3752,7 +3759,8 @@ mod tests {
 
     #[test]
     fn abi_decode() {
-        let expected_consensus_addr = address!("C08B5542D177ac6686946920409741463a15dDdB");
+        let expected_consensus_addr =
+            address!("C08B5542D177ac6686946920409741463a15dDdB");
         let expected_voting_power = U256::from(1);
         let expected_vote_addr = hex::decode("3c2438a4113804bf99e3849ef31887c0f880a0feb92f356f58fbd023a82f5311fc87a5883a662e9ebbbefc90bf13aa53").unwrap();
         let expected_total_length = U256::from(1);
@@ -3760,14 +3768,27 @@ mod tests {
         let output_str = "000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000c08b5542d177ac6686946920409741463a15dddb000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000303c2438a4113804bf99e3849ef31887c0f880a0feb92f356f58fbd023a82f5311fc87a5883a662e9ebbbefc90bf13aa5300000000000000000000000000000000";
         let output = hex::decode(output_str).unwrap();
 
-        let stake_hub_abi: JsonAbi = serde_json::from_str(*STAKE_HUB_ABI).unwrap();
-        let function = stake_hub_abi.function("getValidatorElectionInfo").unwrap().first().unwrap();
+        let stake_hub_abi: JsonAbi =
+            serde_json::from_str(*STAKE_HUB_ABI).unwrap();
+        let function = stake_hub_abi
+            .function("getValidatorElectionInfo")
+            .unwrap()
+            .first()
+            .unwrap();
         let output = function.abi_decode_output(&output).unwrap();
 
-        let consensus_address: Vec<Address> =
-            output[0].as_array().unwrap().iter().map(|val| val.as_address().unwrap()).collect();
-        let voting_powers: Vec<U256> =
-            output[1].as_array().unwrap().iter().map(|val| val.as_uint().unwrap().0).collect();
+        let consensus_address: Vec<Address> = output[0]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|val| val.as_address().unwrap())
+            .collect();
+        let voting_powers: Vec<U256> = output[1]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|val| val.as_uint().unwrap().0)
+            .collect();
         let vote_addresses: Vec<Vec<u8>> = output[2]
             .as_array()
             .unwrap()

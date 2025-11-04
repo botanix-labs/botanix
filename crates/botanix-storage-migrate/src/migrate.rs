@@ -24,7 +24,10 @@ use std::path::Path;
 /// * The reth database path does not exist or is not a directory
 /// * The botanix database path exists but is not a directory
 /// * Reading the directory entries fails
-pub fn is_migration_needed(reth_db_path: &Path, botanix_db_path: &Path) -> eyre::Result<bool> {
+pub fn is_migration_needed(
+    reth_db_path: &Path,
+    botanix_db_path: &Path,
+) -> eyre::Result<bool> {
     let is_migration_needed =
         path_has_content(reth_db_path)? && !path_has_content(botanix_db_path)?;
 
@@ -78,16 +81,21 @@ fn path_has_content(path: &Path) -> eyre::Result<bool> {
 /// migrate_botanix_tables(reth_db.db(), botanix_db.db())?;
 /// # Ok::<(), eyre::Error>(())
 /// ```
-pub fn migrate_botanix_tables(reth_db: &DatabaseEnv, botanix_db: &DatabaseEnv) -> eyre::Result<()> {
+pub fn migrate_botanix_tables(
+    reth_db: &DatabaseEnv,
+    botanix_db: &DatabaseEnv,
+) -> eyre::Result<()> {
     let start_time = std::time::Instant::now();
 
     // Open mutable transactions for both databases
 
-    let reth_tx =
-        reth_db.tx_mut().wrap_err("Failed to create write transaction for reth database")?;
+    let reth_tx = reth_db
+        .tx_mut()
+        .wrap_err("Failed to create write transaction for reth database")?;
 
-    let botanix_tx =
-        botanix_db.tx_mut().wrap_err("Failed to create write transaction for botanix database")?;
+    let botanix_tx = botanix_db
+        .tx_mut()
+        .wrap_err("Failed to create write transaction for botanix database")?;
 
     let transporter = TableTransporter::new(&reth_tx, &botanix_tx);
 
@@ -105,18 +113,29 @@ pub fn migrate_botanix_tables(reth_db: &DatabaseEnv, botanix_db: &DatabaseEnv) -
             .wrap_err(format!("Failed to migrate {} table", table.name()))?;
 
         if report.is_migrated() {
-            tracing::info!("Successfully migrated table {}: {}", table.name(), report);
+            tracing::info!(
+                "Successfully migrated table {}: {}",
+                table.name(),
+                report
+            );
             migrated_tables_count += 1;
             elapsed_time += report.elapsed_time;
         } else {
-            tracing::info!("No entries to migrate for table {}. Skipping.", table.name());
+            tracing::info!(
+                "No entries to migrate for table {}. Skipping.",
+                table.name()
+            );
         }
     }
 
     // Commit the transactions
 
-    botanix_tx.commit().wrap_err("Failed to commit botanix transaction")?;
-    reth_tx.commit().wrap_err("Failed to commit reth transaction")?;
+    botanix_tx
+        .commit()
+        .wrap_err("Failed to commit botanix transaction")?;
+    reth_tx
+        .commit()
+        .wrap_err("Failed to commit reth transaction")?;
 
     let skipped_tables_count = Tables::ALL.len() - migrated_tables_count;
 

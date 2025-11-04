@@ -28,11 +28,11 @@
 //! and deserialization of complex data structures.
 
 use super::models::*;
-use reth_db::{tables, TableType, TableViewer};
-use alloy_primitives::{B256, BlockNumber};
-use std::fmt;
-use reth_db_api::table::TableInfo;
+use alloy_primitives::{BlockNumber, B256};
 use reth_db::TableSet;
+use reth_db::{tables, TableType, TableViewer};
+use reth_db_api::table::TableInfo;
+use std::fmt;
 
 tables! {
     /// Store snapshot id to snapshot data.

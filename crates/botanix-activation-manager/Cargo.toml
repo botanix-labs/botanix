@@ -5,16 +5,16 @@ edition = { workspace = true }
 rust-version = { workspace = true }
 license = { workspace = true }
 
+[features]
+test-utils = []
+
 [dependencies]
-# botanix deps
-botanix-storage = { workspace = true }
 
 #  reth deps
 alloy-primitives = { workspace = true }
+# botanix deps
+botanix-storage = { workspace = true }
 reth-storage-errors = { workspace = true }
-
-[features]
-test-utils = []
 
 [dev-dependencies]
 # This enables the feature when running tests

@@ -23,7 +23,9 @@ use serde::{Deserialize, Serialize};
 /// - `pegins`: Bitcoin-to-Botanix bridge operations found in this block
 /// - `pegouts`: Botanix-to-Bitcoin bridge operations found in this block
 /// - `header`: The original blockchain header containing these operations
-#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact)]
+#[derive(
+    Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub struct HeaderWithPegs {
@@ -54,7 +56,9 @@ pub struct HeaderWithPegs {
 /// on the Bitcoin network to mint equivalent tokens on the Botanix network.
 /// This structure contains all the necessary information to process and verify
 /// a pegin operation.
-#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact)]
+#[derive(
+    Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub struct PeginData {
@@ -99,7 +103,9 @@ pub struct PeginData {
 /// on the Botanix network to unlock equivalent Bitcoin on the Bitcoin network.
 /// This structure contains all the necessary information to process and execute
 /// a pegout operation.
-#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact)]
+#[derive(
+    Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub struct PegoutData {

@@ -1,14 +1,17 @@
 //! Extended bitcoin server client with authentication
 use crate::{
     btc_server::{
-        ConsensusCheckpointRequest, DkgPayload, DkgPayloads, Empty, FinalizeSignerRequest,
-        FinalizeSigningRequest, FinalizeSigningResponse, GetAllUtxosResponse,
-        GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse, GetGatewayAddressRequest,
-        GetGatewayAddressResponse, GetPendingPegoutsResponse, GetPublicKeyResponse,
-        GetSessionIdsRequest, GetSessionIdsResponse, GetSigningStatusRequest,
-        GetSigningStatusResponse, GetTrackedTxsResponse, MakeTxRequest, RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,ResetAllUtxosRequest,
-        ResetWalletStateRequest, SigningPackage, SigningPackageRequest, ToSignRequest,
-        WalletStateResponse,
+        ConsensusCheckpointRequest, DkgPayload, DkgPayloads, Empty,
+        FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
+        GetAllUtxosResponse, GetFinalizedPegoutIdsRequest,
+        GetFinalizedPegoutIdsResponse, GetGatewayAddressRequest,
+        GetGatewayAddressResponse, GetPendingPegoutsResponse,
+        GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
+        GetSigningStatusRequest, GetSigningStatusResponse,
+        GetTrackedTxsResponse, MakeTxRequest, RecoverMissingUtxosRequest,
+        RecoverMissingUtxosResponse, ResetAllUtxosRequest,
+        ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
+        ToSignRequest, WalletStateResponse,
     },
     jwt::{Claims, JwtSecret},
     BtcServerClient,
@@ -25,7 +28,9 @@ use tonic::{
 const JWT_HEADER_KEY: &str = "trace-proto-bin";
 
 fn to_u64(time: SystemTime) -> u64 {
-    time.duration_since(UNIX_EPOCH).expect("Duration since epoch cannot fail").as_secs()
+    time.duration_since(UNIX_EPOCH)
+        .expect("Duration since epoch cannot fail")
+        .as_secs()
 }
 
 /// grpc-related errors
@@ -107,7 +112,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<WalletStateResponse, GrpcClientError>>;
-    fn abort_signing(&mut self, request: Empty) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn abort_signing(
+        &mut self,
+        request: Empty,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn get_signing_status(
         &mut self,
         request: GetSigningStatusRequest,
@@ -116,7 +124,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: GetSessionIdsRequest,
     ) -> BoxFuture<'_, Result<GetSessionIdsResponse, GrpcClientError>>;
-    fn health_check(&mut self, request: Empty) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn health_check(
+        &mut self,
+        request: Empty,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn reset_all_utxos(
         &mut self,
         request: ResetAllUtxosRequest,
@@ -171,7 +182,8 @@ macro_rules! generate_method {
                 let mut req = tonic::Request::new(request);
 
                 if let Some(jwt_auth_token) = self.generate_jwt_token() {
-                    let jwt_auth_token = MetadataValue::from_bytes(jwt_auth_token.as_bytes());
+                    let jwt_auth_token =
+                        MetadataValue::from_bytes(jwt_auth_token.as_bytes());
                     let key = BinaryMetadataKey::from_static(JWT_HEADER_KEY);
                     req.metadata_mut().insert_bin(key, jwt_auth_token);
                 }
@@ -193,8 +205,9 @@ macro_rules! generate_stream_method {
         ) -> BoxFuture<
             '_,
             Result<
-                impl tonic::codegen::tokio_stream::Stream<Item = Result<$resp_ty, tonic::Status>>
-                    + Send
+                impl tonic::codegen::tokio_stream::Stream<
+                        Item = Result<$resp_ty, tonic::Status>,
+                    > + Send
                     + 'static,
                 GrpcClientError,
             >,
@@ -203,7 +216,8 @@ macro_rules! generate_stream_method {
                 let mut req = tonic::Request::new(request);
 
                 if let Some(jwt_auth_token) = self.generate_jwt_token() {
-                    let jwt_auth_token = MetadataValue::from_bytes(jwt_auth_token.as_bytes());
+                    let jwt_auth_token =
+                        MetadataValue::from_bytes(jwt_auth_token.as_bytes());
                     let key = BinaryMetadataKey::from_static(JWT_HEADER_KEY);
                     req.metadata_mut().insert_bin(key, jwt_auth_token);
                 }
@@ -226,8 +240,13 @@ pub struct BtcServerExtendedClient {
 
 impl BtcServerExtendedClient {
     /// Create a new Bitcoin Server Client with extended authentication credentials
-    pub async fn new(url: String, jwt_secret: Option<JwtSecret>) -> Result<Self, GrpcClientError> {
-        let uri = url.parse::<Uri>().map_err(|e| GrpcClientError::InvalidUri(e.to_string()))?;
+    pub async fn new(
+        url: String,
+        jwt_secret: Option<JwtSecret>,
+    ) -> Result<Self, GrpcClientError> {
+        let uri = url
+            .parse::<Uri>()
+            .map_err(|e| GrpcClientError::InvalidUri(e.to_string()))?;
         let chan = tonic::transport::Channel::builder(uri)
             .timeout(Duration::from_secs(20))
             .connect_timeout(Duration::from_secs(20))
@@ -235,7 +254,9 @@ impl BtcServerExtendedClient {
             .tcp_nodelay(true)
             .keep_alive_while_idle(true);
 
-        let client = BtcServerClient::connect(chan).await.map_err(GrpcClientError::Transport)?;
+        let client = BtcServerClient::connect(chan)
+            .await
+            .map_err(GrpcClientError::Transport)?;
 
         Ok(Self { client, jwt_secret })
     }
@@ -250,36 +271,71 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     /// TODO: fix unwraps
     fn generate_jwt_token(&mut self) -> Option<String> {
         self.jwt_secret.as_ref().map(|jwt_secret| {
-            let claims = Claims { iat: to_u64(SystemTime::now()), exp: Some(10000000000) };
+            let claims = Claims {
+                iat: to_u64(SystemTime::now()),
+                exp: Some(10000000000),
+            };
             let jwt_token = jwt_secret.encode(&claims).unwrap();
             jwt_secret.validate(&jwt_token.clone()).unwrap();
             jwt_token
         })
     }
 
-    generate_method!(get_gateway_address, GetGatewayAddressRequest, GetGatewayAddressResponse);
+    generate_method!(
+        get_gateway_address,
+        GetGatewayAddressRequest,
+        GetGatewayAddressResponse
+    );
     generate_method!(get_public_key, Empty, GetPublicKeyResponse);
     generate_method!(get_dkg_payloads, Empty, DkgPayloads);
     generate_method!(new_dkg_payload, DkgPayload, DkgPayloads);
-    generate_method!(get_round1_signing_package, SigningPackageRequest, SigningPackage);
-    generate_method!(get_round2_signing_package, SigningPackageRequest, SigningPackage);
+    generate_method!(
+        get_round1_signing_package,
+        SigningPackageRequest,
+        SigningPackage
+    );
+    generate_method!(
+        get_round2_signing_package,
+        SigningPackageRequest,
+        SigningPackage
+    );
     generate_method!(new_round1_signing_package, SigningPackage, Empty);
     generate_method!(get_psbt, MakeTxRequest, SigningPackage);
     generate_method!(get_to_sign_package, ToSignRequest, SigningPackage);
     generate_method!(new_round2_signing_package, SigningPackage, Empty);
-    generate_method!(finalize_signing, FinalizeSigningRequest, FinalizeSigningResponse);
-    generate_method!(signer_finalize, FinalizeSignerRequest, FinalizeSigningResponse);
+    generate_method!(
+        finalize_signing,
+        FinalizeSigningRequest,
+        FinalizeSigningResponse
+    );
+    generate_method!(
+        signer_finalize,
+        FinalizeSignerRequest,
+        FinalizeSigningResponse
+    );
     generate_method!(get_wallet_state, Empty, WalletStateResponse);
     generate_method!(abort_signing, Empty, Empty);
-    generate_method!(get_signing_status, GetSigningStatusRequest, GetSigningStatusResponse);
-    generate_method!(get_session_ids, GetSessionIdsRequest, GetSessionIdsResponse);
+    generate_method!(
+        get_signing_status,
+        GetSigningStatusRequest,
+        GetSigningStatusResponse
+    );
+    generate_method!(
+        get_session_ids,
+        GetSessionIdsRequest,
+        GetSessionIdsResponse
+    );
     generate_method!(health_check, Empty, Empty);
     generate_method!(reset_all_utxos, ResetAllUtxosRequest, Empty);
     generate_method!(get_all_utxos, Empty, GetAllUtxosResponse);
     generate_method!(get_tracked_txs, Empty, GetTrackedTxsResponse);
     generate_method!(get_pending_pegouts, Empty, GetPendingPegoutsResponse);
     generate_method!(reset_wallet_state, ResetWalletStateRequest, Empty);
-    generate_method!(new_consensus_checkpoint, ConsensusCheckpointRequest, Empty);
+    generate_method!(
+        new_consensus_checkpoint,
+        ConsensusCheckpointRequest,
+        Empty
+    );
     generate_method!(
         recover_missing_utxos,
         RecoverMissingUtxosRequest,
@@ -300,11 +356,20 @@ pub struct GrpcClientFactory {
 
 impl GrpcClientFactory {
     pub fn new(grpc_url: String, jwt_secret: Option<JwtSecret>) -> Self {
-        Self { grpc_url, jwt_secret }
+        Self {
+            grpc_url,
+            jwt_secret,
+        }
     }
 
-    pub async fn build_and_connect(&self) -> Result<BtcServerExtendedClient, GrpcClientError> {
-        let client = BtcServerExtendedClient::new(self.grpc_url.clone(), self.jwt_secret).await?;
+    pub async fn build_and_connect(
+        &self,
+    ) -> Result<BtcServerExtendedClient, GrpcClientError> {
+        let client = BtcServerExtendedClient::new(
+            self.grpc_url.clone(),
+            self.jwt_secret,
+        )
+        .await?;
 
         Ok(client)
     }
@@ -328,7 +393,10 @@ mod tests {
         let jwt_secret = JwtSecret::random();
 
         // create jwt token using the secret
-        let claims = Claims { iat: to_u64(SystemTime::now()), exp: Some(10000000000) };
+        let claims = Claims {
+            iat: to_u64(SystemTime::now()),
+            exp: Some(10000000000),
+        };
         let jwt_token = jwt_secret.encode(&claims).unwrap();
 
         // encode and set the token as a metadata value
@@ -344,10 +412,12 @@ mod tests {
         if let Some(metadata_value) = request.metadata().get_bin(key) {
             // try to verify the received token
             let jwt_request_token_received = metadata_value.as_encoded_bytes();
-            let jwt_token_base64_decoded =
-                general_purpose::STANDARD.decode(jwt_request_token_received).unwrap();
+            let jwt_token_base64_decoded = general_purpose::STANDARD
+                .decode(jwt_request_token_received)
+                .unwrap();
 
-            let jwt_stringified = String::from_utf8(jwt_token_base64_decoded).unwrap();
+            let jwt_stringified =
+                String::from_utf8(jwt_token_base64_decoded).unwrap();
 
             // validate the request token
             assert!(jwt_secret.validate(&jwt_stringified).is_ok());

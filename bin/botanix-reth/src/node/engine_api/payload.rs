@@ -1,4 +1,6 @@
-use crate::node::{engine::BotanixBuiltPayload, engine_api::validator::BotanixExecutionData};
+use crate::node::{
+    engine::BotanixBuiltPayload, engine_api::validator::BotanixExecutionData,
+};
 use reth::{
     payload::EthPayloadBuilderAttributes,
     primitives::{NodePrimitives, SealedBlock},

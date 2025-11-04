@@ -15,7 +15,10 @@ impl BlockAssembler<BotanixBlockExecutorFactory> for BotanixEvmConfig {
         &self,
         input: BlockAssemblerInput<'_, '_, BotanixBlockExecutorFactory, Header>,
     ) -> Result<Self::Block, BlockExecutionError> {
-        let Block { header, body: inner } = self.block_assembler.assemble_block(input)?;
+        let Block {
+            header,
+            body: inner,
+        } = self.block_assembler.assemble_block(input)?;
         Ok(BotanixBlock {
             header,
             body: BotanixBlockBody {

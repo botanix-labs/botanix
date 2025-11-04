@@ -1,7 +1,9 @@
 use std::{borrow::BorrowMut, collections::BTreeMap};
 
 use bitcoin::{
-    psbt::{raw::ProprietaryKey, Input as PsbtInput, Output as PsbtOutput, Psbt},
+    psbt::{
+        raw::ProprietaryKey, Input as PsbtInput, Output as PsbtOutput, Psbt,
+    },
     Amount, OutPoint, TapSighash, TapSighashType, TxOut,
 };
 use bitcoin_hashes::Hash;
@@ -59,38 +61,48 @@ impl ProprietaryKeyExt for ProprietaryKey {}
 pub trait PsbtInputExt: BorrowMut<PsbtInput> {
     fn set_eth_address(&mut self, eth_address: EthAddress) {
         // Key stores no keydata, only the type value
-        self.borrow_mut().proprietary.insert(ETH_ADDRESS_KEY.clone(), eth_address.to_vec());
+        self.borrow_mut()
+            .proprietary
+            .insert(ETH_ADDRESS_KEY.clone(), eth_address.to_vec());
     }
 
     /// Adds version information to PSBT inputs
     fn add_version_to_psbt(&mut self, version: u32) {
-        self.borrow_mut()
-            .proprietary
-            .insert(UTXO_VERSION_TYPE_KEY.clone(), (version).to_le_bytes().to_vec());
+        self.borrow_mut().proprietary.insert(
+            UTXO_VERSION_TYPE_KEY.clone(),
+            (version).to_le_bytes().to_vec(),
+        );
     }
 
     /// Gets the version of a UTXO from a PSBT input
     fn get_version_from_psbt_input(&self) -> Option<UtxoVersion> {
-        self.borrow().proprietary.get(&UTXO_VERSION_TYPE_KEY).and_then(|bytes| {
-            if bytes.len() == 4 {
-                let version = u32::from_le_bytes(bytes.as_slice().try_into().ok()?);
-                UtxoVersion::try_from(version).ok()
-            } else {
-                None
-            }
-        })
+        self.borrow()
+            .proprietary
+            .get(&UTXO_VERSION_TYPE_KEY)
+            .and_then(|bytes| {
+                if bytes.len() == 4 {
+                    let version =
+                        u32::from_le_bytes(bytes.as_slice().try_into().ok()?);
+                    UtxoVersion::try_from(version).ok()
+                } else {
+                    None
+                }
+            })
     }
 
     fn eth_address(&self) -> Option<EthAddress> {
-        self.borrow().proprietary.get(&ETH_ADDRESS_KEY).and_then(|b| {
-            if b.len() == 20 {
-                let mut ret = [0u8; 20];
-                ret.copy_from_slice(&b[..]);
-                Some(ret)
-            } else {
-                None
-            }
-        })
+        self.borrow()
+            .proprietary
+            .get(&ETH_ADDRESS_KEY)
+            .and_then(|b| {
+                if b.len() == 20 {
+                    let mut ret = [0u8; 20];
+                    ret.copy_from_slice(&b[..]);
+                    Some(ret)
+                } else {
+                    None
+                }
+            })
     }
 
     /// Set the signing commitment for this input.
@@ -136,10 +148,12 @@ pub trait PsbtInputExt: BorrowMut<PsbtInput> {
                     Some(v) => v,
                     None => continue,
                 };
-                let sc = match frost::round1::SigningCommitments::deserialize(value) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
+                let sc =
+                    match frost::round1::SigningCommitments::deserialize(value)
+                    {
+                        Ok(v) => v,
+                        Err(_) => continue,
+                    };
                 ret.insert(frost_id, sc);
             }
         }
@@ -179,7 +193,9 @@ pub trait PsbtInputExt: BorrowMut<PsbtInput> {
     }
 
     /// Get all the partial signatures from this inputs for all frost ids.
-    fn all_partial_signatures(&self) -> BTreeMap<frost::Identifier, frost::round2::SignatureShare> {
+    fn all_partial_signatures(
+        &self,
+    ) -> BTreeMap<frost::Identifier, frost::round2::SignatureShare> {
         let mut ret = BTreeMap::new();
         for (key, value) in self.borrow().proprietary.iter() {
             if let Some(key) = key.cast(PARTIAL_SIGNATURE_KEY_TYPE) {
@@ -204,7 +220,9 @@ pub type PegoutId = [u8; 36];
 pub trait PsbtOutputExt: BorrowMut<PsbtOutput> {
     fn set_pegout_id(&mut self, pegout_id: PegoutId) {
         // Key stores no keydata, only the type value
-        self.borrow_mut().proprietary.insert(PEGOUT_ID_KEY.clone(), pegout_id.to_vec());
+        self.borrow_mut()
+            .proprietary
+            .insert(PEGOUT_ID_KEY.clone(), pegout_id.to_vec());
     }
 
     fn pegout_id(&self) -> Option<PegoutId> {
@@ -224,7 +242,11 @@ impl PsbtOutputExt for PsbtOutput {}
 pub trait PsbtExt: BorrowMut<Psbt> {
     /// Get all pegouts ids from this PSBT
     fn pegout_ids(&self) -> Vec<PegoutId> {
-        self.borrow().outputs.iter().filter_map(|o| o.pegout_id()).collect()
+        self.borrow()
+            .outputs
+            .iter()
+            .filter_map(|o| o.pegout_id())
+            .collect()
     }
 
     /// Converts this PSBT into a vector of Frost signing packages.
@@ -241,7 +263,8 @@ pub trait PsbtExt: BorrowMut<Psbt> {
     /// otherwise.
     fn signing_packages(
         &self,
-    ) -> Result<Vec<frost::SigningPackage>, PsbtToSigningPackageConversionError> {
+    ) -> Result<Vec<frost::SigningPackage>, PsbtToSigningPackageConversionError>
+    {
         let mut ret = Vec::new();
         for (idx, input) in self.borrow().inputs.iter().enumerate() {
             let sighash = calculate_sighash(self.borrow(), idx)?;
@@ -252,8 +275,10 @@ pub trait PsbtExt: BorrowMut<Psbt> {
                 return Err(PsbtToSigningPackageConversionError::MissingSigningCommitments);
             }
 
-            let signing_package =
-                frost::SigningPackage::new(sc, sighash.to_raw_hash().as_byte_array().as_slice());
+            let signing_package = frost::SigningPackage::new(
+                sc,
+                sighash.to_raw_hash().as_byte_array().as_slice(),
+            );
             ret.push(signing_package);
         }
         Ok(ret)
@@ -261,12 +286,16 @@ pub trait PsbtExt: BorrowMut<Psbt> {
 
     /// Get the fee per output for this PSBT.
     /// Self only needs to be mutable so it can be included in this trait.
-    fn fee_per_output(&self, num_outputs: u64) -> Result<Amount, PsbtFeePerOutputError> {
+    fn fee_per_output(
+        &self,
+        num_outputs: u64,
+    ) -> Result<Amount, PsbtFeePerOutputError> {
         // calculate fee per output which is shared across all outputs
         let psbt: &Psbt = self.borrow();
         let fee: Amount = psbt.fee()?;
-        let fee_per_output: Amount =
-            fee.checked_div(num_outputs).ok_or(PsbtFeePerOutputError::DivideByZero)?;
+        let fee_per_output: Amount = fee
+            .checked_div(num_outputs)
+            .ok_or(PsbtFeePerOutputError::DivideByZero)?;
         Ok(fee_per_output)
     }
 }
@@ -299,7 +328,9 @@ pub fn frost_id_from_bytes(b: &[u8]) -> Option<frost::Identifier> {
     frost::Identifier::deserialize(b).ok()
 }
 
-pub fn signature_share_from_bytes(b: &[u8]) -> Option<frost::round2::SignatureShare> {
+pub fn signature_share_from_bytes(
+    b: &[u8],
+) -> Option<frost::round2::SignatureShare> {
     frost::round2::SignatureShare::deserialize(b).ok()
 }
 
@@ -318,7 +349,8 @@ pub(crate) fn create_psbt(
     outputs: Vec<(TxOut, PegoutId)>,
     change: Option<TxOut>,
 ) -> Psbt {
-    let mut output: Vec<TxOut> = outputs.iter().map(|(out, _)| out).cloned().collect();
+    let mut output: Vec<TxOut> =
+        outputs.iter().map(|(out, _)| out).cloned().collect();
     if let Some(change) = change {
         output.push(change);
     }
@@ -349,7 +381,9 @@ pub(crate) fn create_psbt(
     }
 
     // add output meta
-    for (psbt_output, (_out, pegout_id)) in psbt.outputs.iter_mut().zip(outputs.iter()) {
+    for (psbt_output, (_out, pegout_id)) in
+        psbt.outputs.iter_mut().zip(outputs.iter())
+    {
         // Pegout ids are stored in the proprietary field to be checked and validated
         // by peers
         psbt_output.set_pegout_id(*pegout_id);
@@ -372,11 +406,16 @@ pub(crate) fn calculate_sighash(
     psbt: &Psbt,
     input_index: usize,
 ) -> Result<TapSighash, CalculateSighashError> {
-    let mut sighashcache = bitcoin::sighash::SighashCache::new(&psbt.unsigned_tx);
+    let mut sighashcache =
+        bitcoin::sighash::SighashCache::new(&psbt.unsigned_tx);
     let prevouts = psbt
         .inputs
         .iter()
-        .map(|i| i.witness_utxo.as_ref().ok_or(CalculateSighashError::MissingWitnessUtxo))
+        .map(|i| {
+            i.witness_utxo
+                .as_ref()
+                .ok_or(CalculateSighashError::MissingWitnessUtxo)
+        })
         .collect::<Result<Vec<_>, CalculateSighashError>>()?;
     let sighash = sighashcache.taproot_key_spend_signature_hash(
         input_index,

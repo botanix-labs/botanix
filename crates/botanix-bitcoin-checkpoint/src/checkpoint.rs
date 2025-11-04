@@ -34,12 +34,20 @@ impl BitcoinCheckpoint {
     /// A new `BitcoinCheckpoint` instance
     pub fn new(header: BitcoinHeader, height: u32) -> Self {
         let hash = header.block_hash();
-        Self { header, height, hash }
+        Self {
+            header,
+            height,
+            hash,
+        }
     }
 }
 
 impl Display for BitcoinCheckpoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BitcoinCheckpoint {{ height: {}, hash: {} }}", self.height, self.hash)
+        write!(
+            f,
+            "BitcoinCheckpoint {{ height: {}, hash: {} }}",
+            self.height, self.hash
+        )
     }
 }

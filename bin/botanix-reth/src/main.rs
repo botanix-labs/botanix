@@ -19,12 +19,12 @@ use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
     consensus::{
-        comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec,
-        wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder,
+        comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable,
+        utils::retry_exec, wallet_state_sync::WalletStateSync,
+        AuthorityConsensusBuilder,
     },
     node::{
-        consensus::BotanixConsensus, evm::config::BotanixEvmConfig, 
-        BotanixNode,
+        consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode,
     },
     services::{
         activation_manager::setup_activation_manager,
@@ -68,18 +68,24 @@ fn main() -> eyre::Result<()> {
     let cli = Cli::<BotanixChainSpecParser, BotanixArgs>::parse();
 
     // Pull out the Node subcommand so we can access its fields like `network`.
-    let node_cmd: &NodeCommand<BotanixChainSpecParser, BotanixArgs> = match &cli.command {
-        Commands::Node(cmd) => cmd.as_ref(),
-        // If the user ran a non-node command (e.g. `reth db`), just execute it normally.
-        _ => {
-            // fall back to running without custom launcher
-            cli.run_with_components::<BotanixNode>(
-                |spec| (BotanixEvmConfig::new(spec.clone()), BotanixConsensus::new(spec)),
-                |_builder, _args| async { Ok(()) },
-            )?;
-            std::process::exit(0);
-        }
-    };
+    let node_cmd: &NodeCommand<BotanixChainSpecParser, BotanixArgs> =
+        match &cli.command {
+            Commands::Node(cmd) => cmd.as_ref(),
+            // If the user ran a non-node command (e.g. `reth db`), just execute it normally.
+            _ => {
+                // fall back to running without custom launcher
+                cli.run_with_components::<BotanixNode>(
+                    |spec| {
+                        (
+                            BotanixEvmConfig::new(spec.clone()),
+                            BotanixConsensus::new(spec),
+                        )
+                    },
+                    |_builder, _args| async { Ok(()) },
+                )?;
+                std::process::exit(0);
+            }
+        };
     let network_args = node_cmd.network.clone();
     let rpc_server_args = node_cmd.rpc.clone();
     let datadir_args = node_cmd.datadir.clone();

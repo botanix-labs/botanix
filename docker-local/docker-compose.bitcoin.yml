@@ -8,7 +8,7 @@ services:
       - ./bitcoin-core/bitcoin.conf:/home/bitcoin/.bitcoin/bitcoin.conf
       - bitcoin-core-db:/home/bitcoin/.bitcoin/regtest
     ports:
-      - "127.0.0.1:38332:8332" # RPC
+      - "127.0.0.1:38332:8332"  # RPC
     networks:
       - botanix-local
 

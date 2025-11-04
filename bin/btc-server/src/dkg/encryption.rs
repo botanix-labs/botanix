@@ -132,7 +132,8 @@ impl DkgHandshakeManager {
 
         let secp = secp256k1::Secp256k1::new();
         let my_eph_sec = secp256k1::SecretKey::new(&mut rand::thread_rng());
-        let my_eph_pub = secp256k1::PublicKey::from_secret_key(&secp, &my_eph_sec);
+        let my_eph_pub =
+            secp256k1::PublicKey::from_secret_key(&secp, &my_eph_sec);
 
         // Track my eph key
         let mut eph_keys = BTreeMap::new();
@@ -167,7 +168,8 @@ impl DkgHandshakeManager {
     pub fn commit_round1(
         &mut self,
         package: &round1::Package,
-    ) -> Result<(secp256k1::PublicKey, secp256k1::ecdsa::Signature), Error> {
+    ) -> Result<(secp256k1::PublicKey, secp256k1::ecdsa::Signature), Error>
+    {
         let mut commit = vec![0; 32];
         let my_eph_pub = self.my_eph_pub;
 
@@ -181,7 +183,8 @@ impl DkgHandshakeManager {
         std::mem::drop(t);
 
         // Create the signature
-        let msg = secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+        let msg =
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size");
         let signature = self.secp.sign_ecdsa(&msg, &self.my_static_sec);
 
         // Keep track of our commitment bytes as well.
@@ -212,7 +215,10 @@ impl DkgHandshakeManager {
         package: &round1::Package,
     ) -> Result<(), Error> {
         let mut commit = vec![0; 32];
-        let fed_static = self.fed_members.get(&initiator.0).ok_or(Error::NotAFedMember)?;
+        let fed_static = self
+            .fed_members
+            .get(&initiator.0)
+            .ok_or(Error::NotAFedMember)?;
 
         // Compute the challenge bytes to be verified against the provided
         // signature; notably, we commit the ephemeral key and the round1
@@ -225,7 +231,8 @@ impl DkgHandshakeManager {
         std::mem::drop(t);
 
         // Verify the signature using the public key of the fed member.
-        let msg = secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+        let msg =
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size");
 
         if fed_static.verify(&self.secp, &msg, &signature).is_err() {
             return Err(Error::SignatureVerificationFailed);
@@ -259,7 +266,9 @@ impl DkgHandshakeManager {
         debug_assert_eq!(self.eph_keys.len(), self.fed_members.len());
 
         let mut round1_commits: Vec<(frost::Identifier, Vec<u8>)> =
-            std::mem::take(&mut self.round1_commits).into_iter().collect();
+            std::mem::take(&mut self.round1_commits)
+                .into_iter()
+                .collect();
 
         // Sort in ascending order, by the frost_id.
         round1_commits.sort_by(|a, b| a.0.cmp(&b.0));
@@ -277,7 +286,8 @@ impl DkgHandshakeManager {
                 continue;
             }
 
-            let fed_eph = self.eph_keys.get(fed_id).expect("ephemeral key must exist");
+            let fed_eph =
+                self.eph_keys.get(fed_id).expect("ephemeral key must exist");
 
             // Compute the shared secrets; the participant with the lower Frost
             // ID generates the following order:
@@ -292,11 +302,23 @@ impl DkgHandshakeManager {
 
             debug_assert_ne!(&self.my_frost_id, fed_id);
             if &self.my_frost_id < fed_id {
-                ss1 = secp256k1::ecdh::SharedSecret::new(fed_eph, &self.my_static_sec);
-                ss2 = secp256k1::ecdh::SharedSecret::new(fed_static, &self.my_eph_sec);
+                ss1 = secp256k1::ecdh::SharedSecret::new(
+                    fed_eph,
+                    &self.my_static_sec,
+                );
+                ss2 = secp256k1::ecdh::SharedSecret::new(
+                    fed_static,
+                    &self.my_eph_sec,
+                );
             } else {
-                ss1 = secp256k1::ecdh::SharedSecret::new(fed_static, &self.my_eph_sec);
-                ss2 = secp256k1::ecdh::SharedSecret::new(fed_eph, &self.my_static_sec);
+                ss1 = secp256k1::ecdh::SharedSecret::new(
+                    fed_static,
+                    &self.my_eph_sec,
+                );
+                ss2 = secp256k1::ecdh::SharedSecret::new(
+                    fed_eph,
+                    &self.my_static_sec,
+                );
             }
 
             let mut key1 = Zeroizing::new([0; 32]);
@@ -315,11 +337,18 @@ impl DkgHandshakeManager {
             // sending key and the second key as the receiving key. The other
             // participant does the opposite.
             debug_assert_ne!(&self.my_frost_id, fed_id);
-            let (sending, receiving) =
-                if &self.my_frost_id < fed_id { (key1, key2) } else { (key2, key1) };
+            let (sending, receiving) = if &self.my_frost_id < fed_id {
+                (key1, key2)
+            } else {
+                (key2, key1)
+            };
 
             // Track the symmetric key for this target.
-            let entry = SymmetricKeyEntry { sending, receiving, nonce: 0 };
+            let entry = SymmetricKeyEntry {
+                sending,
+                receiving,
+                nonce: 0,
+            };
 
             symmetric_keys.insert(*fed_id, entry);
         }
@@ -382,7 +411,10 @@ impl SecureChannelManager {
         package: &round2::Package,
     ) -> Result<(Vec<u8>, u64), Error> {
         // Retrieve the symmetric key for the target.
-        let entry = self.symmetric_keys.get_mut(&target.0).ok_or(Error::NotAFedMember)?;
+        let entry = self
+            .symmetric_keys
+            .get_mut(&target.0)
+            .ok_or(Error::NotAFedMember)?;
 
         let sending_nonce = entry.nonce;
         let ser_nonce = integer_to_serialized_nonce(sending_nonce);
@@ -419,14 +451,20 @@ impl SecureChannelManager {
         package: &[u8],
     ) -> Result<round2::Package, Error> {
         // Prepare the encryption key.
-        let entry = self.symmetric_keys.get(&initiator.0).ok_or(Error::NotAFedMember)?;
+        let entry = self
+            .symmetric_keys
+            .get(&initiator.0)
+            .ok_or(Error::NotAFedMember)?;
 
         let receiving_key = entry.receiving.as_slice();
-        let cipher = ChaCha20Poly1305::new_from_slice(receiving_key).expect("valid size");
+        let cipher = ChaCha20Poly1305::new_from_slice(receiving_key)
+            .expect("valid size");
         let ser_nonce = integer_to_serialized_nonce(nonce);
 
         // Decrypt the package using the symmetric key.
-        let plaintext = cipher.decrypt(&ser_nonce, package).map_err(|_| Error::DecryptionFailed)?;
+        let plaintext = cipher
+            .decrypt(&ser_nonce, package)
+            .map_err(|_| Error::DecryptionFailed)?;
 
         let package = round2::Package::deserialize(plaintext.as_slice())
             .map_err(|_| Error::DeserializationFailed)?;
@@ -510,10 +548,13 @@ impl KeyVerificationManager {
     ) -> Result<secp256k1::ecdsa::Signature, Error> {
         let mut commit = [0; 32];
 
-        self.transcript.append_message(b"round3_package", package.serialize()?.as_slice());
-        self.transcript.challenge_bytes(b"round3_commit", &mut commit);
+        self.transcript
+            .append_message(b"round3_package", package.serialize()?.as_slice());
+        self.transcript
+            .challenge_bytes(b"round3_commit", &mut commit);
 
-        let msg = secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+        let msg =
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size");
         let signature = self.secp.sign_ecdsa(&msg, &self.my_static_sec);
 
         // Set the unified challenge.
@@ -546,10 +587,14 @@ impl KeyVerificationManager {
             return Err(Error::AwaitingChallengeGeneration);
         };
 
-        let fed_static = self.fed_members.get(&initiator.0).ok_or(Error::NotAFedMember)?;
+        let fed_static = self
+            .fed_members
+            .get(&initiator.0)
+            .ok_or(Error::NotAFedMember)?;
 
         // Verify the signature using the public key of the fed member.
-        let msg = secp256k1::Message::from_digest_slice(challenge).expect("valid size");
+        let msg = secp256k1::Message::from_digest_slice(challenge)
+            .expect("valid size");
 
         if fed_static.verify(&self.secp, &msg, &signature).is_err() {
             return Err(Error::SignatureVerificationFailed);
@@ -574,15 +619,22 @@ impl KeyVerificationManager {
             return Err(Error::InsufficientSamples);
         }
 
-        let mut round3_commits: Vec<(frost::Identifier, secp256k1::ecdsa::Signature)> =
-            std::mem::take(&mut self.round3_commits).into_iter().collect();
+        let mut round3_commits: Vec<(
+            frost::Identifier,
+            secp256k1::ecdsa::Signature,
+        )> = std::mem::take(&mut self.round3_commits)
+            .into_iter()
+            .collect();
 
         // Sort in ascending order, by the frost_id.
         round3_commits.sort_by(|a, b| a.0.cmp(&b.0));
 
         let t = &mut self.transcript;
         for (_, signature) in round3_commits {
-            t.append_message(b"round3_commit", signature.serialize_compact().as_slice());
+            t.append_message(
+                b"round3_commit",
+                signature.serialize_compact().as_slice(),
+            );
         }
 
         let mut final_commit = [0; 32];

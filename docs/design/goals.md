@@ -4,9 +4,9 @@
 
 Our goal in building Reth, apart from improving client diversity, is to create a client that delivers maximally along each of the following dimensions:
 
--   Performance
--   Configurability
--   Open-source friendliness
+- Performance
+- Configurability
+- Open-source friendliness
 
 ---
 
@@ -16,10 +16,10 @@ Our goal in building Reth, apart from improving client diversity, is to create a
 
 This is a win for everyone:
 
--   Average users & developers benefit from RPC performance, leading to more responsive applications and faster feedback.
--   Home node operators benefit from faster sync times.
--   Costs are lowered for all operators, whether in terms of storage costs, or being able to serve more requests from the same node.
--   Searchers are able to run more simulations.
+- Average users & developers benefit from RPC performance, leading to more responsive applications and faster feedback.
+- Home node operators benefit from faster sync times.
+- Costs are lowered for all operators, whether in terms of storage costs, or being able to serve more requests from the same node.
+- Searchers are able to run more simulations.
 
 ### What are the performance bottlenecks that need to be addressed?
 

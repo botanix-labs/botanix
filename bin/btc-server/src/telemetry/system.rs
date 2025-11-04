@@ -1,4 +1,7 @@
-use std::{collections::HashMap, convert::TryFrom, hash::Hash, path::PathBuf, time::Duration};
+use std::{
+    collections::HashMap, convert::TryFrom, hash::Hash, path::PathBuf,
+    time::Duration,
+};
 
 use derive_more::Deref;
 use rust_decimal::{
@@ -6,7 +9,10 @@ use rust_decimal::{
     Decimal,
 };
 use serde::{ser::SerializeStruct, Serialize, Serializer};
-use sysinfo::{CpuExt, CpuRefreshKind, DiskExt, Pid, PidExt, ProcessExt, RefreshKind, SystemExt};
+use sysinfo::{
+    CpuExt, CpuRefreshKind, DiskExt, Pid, PidExt, ProcessExt, RefreshKind,
+    SystemExt,
+};
 use thiserror::Error;
 use tokio::time;
 
@@ -63,7 +69,12 @@ impl System {
         // just assume that it is usually not changing on runtime).
         let cpu_physical_core_count = system.physical_core_count();
 
-        Self { system, specifics, cpu_physical_core_count, pid }
+        Self {
+            system,
+            specifics,
+            cpu_physical_core_count,
+            pid,
+        }
     }
 
     pub fn refresh(&mut self) {
@@ -120,8 +131,12 @@ impl TryFrom<&System> for SystemMetrics {
             })
             .collect();
 
-        let cpu =
-            system.cpus().iter().enumerate().map(|(i, v)| (i, v.into())).collect::<HashMap<_, _>>();
+        let cpu = system
+            .cpus()
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (i, v.into()))
+            .collect::<HashMap<_, _>>();
         // Total number of CPUs (including CPU threads).
         let cpu_count = cpu.len();
 
@@ -155,7 +170,10 @@ pub struct Memory {
 }
 
 impl serde::Serialize for Memory {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         if let Some(free) = self.free {
             let mut s = serializer.serialize_struct("Memory", 3)?;
             s.serialize_field("size", &Format::Memory(self.size))?;
@@ -194,7 +212,11 @@ impl From<&sysinfo::System> for SystemMemory {
 
         Self {
             system: Memory { size, free, usage },
-            swap: Memory { size: swap_size, free: swap_free, usage: swap_usage },
+            swap: Memory {
+                size: swap_size,
+                free: swap_free,
+                usage: swap_usage,
+            },
         }
     }
 }
@@ -220,11 +242,20 @@ impl Default for Process {
 }
 
 impl serde::Serialize for Process {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         let mut s = serializer.serialize_struct("Process", 4)?;
-        s.serialize_field("pid", &Format::<i32>::Process(self.pid.as_u32() as i32))?;
+        s.serialize_field(
+            "pid",
+            &Format::<i32>::Process(self.pid.as_u32() as i32),
+        )?;
         s.serialize_field("name", &FormatKey(&self.name))?;
-        s.serialize_field("cpu_usage", &Format::Process(AsF64(self.cpu_usage)))?;
+        s.serialize_field(
+            "cpu_usage",
+            &Format::Process(AsF64(self.cpu_usage)),
+        )?;
         s.serialize_field("memory", &self.memory)?;
         s.end()
     }
@@ -233,14 +264,23 @@ impl serde::Serialize for Process {
 impl TryFrom<(&sysinfo::System, Pid)> for Process {
     type Error = Error;
 
-    fn try_from((system, pid): (&sysinfo::System, Pid)) -> Result<Self, Self::Error> {
+    fn try_from(
+        (system, pid): (&sysinfo::System, Pid),
+    ) -> Result<Self, Self::Error> {
         let process = system.process(pid).ok_or(Error::ProcessNotFound(pid))?;
 
         let total = system.total_memory();
         let size = process.memory();
         let usage = percent_usage(size, total);
 
-        Ok(Self { memory: Memory { size, free: None, usage }, ..Self::from(process) })
+        Ok(Self {
+            memory: Memory {
+                size,
+                free: None,
+                usage,
+            },
+            ..Self::from(process)
+        })
     }
 }
 
@@ -264,7 +304,10 @@ pub struct Disk {
 }
 
 impl serde::Serialize for Disk {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         let mut s = serializer.serialize_struct("Disk", 2)?;
         s.serialize_field("size", &Format::Disk(self.size))?;
         s.serialize_field("free", &Format::Disk(self.free))?;
@@ -291,7 +334,10 @@ impl From<&sysinfo::Disk> for Disk {
 pub struct LoadAverage(f64, f64, f64);
 
 impl serde::Serialize for LoadAverage {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         let mut s = serializer.serialize_struct("LoadAverage", 3)?;
         s.serialize_field("1", &Format::LoadAverage(self.0))?;
         s.serialize_field("5", &Format::LoadAverage(self.1))?;
@@ -317,7 +363,10 @@ pub struct Cpu {
 }
 
 impl serde::Serialize for Cpu {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         let mut s = serializer.serialize_struct("Cpu", 2)?;
         s.serialize_field("frequency", &Format::Cpu(self.frequency))?;
         s.serialize_field("usage", &Format::Cpu(AsF64(self.usage)))?;
@@ -344,7 +393,10 @@ pub struct Host {
 }
 
 impl serde::Serialize for Host {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         let mut s = serializer.serialize_struct("Host", 3)?;
         s.serialize_field("os_version", &FormatKey(&self.os_version))?;
         s.serialize_field("kernel_version", &FormatKey(&self.kernel_version))?;
@@ -366,10 +418,16 @@ impl From<&sysinfo::System> for Host {
 struct AsF64(Decimal);
 
 impl Serialize for AsF64 {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         let value = self.0.to_f64().ok_or_else(|| {
-            S::Error::custom(format!("Failed to convert a Decimal value into a f64: {:?}", self.0))
+            S::Error::custom(format!(
+                "Failed to convert a Decimal value into a f64: {:?}",
+                self.0
+            ))
         })?;
         value.serialize(serializer)
     }
@@ -439,7 +497,9 @@ fn percent_usage(current: u64, max: u64) -> Decimal {
 
 #[inline]
 fn decimal(current: f32) -> Decimal {
-    Decimal::from_f32(current).unwrap_or_default().round_dp(DECIMAL_PRECISION)
+    Decimal::from_f32(current)
+        .unwrap_or_default()
+        .round_dp(DECIMAL_PRECISION)
 }
 
 #[cfg(test)]
@@ -458,7 +518,9 @@ mod tests {
 
     impl From<&System> for Metrics {
         fn from(system: &System) -> Self {
-            Self { system: system.metrics().expect("metrics") }
+            Self {
+                system: system.metrics().expect("metrics"),
+            }
         }
     }
 
@@ -477,7 +539,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_system_prometheus_full() {
-        let memory = Memory { size: 1000, free: Some(877), usage: Decimal::new(1234, 2) };
+        let memory = Memory {
+            size: 1000,
+            free: Some(877),
+            usage: Decimal::new(1234, 2),
+        };
 
         let metrics = Metrics {
             system: SystemMetrics {
@@ -487,7 +553,10 @@ mod tests {
                     cpu_usage: Decimal::new(1234, 2),
                     memory: memory.clone(),
                 },
-                memory: SystemMemory { system: memory.clone(), swap: memory },
+                memory: SystemMemory {
+                    system: memory.clone(),
+                    swap: memory,
+                },
                 load_average: LoadAverage(1.2, 2.3, 3.4),
                 host: Host {
                     os_version: "os-version".to_string(),
@@ -496,7 +565,11 @@ mod tests {
                 },
                 disk: vec![(
                     PathBuf::from("disk1"),
-                    Disk { size: 1000, free: 877, usage: Decimal::new(1234, 2) },
+                    Disk {
+                        size: 1000,
+                        free: 877,
+                        usage: Decimal::new(1234, 2),
+                    },
                 )]
                 .into_iter()
                 .collect(),
@@ -514,7 +587,8 @@ mod tests {
                 .collect(),
             },
         };
-        let output = serde_prometheus::to_string(&metrics, None, &[]).expect("prometheus");
+        let output = serde_prometheus::to_string(&metrics, None, &[])
+            .expect("prometheus");
 
         assert_eq!(
             output.trim_end().split('\n').collect::<Vec<&str>>(),

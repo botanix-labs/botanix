@@ -18,7 +18,7 @@ concurrency:
 jobs:
   lockfile:
     name: Validate Lockfile
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: Install Rust toolchain
@@ -30,7 +30,7 @@ jobs:
 
   pre-commit:
     name: Pre-commit
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
@@ -57,7 +57,7 @@ jobs:
     needs:
       - lockfile
       - pre-commit
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 

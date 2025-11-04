@@ -27,7 +27,9 @@ impl BotanixHandshake {
         if negotiated_status.version > EthVersion::Eth66 {
             // Send upgrade status message allowing peer to broadcast transactions
             let upgrade_msg = UpgradeStatus {
-                extension: UpgradeStatusExtension { disable_peer_tx_broadcast: false },
+                extension: UpgradeStatusExtension {
+                    disable_peer_tx_broadcast: false,
+                },
             };
             unauth.start_send_unpin(upgrade_msg.into_rlpx())?;
 
@@ -36,8 +38,12 @@ impl BotanixHandshake {
                 Some(Ok(msg)) => msg,
                 Some(Err(e)) => return Err(EthStreamError::from(e)),
                 None => {
-                    unauth.disconnect(DisconnectReason::DisconnectRequested).await?;
-                    return Err(EthStreamError::EthHandshakeError(EthHandshakeError::NoResponse));
+                    unauth
+                        .disconnect(DisconnectReason::DisconnectRequested)
+                        .await?;
+                    return Err(EthStreamError::EthHandshakeError(
+                        EthHandshakeError::NoResponse,
+                    ));
                 }
             };
 
@@ -70,14 +76,23 @@ impl EthRlpxHandshake for BotanixHandshake {
         status: UnifiedStatus,
         fork_filter: ForkFilter,
         timeout_limit: Duration,
-    ) -> Pin<Box<dyn Future<Output = Result<UnifiedStatus, EthStreamError>> + 'a + Send>> {
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<UnifiedStatus, EthStreamError>>
+                + 'a
+                + Send,
+        >,
+    > {
         Box::pin(async move {
             let fut = async {
-                let negotiated_status =
-                    EthereumEthHandshake(unauth).eth_handshake(status, fork_filter).await?;
+                let negotiated_status = EthereumEthHandshake(unauth)
+                    .eth_handshake(status, fork_filter)
+                    .await?;
                 Self::upgrade_status(unauth, negotiated_status).await
             };
-            timeout(timeout_limit, fut).await.map_err(|_| EthStreamError::StreamTimeout)?
+            timeout(timeout_limit, fut)
+                .await
+                .map_err(|_| EthStreamError::StreamTimeout)?
         })
     }
 }

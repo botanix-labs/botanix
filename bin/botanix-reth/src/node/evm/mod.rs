@@ -64,7 +64,10 @@ where
             // disable the base fee check for this call by setting the base fee to zero
             core::mem::swap(&mut self.block.basefee, &mut basefee);
             // disable the nonce check
-            core::mem::swap(&mut self.cfg.disable_nonce_check, &mut disable_nonce_check);
+            core::mem::swap(
+                &mut self.cfg.disable_nonce_check,
+                &mut disable_nonce_check,
+            );
             let res = ExecuteEvm::transact(self, tx);
 
             // swap back to the previous gas limit
@@ -72,7 +75,10 @@ where
             // swap back to the previous base fee
             core::mem::swap(&mut self.block.basefee, &mut basefee);
             // swap back to the previous nonce check flag
-            core::mem::swap(&mut self.cfg.disable_nonce_check, &mut disable_nonce_check);
+            core::mem::swap(
+                &mut self.cfg.disable_nonce_check,
+                &mut disable_nonce_check,
+            );
             res
         } else {
             ExecuteEvm::transact(self, tx)
@@ -85,13 +91,20 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        let result = self.inner.system_call_one_with_caller(caller, contract, data)?;
+        let result = self
+            .inner
+            .system_call_one_with_caller(caller, contract, data)?;
         let state = self.finalize();
         Ok(ResultAndState::new(result, state))
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
-        let Context { block: block_env, cfg: cfg_env, journaled_state, .. } = self.inner.ctx;
+        let Context {
+            block: block_env,
+            cfg: cfg_env,
+            journaled_state,
+            ..
+        } = self.inner.ctx;
 
         (journaled_state.database, EvmEnv { block_env, cfg_env })
     }
@@ -101,10 +114,16 @@ where
     }
 
     fn components(&self) -> (&Self::DB, &Self::Inspector, &Self::Precompiles) {
-        (&self.journaled_state.database, &self.inner.inspector, &self.inner.precompiles)
+        (
+            &self.journaled_state.database,
+            &self.inner.inspector,
+            &self.inner.precompiles,
+        )
     }
 
-    fn components_mut(&mut self) -> (&mut Self::DB, &mut Self::Inspector, &mut Self::Precompiles) {
+    fn components_mut(
+        &mut self,
+    ) -> (&mut Self::DB, &mut Self::Inspector, &mut Self::Precompiles) {
         (
             &mut self.inner.ctx.journaled_state.database,
             &mut self.inner.inspector,
@@ -124,7 +143,10 @@ where
 {
     type EVM = BotanixEvmConfig;
 
-    async fn build_evm(self, ctx: &BuilderContext<Node>) -> eyre::Result<Self::EVM> {
+    async fn build_evm(
+        self,
+        ctx: &BuilderContext<Node>,
+    ) -> eyre::Result<Self::EVM> {
         let evm_config = BotanixEvmConfig::botanix(ctx.chain_spec());
         Ok(evm_config)
     }

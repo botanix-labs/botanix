@@ -1,7 +1,7 @@
 //! Models for a wallet state sync record.
 
-use reth_codecs::{add_arbitrary_tests, Compact};
 use alloy_primitives::{Bytes, B256, B512};
+use reth_codecs::{add_arbitrary_tests, Compact};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -13,7 +13,9 @@ pub type PeerID = B512;
 pub type UuidID = B256;
 
 /// Wallet state sync record
-#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact)]
+#[derive(
+    Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
+)]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[add_arbitrary_tests(compact)]
 pub struct WalletStateSyncRecord {
@@ -53,10 +55,23 @@ impl WalletStateSyncRecord {
         data: Option<Vec<(u64, Bytes)>>,
     ) -> Self {
         if let Some(tuples) = data {
-            let (blocks, data_bytes): (Vec<u64>, Vec<Bytes>) = tuples.into_iter().unzip();
-            Self { uuid, data: data_bytes, blocks, chunks_count, peer_id }
+            let (blocks, data_bytes): (Vec<u64>, Vec<Bytes>) =
+                tuples.into_iter().unzip();
+            Self {
+                uuid,
+                data: data_bytes,
+                blocks,
+                chunks_count,
+                peer_id,
+            }
         } else {
-            Self { uuid, data: Vec::new(), blocks: Vec::new(), chunks_count, peer_id }
+            Self {
+                uuid,
+                data: Vec::new(),
+                blocks: Vec::new(),
+                chunks_count,
+                peer_id,
+            }
         }
     }
 
@@ -71,7 +86,11 @@ impl WalletStateSyncRecord {
     /// * `additional_data` - The data chunk to append to the record
     /// * `block_number` - The block number associated with this data chunk
     #[inline(always)]
-    pub fn append_data_with_block(&mut self, additional_data: Bytes, block_number: u64) {
+    pub fn append_data_with_block(
+        &mut self,
+        additional_data: Bytes,
+        block_number: u64,
+    ) {
         self.add_data_if_not_exists(additional_data, block_number);
     }
 
@@ -268,7 +287,11 @@ impl WalletStateSyncRecord {
     ///
     /// * `true` if the data chunk and block number were successfully added
     /// * `false` if either the data chunk or block number already exists in the record
-    pub fn add_data_if_not_exists(&mut self, data_chunk: Bytes, block_number: u64) -> bool {
+    pub fn add_data_if_not_exists(
+        &mut self,
+        data_chunk: Bytes,
+        block_number: u64,
+    ) -> bool {
         if self.data.iter().any(|data| data == &data_chunk) {
             return false;
         }
