@@ -1,5 +1,5 @@
 use crate::{
-    botanix_authority_consensus::{
+    consensus::{
         comet_bft::abci::{ABCIClientBuilder, ABCIDriverMessage},
         frost_task::FrostTask,
         snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},

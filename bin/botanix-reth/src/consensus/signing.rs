@@ -1,4 +1,4 @@
-use crate::botanix_authority_consensus::utils::{parse_signing_session_id, retry_exec, retry_future, FrostParseError};
+use crate::consensus::utils::{parse_signing_session_id, retry_exec, retry_future, FrostParseError};
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
 use botanix_chainspec::BotanixChainSpec;

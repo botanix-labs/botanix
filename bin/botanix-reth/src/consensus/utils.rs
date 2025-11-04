@@ -34,7 +34,7 @@ use std::{
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::botanix_authority_consensus::wallet_state_sync::MAX_BLOCK_TS_CUTOFF_DURATION;
+use crate::consensus::wallet_state_sync::MAX_BLOCK_TS_CUTOFF_DURATION;
 
 /// Checks if the network is undergoing an active sync or not
 pub fn is_active_sync_in_progress(network_handle: &NetworkHandle) -> bool {

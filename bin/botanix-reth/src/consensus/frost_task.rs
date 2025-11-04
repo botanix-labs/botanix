@@ -1,5 +1,5 @@
 use crate::{
-    botanix_authority_consensus::{
+    consensus::{
         signing::SigningStateMachine,
         utils::{
             get_pending_pegouts_from_pegout_data, get_pending_pegouts_from_staged_pegouts,
@@ -358,7 +358,7 @@ where
         }
 
         // Create psbt and send init signing message.
-        let psbt_payload = match crate::botanix_authority_consensus::utils::get_psbt(
+        let psbt_payload = match crate::consensus::utils::get_psbt(
             &mut self.btc_server,
             &header_hash,
             cp_block_hash,

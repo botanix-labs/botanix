@@ -1,5 +1,5 @@
 //! Wallet state sync module
-use crate::botanix_authority_consensus::{
+use crate::consensus::{
     utils::{get_block_pegouts, EpochPegoutsError},
     Storage,
 };

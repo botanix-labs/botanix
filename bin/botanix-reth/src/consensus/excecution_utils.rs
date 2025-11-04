@@ -46,7 +46,7 @@ pub(crate) mod authority_execution_utils {
     use std::sync::Arc;
     use tendermint_proto::google::protobuf::Timestamp;
 
-    use crate::botanix_authority_consensus::comet_bft::abci::BlockWithContext;
+    use crate::consensus::comet_bft::abci::BlockWithContext;
 
     /// Builds and executes a new block with the given transactions, on the provided [Executor].
     ///

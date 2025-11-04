@@ -18,7 +18,7 @@ use reth_provider::providers::BlockchainProvider;
 use reth_tasks::TaskExecutor;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
 
-use crate::{botanix_authority_consensus::{snapshot_manager::SnapshotManager, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{evm::config::BotanixEvmConfig, BotanixNode}, services::network_builder::BotanixNetworkHandle};
+use crate::{consensus::{snapshot_manager::SnapshotManager, wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder}, node::{evm::config::BotanixEvmConfig, BotanixNode}, services::network_builder::BotanixNetworkHandle};
 
 /// Result of setting up the Frost configuration for a node, containing the optional FrostConfig,
 /// the socket addresses of federation authorities, the node's secret key, and the genesis authorities.

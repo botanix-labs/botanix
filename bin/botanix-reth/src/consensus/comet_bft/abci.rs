@@ -58,7 +58,7 @@ use tendermint_proto::{
 };
 
 use crate::{
-    botanix_authority_consensus::comet_bft::non_deterministic_data::{
+    consensus::comet_bft::non_deterministic_data::{
         NonDeterministicData, RUNTIME_VERSION_GENESIS,
     },
     node::BotanixNode,
@@ -117,7 +117,7 @@ pub enum ApplySnapshotResult {
     /// Reject this snapshot, try others
     RejectSnapshot = 5,
 }
-use crate::botanix_authority_consensus::{
+use crate::consensus::{
     comet_bft::proto_debug::{
         RequestApplySnapshotChunkTruncatedDebug, RequestFinalizeBlockTruncatedDebug,
         RequestProcessProposalTruncatedDebug, ResponseLoadSnapshotChunkTruncatedDebug,

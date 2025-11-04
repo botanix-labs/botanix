@@ -1,6 +1,6 @@
 use alloy_primitives::Address;
 use botanix_activation_manager::{ActivationManager, ActivationManagerBuilder, VoteWatcher};
-use crate::botanix_authority_consensus::comet_bft::abci::{RUNTIME_VERSION_V2, RUNTIME_VERSION_V3};
+use crate::consensus::comet_bft::abci::{RUNTIME_VERSION_V2, RUNTIME_VERSION_V3};
 use botanix_cli_args::{chain::BotanixNetwork};
 use botanix_storage::models::Vote;
 

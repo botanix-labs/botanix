@@ -1,4 +1,4 @@
-use crate::botanix_authority_consensus::AuthorityConsensusBuilder;
+use crate::consensus::AuthorityConsensusBuilder;
 
 
 

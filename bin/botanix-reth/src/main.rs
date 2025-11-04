@@ -18,7 +18,7 @@ use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
 use reth_botanix::{
-    botanix_authority_consensus::{
+    consensus::{
         comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable, utils::retry_exec,
         wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder,
     },
