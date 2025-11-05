@@ -3,7 +3,9 @@
 use alloy_consensus::BlockHeader;
 use alloy_eips::Encodable2718;
 use botanix_authority_edh::header_ext::HeaderExt;
-use botanix_chainspec::constants::BOTANIX_TESTNET_CHAIN_ID;
+use botanix_chainspec::{
+    constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
+};
 use botanix_storage::models::RuntimeVersion;
 use reth_db::DatabaseEnv;
 use reth_ethereum::consensus::ConsensusError;
@@ -30,7 +32,7 @@ use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
-use reth_consensus::InvalidAggregatedPublicKeyError;
+use reth_consensus::{Consensus, InvalidAggregatedPublicKeyError};
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
@@ -62,7 +64,7 @@ use crate::{
     consensus::comet_bft::non_deterministic_data::{
         NonDeterministicData, RUNTIME_VERSION_GENESIS,
     },
-    node::BotanixNode,
+    node::{consensus::BotanixConsensus, BotanixNode},
     BotanixBlock,
 };
 
@@ -248,7 +250,7 @@ pub struct ABCIClientBuilder<BF, RDB, BDB> {
     storage: Storage<BF, RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
-    authority_consensus: AuthorityConsensus,
+    botanix_consensus: BotanixConsensus<BotanixChainSpec>,
     cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
     is_fed_node: bool,
     metrics: Arc<AuthorityMetrics>,
@@ -282,7 +284,7 @@ where
         storage: Storage<BF, RDB, BDB>,
         activation_manager: ActivationManager<VoteWatcher, Address>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
-        authority_consensus: AuthorityConsensus,
+        botanix_consensus: BotanixConsensus<BotanixChainSpec>,
         cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
         is_fed_node: bool,
         metrics: Arc<AuthorityMetrics>,
@@ -314,7 +316,7 @@ where
             storage,
             activation_manager,
             bitcoin_checkpoints,
-            authority_consensus,
+            botanix_consensus,
             cbft_rpc_client_factory,
             is_fed_node,
             metrics,
@@ -356,7 +358,7 @@ where
             self.bitcoin_checkpoints.clone(),
             self.abci_driver_tx.clone(),
             self.cbft_rpc_client_factory.clone(),
-            self.authority_consensus.clone(),
+            self.botanix_consensus.clone(),
             self.is_fed_node,
             self.metrics.clone(),
             self.compressor.clone(),
@@ -435,7 +437,7 @@ pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
     driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
     #[allow(dead_code)]
     cbft_rpc_provider: HttpCometBFTRpcClientFactory,
-    authority_consensus: AuthorityConsensus,
+    botanix_consensus: BotanixConsensus<BotanixChainSpec>,
     is_fed_node: bool,
     metrics: Arc<AuthorityMetrics>,
     task_executor: TaskExecutor,
@@ -474,7 +476,7 @@ where
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
         cbft_rpc_provider: HttpCometBFTRpcClientFactory,
-        authority_consensus: AuthorityConsensus,
+        botanix_consensus: BotanixConsensus<BotanixChainSpec>,
         is_fed_node: bool,
         metrics: Arc<AuthorityMetrics>,
         compressor: DataParser,
@@ -503,7 +505,7 @@ where
             block_cache,
             driver_tx,
             cbft_rpc_provider,
-            authority_consensus,
+            botanix_consensus,
             is_fed_node,
             metrics,
             compressor,
@@ -603,44 +605,52 @@ where
         &self,
         block: &RecoveredBlock<BotanixBlock>,
     ) -> ResponseProcessProposal {
-        // // validate_block_post_execution() is called when inserting the block (ABCIDriver)
-        // match self.authority_consensus.validate_block_pre_execution(block) {
-        //     Ok(_) => {}
-        //     Err(e) => {
-        //         error!("Error in validate_block_pre_execution(): {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // }
+        // validate_block_post_execution() is called when inserting the block (ABCIDriver)
+        match self.botanix_consensus.validate_block_pre_execution(block.sealed_block()) {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Error in validate_block_pre_execution(): {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        }
 
-        // // standard header validation
-        // match self.authority_consensus.validate_header(&block.header()) {
-        //     Ok(_) => {}
-        //     Err(e) => {
-        //         error!("Error in validate_header(): {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // }
+        // standard header validation
+        match self.botanix_consensus.validate_header(&block.header()) {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Error in validate_header(): {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        }
 
-        // // poa validation
-        // let agg_pk = match self.aggregate_public_key() {
-        //     Ok(pk) => pk,
-        //     Err(e) => {
-        //         error!("Error getting aggregate public key: {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+        // poa validation
+        let agg_pk = match self.aggregate_public_key() {
+            Ok(pk) => pk,
+            Err(e) => {
+                error!("Error getting aggregate public key: {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        };
 
-        // match self.authority_consensus.validate_header_standalone(
-        //     block.header(),
-        //     self.storage.genesis_authorities.as_slice(),
-        //     Some(&agg_pk),
-        // ) {
-        //     Ok(_) => {}
-        //     Err(e) => {
-        //         error!("Error in validate_header_standalone(): {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // }
+        match self.botanix_consensus.validate_header_standalone(
+            block.header(),
+            self.storage.genesis_authorities.as_slice(),
+            Some(&agg_pk),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Error in validate_header_standalone(): {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        }
         return ResponseProcessProposal {
             status: VERIFY_REJECT,
         };

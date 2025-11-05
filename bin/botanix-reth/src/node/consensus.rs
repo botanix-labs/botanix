@@ -1,12 +1,8 @@
-use crate::{
-    node::BotanixNode, BotanixBlock, BotanixBlockBody, BotanixPrimitives,
-};
 use alloy_consensus::Header;
 use alloy_primitives::B256;
-use botanix_chainspec::BotanixHardforks;
+use botanix_chainspec::{BotanixChainSpec, BotanixHardforks};
 use reth::{
     api::FullNodeTypes,
-    beacon_consensus::EthBeaconConsensus,
     builder::{components::ConsensusBuilder, BuilderContext},
     consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator},
     consensus_common::validation::{
@@ -14,48 +10,63 @@ use reth::{
     },
 };
 use reth_chainspec::EthChainSpec;
+use reth_consensus_common::validation::validate_block_pre_execution;
 use reth_primitives::{Receipt, RecoveredBlock, SealedBlock, SealedHeader};
 use reth_provider::BlockExecutionResult;
 use std::sync::Arc;
+
+use crate::BotanixBlock;
 
 /// A basic Botanix consensus builder.
 #[derive(Debug, Default, Clone, Copy)]
 #[non_exhaustive]
 pub struct BotanixConsensusBuilder;
 
-impl<Node> ConsensusBuilder<Node> for BotanixConsensusBuilder
-where
-    Node: FullNodeTypes<Types = BotanixNode>,
-{
-    type Consensus =
-        Arc<dyn FullConsensus<BotanixPrimitives, Error = ConsensusError>>;
+// impl<Node> ConsensusBuilder<Node> for BotanixConsensusBuilder
+// where
+//     Node: FullNodeTypes<Types = BotanixNode>,
+// {
+//     type Consensus =
+//         Arc<dyn FullConsensus<BotanixPrimitives, Error = ConsensusError>>;
 
-    async fn build_consensus(
-        self,
-        ctx: &BuilderContext<Node>,
-    ) -> eyre::Result<Self::Consensus> {
-        Ok(Arc::new(BotanixConsensus::new(ctx.chain_spec())))
-    }
-}
+//     async fn build_consensus(
+//         self,
+//         ctx: &BuilderContext<Node>,
+//     ) -> eyre::Result<Self::Consensus> {
+//         Ok(Arc::new(BotanixConsensus::new(ctx.chain_spec())))
+//     }
+// }
 
 /// Botanix consensus implementation.
 ///
 /// Provides basic checks as outlined in the execution specs.
 #[derive(Debug, Clone)]
-pub struct BotanixConsensus<ChainSpec> {
-    inner: EthBeaconConsensus<ChainSpec>,
-    chain_spec: Arc<ChainSpec>,
+pub struct BotanixConsensus<BotanixChainSpec> {
+    chain_spec: Arc<BotanixChainSpec>,
 }
 
-impl<ChainSpec: EthChainSpec + BotanixHardforks> BotanixConsensus<ChainSpec> {
+impl BotanixConsensus<BotanixChainSpec> {
     /// Create a new instance of [`BotanixConsensus`]
-    pub fn new(chain_spec: Arc<ChainSpec>) -> Self {
-        Self {
-            inner: EthBeaconConsensus::new(chain_spec.clone()),
-            chain_spec,
-        }
+    pub fn new(chain_spec: Arc<BotanixChainSpec>) -> Self {
+        Self { chain_spec }
     }
 }
+
+
+// impl FullConsensus<BlockWithSenders> for BotanixConsensus<BotanixChainSpec> {
+//     fn validate_block_post_execution(
+//         &self,
+//         block: &BlockWithSenders,
+//         input: BlockExecutionResult<_>,
+//     ) -> Result<(), ConsensusError> {
+//         validate_block_post_execution(
+//             block,
+//             &self.chain_spec.inner(),
+//             input.receipts,
+//             input.requests,
+//         )
+//     }
+// }
 
 impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator
     for BotanixConsensus<ChainSpec>
@@ -101,9 +112,9 @@ impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator
     }
 }
 
-impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
-    Consensus<BotanixBlock> for BotanixConsensus<ChainSpec>
-{
+use crate::BotanixBlockBody;
+
+impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
     type Error = ConsensusError;
 
     fn validate_body_against_header(
@@ -111,59 +122,37 @@ impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
         body: &BotanixBlockBody,
         header: &SealedHeader,
     ) -> Result<(), ConsensusError> {
-        Consensus::<BotanixBlock>::validate_body_against_header(
-            &self.inner,
-            body,
+        // Delegate to standard Ethereum block body validation using the inner body
+        Consensus::<reth_primitives::Block>::validate_body_against_header(
+            self,
+            &body.inner,
             header,
         )
     }
 
     fn validate_block_pre_execution(
         &self,
-        _block: &SealedBlock<BotanixBlock>,
+        block: &SealedBlock<BotanixBlock>,
     ) -> Result<(), ConsensusError> {
-        // Check ommers hash
-        // let ommers_hash = block.body().calculate_ommers_root();
-        // if Some(block.ommers_hash()) != ommers_hash {
-        //     return Err(ConsensusError::BodyOmmersHashDiff(
-        //         GotExpected {
-        //             got: ommers_hash.unwrap_or(EMPTY_OMMER_ROOT_HASH),
-        //             expected: block.ommers_hash(),
-        //         }
-        //         .into(),
-        //     ))
-        // }
-
-        // // Check transaction root
-        // if let Err(error) = block.ensure_transaction_root_valid() {
-        //     return Err(ConsensusError::BodyTransactionRootDiff(error.into()))
-        // }
-
-        // if self.chain_spec.is_cancun_active_at_timestamp(block.timestamp()) {
-        //     validate_cancun_gas(block)?;
-        // } else {
-        //     return Ok(())
-        // }
-
-        Ok(())
+        validate_block_pre_execution(block, &self.chain_spec.inner())
     }
 }
 
-impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
-    FullConsensus<BotanixPrimitives> for BotanixConsensus<ChainSpec>
-{
-    fn validate_block_post_execution(
-        &self,
-        block: &RecoveredBlock<BotanixBlock>,
-        result: &BlockExecutionResult<Receipt>,
-    ) -> Result<(), ConsensusError> {
-        FullConsensus::<BotanixPrimitives>::validate_block_post_execution(
-            &self.inner,
-            block,
-            result,
-        )
-    }
-}
+// impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
+//     FullConsensus<BotanixPrimitives> for BotanixConsensus<ChainSpec>
+// {
+//     fn validate_block_post_execution(
+//         &self,
+//         block: &RecoveredBlock<BotanixBlock>,
+//         result: &BlockExecutionResult<Receipt>,
+//     ) -> Result<(), ConsensusError> {
+//         FullConsensus::<BotanixPrimitives>::validate_block_post_execution(
+//             &self.inner,
+//             block,
+//             result,
+//         )
+//     }
+// }
 
 /// Calculate the millisecond timestamp of a block header.
 /// Refer to https://github.com/bnb-chain/BEPs/blob/master/BEPs/BEP-520.md.

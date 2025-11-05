@@ -5,11 +5,11 @@ use crate::{
         snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},
         utils::{is_poa_epoch, seal_slow},
         wallet_state_sync::WalletStateSyncEngine,
-        AuthorityConsensus, Storage,
+        Storage,
     },
     node::{
-        evm::config::BotanixEvmConfig, network::BotanixNetworkPrimitives,
-        BotanixNode,
+        consensus::BotanixConsensus, evm::config::BotanixEvmConfig,
+        network::BotanixNetworkPrimitives, BotanixNode,
     },
 };
 use botanix_activation_manager::{ActivationManager, VoteWatcher};
@@ -55,7 +55,7 @@ use tracing::{info, warn};
 /// Builder type for configuring the setup
 #[allow(dead_code)]
 pub struct AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source> {
-    consensus: AuthorityConsensus,
+    consensus: BotanixConsensus<BotanixChainSpec>,
     storage: Storage<BF, RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     btc_server_factory: Option<GrpcClientFactory>,
@@ -233,7 +233,7 @@ where
         Ok(Self {
             storage,
             activation_manager,
-            consensus: AuthorityConsensus::new(chain_spec),
+            consensus: BotanixConsensus::new(chain_spec),
             btc_server_factory,
             bitcoin_checkpoints,
             network_handle,
