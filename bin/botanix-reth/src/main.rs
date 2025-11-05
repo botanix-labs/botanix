@@ -63,9 +63,8 @@ fn main() -> eyre::Result<()> {
     // Enable backtraces unless a RUST_BACKTRACE value has already been
     // explicitly provided.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
-        std::env::set_var("RUST_BACKTRACE", "1");
+        std::env::set_var("RUST_BACKTRACE", "full");
     }
-
     // Parse everything first
     let cli = Cli::<BotanixChainSpecParser, BotanixArgs>::parse();
 
@@ -114,7 +113,7 @@ fn main() -> eyre::Result<()> {
             let poa_cfg = args.poa.clone();
 
             // State Sync Config
-            let state_sync_cfg = args.state_sync.clone();
+            let state_sync_cfg = args.poa.state_sync.clone();
 
             // Reth Config
             let mut reth_cfg = load_reth_config(&args.poa, &network_args)?;
