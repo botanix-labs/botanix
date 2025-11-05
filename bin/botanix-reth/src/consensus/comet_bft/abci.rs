@@ -606,7 +606,10 @@ where
         block: &RecoveredBlock<BotanixBlock>,
     ) -> ResponseProcessProposal {
         // validate_block_post_execution() is called when inserting the block (ABCIDriver)
-        match self.botanix_consensus.validate_block_pre_execution(block.sealed_block()) {
+        match self
+            .botanix_consensus
+            .validate_block_pre_execution(block.sealed_block())
+        {
             Ok(_) => {}
             Err(e) => {
                 error!("Error in validate_block_pre_execution(): {:?}", e);
@@ -617,7 +620,10 @@ where
         }
 
         // standard header validation
-        match self.botanix_consensus.validate_header(&block.header()) {
+        match self
+            .botanix_consensus
+            .validate_header(&block.sealed_header())
+        {
             Ok(_) => {}
             Err(e) => {
                 error!("Error in validate_header(): {:?}", e);

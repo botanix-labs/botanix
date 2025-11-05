@@ -1,4 +1,5 @@
-use alloy_consensus::Header;
+use alloy_consensus::{BlockHeader, Header, EMPTY_OMMER_ROOT_HASH};
+use alloy_eips::eip7840::BlobParams;
 use alloy_primitives::B256;
 use botanix_chainspec::{BotanixChainSpec, BotanixHardforks};
 use reth::{
@@ -9,8 +10,11 @@ use reth::{
         validate_against_parent_4844, validate_against_parent_hash_number,
     },
 };
-use reth_chainspec::EthChainSpec;
-use reth_consensus_common::validation::validate_block_pre_execution;
+use reth_chainspec::{EthChainSpec, EthereumHardforks};
+use reth_consensus_common::validation::{
+    validate_4844_header_standalone, validate_block_pre_execution,
+    validate_header_base_fee, validate_header_extra_data, validate_header_gas,
+};
 use reth_primitives::{Receipt, RecoveredBlock, SealedBlock, SealedHeader};
 use reth_provider::BlockExecutionResult;
 use std::sync::Arc;
@@ -52,7 +56,6 @@ impl BotanixConsensus<BotanixChainSpec> {
     }
 }
 
-
 // impl FullConsensus<BlockWithSenders> for BotanixConsensus<BotanixChainSpec> {
 //     fn validate_block_post_execution(
 //         &self,
@@ -68,15 +71,126 @@ impl BotanixConsensus<BotanixChainSpec> {
 //     }
 // }
 
-impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator
-    for BotanixConsensus<ChainSpec>
-{
+impl BotanixConsensus<BotanixChainSpec> {
+    /// Validates PoA header standalone according to the authority consensus rules.
+    fn validate_header_standalone(
+        &self,
+        header: &Header,
+        genesis_authorities: &[secp256k1::PublicKey],
+        aggregate_public_key: Option<&secp256k1::PublicKey>,
+    ) -> Result<(), ConsensusError> {
+        if aggregate_public_key.is_none() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+            ));
+        }
+
+        // run the reth header validation rule
+        let _sealed_header = header.clone().seal_slow();
+
+        // Validate EDH serialization and signature on block
+        self.validate_extra_data_header(
+            header,
+            genesis_authorities,
+            aggregate_public_key,
+        )?;
+
+        // Validate fee benificiary
+        self.validate_block_beneficiary(header)?;
+
+        Ok(())
+    }
+}
+
+impl HeaderValidator for BotanixConsensus<BotanixChainSpec> {
+    // Copied from Reth `crates/ethereum/consensus/src/lib.rs`
     fn validate_header(
         &self,
-        _header: &SealedHeader,
+        header: &SealedHeader,
     ) -> Result<(), ConsensusError> {
-        // TODO: doesn't work because of extradata check
-        // self.inner.validate_header(header)
+        let header = header.header();
+        let is_post_merge =
+            self.chain_spec.is_paris_active_at_block(header.number());
+
+        if is_post_merge {
+            if !header.difficulty().is_zero() {
+                return Err(ConsensusError::TheMergeDifficultyIsNotZero);
+            }
+
+            if !header.nonce().is_some_and(|nonce| nonce.is_zero()) {
+                return Err(ConsensusError::TheMergeNonceIsNotZero);
+            }
+
+            if header.ommers_hash() != EMPTY_OMMER_ROOT_HASH {
+                return Err(ConsensusError::TheMergeOmmerRootIsNotEmpty);
+            }
+        } else {
+            {
+                let present_timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+
+                if header.timestamp()
+                    > present_timestamp
+                        + alloy_eips::merge::ALLOWED_FUTURE_BLOCK_TIME_SECONDS
+                {
+                    return Err(ConsensusError::TimestampIsInFuture {
+                        timestamp: header.timestamp(),
+                        present_timestamp,
+                    });
+                }
+            }
+        }
+        // Not using the Reth `validate_header_extra_data()` since we have custom EDH validation
+        // checked in `validate_header_standalone()`.
+        validate_header_gas(header)?;
+        validate_header_base_fee(header, &self.chain_spec)?;
+
+        // EIP-4895: Beacon chain push withdrawals as operations
+        if self
+            .chain_spec
+            .is_shanghai_active_at_timestamp(header.timestamp())
+            && header.withdrawals_root().is_none()
+        {
+            return Err(ConsensusError::WithdrawalsRootMissing);
+        } else if !self
+            .chain_spec
+            .is_shanghai_active_at_timestamp(header.timestamp())
+            && header.withdrawals_root().is_some()
+        {
+            return Err(ConsensusError::WithdrawalsRootUnexpected);
+        }
+
+        // Ensures that EIP-4844 fields are valid once cancun is active.
+        if self
+            .chain_spec
+            .is_cancun_active_at_timestamp(header.timestamp())
+        {
+            validate_4844_header_standalone(
+                header,
+                self.chain_spec
+                    .blob_params_at_timestamp(header.timestamp())
+                    .unwrap_or_else(BlobParams::cancun),
+            )?;
+        } else if header.blob_gas_used().is_some() {
+            return Err(ConsensusError::BlobGasUsedUnexpected);
+        } else if header.excess_blob_gas().is_some() {
+            return Err(ConsensusError::ExcessBlobGasUnexpected);
+        } else if header.parent_beacon_block_root().is_some() {
+            return Err(ConsensusError::ParentBeaconBlockRootUnexpected);
+        }
+
+        if self
+            .chain_spec
+            .is_prague_active_at_timestamp(header.timestamp())
+        {
+            if header.requests_hash().is_none() {
+                return Err(ConsensusError::RequestsHashMissing);
+            }
+        } else if header.requests_hash().is_some() {
+            return Err(ConsensusError::RequestsHashUnexpected);
+        }
 
         Ok(())
     }
