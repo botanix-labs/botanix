@@ -672,8 +672,8 @@ start-btc-server-3:
 	--fall-back-fee-rate-sat-per-vbyte 5
 
 start-poa-server-1:
-	cd ./bin/reth && \
-	cargo run --bin reth -- poa \
+	cd ./bin/botanix-reth && \
+	cargo run --bin reth-botanix -- node \
 	--is-testnet \
 	--federation-config-path "${NODE_1_DIR}/federation.toml" \
 	--federation-mode \
@@ -692,7 +692,7 @@ start-poa-server-1:
 	-vvv \
 	--btc-server "localhost:8081" \
 	--btc-network "${BITCOIND_NETWORK}" \
-	--btc-signing-server-jwt-secret "${NODE_1_DIR}/bjwt.hex" \
+	--btc-signing-server-jwt-secret-path "${NODE_1_DIR}/bjwt.hex" \
 	--bitcoind.url "${BITCOIND_URL}" \
 	--bitcoind.username "${BITCOIND_USER}" \
 	--bitcoind.password "${BITCOIND_PWD}" \
@@ -709,8 +709,8 @@ start-poa-server-1:
 	--txpool.minimal-protocol-fee 5000000
 
 start-poa-server-2:
-	cd ./bin/reth && \
-	cargo run --bin reth -- poa \
+	cd ./bin/botanix-reth && \
+	cargo run --bin reth-botanix -- node \
 	--is-testnet \
 	--federation-config-path "${NODE_2_DIR}/federation.toml" \
 	--federation-mode \
@@ -729,7 +729,7 @@ start-poa-server-2:
 	-vvv \
 	--btc-server "localhost:8082" \
 	--btc-network "${BITCOIND_NETWORK}" \
-	--btc-signing-server-jwt-secret "${NODE_2_DIR}/bjwt.hex" \
+	--btc-signing-server-jwt-secret-path "${NODE_2_DIR}/bjwt.hex" \
 	--bitcoind.url "${BITCOIND_URL}" \
 	--bitcoind.username "${BITCOIND_USER}" \
 	--bitcoind.password "${BITCOIND_PWD}" \
@@ -746,8 +746,8 @@ start-poa-server-2:
 	--txpool.minimal-protocol-fee 5000000
 
 start-poa-server-3:
-	cd ./bin/reth && \
-	cargo run --bin reth -- poa \
+	cd ./bin/botanix-reth && \
+	cargo run --bin reth-botanix -- node \
 	--is-testnet \
 	--federation-config-path "${NODE_3_DIR}/federation.toml" \
 	--federation-mode \
@@ -766,7 +766,7 @@ start-poa-server-3:
 	-vvv \
 	--btc-server "localhost:8083" \
 	--btc-network "${BITCOIND_NETWORK}" \
-	--btc-signing-server-jwt-secret "${NODE_3_DIR}/bjwt.hex" \
+	--btc-signing-server-jwt-secret-path "${NODE_3_DIR}/bjwt.hex" \
 	--bitcoind.url "${BITCOIND_URL}" \
 	--bitcoind.username "${BITCOIND_USER}" \
 	--bitcoind.password "${BITCOIND_PWD}" \
@@ -783,8 +783,8 @@ start-poa-server-3:
 	--txpool.minimal-protocol-fee 5000000
 
 start-non-fed-server-1:
-	cd ./bin/reth && \
-	cargo run --bin reth -- poa \
+	cd ./bin/botanix-reth && \
+	cargo run --bin reth-botanix -- node \
 	--is-testnet \
 	--federation-config-path "${NON_FED_1_DIR}/federation.toml" \
 	--datadir ${NON_FED_1_DIR} \
@@ -1048,7 +1048,7 @@ profile-btc:
 # ------------------------------------------------------------
 
 PROFILER_POA_SEVER_ARGS := \
-	poa \
+	node \
 	--is-testnet \
 	--federation-config-path ${PROFILER_NODE_DIR}/federation.toml \
 	--federation-mode \
@@ -1066,7 +1066,7 @@ PROFILER_POA_SEVER_ARGS := \
 	-vvv \
 	--btc-server localhost:${PROFILER_BTC_SERVER_PORT} \
 	--btc-network ${BITCOIND_NETWORK} \
-	--btc-signing-server-jwt-secret ${PROFILER_NODE_DIR}/bjwt.hex \
+	--btc-signing-server-jwt-secret-path ${PROFILER_NODE_DIR}/bjwt.hex \
 	--bitcoind.url ${BITCOIND_URL} \
 	--bitcoind.username ${BITCOIND_USER} \
 	--bitcoind.password ${BITCOIND_PWD} \

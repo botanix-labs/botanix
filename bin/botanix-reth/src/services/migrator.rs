@@ -41,6 +41,8 @@ pub fn init_and_migrate_db(
         is_migration_needed(&reth_db_path, &botanix_db_path)?;
 
     tracing::info!(target: "reth::cli", path = ?reth_db_path, "Opening reth database");
+    println!("Opening reth database at: {:?}\n", reth_db_path.display());
+    println!("Using arguments: {:?}\n", db.database_args());
     let reth_database = Arc::new(
         reth_db::init_db(&reth_db_path, db.database_args())?.with_metrics(),
     );

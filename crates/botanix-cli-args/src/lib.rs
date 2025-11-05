@@ -17,7 +17,4 @@ pub struct BotanixArgs {
 
     #[command(flatten)]
     pub poa: poa_node::PoaNodeArgs,
-
-    #[command(flatten)]
-    pub state_sync: state_sync::StateSyncArgs,
 }
