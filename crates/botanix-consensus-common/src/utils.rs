@@ -54,17 +54,6 @@ pub fn validate_poa_block_beneficiary(
     Ok(())
 }
 
-/// Check the extra data header field has the current chain version
-pub const fn validate_chain_version(
-    edh_chain_version: u32,
-) -> Result<(), ConsensusError> {
-    if edh_chain_version != CHAIN_VERSION {
-        return Err(ConsensusError::InvalidChainVersion);
-    }
-
-    Ok(())
-}
-
 /// Convert `FixedBytes`<32> to U256
 pub fn fixed_bytes_32_to_u256(value: FixedBytes<32>) -> U256 {
     let mut value_array = [0u8; 32];

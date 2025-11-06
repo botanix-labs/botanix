@@ -1,11 +1,19 @@
+use alloy_consensus::Sealable;
 use alloy_consensus::{BlockHeader, Header, EMPTY_OMMER_ROOT_HASH};
 use alloy_eips::eip7840::BlobParams;
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256};
+use botanix_authority_edh::extra_data_header::CHAIN_VERSION;
+use botanix_authority_edh::nums_secp256k1_pk;
+use botanix_authority_edh::{
+    extra_data_header::ExtraDataHeader, header_ext::HeaderExt,
+};
 use botanix_chainspec::{BotanixChainSpec, BotanixHardforks};
+use botanix_consensus_common::utils::validate_chain_version;
+use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use reth::{
     api::FullNodeTypes,
     builder::{components::ConsensusBuilder, BuilderContext},
-    consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator},
+    consensus::{Consensus, FullConsensus, HeaderValidator},
     consensus_common::validation::{
         validate_against_parent_4844, validate_against_parent_hash_number,
     },
@@ -18,6 +26,7 @@ use reth_consensus_common::validation::{
 use reth_primitives::{Receipt, RecoveredBlock, SealedBlock, SealedHeader};
 use reth_provider::BlockExecutionResult;
 use std::sync::Arc;
+use tracing::error;
 
 use crate::BotanixBlock;
 
@@ -73,7 +82,7 @@ impl BotanixConsensus<BotanixChainSpec> {
 
 impl BotanixConsensus<BotanixChainSpec> {
     /// Validates PoA header standalone according to the authority consensus rules.
-    fn validate_header_standalone(
+    pub fn validate_header_standalone(
         &self,
         header: &Header,
         genesis_authorities: &[secp256k1::PublicKey],
@@ -97,6 +106,86 @@ impl BotanixConsensus<BotanixChainSpec> {
 
         // Validate fee benificiary
         self.validate_block_beneficiary(header)?;
+
+        Ok(())
+    }
+
+    /// Validate poa block beneficiary
+    fn validate_block_beneficiary(
+        &self,
+        header: &Header,
+    ) -> Result<(), ConsensusError> {
+        if header.beneficiary != Address::ZERO {
+            return Err(ConsensusError::BlockBeneficiaryIsNotBurnAddress);
+        }
+
+        Ok(())
+    }
+
+    /// Validate poa extra data header
+    fn validate_extra_data_header(
+        &self,
+        header: &Header,
+        _genesis_authorities: &[secp256k1::PublicKey],
+        aggregate_public_key: Option<&secp256k1::PublicKey>,
+    ) -> Result<(), ConsensusError> {
+        // Skip over genesis
+        if header.number == 0 {
+            return Ok(());
+        }
+
+        // there should alawys be an aggregate public key for poa
+        if aggregate_public_key.is_none() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+            ));
+        }
+
+        let extradata_len = header.extra_data.as_ref().len();
+        if extradata_len > MAXIMUM_EXTRA_DATA_SIZE {
+            return Err(ConsensusError::ExtraDataExceedsMax {
+                len: extradata_len,
+            });
+        }
+
+        // Attempt to deserialize the extra data header
+        let edh = header.deserialize_extra_data_header().map_err(|e| {
+            error!("Failed to deserialize extra data header: {:?}", e);
+            ConsensusError::ExtraDataInvalid
+        })?;
+
+        // Check total size of the extra data header
+        if edh.edh_size() > MAX_EDH_SIZE {
+            return Err(ConsensusError::ExtraDataHeaderExceedsMax {
+                len: edh.edh_size(),
+            });
+        }
+
+        validate_chain_version(edh.chain_version)?;
+
+        // Past genesis NUMS point should never be used as the aggregated public key
+        if edh.aggregated_public_key == nums_secp256k1_pk() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis,
+            ));
+        }
+
+        if edh.aggregated_public_key != *aggregate_public_key.unwrap() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::InvalidAggregatedPublicKey,
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Check the extra data header field has the current chain version
+    pub const fn validate_chain_version(
+        edh_chain_version: u32,
+    ) -> Result<(), ConsensusError> {
+        if edh_chain_version != CHAIN_VERSION {
+            return Err(ConsensusError::InvalidChainVersion);
+        }
 
         Ok(())
     }
@@ -226,6 +315,7 @@ impl HeaderValidator for BotanixConsensus<BotanixChainSpec> {
     }
 }
 
+use crate::consensus::{MAXIMUM_EXTRA_DATA_SIZE, MAX_EDH_SIZE};
 use crate::BotanixBlockBody;
 
 impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {

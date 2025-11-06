@@ -1,6 +1,6 @@
 //! Collection of methods for block validation.
 
-use alloy_consensus::{constants::MAXIMUM_EXTRA_DATA_SIZE, BlockHeader};
+use alloy_consensus::BlockHeader;
 use alloy_eips::eip4844::{
     calc_excess_blob_gas, DATA_GAS_PER_BLOB,
     MAX_DATA_GAS_PER_BLOCK_DENCUN as MAX_DATA_GAS_PER_BLOCK,
@@ -120,22 +120,6 @@ pub fn validate_4844_header_standalone(
     }
 
     Ok(())
-}
-
-/// Validates the header's extradata according to the authority consensus rules.
-///
-/// From yellow paper: extraData: An arbitrary byte array containing data relevant to this block.
-/// This must be 32 bytes or fewer; formally Hx.
-#[inline]
-pub fn validate_header_extradata(
-    header: &Header,
-) -> Result<(), ConsensusError> {
-    let extradata_len = header.extra_data.as_ref().len();
-    if extradata_len > MAXIMUM_EXTRA_DATA_SIZE {
-        Err(ConsensusError::ExtraDataExceedsMax { len: extradata_len })
-    } else {
-        Ok(())
-    }
 }
 
 /// Validates against the parent hash and number.

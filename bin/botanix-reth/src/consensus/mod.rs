@@ -50,6 +50,10 @@ use crate::node::evm::config::BotanixEvmConfig;
 pub mod test_utils;
 pub mod wallet_state_sync;
 
+/// Maximum extra data size in a block which supports Botanix consensus rules.
+/// This is larger than the Ethereum default of 32 bytes.
+pub const MAXIMUM_EXTRA_DATA_SIZE: usize = 256;
+
 /// Max EDH size; for specific details see [ExtraDataHeader]
 pub const MAX_EDH_SIZE: usize = 93;
 /// Ethereum authority consensus
