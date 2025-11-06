@@ -1,0 +1,9 @@
+---
+self-hosted-runner:
+  labels:
+    - botanix-actions-runner-vm-1
+    - image-builder
+    - botanix-actions-runner
+    - k8-runners
+    - binary-builder
+config-variables: null
