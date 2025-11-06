@@ -36,8 +36,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          toolchain: stable
-
       - name: Install nextest
         uses: taiki-e/install-action@nextest
 
@@ -52,7 +50,7 @@ jobs:
       - name: Run tests
         run: |
           cargo nextest run \
-            --locked --features "all" \
+            --locked --features "reth_botanix" \
             --workspace --exclude example-custom-evm --exclude example-stateful-precompile --exclude ef-tests \
             -E "kind(lib) | kind(bin) | kind(proc-macro)"
 
@@ -74,7 +72,7 @@ jobs:
         run: cargo fetch
 
       - name: Run doctests
-        run: cargo test --doc --workspace --features "all"
+        run: cargo test --doc --workspace --features "reth_botanix"
 
   unit-success:
     name: unit success
