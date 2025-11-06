@@ -50,8 +50,8 @@ jobs:
       - name: Run tests
         run: |
           cargo nextest run \
-            --locked --features "reth_botanix" \
-            --workspace --exclude example-custom-evm --exclude example-stateful-precompile --exclude ef-tests \
+            --locked  \
+            --workspace  --exclude ef-tests \
             -E "kind(lib) | kind(bin) | kind(proc-macro)"
 
   doc:
@@ -72,7 +72,7 @@ jobs:
         run: cargo fetch
 
       - name: Run doctests
-        run: cargo test --doc --workspace --features "reth_botanix"
+        run: cargo test --doc --workspace
 
   unit-success:
     name: unit success
