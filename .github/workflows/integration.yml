@@ -132,14 +132,6 @@ jobs:
           echo "Test suite compiled successfully!"
           sccache --show-stats
 
-      - name: Compile pegin-recovery
-        run: |
-          set -eo pipefail
-          cd ./bin/pegin-recovery
-          cargo build --bin pegin-recovery
-          echo "Pegin recovery compiled successfully!"
-          sccache --show-stats
-
       - name: Prepare binaries for upload
         run: |
           mkdir -p /tmp/binaries
@@ -147,7 +139,6 @@ jobs:
           cp target/debug/btc-utils /tmp/binaries/ || true
           cp target/debug/reth-botanix /tmp/binaries/ || true
           cp target/debug/test-suite /tmp/binaries/ || true
-          cp target/debug/pegin-recovery /tmp/binaries/ || true
 
       - name: Upload compiled binaries
         uses: actions/upload-artifact@v5
@@ -256,11 +247,6 @@ jobs:
             sudo cp /tmp/binaries/test-suite /usr/local/bin/
             sudo chmod +x /usr/local/bin/test-suite
           fi
-          if [ -f "/tmp/binaries/pegin-recovery" ]; then
-            cp /tmp/binaries/pegin-recovery target/debug/
-            chmod +x target/debug/pegin-recovery
-          fi
-          
           if [ -d "/tmp/binaries/test-suite-dir" ]; then
             cp -r /tmp/binaries/test-suite-dir/* ./bin/test-suite/
           fi
