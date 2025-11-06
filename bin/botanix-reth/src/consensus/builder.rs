@@ -20,7 +20,7 @@ use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
 };
-use botanix_btc_wallet::bitcoind::{BitcoindClient, BitcoindFactory};
+use botanix_btc_wallet::{bitcoind::BitcoindFactory, fallback::FallbackBitcoindClient};
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::state_sync::StateSyncArgs;
 use botanix_comet_bft_rpc::{
@@ -72,7 +72,7 @@ pub struct AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source> {
         ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
     state_sync: StateSyncArgs,
     block_fee_recipient_address: Option<alloy_primitives::Address>,
-    bitcoind_client: BitcoindClient,
+    bitcoind_client: Arc<FallbackBitcoindClient>,
 }
 
 /// Errors that can occur when building an authority consensus.
@@ -136,7 +136,7 @@ where
         >,
         botanix_provider_factory: BDB,
         block_fee_recipient_address: Option<alloy_primitives::Address>,
-        bitcoind_client: BitcoindClient,
+        bitcoind_client: Arc<FallbackBitcoindClient>,
     ) -> Result<Self, AuthorityConsensusBuilderError> {
         // only a federation node has a btc_server
         let is_fed_node = btc_server_factory.is_some();
@@ -405,7 +405,7 @@ where
                             }
                         }
                         // Health check for bitcoind
-                        match bitcoind_client.get_rpc_client_dyn().is_synced().await {
+                        match bitcoind_client.is_synced().await {
                             Ok(status) => {
                                 tracing::info!(target: "reth::authority", "Bitcoind server is healthy");
                                 if status { metrics.bitcoind_connection_status.set(1) } else { metrics.bitcoind_connection_status.set(0) };

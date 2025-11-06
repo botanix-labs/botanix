@@ -56,6 +56,15 @@ pub struct PoaNodeArgs {
     )]
     pub bitcoind_config_path: Option<PathBuf>,
 
+    /// The path to the fallback configuration file to use for network properties.
+    #[arg(
+        long,
+        value_name = "BITCOIND_FALLBACK_CONFIG_FILE",
+        env = "RETH_BITCOIND_FALLBACK_CONFIG_PATH",
+        verbatim_doc_comment
+    )]
+    pub bitcoind_fallback_config_path: Option<PathBuf>,
+
     /// ABCI client host to listen on
     #[arg(long, value_name = "ABCI_HOST", env = "RETH_ABCI_HOST", default_value_t = String::from("0.0.0.0"))]
     pub abci_host: String,

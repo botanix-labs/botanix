@@ -2,9 +2,9 @@
 
 use alloy_primitives::U256;
 use botanix_authority_edh::header_ext::HeaderExt;
-use botanix_btc_wallet::bitcoind::{
+use botanix_btc_wallet::{bitcoind::{
     BitcoindClientFactory, BitcoindConfig, BitcoindFactory,
-};
+}, error::BitcoindError};
 use btcserverlib::wallet::address::{
     generate_taproot_address, generate_tweaked_public_key,
 };
@@ -122,7 +122,7 @@ impl From<MerkleProofRPCError> for String {
 #[derive(Debug)]
 pub enum BtcFeeRateRPCError {
     /// Failed to get estimate smart fee rate
-    FailedToGetEstimateSmartFee(botanix_btc_wallet::bitcoind::BitcoindError),
+    FailedToGetEstimateSmartFee(BitcoindError),
     /// Failed to initialize bitcoind client
     BitcoindClientInitialization,
     /// Failed to get estimate smart fee rate

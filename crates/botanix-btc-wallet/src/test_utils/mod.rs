@@ -1,6 +1,6 @@
-use crate::bitcoind::{
-    BitcoindClient, BitcoindError, BitcoindFactory, BitcoindRpc,
-};
+use crate::{bitcoind::{
+    BitcoindClient, BitcoindFactory, BitcoindRpc,
+}, error::BitcoindError};
 use async_trait::async_trait;
 use bitcoin::{
     block::{BlockHash, Header, Version},
