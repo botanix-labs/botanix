@@ -28,7 +28,7 @@ const SAFE_DELAY: Duration = Duration::from_secs(1);
 
 macro_rules! map_rpc_error {
     ($target:expr, $method:ident ( $($args:tt)* )) => {{
-        $target.$method($($args)*).await.map_err(|error| {
+        $target.$method($($args)*).map_err(|error| {
             BitcoinCheckpointError::SyncRpcError {
                 error,
                 procedure_name: stringify!($method).to_string(),

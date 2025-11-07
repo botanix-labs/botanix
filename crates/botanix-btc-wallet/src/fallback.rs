@@ -53,7 +53,7 @@ impl FallbackBitcoindClient {
         }
     }
 
-    async fn execute_with_fallback<T, F, Fut>(
+    async fn execute_with_fallback_async<T, F, Fut>(
         &self,
         operation: F,
     ) -> BitcoindAdapterResult<T>
@@ -100,6 +100,52 @@ impl FallbackBitcoindClient {
             .unwrap_or_else(|| BitcoindAdapterError::NoClientsAvailable))
     }
 
+    fn execute_with_fallback_sync<T, F>(
+        &self,
+        operation: F,
+    ) -> BitcoindAdapterResult<T>
+    where
+        F: Fn(BitcoindClientWrapper) -> BitcoindAdapterResult<T>,
+        T: Send,
+    {
+        let mut last_error = None;
+
+        let clients_to_use = match self.filter_clients_to_use() {
+            c if c.is_empty() => {
+                return Err(BitcoindAdapterError::NoClientsAvailable);
+            }
+            c => c,
+        };
+
+        for (index, client) in clients_to_use.iter().enumerate() {
+            let client_clone = client.clone();
+            match operation(client_clone) {
+                Ok(result) => {
+                    if index > 0 {
+                        tracing::warn!(
+                            "Fallback succeeded with client {}",
+                            index
+                        );
+                    }
+                    return Ok(result);
+                }
+                Err(e) => {
+                    tracing::warn!("Client {} failed: {:?}", index, e);
+                    // Only continue to next client if we should fallback
+                    if !Self::should_fallback(&e) {
+                        tracing::debug!("Not falling back for error: {:?}", e);
+                        return Err(e);
+                    }
+
+                    last_error = Some(e);
+                }
+            }
+        }
+
+        Err(last_error
+            .unwrap_or_else(|| BitcoindAdapterError::NoClientsAvailable))
+    }
+
     fn should_fallback(error: &BitcoindAdapterError) -> bool {
         match error {
             BitcoindAdapterError::BitcoindRpc(_) => true, // Fallback on all rpc errors
@@ -111,7 +157,7 @@ impl FallbackBitcoindClient {
 
 impl FallbackBitcoindClient {
     pub async fn is_synced(&self) -> BitcoindAdapterResult<bool> {
-        self.execute_with_fallback(|client| async move {
+        self.execute_with_fallback_async(|client| async move {
             match client {
                 BitcoindClientWrapper::Provider1(rpc) => rpc
                     .get_rpc_client_dyn()
@@ -131,7 +177,7 @@ impl FallbackBitcoindClient {
     }
 
     pub async fn wait_until_synced(&self) -> BitcoindAdapterResult<()> {
-        self.execute_with_fallback(|client| async move {
+        self.execute_with_fallback_async(|client| async move {
             match client {
                 BitcoindClientWrapper::Provider1(rpc) => {
                     Ok(rpc.get_rpc_client_dyn().wait_until_synced().await)
@@ -148,156 +194,131 @@ impl FallbackBitcoindClient {
         .await
     }
 
-    pub async fn get_best_block_hash_rpc(
+    pub fn get_best_block_hash_rpc(
         &self,
     ) -> BitcoindAdapterResult<bitcoin::BlockHash> {
-        self.execute_with_fallback(|client| async move {
-            match client {
-                BitcoindClientWrapper::Provider1(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_best_block_hash_rpc()
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                BitcoindClientWrapper::Provider2(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_best_block_hash_rpc()
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                #[cfg(test)]
-                BitcoindClientWrapper::Mock(mock) => {
-                    mock.get_best_block_hash_rpc()
-                }
-            }
+        self.execute_with_fallback_sync(|client| match client {
+            BitcoindClientWrapper::Provider1(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_best_block_hash_rpc()
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            BitcoindClientWrapper::Provider2(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_best_block_hash_rpc()
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            #[cfg(test)]
+            BitcoindClientWrapper::Mock(mock) => mock.get_best_block_hash_rpc(),
         })
-        .await
     }
 
-    pub async fn get_block_header_rpc(
+    pub fn get_block_header_rpc(
         &self,
         h: &bitcoin::BlockHash,
     ) -> BitcoindAdapterResult<bitcoin::blockdata::block::Header> {
-        self.execute_with_fallback(|client| async move {
-            match client {
-                BitcoindClientWrapper::Provider1(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_header_rpc(h)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                BitcoindClientWrapper::Provider2(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_header_rpc(h)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                #[cfg(test)]
-                BitcoindClientWrapper::Mock(mock) => {
-                    mock.get_block_header_rpc(h)
-                }
-            }
+        self.execute_with_fallback_sync(|client| match client {
+            BitcoindClientWrapper::Provider1(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_header_rpc(h)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            BitcoindClientWrapper::Provider2(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_header_rpc(h)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            #[cfg(test)]
+            BitcoindClientWrapper::Mock(mock) => mock.get_block_header_rpc(h),
         })
-        .await
     }
 
-    pub async fn get_block_hash_rpc(
+    pub fn get_block_hash_rpc(
         &self,
         height: u64,
     ) -> BitcoindAdapterResult<bitcoin::BlockHash> {
-        self.execute_with_fallback(|client| async move {
-            match client {
-                BitcoindClientWrapper::Provider1(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_hash_rpc(height)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                BitcoindClientWrapper::Provider2(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_hash_rpc(height)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                #[cfg(test)]
-                BitcoindClientWrapper::Mock(mock) => {
-                    mock.get_block_hash_rpc(height)
-                }
+        self.execute_with_fallback_sync(|client| match client {
+            BitcoindClientWrapper::Provider1(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_hash_rpc(height)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            BitcoindClientWrapper::Provider2(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_hash_rpc(height)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            #[cfg(test)]
+            BitcoindClientWrapper::Mock(mock) => {
+                mock.get_block_hash_rpc(height)
             }
         })
-        .await
     }
 
-    pub async fn get_txids_rpc(
+    pub fn get_txids_rpc(
         &self,
         h: &bitcoin::BlockHash,
     ) -> BitcoindAdapterResult<Vec<bitcoin::Txid>> {
-        self.execute_with_fallback(|client| async move {
-            match client {
-                BitcoindClientWrapper::Provider1(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_txids_rpc(h)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                BitcoindClientWrapper::Provider2(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_txids_rpc(h)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                #[cfg(test)]
-                BitcoindClientWrapper::Mock(mock) => mock.get_txids_rpc(h),
-            }
+        self.execute_with_fallback_sync(|client| match client {
+            BitcoindClientWrapper::Provider1(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_txids_rpc(h)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            BitcoindClientWrapper::Provider2(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_txids_rpc(h)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            #[cfg(test)]
+            BitcoindClientWrapper::Mock(mock) => mock.get_txids_rpc(h),
         })
-        .await
     }
 
-    pub async fn get_estimate_smart_fee_rpc(
+    pub fn get_estimate_smart_fee_rpc(
         &self,
     ) -> BitcoindAdapterResult<EstimateSmartFeeResult> {
-        self.execute_with_fallback(|client| async move {
-            match client {
-                BitcoindClientWrapper::Provider1(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_estimate_smart_fee_rpc()
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                BitcoindClientWrapper::Provider2(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_estimate_smart_fee_rpc()
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                #[cfg(test)]
-                BitcoindClientWrapper::Mock(mock) => {
-                    mock.get_estimate_smart_fee_rpc()
-                }
+        self.execute_with_fallback_sync(|client| match client {
+            BitcoindClientWrapper::Provider1(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_estimate_smart_fee_rpc()
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            BitcoindClientWrapper::Provider2(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_estimate_smart_fee_rpc()
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            #[cfg(test)]
+            BitcoindClientWrapper::Mock(mock) => {
+                mock.get_estimate_smart_fee_rpc()
             }
         })
-        .await
     }
 
-    pub async fn get_block_info_rpc(
+    pub fn get_block_info_rpc(
         &self,
         block_hash: &bitcoin::BlockHash,
     ) -> BitcoindAdapterResult<GetBlockResult> {
-        self.execute_with_fallback(|client| async move {
-            match client {
-                BitcoindClientWrapper::Provider1(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_info_rpc(block_hash)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                BitcoindClientWrapper::Provider2(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_info_rpc(block_hash)
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                #[cfg(test)]
-                BitcoindClientWrapper::Mock(mock) => {
-                    mock.get_block_info_rpc(block_hash)
-                }
+        self.execute_with_fallback_sync(|client| match client {
+            BitcoindClientWrapper::Provider1(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_info_rpc(block_hash)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            BitcoindClientWrapper::Provider2(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_info_rpc(block_hash)
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            #[cfg(test)]
+            BitcoindClientWrapper::Mock(mock) => {
+                mock.get_block_info_rpc(block_hash)
             }
         })
-        .await
     }
 
-    pub async fn get_block_count_rpc(&self) -> BitcoindAdapterResult<u64> {
-        self.execute_with_fallback(|client| async move {
-            match client {
-                BitcoindClientWrapper::Provider1(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_count_rpc()
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                BitcoindClientWrapper::Provider2(rpc) => rpc
-                    .get_rpc_client_dyn()
-                    .get_block_count_rpc()
-                    .map_err(BitcoindAdapterError::BitcoindRpc),
-                #[cfg(test)]
-                BitcoindClientWrapper::Mock(mock) => mock.get_block_count_rpc(),
-            }
+    pub fn get_block_count_rpc(&self) -> BitcoindAdapterResult<u64> {
+        self.execute_with_fallback_sync(|client| match client {
+            BitcoindClientWrapper::Provider1(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_count_rpc()
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            BitcoindClientWrapper::Provider2(rpc) => rpc
+                .get_rpc_client_dyn()
+                .get_block_count_rpc()
+                .map_err(BitcoindAdapterError::BitcoindRpc),
+            #[cfg(test)]
+            BitcoindClientWrapper::Mock(mock) => mock.get_block_count_rpc(),
         })
-        .await
     }
 
     pub fn primary(&self) -> Option<Arc<BitcoindClient>> {
