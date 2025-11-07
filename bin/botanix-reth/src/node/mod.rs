@@ -1,5 +1,6 @@
 use crate::{
     node::{
+        consensus::BotanixConsensusBuilder,
         engine_api::{
             builder::BotanixEngineApiBuilder,
             payload::BotanixPayloadTypes,
@@ -13,7 +14,6 @@ use crate::{
     BotanixBlock, BotanixBlockBody,
 };
 use botanix_chainspec::BotanixChainSpec;
-use consensus::BotanixConsensusBuilder;
 use engine::BotanixPayloadServiceBuilder;
 use evm::BotanixExecutorBuilder;
 use network::BotanixNetworkBuilder;
@@ -25,13 +25,11 @@ use reth::{
     },
 };
 use reth_engine_local::LocalPayloadAttributesBuilder;
-use reth_engine_primitives::BeaconConsensusEngineHandle;
 use reth_node_ethereum::{node::EthereumPoolBuilder, EthereumEthApiBuilder};
 use reth_payload_primitives::{PayloadAttributesBuilder, PayloadTypes};
 use reth_primitives::BlockBody;
 use reth_trie_db::MerklePatriciaTrie;
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
 
 /// Consensus module containing logic related to Botanix consensus.
 pub mod consensus;

@@ -3,16 +3,17 @@ use alloy_consensus::{BlockHeader, Header, EMPTY_OMMER_ROOT_HASH};
 use alloy_eips::eip7840::BlobParams;
 use alloy_primitives::{Address, B256};
 use botanix_authority_edh::extra_data_header::CHAIN_VERSION;
+use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_edh::nums_secp256k1_pk;
-use botanix_authority_edh::{
-    extra_data_header::ExtraDataHeader, header_ext::HeaderExt,
-};
-use botanix_chainspec::{BotanixChainSpec, BotanixHardforks};
+use botanix_chainspec::BotanixChainSpec;
 use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use reth::{
     api::FullNodeTypes,
     builder::{components::ConsensusBuilder, BuilderContext},
-    consensus::{Consensus, FullConsensus, HeaderValidator},
+    consensus::{
+        Consensus, ConsensusError as RethConsensusError, FullConsensus,
+        HeaderValidator,
+    },
     consensus_common::validation::{
         validate_against_parent_4844, validate_against_parent_hash_number,
     },
@@ -22,7 +23,7 @@ use reth_consensus_common::validation::{
     validate_4844_header_standalone, validate_against_parent_eip1559_base_fee,
     validate_against_parent_timestamp, validate_block_pre_execution,
     validate_body_against_header, validate_header_base_fee,
-    validate_header_extra_data, validate_header_gas,
+    validate_header_gas,
 };
 use reth_primitives::{Receipt, RecoveredBlock, SealedBlock, SealedHeader};
 use reth_primitives_traits::constants::{
@@ -33,27 +34,27 @@ use std::convert::Into;
 use std::sync::Arc;
 use tracing::error;
 
-use crate::BotanixBlock;
+use crate::{node::BotanixNode, BotanixBlock, BotanixPrimitives};
 
 /// A basic Botanix consensus builder.
 #[derive(Debug, Default, Clone, Copy)]
 #[non_exhaustive]
 pub struct BotanixConsensusBuilder;
 
-// impl<Node> ConsensusBuilder<Node> for BotanixConsensusBuilder
-// where
-//     Node: FullNodeTypes<Types = BotanixNode>,
-// {
-//     type Consensus =
-//         Arc<dyn FullConsensus<BotanixPrimitives, Error = ConsensusError>>;
+impl<Node> ConsensusBuilder<Node> for BotanixConsensusBuilder
+where
+    Node: FullNodeTypes<Types = BotanixNode>,
+{
+    type Consensus =
+        Arc<dyn FullConsensus<BotanixPrimitives, Error = RethConsensusError>>;
 
-//     async fn build_consensus(
-//         self,
-//         ctx: &BuilderContext<Node>,
-//     ) -> eyre::Result<Self::Consensus> {
-//         Ok(Arc::new(BotanixConsensus::new(ctx.chain_spec())))
-//     }
-// }
+    async fn build_consensus(
+        self,
+        ctx: &BuilderContext<Node>,
+    ) -> eyre::Result<Self::Consensus> {
+        Ok(Arc::new(BotanixConsensus::new(ctx.chain_spec())))
+    }
+}
 
 /// Botanix consensus implementation.
 ///
@@ -69,21 +70,6 @@ impl BotanixConsensus<BotanixChainSpec> {
         Self { chain_spec }
     }
 }
-
-// impl FullConsensus<BlockWithSenders> for BotanixConsensus<BotanixChainSpec> {
-//     fn validate_block_post_execution(
-//         &self,
-//         block: &BlockWithSenders,
-//         input: BlockExecutionResult<_>,
-//     ) -> Result<(), ConsensusError> {
-//         validate_block_post_execution(
-//             block,
-//             &self.chain_spec.inner(),
-//             input.receipts,
-//             input.requests,
-//         )
-//     }
-// }
 
 impl BotanixConsensus<BotanixChainSpec> {
     /// Validates PoA header standalone according to the authority consensus rules.
@@ -239,9 +225,9 @@ impl BotanixConsensus<BotanixChainSpec> {
         // Not using the Reth `validate_header_extra_data()` since we have custom EDH validation
         // checked in `validate_header_standalone()`.
         validate_header_gas(header)
-            .map_err(|e| Into::<botanix_evm::error::ConsensusError>::into(e))?;
+            .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
         validate_header_base_fee(header, &self.chain_spec)
-            .map_err(|e| Into::<botanix_evm::error::ConsensusError>::into(e))?;
+            .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
 
         // EIP-4895: Beacon chain push withdrawals as operations
         if self
@@ -269,7 +255,7 @@ impl BotanixConsensus<BotanixChainSpec> {
                     .blob_params_at_timestamp(header.timestamp())
                     .unwrap_or_else(BlobParams::cancun),
             )
-            .map_err(|e| Into::<botanix_evm::error::ConsensusError>::into(e))?;
+            .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
         } else if header.blob_gas_used().is_some() {
             return Err(ConsensusError::BlobGasUsedUnexpected);
         } else if header.excess_blob_gas().is_some() {
@@ -392,15 +378,18 @@ use crate::consensus::{MAXIMUM_EXTRA_DATA_SIZE, MAX_EDH_SIZE};
 use crate::BotanixBlockBody;
 
 impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
-    type Error = ConsensusError;
+    type Error = RethConsensusError;
 
     fn validate_body_against_header(
         &self,
         body: &BotanixBlockBody,
         header: &SealedHeader,
-    ) -> Result<(), ConsensusError> {
-        validate_body_against_header(body, header.header())
-            .map_err(|e| Into::<botanix_evm::error::ConsensusError>::into(e))?;
+    ) -> Result<(), RethConsensusError> {
+        validate_body_against_header(body, header.header()).map_err(|e| {
+            RethConsensusError::Other(
+                format!("body validation failed: {}", e).into(),
+            )
+        })?;
 
         Ok(())
     }
@@ -408,96 +397,24 @@ impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
     fn validate_block_pre_execution(
         &self,
         block: &SealedBlock<BotanixBlock>,
-    ) -> Result<(), botanix_evm::error::ConsensusError> {
-        validate_block_pre_execution(block, &self.chain_spec.inner())
-            .map_err(botanix_evm::error::ConsensusError::from)
+    ) -> Result<(), RethConsensusError> {
+        validate_block_pre_execution(block, &self.chain_spec.inner()).map_err(
+            |e| {
+                RethConsensusError::Other(
+                    format!("pre-execution validation failed: {}", e).into(),
+                )
+            },
+        )
     }
 }
 
-// impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
-//     FullConsensus<BotanixPrimitives> for BotanixConsensus<ChainSpec>
-// {
-//     fn validate_block_post_execution(
-//         &self,
-//         block: &RecoveredBlock<BotanixBlock>,
-//         result: &BlockExecutionResult<Receipt>,
-//     ) -> Result<(), ConsensusError> {
-//         FullConsensus::<BotanixPrimitives>::validate_block_post_execution(
-//             &self.inner,
-//             block,
-//             result,
-//         )
-//     }
-// }
-
-/// Calculate the millisecond timestamp of a block header.
-/// Refer to https://github.com/bnb-chain/BEPs/blob/master/BEPs/BEP-520.md.
-pub fn calculate_millisecond_timestamp<H: alloy_consensus::BlockHeader>(
-    header: &H,
-) -> u64 {
-    let seconds = header.timestamp();
-    let mix_digest = header.mix_hash().unwrap_or(B256::ZERO);
-
-    let milliseconds = if mix_digest != B256::ZERO {
-        let bytes = mix_digest.as_slice();
-        // Convert last 8 bytes to u64 (big-endian), equivalent to Go's
-        // uint256.SetBytes32().Uint64()
-        let mut result = 0u64;
-        for &byte in bytes.iter().skip(24).take(8) {
-            result = (result << 8) | u64::from(byte);
-        }
-        result
-    } else {
-        0
-    };
-
-    seconds * 1000 + milliseconds
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use alloy_consensus::Header;
-    use alloy_primitives::B256;
-
-    #[test]
-    fn test_calculate_millisecond_timestamp_without_mix_hash() {
-        // Create a header with current timestamp and zero mix_hash
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let header = Header {
-            timestamp,
-            mix_hash: B256::ZERO,
-            ..Default::default()
-        };
-
-        let result = calculate_millisecond_timestamp(&header);
-        assert_eq!(result, timestamp * 1000);
-    }
-
-    #[test]
-    fn test_calculate_millisecond_timestamp_with_milliseconds() {
-        // Create a header with current timestamp and mix_hash containing milliseconds
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let milliseconds = 750u64;
-        let mut mix_hash_bytes = [0u8; 32];
-        mix_hash_bytes[24..32].copy_from_slice(&milliseconds.to_be_bytes());
-        let mix_hash = B256::new(mix_hash_bytes);
-
-        let header = Header {
-            timestamp,
-            mix_hash,
-            ..Default::default()
-        };
-
-        let result = calculate_millisecond_timestamp(&header);
-        assert_eq!(result, timestamp * 1000 + milliseconds);
+impl FullConsensus<BotanixPrimitives> for BotanixConsensus<BotanixChainSpec> {
+    fn validate_block_post_execution(
+        &self,
+        _block: &RecoveredBlock<BotanixBlock>,
+        _result: &BlockExecutionResult<Receipt>,
+    ) -> Result<(), RethConsensusError> {
+        // TODO: implement post-execution validation
+        Ok(())
     }
 }

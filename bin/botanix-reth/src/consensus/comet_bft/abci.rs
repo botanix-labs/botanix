@@ -134,7 +134,7 @@ use crate::consensus::{
         get_staged_pegins_from_pegin_meta, get_staged_pegouts_from_pegout_data,
         transactions_signed_from_bytes,
     },
-    AuthorityConsensus, Storage,
+    Storage,
 };
 use botanix_activation_manager::{
     ActivationManager, NetworkUpgradePayload, OnFinalizeBlockDecision,
@@ -605,7 +605,6 @@ where
         &self,
         block: &RecoveredBlock<BotanixBlock>,
     ) -> ResponseProcessProposal {
-        // validate_block_post_execution() is called when inserting the block (ABCIDriver)
         match self
             .botanix_consensus
             .validate_block_pre_execution(block.sealed_block())
