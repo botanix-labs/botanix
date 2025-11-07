@@ -11,7 +11,6 @@ pub enum BitcoindAdapterError {
     NoClientsAvailable,
 }
 
-
 #[derive(Debug, Error)]
 pub enum BitcoindError {
     #[error("Client initialization failed")]

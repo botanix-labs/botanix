@@ -12,6 +12,7 @@ exclude.workspace = true
 # Reth dependencies - using botanix fork
 reth-basic-payload-builder = { workspace = true }
 reth-chainspec = { workspace = true }
+reth-consensus = { workspace = true }
 reth-db = { workspace = true }
 reth-ethereum-engine-primitives = { workspace = true }
 reth-ethereum-payload-builder = { workspace = true }

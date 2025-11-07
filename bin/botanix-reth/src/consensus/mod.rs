@@ -1,40 +1,15 @@
 //! A [Consensus] implementation of Clique Proof of Authority (POA)
 //! that authoritymatically seals blocks.
-use alloy_consensus::EMPTY_OMMER_ROOT_HASH;
-use alloy_primitives::{Address, U256};
 use async_trait as _;
-use botanix_authority_edh::{header_ext::HeaderExt, nums_secp256k1_pk};
 use botanix_chainspec::BotanixChainSpec;
-use botanix_consensus_common::{
-    utils::validate_chain_version,
-    validation::{
-        validate_4844_header_standalone, validate_against_parent_4844,
-        validate_against_parent_eip1559_base_fee,
-        validate_against_parent_hash_number, validate_against_parent_timestamp,
-        validate_block_pre_execution, validate_header_base_fee,
-        validate_header_gas,
-    },
-};
+
 use bytes as _;
 use displaydoc as _;
-use reth_chainspec::{EthereumHardfork, EthereumHardforks};
-use reth_consensus::{
-    Consensus, ConsensusError, FullConsensus, HeaderValidator,
-    InvalidAggregatedPublicKeyError,
-};
-use reth_ethereum_consensus::validate_block_post_execution;
 use reth_network_peers as _;
 use reth_node_core as _;
-use reth_node_ethereum::EthEvmConfig;
-use reth_primitives::{
-    Block, BlockWithSenders, Header, RecoveredBlock, SealedBlock, SealedHeader,
-};
-use reth_primitives_traits::constants::MINIMUM_GAS_LIMIT;
-use reth_provider::BlockExecutionResult;
 use serde_json as _;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use tracing::{error, warn};
 mod builder;
 
 // /// Comet BFT abci and consensus driver
@@ -50,131 +25,12 @@ use crate::node::evm::config::BotanixEvmConfig;
 pub mod test_utils;
 pub mod wallet_state_sync;
 
+/// Maximum extra data size in a block which supports Botanix consensus rules.
+/// This is larger than the Ethereum default of 32 bytes.
+pub const MAXIMUM_EXTRA_DATA_SIZE: usize = 256;
+
 /// Max EDH size; for specific details see [ExtraDataHeader]
 pub const MAX_EDH_SIZE: usize = 93;
-/// Ethereum authority consensus
-///
-/// This consensus engine does basic checks as outlined in the execution specs.
-#[derive(Clone, Debug)]
-pub struct AuthorityConsensus {
-    /// Configuration
-    chain_spec: Arc<BotanixChainSpec>,
-}
-
-impl AuthorityConsensus {
-    /// Create a new instance of [AuthorityConsensus]
-    pub fn new(chain_spec: Arc<BotanixChainSpec>) -> Self {
-        Self { chain_spec }
-    }
-
-    /// Checks the gas limit for consistency between parent and self headers.
-    ///
-    /// The maximum allowable difference between self and parent gas limits is determined by the
-    /// parent's gas limit divided by the elasticity multiplier (1024).
-    /// NOTE: copied from `crates/ethereum/consensus/src/lib.rs`
-    fn validate_against_parent_gas_limit(
-        &self,
-        header: &SealedHeader,
-        parent: &SealedHeader,
-    ) -> Result<(), ConsensusError> {
-        // TODO
-        Ok(())
-    }
-}
-
-// impl Consensus<reth_primitives::Block> for AuthorityConsensus {
-
-//     type Error = ConsensusError;
-
-//     fn validate_body_against_header(&self, body: &Block::Body, header: &SealedHeader<Header>) -> Result<(),Self::Error>  {
-//         todo!()
-//     }
-
-//     fn validate_block_pre_execution(&self, block: &SealedBlock) -> Result<(), ConsensusError> {
-//         validate_block_pre_execution(block, &self.chain_spec.inner())
-//     }
-// }
-
-// impl FullConsensus<BlockWithSenders> for AuthorityConsensus {
-//     fn validate_block_post_execution(
-//         &self,
-//         block: &BlockWithSenders,
-//         input: BlockExecutionResult<_>,
-//     ) -> Result<(), ConsensusError> {
-//         validate_block_post_execution(
-//             block,
-//             &self.chain_spec.inner(),
-//             input.receipts,
-//             input.requests,
-//         )
-//     }
-// }
-
-impl HeaderValidator for AuthorityConsensus {
-    fn validate_header(
-        &self,
-        header: &SealedHeader,
-    ) -> Result<(), ConsensusError> {
-        validate_header_gas(header)?;
-        validate_header_base_fee(header, &self.chain_spec.inner())?;
-
-        // Ensures that EIP-4844 fields are valid once cancun is active.
-        if self
-            .chain_spec
-            .inner()
-            .is_cancun_active_at_timestamp(header.timestamp)
-        {
-            validate_4844_header_standalone(header)?;
-        } else if header.blob_gas_used.is_some() {
-            return Err(ConsensusError::BlobGasUsedUnexpected);
-        } else if header.excess_blob_gas.is_some() {
-            return Err(ConsensusError::ExcessBlobGasUnexpected);
-        } else if header.parent_beacon_block_root.is_some() {
-            return Err(ConsensusError::ParentBeaconBlockRootUnexpected);
-        }
-
-        // if self.chain_spec.inner().is_prague_active_at_timestamp(header.timestamp) {
-        //     if header.requests_root.is_none() {
-        //         return Err(ConsensusError::RequestsRootMissing);
-        //     }
-        // } else if header.requests_root.is_some() {
-        //     return Err(ConsensusError::RequestsRootUnexpected);
-        // }
-
-        Ok(())
-    }
-
-    fn validate_header_against_parent(
-        &self,
-        header: &SealedHeader,
-        parent: &SealedHeader,
-    ) -> Result<(), ConsensusError> {
-        validate_against_parent_hash_number(header, parent)?;
-
-        validate_against_parent_timestamp(header, parent)?;
-
-        // TODO Check difficulty increment between parent and self
-        // Ace age did increment it by some formula that we need to follow.
-        self.validate_against_parent_gas_limit(header, parent)?;
-
-        validate_against_parent_eip1559_base_fee(
-            header,
-            parent,
-            &self.chain_spec.inner(),
-        )?;
-
-        // ensure that the blob gas fields for this block
-        if self
-            .chain_spec
-            .inner()
-            .is_cancun_active_at_timestamp(header.timestamp)
-        {
-            validate_against_parent_4844(header, parent)?;
-        }
-
-        Ok(())
-    }
-}
 /// In memory storage
 /// All this struct does is provide a rwlock wrapper around the storage inner
 #[allow(dead_code)]

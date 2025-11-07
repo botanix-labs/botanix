@@ -2,9 +2,10 @@
 
 use alloy_primitives::U256;
 use botanix_authority_edh::header_ext::HeaderExt;
-use botanix_btc_wallet::{bitcoind::{
-    BitcoindClientFactory, BitcoindConfig, BitcoindFactory,
-}, error::BitcoindError};
+use botanix_btc_wallet::{
+    bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory},
+    error::BitcoindError,
+};
 use btcserverlib::wallet::address::{
     generate_taproot_address, generate_tweaked_public_key,
 };

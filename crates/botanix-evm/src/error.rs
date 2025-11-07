@@ -536,6 +536,10 @@ pub enum ConsensusError {
     /// Error since the block fee recipient fee is missing.
     #[display("missing block fee recipient address")]
     MissingBlockFeeRecipientAddress,
+
+    /// Other consensus errors.
+    #[display("other consensus error: {_0}")]
+    Other(String),
 }
 
 /// Invalid Aggregated Public Key Error
@@ -552,4 +556,20 @@ pub enum InvalidAggregatedPublicKeyError {
         "Aggregated public key should not be NUMS point past genesis block"
     )]
     NumsAggregatePublicKeyPastGenesis,
+}
+
+/// Convert from Reth ConsensusError to Botanix ConsensusError
+/// TODO: match on each variant
+impl From<reth_consensus::ConsensusError> for ConsensusError {
+    fn from(err: reth_consensus::ConsensusError) -> Self {
+        Self::Other(err.to_string())
+    }
+}
+
+/// Convert from Botanix ConsensusError to Reth ConsensusError
+/// TODO: match on each variant
+impl From<ConsensusError> for reth_consensus::ConsensusError {
+    fn from(err: ConsensusError) -> Self {
+        Self::Other(err.to_string())
+    }
 }
