@@ -88,8 +88,8 @@ pub trait WalletStateSync {
 type WalletStateSyncResponseCycle = Arc<RwLock<Option<Uuid>>>;
 #[derive(Clone)]
 /// Engine for synchronizing wallet state
-pub struct WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient> {
-    storage: Storage<BF, RDB, BDB>,
+pub struct WalletStateSyncEngine<RDB, BDB, ToFrostMan, BtcServerClient> {
+    storage: Storage<RDB, BDB>,
     btc_server: BtcServerClient,
     to_frost_manager: ToFrostMan,
     data_parser: DataParser,
@@ -98,10 +98,9 @@ pub struct WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient> {
     current_response_cycle: WalletStateSyncResponseCycle,
 }
 
-impl<BF, RDB, BDB, ToFrostMan, BtcServerClient>
-    WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>
+impl<RDB, BDB, ToFrostMan, BtcServerClient>
+    WalletStateSyncEngine<RDB, BDB, ToFrostMan, BtcServerClient>
 where
-    BF: BitcoindFactory + Clone + 'static,
     ToFrostMan: ToFrostManager + Sync + Clone + 'static,
     RDB: BlockReaderIdExt<Header = alloy_consensus::Header>
         + CanonStateSubscriptions
@@ -111,7 +110,7 @@ where
     BtcServerClient: BtcServerExtendedApi + Clone,
 {
     pub(crate) fn new(
-        storage: Storage<BF, RDB, BDB>,
+        storage: Storage<RDB, BDB>,
         btc_server: BtcServerClient,
         to_frost_manager: ToFrostMan,
         task_executor: TaskExecutor,
@@ -195,10 +194,9 @@ async fn hydrate_minimum_superset(
     Ok(hydrated_superset_map)
 }
 
-impl<BF, RDB, BDB, ToFrostMan, BtcServerClient> WalletStateSync
-    for WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>
+impl<RDB, BDB, ToFrostMan, BtcServerClient> WalletStateSync
+    for WalletStateSyncEngine<RDB, BDB, ToFrostMan, BtcServerClient>
 where
-    BF: BitcoindFactory + Clone + 'static,
     ToFrostMan: ToFrostManager + Clone + Sync + 'static,
     RDB: BlockReaderIdExt + CanonStateSubscriptions + Clone + 'static,
     BDB: WalletStateSyncWriter + WalletStateSyncReader + Clone + 'static,

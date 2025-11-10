@@ -2,29 +2,30 @@
 
 use alloy_primitives::U256;
 use botanix_authority_edh::header_ext::HeaderExt;
-use botanix_btc_wallet::bitcoind::{
-    BitcoindClientFactory, BitcoindConfig, BitcoindFactory,
+use botanix_btc_wallet::{
+    bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory},
+    error::{BitcoindAdapterError, BitcoindError},
+    fallback::FallbackBitcoindClient,
 };
 use btcserverlib::wallet::address::{
     generate_taproot_address, generate_tweaked_public_key,
 };
 use frost_secp256k1_tr::{self as frost};
 use reth_storage_api::BlockReaderIdExt;
-use std::{fmt, str::FromStr};
+use std::{fmt, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tracing::error;
-use url::Url;
 
 use crate::impl_to_rpc_result;
 
 /// Settings for the [`BotanixConfig`]
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct BotanixConfig {
     /// Bitcoin network
     pub bitcoin_network: bitcoin::Network,
 
     /// bitcoind configuration
-    pub bitcoind_factory: BitcoindClientFactory,
+    pub bitcoind_factory: Arc<FallbackBitcoindClient>,
 }
 
 impl Default for BotanixConfig {
@@ -33,13 +34,7 @@ impl Default for BotanixConfig {
         Self {
             bitcoin_network: bitcoin::Network::Regtest,
             // Use a public signet endpoint by default
-            bitcoind_factory: BitcoindClientFactory::new(BitcoindConfig::new(
-                "http://localhost:18443"
-                    .parse::<Url>()
-                    .expect("must be valid url address"),
-                "foo".to_string(),
-                "bar".to_string(),
-            )),
+            bitcoind_factory: Arc::new(FallbackBitcoindClient::default()),
         }
     }
 }
@@ -48,7 +43,7 @@ impl BotanixConfig {
     /// Creates a new [`BotanixConfig`]
     pub const fn new(
         bitcoin_network: bitcoin::Network,
-        bitcoind_factory: BitcoindClientFactory,
+        bitcoind_factory: Arc<FallbackBitcoindClient>,
     ) -> Self {
         Self {
             bitcoin_network,
@@ -122,7 +117,7 @@ impl From<MerkleProofRPCError> for String {
 #[derive(Debug)]
 pub enum BtcFeeRateRPCError {
     /// Failed to get estimate smart fee rate
-    FailedToGetEstimateSmartFee(botanix_btc_wallet::bitcoind::BitcoindError),
+    FailedToGetEstimateSmartFee(BitcoindAdapterError),
     /// Failed to initialize bitcoind client
     BitcoindClientInitialization,
     /// Failed to get estimate smart fee rate
@@ -150,7 +145,7 @@ impl_to_rpc_result!(MerkleProofRPCError);
 impl_to_rpc_result!(GatewayAddressRPCError);
 
 /// Botanix config
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct Botanix {
     /// Botanix config
     pub botanix_rpc_config: BotanixConfig,
@@ -244,15 +239,11 @@ impl Botanix {
             .map_err(|_e| MerkleProofRPCError::InvalidTxId)?;
 
         let bitcoind_client = self.botanix_rpc_config.bitcoind_factory.clone();
-        let bitcoind_client = bitcoind_client
-            .build_and_connect()
-            .map_err(|_| MerkleProofRPCError::BitcoindClientInitialization)?;
 
         let block_hash = bitcoin::BlockHash::from_str(&block_hash)
             .map_err(|_e| MerkleProofRPCError::MalformedBlockHash)?;
 
         let txids = bitcoind_client
-            .get_rpc_client_dyn()
             .get_block_info_rpc(&block_hash)
             .map_err(|_e| MerkleProofRPCError::BitcoindClientInitialization)?
             .tx;
@@ -277,11 +268,7 @@ impl Botanix {
         &self,
     ) -> std::result::Result<U256, BtcFeeRateRPCError> {
         let bitcoind_client = self.botanix_rpc_config.bitcoind_factory.clone();
-        let bitcoind_client = bitcoind_client
-            .build_and_connect()
-            .map_err(|_| BtcFeeRateRPCError::BitcoindClientInitialization)?;
         let fee_result = bitcoind_client
-            .get_rpc_client_dyn()
             .get_estimate_smart_fee_rpc()
             .map_err(BtcFeeRateRPCError::FailedToGetEstimateSmartFee)?;
 

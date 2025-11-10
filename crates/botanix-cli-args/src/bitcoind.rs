@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
-use botanix_btc_wallet::bitcoind::BitcoindConfig;
 use botanix_cli_parsers::parsers::{parse_grpc_address, parse_url};
 use clap::Args;
 use serde::{Deserialize, Serialize};
@@ -26,36 +25,67 @@ pub const DEFAULT_BTC_SERVER: &str = "127.0.0.1:8080";
 #[derive(Debug, Clone, Args, PartialEq, Eq, Serialize, Deserialize)]
 #[clap(next_help_heading = "Bitcoind")]
 pub struct BitcoindArgs {
-    /// bitcoind RPC url
+    /// bitcoind RPC primary url
     ///
-    /// The url of the bitcoind server.
-    #[arg(default_value_t=Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"), value_parser = parse_url, long = "bitcoind.url", name = "bitcoind.url", value_name = "BITCOIND_URL", env = "RETH_BITCOIND_URL"
+    /// The primary url of the bitcoind server.
+    #[arg(default_value_t=Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"), value_parser = parse_url, long = "bitcoind.primary_url", name = "bitcoind.url", value_name = "BITCOIND_URL", env = "RETH_BITCOIND_URL"
     )]
-    pub url: Url,
+    pub primary_url: Url,
 
-    /// Btcd username
+    /// Btcd primary username
     ///
-    /// The username of the bitcoind server.
+    /// The primary username of the bitcoind server.
     #[arg(
         default_value_t = DEFAULT_BITCOIND_USERNAME.into(),
-        long = "bitcoind.username",
-        name = "bitcoind.username",
-        value_name = "BITCOIND_USERNAME",
-        env = "RETH_BITCOIND_USERNAME"
+        long = "bitcoind.primary_username",
+        name = "bitcoind.primary_username",
+        value_name = "BITCOIND_PRIMARY_USERNAME",
+        env = "RETH_BITCOIND_PRIMARY_USERNAME"
     )]
-    pub username: String,
+    pub primary_username: String,
 
-    /// Btcd password
+    /// Btcd primary password
     ///
-    /// The password of the bitcoind server.
+    /// The primary password of the bitcoind server.
     #[arg(
         default_value_t = DEFAULT_BITCOIND_PASSWORD.into(),
-        long = "bitcoind.password",
-        name = "bitcoind.password",
-        value_name = "BITCOIND_PASSWORD",
-        env = "RETH_BITCOIND_PASSWORD"
+        long = "bitcoind.primary_password",
+        name = "bitcoind.primary_password",
+        value_name = "BITCOIND_PRIMARY_PASSWORD",
+        env = "RETH_BITCOIND_PRIMARY_PASSWORD"
     )]
-    pub password: String,
+    pub primary_password: String,
+
+    /// bitcoind RPC secondary url
+    ///
+    /// The secondary url of the bitcoind server.
+    #[arg(default_value_t=Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"), value_parser = parse_url, long = "bitcoind.secondary_url", name = "bitcoind.url", value_name = "BITCOIND_URL", env = "RETH_BITCOIND_URL"
+    )]
+    pub secondary_url: Url,
+
+    /// Btcd secondary username
+    ///
+    /// The secondary username of the bitcoind server.
+    #[arg(
+        default_value_t = DEFAULT_BITCOIND_USERNAME.into(),
+        long = "bitcoind.secondary_username",
+        name = "bitcoind.secondary_username",
+        value_name = "BITCOIND_SECONDARY_USERNAME",
+        env = "RETH_BITCOIND_SECONDARY_USERNAME"
+    )]
+    pub secondary_username: String,
+
+    /// Btcd secondary password
+    ///
+    /// The secondary password of the bitcoind server.
+    #[arg(
+        default_value_t = DEFAULT_BITCOIND_PASSWORD.into(),
+        long = "bitcoind.secondary_password",
+        name = "bitcoind.secondary_password",
+        value_name = "BITCOIND_SECONDARY_PASSWORD",
+        env = "RETH_BITCOIND_SECONDARY_PASSWORD"
+    )]
+    pub secondary_password: String,
 
     /// ZMQ address for bitcoind
     #[arg(
@@ -96,20 +126,17 @@ pub struct BitcoindArgs {
 impl Default for BitcoindArgs {
     fn default() -> Self {
         Self {
-            url: Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"),
-            username: DEFAULT_BITCOIND_USERNAME.into(),
-            password: DEFAULT_BITCOIND_PASSWORD.into(),
+            primary_url: Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"),
+            primary_username: DEFAULT_BITCOIND_USERNAME.into(),
+            primary_password: DEFAULT_BITCOIND_PASSWORD.into(),
+            secondary_url: Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"),
+            secondary_username: DEFAULT_BITCOIND_USERNAME.into(),
+            secondary_password: DEFAULT_BITCOIND_PASSWORD.into(),
             zmq_hash_block_address: None,
             btc_network: DEFAULT_BITCOIN_NETWORK,
             btc_server: Some(DEFAULT_BTC_SERVER.to_owned()),
             btc_signing_server_jwt_secret_path: None,
         }
-    }
-}
-
-impl From<BitcoindArgs> for BitcoindConfig {
-    fn from(args: BitcoindArgs) -> Self {
-        Self::new(args.url.clone(), args.username.clone(), args.password)
     }
 }
 

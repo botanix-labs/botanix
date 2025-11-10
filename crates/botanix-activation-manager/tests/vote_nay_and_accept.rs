@@ -1,3 +1,4 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
@@ -5,6 +6,7 @@ use botanix_activation_manager::{
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests that an upgrade activates even with a validator voting Nay but
@@ -19,6 +21,7 @@ use botanix_storage::models::Vote;
 /// 4. After activation, all validators, including EVE, process blocks with the new version
 /// 5. This shows that validators can signal disagreement while still accepting majority decisions
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_vote_nay_and_accept() {
     let upgrade_height = 3;
     let required_approval_rate = 67;
