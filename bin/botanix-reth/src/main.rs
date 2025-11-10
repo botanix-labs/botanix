@@ -149,7 +149,7 @@ fn main() -> eyre::Result<()> {
             }
 
             // Create bitcoind client
-            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, ClientSelection::Fallback).await?;
+            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, ClientSelection::Fallback)?;
             let bitcoind_client = Arc::new(bitcoind_client);
 
             // Migrate the db if needed
@@ -273,7 +273,6 @@ fn main() -> eyre::Result<()> {
                     bitcoind_cfg.btc_network,
                     frost_setup_result.genesis_authorities.clone(),
                     frost_setup_result.authorities_socket_addresses,
-                    bitcoind_client.clone(),
                     botanix_evm_config,
                     cometbft_rpc_factory,
                     RandomSourceProvider::new(),

@@ -471,6 +471,7 @@ async fn handle_new_blocks_sync_result(
     }
 }
 
+// TODO: fixme
 // #[cfg(test)]
 // mod tests {
 //     use super::*;

@@ -20,9 +20,7 @@ use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
 };
-use botanix_btc_wallet::{
-    bitcoind::BitcoindFactory, fallback::FallbackBitcoindClient,
-};
+use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::state_sync::StateSyncArgs;
 use botanix_comet_bft_rpc::{
@@ -128,7 +126,6 @@ where
         btc_network: bitcoin::Network,
         genesis_authorities: Vec<secp256k1::PublicKey>,
         authority_socket_addresses: Vec<SocketAddr>,
-        bitcoind_factory: Arc<FallbackBitcoindClient>,
         evm_config: BotanixEvmConfig,
         cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
         random_source_provider: Source,
@@ -228,7 +225,7 @@ where
             authority_socket_addresses,
             evm_config,
             chain_spec.clone(),
-            bitcoind_factory,
+            bitcoind_client.clone(),
             reth_provider,
             botanix_provider_factory,
         );
