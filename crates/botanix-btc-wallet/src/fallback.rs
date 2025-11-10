@@ -12,7 +12,7 @@ use std::sync::Arc;
 pub enum ClientSelection {
     #[default]
     Fallback, // Use all clients with fallback
-    Secondary, // Use only seconadary provider only
+    Secondary, // Use only secondary provider
     Primary,   // Use only first provider
 }
 

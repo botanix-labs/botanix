@@ -692,7 +692,7 @@ start-poa-server-1:
 	-vvv \
 	--btc-server "localhost:8081" \
 	--btc-network "${BITCOIND_NETWORK}" \
-	--btc-signing-server-jwt-secret "${NODE_1_DIR}/bjwt.hex" \
+	--btc-signing-server-jwt-secret-path "${NODE_1_DIR}/bjwt.hex" \
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \
@@ -729,7 +729,7 @@ start-poa-server-2:
 	-vvv \
 	--btc-server "localhost:8082" \
 	--btc-network "${BITCOIND_NETWORK}" \
-	--btc-signing-server-jwt-secret "${NODE_2_DIR}/bjwt.hex" \
+	--btc-signing-server-jwt-secret-path "${NODE_2_DIR}/bjwt.hex" \
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \
@@ -766,7 +766,7 @@ start-poa-server-3:
 	-vvv \
 	--btc-server "localhost:8083" \
 	--btc-network "${BITCOIND_NETWORK}" \
-	--btc-signing-server-jwt-secret "${NODE_3_DIR}/bjwt.hex" \
+	--btc-signing-server-jwt-secret-path "${NODE_3_DIR}/bjwt.hex" \
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \
@@ -1066,7 +1066,7 @@ PROFILER_POA_SEVER_ARGS := \
 	-vvv \
 	--btc-server localhost:${PROFILER_BTC_SERVER_PORT} \
 	--btc-network ${BITCOIND_NETWORK} \
-	--btc-signing-server-jwt-secret ${PROFILER_NODE_DIR}/bjwt.hex \
+	--btc-signing-server-jwt-secret-path ${PROFILER_NODE_DIR}/bjwt.hex \
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \

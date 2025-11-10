@@ -121,6 +121,7 @@ pub(crate) struct StorageInner {
     pub(crate) is_block_syncing: bool,
 }
 
+// TODO
 // #[cfg(test)]
 // mod tests {
 //     use botanix_authority_edh::extra_data_header::{ExtraDataHeader, CHAIN_VERSION};
