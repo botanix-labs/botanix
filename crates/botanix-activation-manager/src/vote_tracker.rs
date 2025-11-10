@@ -136,9 +136,10 @@ impl ActivationManagerReaderWriter<Address> for VoteWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "test-utils")]
     use crate::test_utils::{assert_polling, assert_threshold_rates};
-
     #[test]
+    #[cfg(feature = "test-utils")]
     fn vote_watcher_db_conformance() {
         let alice = Address::from_slice(&[0; 20]);
         let bob = Address::from_slice(&[1; 20]);

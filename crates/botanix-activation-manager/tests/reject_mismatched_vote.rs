@@ -1,9 +1,11 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests that validators tracking different upgrade versions don't count each
@@ -17,6 +19,7 @@ use botanix_storage::models::Vote;
 ///    perspective, the minimum quorum requirement is not met
 /// 5. This protects the network from confusion when multiple potential upgrades are being discussed
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_reject_mismatched_vote() {
     let upgrade_height = 3;
     // NOTE: All validators are required to reach the approval rate!

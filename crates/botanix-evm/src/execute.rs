@@ -10,7 +10,9 @@ use botanix_authority_peg::{
     },
     peg_contract::{PeginData, PegoutWithId},
 };
-use botanix_btc_wallet::bitcoind::BitcoindFactory;
+use botanix_btc_wallet::{
+    bitcoind::BitcoindFactory, fallback::FallbackBitcoindClient,
+};
 use botanix_chainspec::BotanixChainSpec;
 use btcserverlib::pegout_id::PegoutId;
 use reth_chainspec::{ChainSpec, EthereumHardforks};
@@ -85,8 +87,8 @@ pub struct BotanixBlockExecutionOutput<T> {
 }
 
 /// Helper container type for EVM with chain spec.
-#[derive(Debug, Clone)]
-struct EthEvmExecutor<EvmConfig, BF, RethDB, N>
+#[derive(Clone)]
+struct EthEvmExecutor<EvmConfig, RethDB, N>
 where
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
@@ -96,7 +98,7 @@ where
     /// How to create an EVM.
     evm_config: EvmConfig,
     /// The bitcoind factory used to connect to the L1 bitcoind RPC
-    bitcoind_factory: BF,
+    bitcoind_factory: Arc<FallbackBitcoindClient>,
     /// The L1 bitcoin network
     bitcoin_network: bitcoin::Network,
     /// Blockchain provider
@@ -108,20 +110,18 @@ where
 /// Expected usage:
 /// - Create a new instance of the executor.
 /// - Execute the block.
-#[derive(Debug)]
-pub struct EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+pub struct EthBlockExecutor<EvmConfig, DB, RethDB, N>
 where
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
 {
     /// Chain specific evm config that's used to execute a block.
-    executor: EthEvmExecutor<EvmConfig, BF, RethDB, N>,
+    executor: EthEvmExecutor<EvmConfig, RethDB, N>,
     /// The state to use for execution
     state: State<DB>,
 }
 
-impl<EvmConfig, DB, BF, RethDB, N>
-    EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+impl<EvmConfig, DB, RethDB, N> EthBlockExecutor<EvmConfig, DB, RethDB, N>
 where
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
@@ -132,7 +132,7 @@ where
         botanix_chain_spec: Arc<BotanixChainSpec>,
         evm_config: EvmConfig,
         state: State<DB>,
-        bitcoind_factory: BF,
+        bitcoind_factory: Arc<FallbackBitcoindClient>,
         bitcoin_network: bitcoin::Network,
         provider: Arc<DatabaseProviderRO<RethDB, N>>,
     ) -> Self {
@@ -186,12 +186,10 @@ where
     }
 }
 
-impl<EvmConfig, DB, BF, RethDB, N>
-    EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+impl<EvmConfig, DB, RethDB, N> EthBlockExecutor<EvmConfig, DB, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
     DB: RethDatabase<Error: Into<ProviderError> + Display>,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
 {
@@ -294,10 +292,9 @@ where
     }
 }
 
-impl<EvmConfig, BF, RethDB, N> EthEvmExecutor<EvmConfig, BF, RethDB, N>
+impl<EvmConfig, RethDB, N> EthEvmExecutor<EvmConfig, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
 {
@@ -739,13 +736,11 @@ where
     }
 }
 
-impl<EvmConfig, DB, BF, RethDB, N>
-    EthBlockExecutor<EvmConfig, DB, BF, RethDB, N>
+impl<EvmConfig, DB, RethDB, N> EthBlockExecutor<EvmConfig, DB, RethDB, N>
 where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
     DB: RethDatabase<Error: Into<ProviderError> + Display>,
     RethDB: reth_db::Database,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
     N: reth_node_types::NodeTypes
         + reth_provider::providers::NodeTypesForProvider,
     <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,

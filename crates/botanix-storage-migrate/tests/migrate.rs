@@ -1,4 +1,5 @@
 //! Test migration of botanix storage tables to reth database
+#[cfg(feature = "test-utils")]
 use botanix_storage_migrate::{
     migrate_botanix_tables,
     test_utils::fixtures::{
@@ -10,6 +11,7 @@ use botanix_storage_migrate::{
 };
 
 use alloy_primitives::BlockNumber;
+#[cfg(feature = "test-utils")]
 use eyre::Context;
 use reth_db::{test_utils::create_test_rw_db, DatabaseEnv};
 use reth_db_api::{
@@ -19,6 +21,7 @@ use reth_db_api::{
     Database,
 };
 
+#[cfg(feature = "test-utils")]
 /// Helper function to populate test data in botanix-storage tables
 pub fn populate_botanix_test_data(db: &DatabaseEnv) -> eyre::Result<()> {
     let tx = db.tx_mut()?;
@@ -96,6 +99,7 @@ pub fn count_table_entries<T: Table>(db: &DatabaseEnv) -> eyre::Result<usize> {
     Ok(count)
 }
 
+#[cfg(feature = "test-utils")]
 fn count_botanix_db_tables(
     db: &DatabaseEnv,
     expected_count: usize,
@@ -173,6 +177,7 @@ fn count_botanix_db_tables(
     Ok(())
 }
 
+#[cfg(feature = "test-utils")]
 fn count_reth_db_botanix_tables(
     db: &DatabaseEnv,
     expected_count: usize,
@@ -251,6 +256,7 @@ fn count_reth_db_botanix_tables(
 }
 
 #[test]
+#[cfg(feature = "test-utils")]
 fn test_migration() -> eyre::Result<()> {
     // Create temporary databases
     let reth_temp_db = create_test_rw_db();

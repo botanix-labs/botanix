@@ -1,3 +1,4 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
@@ -5,6 +6,7 @@ use botanix_activation_manager::{
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests that a lagging validator can join the network after an upgrade has
@@ -16,10 +18,10 @@ use botanix_storage::models::Vote;
 /// 2. A third validator (EVE) who joins later and is compliant with the upgrade can successfully
 ///    process blocks with the new version
 /// 3. The lagging validator correctly rejects upgraded blocks during the `process_proposal` phase
-///    but accepts them during finalize_block phase
 /// 4. After finalizing the first upgraded block, the lagging validator properly updates its active
 ///    version and can fully participate in the network
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_accept_lagging_validator() {
     let upgrade_height = 2;
     let required_approval_rate = 67;

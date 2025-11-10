@@ -145,7 +145,7 @@ fn main() -> eyre::Result<()> {
             }
 
             // Create bitcoind client
-            let (bitcoind_client, bitcoind_client_factory) = setup_bitcoind_client(&bitcoind_cfg, &poa_cfg, ClientSelection::Fallback).await?;
+            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, &poa_cfg, ClientSelection::Fallback).await?;
             let bitcoind_client = Arc::new(bitcoind_client);
 
             // Migrate the db if needed
@@ -187,7 +187,7 @@ fn main() -> eyre::Result<()> {
                 &mut reth_cfg,
             )?;
 
-            let botanix_provider = create_botanix_provider(&bitcoind_cfg, &bitcoind_client_factory)?;
+            let botanix_provider = create_botanix_provider(&bitcoind_cfg, bitcoind_client.clone())?;
 
             // Setup bitcoin checkpoints synchronizer
             let (checkpoints_synchronizer, bitcoin_zmq_block_hash_stream, bitcoin_checkpoints) = setup_bitcoin_checkpoints(
@@ -267,7 +267,7 @@ fn main() -> eyre::Result<()> {
                     bitcoind_cfg.btc_network,
                     frost_setup_result.genesis_authorities.clone(),
                     frost_setup_result.authorities_socket_addresses,
-                    bitcoind_client_factory.clone(),
+                    bitcoind_client.clone(),
                     botanix_evm_config,
                     cometbft_rpc_factory,
                     RandomSourceProvider::new(),

@@ -1,3 +1,4 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
@@ -5,6 +6,7 @@ use botanix_activation_manager::{
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests the upgrade flow where validators first signal support, then later accept.
@@ -19,6 +21,7 @@ use botanix_storage::models::Vote;
 /// 4. This demonstrates the two-phase upgrade process where validators can signal support before
 ///    they're technically ready to handle the upgrade
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_wait_for_compliance() {
     let upgrade_height = 3;
     let required_approval_rate = 67;

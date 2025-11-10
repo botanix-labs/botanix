@@ -1,6 +1,7 @@
 //! A [Consensus] implementation of Clique Proof of Authority (POA)
 //! that authoritymatically seals blocks.
 use async_trait as _;
+use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 
 use bytes as _;
@@ -12,7 +13,7 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 mod builder;
 
-// /// Comet BFT abci and consensus driver
+/// Comet BFT abci and consensus driver
 pub mod comet_bft;
 mod excecution_utils;
 mod frost_task;
@@ -34,8 +35,8 @@ pub const MAX_EDH_SIZE: usize = 93;
 /// In memory storage
 /// All this struct does is provide a rwlock wrapper around the storage inner
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
-pub(crate) struct Storage<BF, RDB, BDB> {
+#[derive(Clone)]
+pub(crate) struct Storage<RDB, BDB> {
     /// Reth Database Provider Factory
     pub(crate) reth_database: RDB,
     /// Botanix Database Provider Factory
@@ -54,14 +55,14 @@ pub(crate) struct Storage<BF, RDB, BDB> {
     /// Evm config
     pub(crate) evm_config: BotanixEvmConfig,
     /// Bitcoind Factory
-    pub(crate) bitcoind_factory: BF,
+    pub(crate) bitcoind_factory: Arc<FallbackBitcoindClient>,
     /// Chain spec
     pub(crate) chain_spec: Arc<BotanixChainSpec>,
     // The inner storage, everything here is rw locked
     pub(crate) inner: Arc<RwLock<StorageInner>>,
 }
 
-impl<BF, RDB: Clone, BDB: Clone> Storage<BF, RDB, BDB> {
+impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
     /// Create a new instance of the storage
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -73,7 +74,7 @@ impl<BF, RDB: Clone, BDB: Clone> Storage<BF, RDB, BDB> {
         authority_socket_addresses: Vec<SocketAddr>,
         evm_config: BotanixEvmConfig,
         chain_spec: Arc<BotanixChainSpec>,
-        bitcoind_factory: BF,
+        bitcoind_factory: Arc<FallbackBitcoindClient>,
         reth_database: RDB,
         botanix_database_factory: BDB,
     ) -> Self {

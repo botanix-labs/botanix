@@ -56,9 +56,9 @@ use tracing::{info, warn};
 
 /// Builder type for configuring the setup
 #[allow(dead_code)]
-pub struct AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source> {
+pub struct AuthorityConsensusBuilder<RDB, BDB, ToFrostMan, Source> {
     consensus: BotanixConsensus<BotanixChainSpec>,
-    storage: Storage<BF, RDB, BDB>,
+    storage: Storage<RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     btc_server_factory: Option<GrpcClientFactory>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
@@ -87,8 +87,8 @@ pub enum AuthorityConsensusBuilderError {
 }
 
 // ===== impl AuthorityConsensusBuilder =====
-impl<BF, RDB, BDB, ToFrostMan, Source>
-    AuthorityConsensusBuilder<BF, RDB, BDB, ToFrostMan, Source>
+impl<RDB, BDB, ToFrostMan, Source>
+    AuthorityConsensusBuilder<RDB, BDB, ToFrostMan, Source>
 where
     ToFrostMan: ToFrostManager + Clone + 'static + Send + Sync,
     RDB: BlockReaderIdExt<Header = alloy_consensus::Header>
@@ -108,7 +108,6 @@ where
         + RuntimeTransitionsReadWrite
         + Clone
         + 'static,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
     Source: RandomSource,
 {
     /// Creates a new builder instance to configure all parts.
@@ -127,7 +126,7 @@ where
         btc_network: bitcoin::Network,
         genesis_authorities: Vec<secp256k1::PublicKey>,
         authority_socket_addresses: Vec<SocketAddr>,
-        bitcoind_factory: BF,
+        bitcoind_factory: Arc<FallbackBitcoindClient>,
         evm_config: BotanixEvmConfig,
         cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
         random_source_provider: Source,
@@ -259,12 +258,10 @@ where
     pub async fn build<BtcServerClient>(
         self,
     ) -> (
-        Option<FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient>>,
-        Option<ABCIClientBuilder<BF, RDB, BDB>>,
-        Option<SnapshotManager<BF, RDB, BDB>>,
-        Option<
-            WalletStateSyncEngine<BF, RDB, BDB, ToFrostMan, BtcServerClient>,
-        >,
+        Option<FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient>>,
+        Option<ABCIClientBuilder<RDB, BDB>>,
+        Option<SnapshotManager<RDB, BDB>>,
+        Option<WalletStateSyncEngine<RDB, BDB, ToFrostMan, BtcServerClient>>,
     )
     where
         BtcServerClient: BtcServerExtendedApi + Clone + Send + Sync + 'static,

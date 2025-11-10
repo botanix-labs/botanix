@@ -57,15 +57,15 @@ pub async fn setup_bitcoind_client(
     bitcoind_cfg: &BitcoindArgs,
     poa_cfg: &PoaNodeArgs,
     client_selection: ClientSelection,
-) -> eyre::Result<(FallbackBitcoindClient, BitcoindClientFactory)> {
+) -> eyre::Result<FallbackBitcoindClient> {
     let primary_bitcoind_config =
         get_bitcoind_config(poa_cfg, bitcoind_cfg, true)?;
-    let (primary_bitcoind_client, primary_bitcoind_factory) =
+    let (primary_bitcoind_client, _) =
         create_bitcoind_client(&primary_bitcoind_config)?;
 
     let secondary_bitcoind_config =
         get_bitcoind_config(poa_cfg, bitcoind_cfg, false)?;
-    let (secondary_bitcoind_client, _secondary_bitcoind_factory) =
+    let (secondary_bitcoind_client, _) =
         create_bitcoind_client(&secondary_bitcoind_config)?;
 
     let fallback_client = FallbackBitcoindClient::new(
@@ -78,5 +78,5 @@ pub async fn setup_bitcoind_client(
         client_selection,
     );
 
-    Ok((fallback_client, primary_bitcoind_factory))
+    Ok(fallback_client)
 }

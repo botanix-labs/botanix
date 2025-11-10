@@ -1,3 +1,4 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
@@ -5,6 +6,7 @@ use botanix_activation_manager::{
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests that validators reject blocks with outdated or unsupported versions.
@@ -20,6 +22,7 @@ use botanix_storage::models::Vote;
 ///    - EVE rejects these blocks during both process_proposal and finalize_block
 ///    - This creates a consensus split where EVE cannot follow the upgraded chain
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_reject_outdated_or_unsupported_version() {
     let upgrade_height = 3;
     let required_approval_rate = 67;

@@ -1,9 +1,11 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests that votes expire after the retention period and are no longer counted.
@@ -17,6 +19,7 @@ use botanix_storage::models::Vote;
 ///    reduce the validator count below the minimum requirement
 /// 6. This ensures that upgrade decisions reflect recent consensus rather than outdated votes
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_vote_expiration() {
     let upgrade_height = 20;
     let required_approval_rate = 67;

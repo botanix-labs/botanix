@@ -1,4 +1,8 @@
-use botanix_btc_wallet::bitcoind::BitcoindClientFactory;
+use std::sync::Arc;
+
+use botanix_btc_wallet::{
+    bitcoind::BitcoindClientFactory, fallback::FallbackBitcoindClient,
+};
 use botanix_cli_args::bitcoind::BitcoindArgs;
 use botanix_rpc_config::botanix_config::{Botanix, BotanixConfig};
 use eyre::Ok;
@@ -15,10 +19,10 @@ use eyre::Ok;
 /// Returns an eyre::Result containing a Botanix instance on success.
 pub fn create_botanix_provider(
     bitcoind_cfg: &BitcoindArgs,
-    bitcoind_factory: &BitcoindClientFactory,
+    bitcoind_factory: Arc<FallbackBitcoindClient>,
 ) -> eyre::Result<Botanix> {
     let botanix_config =
-        BotanixConfig::new(bitcoind_cfg.btc_network, bitcoind_factory.clone());
+        BotanixConfig::new(bitcoind_cfg.btc_network, bitcoind_factory);
     let botanix_provider = Botanix::new(botanix_config);
     Ok(botanix_provider)
 }

@@ -1,9 +1,11 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests that an upgrade is rejected when most validators vote Nay despite
@@ -17,6 +19,7 @@ use botanix_storage::models::Vote;
 /// 4. This demonstrates that both acceptance and explicit Aye votes are required for an upgrade to
 ///    activate
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_vote_majority_nay_compliant_and_reject() {
     let upgrade_height = 3;
     let required_approval_rate = 67;
