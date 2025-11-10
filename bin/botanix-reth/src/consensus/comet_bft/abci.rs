@@ -7,6 +7,7 @@ use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
 use botanix_storage::models::RuntimeVersion;
+use reth_chain_state::ExecutedBlock;
 use reth_db::DatabaseEnv;
 use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
@@ -26,7 +27,6 @@ use alloy_primitives::{Address, BlockHash, BlockNumber, B256};
 use alloy_rpc_types_engine::PayloadAttributes;
 use alloy_rpc_types_eth::BlockId;
 use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
-use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
 use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
@@ -2811,151 +2811,181 @@ impl ABCIDriver {
                         sealed_block_with_context,
                         commit_tx,
                     )) => {
-                        // let _span = tracing::trace_span!(
-                        //     "ABCI driver commit block",
-                        //     eth_block_height =
-                        //         sealed_block_with_context.sealed_block_with_peg.block().number,
-                        //     eth_block_hash =
-                        //         %sealed_block_with_context.sealed_block_with_peg.block().hash(),
-                        // )
-                        // .entered();
+                        let _span = tracing::trace_span!(
+                            "ABCI driver commit block",
+                            eth_block_height =
+                                sealed_block_with_context.sealed_block_with_peg.block().number,
+                            eth_block_hash =
+                                %sealed_block_with_context.sealed_block_with_peg.block().hash(),
+                        )
+                        .entered();
 
-                        // let sealed_block_with_peg =
-                        // sealed_block_with_context.sealed_block_with_peg;
-                        // let new_header = sealed_block_with_peg.block().header().clone();
-                        // let block_height = sealed_block_with_peg.block().number;
-                        // let sealed_block_with_senders = sealed_block_with_peg.block().to_owned();
-                        // let hashed_state =
-                        // sealed_block_with_context.exec_outcome.hash_state_slow();
-                        // let trie_updates = sealed_block_with_context.trie_updates;
+                        let sealed_block_with_peg =
+                            sealed_block_with_context.sealed_block_with_peg;
+                        let new_header =
+                            sealed_block_with_peg.block().header().clone();
+                        let block_height = sealed_block_with_peg.block().number;
+                        let sealed_block_with_senders =
+                            sealed_block_with_peg.block().to_owned();
+                        let hashed_state = sealed_block_with_context
+                            .exec_outcome
+                            .hash_state_slow();
+                        let trie_updates =
+                            sealed_block_with_context.trie_updates;
 
-                        // let executed_block = ExecutedBlock {
-                        //     recovered_block: Arc::new(sealed_block_with_senders.block().clone()),
-                        //     // x: Arc::new(sealed_block_with_senders.senders.clone()),
-                        //     execution_output:
-                        // Arc::new(sealed_block_with_context.exec_outcome.clone()),
-                        //     hashed_state: Arc::new(hashed_state.clone()),
-                        //     // x: Arc::new(trie_updates.clone()),
-                        // };
+                        let executed_block = ExecutedBlock {
+                            recovered_block: Arc::new(
+                                sealed_block_with_senders.clone(),
+                            ),
+                            execution_output: Arc::new(
+                                sealed_block_with_context.exec_outcome.clone(),
+                            ),
+                            hashed_state: Arc::new(hashed_state.clone()),
+                        };
 
-                        // let pegins = sealed_block_with_peg
-                        //     .pegins()
-                        //     .iter()
-                        //     .flat_map(|p| p.meta.clone())
-                        //     .collect::<Vec<_>>();
+                        let pegins = sealed_block_with_peg
+                            .pegins()
+                            .iter()
+                            .flat_map(|p| p.meta.clone())
+                            .collect::<Vec<_>>();
 
-                        // let pegouts = sealed_block_with_peg.pegouts().to_vec();
+                        let pegouts = sealed_block_with_peg.pegouts().to_vec();
 
-                        // // Prepare the staged entries for insertion into the
-                        // // database; this ensures that no pegins or pegouts are
-                        // // ever accidentally dropped during a shutdown or
-                        // // interruption.
-                        // //
-                        // // Those staged entries are removed from the database
-                        // // once the Frost task has successfully initiated a new
-                        // // checkpoint on the btc-server.
+                        // Prepare the staged entries for insertion into the
+                        // database; this ensures that no pegins or pegouts are
+                        // ever accidentally dropped during a shutdown or
+                        // interruption.
+                        //
+                        // Those staged entries are removed from the database
+                        // once the Frost task has successfully initiated a new
+                        // checkpoint on the btc-server.
 
-                        // let staged_pegins: Vec<PeginData> =
-                        //     get_staged_pegins_from_pegin_meta(&pegins);
-                        // let staged_pegouts: Vec<PegoutData> =
-                        //     get_staged_pegouts_from_pegout_data(&pegouts, new_header.number);
+                        let staged_pegins: Vec<PeginData> =
+                            get_staged_pegins_from_pegin_meta(&pegins);
+                        let staged_pegouts: Vec<PegoutData> =
+                            get_staged_pegouts_from_pegout_data(
+                                &pegouts,
+                                new_header.number,
+                            );
 
-                        // let header_with_pegs = HeaderWithPegs {
-                        //     pegins: staged_pegins,
-                        //     pegouts: staged_pegouts,
-                        //     header: new_header.header().clone(),
-                        // };
+                        let header_with_pegs = HeaderWithPegs {
+                            pegins: staged_pegins,
+                            pegouts: staged_pegouts,
+                            header: new_header.clone(),
+                        };
 
-                        // // Commit block data to both reth and botanix databases
+                        // Commit block data to both reth and botanix databases
 
-                        // // To ensure consistency between databases (one of the commits failed) we
-                        // // make the block commitment process idempotent:
-                        // // 1. Panic in case any of the commits failed
-                        // // 2. Reth process is restarted, that lead CometBFT to restart
-                        // // 3. Reth send previous block height CometBFT tries to replay the block
-                        // // 4. If botanix database commit failed (it goes first), then we are at
-                        // the //    previous block state for both databases
-                        // // 5. If reth database commit failed then we should have staged header in
-                        // //    the botanix database but reth database in previous block state
-                        // // 6. This is totally fine because `insert_staged_header` is idempotent
+                        // To ensure consistency between databases (one of the commits failed) we
+                        // make the block commitment process idempotent:
+                        // 1. Panic in case any of the commits failed
+                        // 2. Reth process is restarted, that lead CometBFT to restart
+                        // 3. Reth send previous block height CometBFT tries to replay the block
+                        // 4. If botanix database commit failed (it goes first), then we are at the
+                        //    previous block state for both databases
+                        // 5. If reth database commit failed then we should have staged header in
+                        //    the botanix database but reth database in previous block state
+                        // 6. This is totally fine because `insert_staged_header` is idempotent
 
-                        // let botanix_db_rw = self
-                        //     .botanix_database_provider_factory
-                        //     .provider_rw()
-                        //     .unwrap_or_else(|e| panic!("can't get botanix rw provider: {e}"));
+                        let botanix_db_rw = self
+                            .botanix_database_provider_factory
+                            .provider_rw()
+                            .unwrap_or_else(|e| {
+                                panic!("can't get botanix rw provider: {e}")
+                            });
 
-                        // let reth_db_rw =
-                        //     self.reth_database_provider_factory.provider_rw().unwrap_or_else(|e|
-                        // {         panic!("Error getting database rw
-                        // provider: {:?}", e);     });
+                        let reth_db_rw = self
+                            .reth_database_provider_factory
+                            .provider_rw()
+                            .unwrap_or_else(|e| {
+                                panic!(
+                                    "Error getting database rw
+                        provider: {:?}",
+                                    e
+                                );
+                            });
 
-                        // // Update botanix database with the new header and pegins/pegouts
+                        // Update botanix database with the new header and pegins/pegouts
 
-                        // botanix_db_rw.insert_staged_header(new_header.hash(), header_with_pegs)?;
+                        botanix_db_rw.insert_staged_header(
+                            new_header.hash_slow(),
+                            header_with_pegs,
+                        )?;
 
-                        // // Track the last known runtime version.
+                        // Track the last known runtime version.
 
-                        // botanix_db_rw.insert_runtime_upgrade_version(
-                        //     new_header.number,
-                        //     sealed_block_with_context.runtime_version,
-                        // )?;
+                        botanix_db_rw.insert_runtime_upgrade_version(
+                            new_header.number,
+                            sealed_block_with_context.runtime_version,
+                        )?;
 
-                        // botanix_db_rw.commit().unwrap_or_else(|err| {
-                        //     panic!("Failed to commit block to botanix database: {err}");
-                        // });
+                        botanix_db_rw.commit().unwrap_or_else(|err| {
+                            panic!("Failed to commit block to botanix database: {err}");
+                        });
 
-                        // // Update reth database with the new block
+                        // Update reth database with the new block
 
-                        // reth_db_rw.append_blocks_with_state(
-                        //     vec![sealed_block_with_senders.clone()],
-                        //     sealed_block_with_context.exec_outcome.clone(),
-                        //     hashed_state.into_sorted(),
-                        //     trie_updates,
-                        // )?;
+                        reth_db_rw.append_blocks_with_state(
+                            vec![sealed_block_with_senders.clone()],
+                            sealed_block_with_context.exec_outcome.clone(),
+                            hashed_state.into_sorted(),
+                            trie_updates,
+                        )?;
 
-                        // reth_db_rw.commit().unwrap_or_else(|err| {
-                        //     panic!("Failed to commit block to reth database: {err}");
-                        // });
+                        reth_db_rw.commit().unwrap_or_else(|err| {
+                            panic!("Failed to commit block to reth database: {err}");
+                        });
 
-                        // // Update the in-memory state with the new canonical chain
+                        // Update the in-memory state with the new canonical chain
 
-                        // let new_chain = reth_chain_state::NewCanonicalChain::Commit {
-                        //     new: vec![executed_block],
-                        // };
-                        // self.blockchain_provider
-                        //     .canonical_in_memory_state()
-                        //     .update_chain(new_chain);
+                        let new_chain =
+                            reth_chain_state::NewCanonicalChain::Commit {
+                                new: vec![executed_block],
+                            };
+                        self.blockchain_provider
+                            .canonical_in_memory_state()
+                            .update_chain(new_chain);
 
-                        // self.blockchain_provider
-                        //     .on_forkchoice_update_received(&ForkchoiceState::default());
+                        self.blockchain_provider.on_forkchoice_update_received(
+                            &ForkchoiceState::default(),
+                        );
 
-                        // self.blockchain_provider.set_canonical_head(new_header.clone());
-                        // self.blockchain_provider.set_safe(new_header.clone());
-                        // self.blockchain_provider.set_finalized(new_header.clone());
+                        self.blockchain_provider
+                            .set_canonical_head(new_header.clone());
+                        self.blockchain_provider.set_safe(new_header.clone());
+                        self.blockchain_provider
+                            .set_finalized(new_header.clone());
 
-                        // self.blockchain_provider
-                        //     .canonical_in_memory_state()
-                        //     .remove_persisted_blocks(block_height - 1);
+                        self.blockchain_provider
+                            .canonical_in_memory_state()
+                            .remove_persisted_blocks(block_height - 1);
 
-                        // debug!("eth block {block_height} committed to the state");
+                        debug!(
+                            "eth block {block_height} committed to the state"
+                        );
 
-                        // let chain = Chain::new(
-                        //     vec![sealed_block_with_senders].into_iter(),
-                        //     sealed_block_with_context.exec_outcome.clone(),
-                        //     None,
-                        // );
+                        let chain = Chain::new(
+                            vec![sealed_block_with_senders].into_iter(),
+                            sealed_block_with_context.exec_outcome.clone(),
+                            None,
+                        );
 
-                        // self.blockchain_provider.canonical_in_memory_state().notify_canon_state(
-                        //     CanonStateNotification::Commit {
-                        //         new: Arc::new(chain),
-                        //         pegins: Some(pegins),
-                        //         pegouts: Some(pegouts),
-                        //     },
-                        // );
+                        self.blockchain_provider
+                            .canonical_in_memory_state()
+                            .notify_canon_state(
+                                CanonStateNotification::Commit {
+                                    new: Arc::new(chain),
+                                    pegins: Some(pegins),
+                                    pegouts: Some(pegouts),
+                                },
+                            );
 
-                        // if let Err(e) = commit_tx.send(()) {
-                        //     error!("Failed to send await on channel for
-                        // ABCIDriverMessage::CommitBlock message {e:?}"); }
+                        if let Err(e) = commit_tx.send(()) {
+                            error!(
+                                "Failed to send await on channel for
+                        ABCIDriverMessage::CommitBlock message {e:?}"
+                            );
+                        }
                     }
                     ABCIDriverMessage::Exit => {
                         break;
