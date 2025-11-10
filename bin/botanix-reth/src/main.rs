@@ -4,6 +4,7 @@
 
 use botanix_authority_rsp::RandomSourceProvider;
 use botanix_btc_server_client::BtcServerExtendedClient;
+use botanix_btc_wallet::fallback::ClientSelection;
 use botanix_chainspec::{
     constants::{BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET_CHAIN_ID},
     parser::BotanixChainSpecParser,
@@ -146,7 +147,8 @@ fn main() -> eyre::Result<()> {
             }
 
             // Create bitcoind client
-            let (bitcoind_client, bitcoind_client_factory) = setup_bitcoind_client(&bitcoind_cfg, &poa_cfg).await?;
+            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, ClientSelection::Fallback).await?;
+            let bitcoind_client = Arc::new(bitcoind_client);
 
             // Migrate the db if needed
             let (reth_database, botanix_database) = init_and_migrate_db(
@@ -187,11 +189,11 @@ fn main() -> eyre::Result<()> {
                 &mut reth_cfg,
             )?;
 
-            let botanix_provider = create_botanix_provider(&bitcoind_cfg, &bitcoind_client_factory)?;
+            let botanix_provider = create_botanix_provider(&bitcoind_cfg, bitcoind_client.clone())?;
 
             // Setup bitcoin checkpoints synchronizer
             let (checkpoints_synchronizer, bitcoin_zmq_block_hash_stream, bitcoin_checkpoints) = setup_bitcoin_checkpoints(
-                bitcoind_client,
+                bitcoind_client.clone(),
                 &bitcoind_cfg,
                 &chain_spec,
             ).await?;
@@ -248,7 +250,6 @@ fn main() -> eyre::Result<()> {
 
             let task_executor = node.task_executor.clone();
             let botanix_evm_config = BotanixEvmConfig::new(chain_spec_arc.clone());
-            let (bitcoind_client, bitcoind_factory) = setup_bitcoind_client(&bitcoind_cfg, &poa_cfg).await?;
             let cometbft_rpc_factory = create_cometbft_factory(&poa_cfg);
             let btc_server_factory = btc_server_client.unzip().0;
             let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
@@ -268,7 +269,7 @@ fn main() -> eyre::Result<()> {
                     bitcoind_cfg.btc_network,
                     frost_setup_result.genesis_authorities.clone(),
                     frost_setup_result.authorities_socket_addresses,
-                    bitcoind_factory.clone(),
+                    bitcoind_client.clone(),
                     botanix_evm_config,
                     cometbft_rpc_factory,
                     RandomSourceProvider::new(),

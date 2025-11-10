@@ -43,7 +43,6 @@ pub trait BotanixRpcExtApi {
 }
 
 /// The type that implements `botanixrpcExt` rpc namespace trait
-#[derive(Debug)]
 pub struct BotanixRpcExt<Provider> {
     /// The Ethereum provider used to read blocks.
     pub provider: Provider,

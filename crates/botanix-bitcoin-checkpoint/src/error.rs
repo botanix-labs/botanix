@@ -4,6 +4,7 @@
 //! management, and synchronization.
 
 use bitcoin::block::BlockHash as BitcoinBlockHash;
+use botanix_btc_wallet::error::BitcoindAdapterError;
 
 /// Errors that can occur in Bitcoin checkpoint operations.
 #[derive(thiserror::Error, Debug)]
@@ -25,7 +26,7 @@ pub enum BitcoinCheckpointError {
     )]
     SyncRpcError {
         /// The underlying JSON-RPC error
-        error: botanix_btc_wallet::bitcoind::BitcoindError,
+        error: BitcoindAdapterError,
         /// Name of the procedure that failed
         procedure_name: String,
     },

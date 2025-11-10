@@ -1,22 +1,40 @@
-use crate::{
-    node::BotanixNode, BotanixBlock, BotanixBlockBody, BotanixPrimitives,
-};
-use alloy_consensus::Header;
-use alloy_primitives::B256;
-use botanix_chainspec::BotanixHardforks;
+use alloy_consensus::Sealable;
+use alloy_consensus::{BlockHeader, Header, EMPTY_OMMER_ROOT_HASH};
+use alloy_eips::eip7840::BlobParams;
+use alloy_primitives::{Address, B256};
+use botanix_authority_edh::extra_data_header::CHAIN_VERSION;
+use botanix_authority_edh::header_ext::HeaderExt;
+use botanix_authority_edh::nums_secp256k1_pk;
+use botanix_chainspec::BotanixChainSpec;
+use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use reth::{
     api::FullNodeTypes,
-    beacon_consensus::EthBeaconConsensus,
     builder::{components::ConsensusBuilder, BuilderContext},
-    consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator},
+    consensus::{
+        Consensus, ConsensusError as RethConsensusError, FullConsensus,
+        HeaderValidator,
+    },
     consensus_common::validation::{
         validate_against_parent_4844, validate_against_parent_hash_number,
     },
 };
-use reth_chainspec::EthChainSpec;
+use reth_chainspec::{EthChainSpec, EthereumHardforks};
+use reth_consensus_common::validation::{
+    validate_4844_header_standalone, validate_against_parent_eip1559_base_fee,
+    validate_against_parent_timestamp, validate_block_pre_execution,
+    validate_body_against_header, validate_header_base_fee,
+    validate_header_gas,
+};
 use reth_primitives::{Receipt, RecoveredBlock, SealedBlock, SealedHeader};
+use reth_primitives_traits::constants::{
+    GAS_LIMIT_BOUND_DIVISOR, MINIMUM_GAS_LIMIT,
+};
 use reth_provider::BlockExecutionResult;
+use std::convert::Into;
 use std::sync::Arc;
+use tracing::error;
+
+use crate::{node::BotanixNode, BotanixBlock, BotanixPrimitives};
 
 /// A basic Botanix consensus builder.
 #[derive(Debug, Default, Clone, Copy)]
@@ -28,7 +46,7 @@ where
     Node: FullNodeTypes<Types = BotanixNode>,
 {
     type Consensus =
-        Arc<dyn FullConsensus<BotanixPrimitives, Error = ConsensusError>>;
+        Arc<dyn FullConsensus<BotanixPrimitives, Error = RethConsensusError>>;
 
     async fn build_consensus(
         self,
@@ -42,53 +60,308 @@ where
 ///
 /// Provides basic checks as outlined in the execution specs.
 #[derive(Debug, Clone)]
-pub struct BotanixConsensus<ChainSpec> {
-    inner: EthBeaconConsensus<ChainSpec>,
-    chain_spec: Arc<ChainSpec>,
+pub struct BotanixConsensus<BotanixChainSpec> {
+    chain_spec: Arc<BotanixChainSpec>,
 }
 
-impl<ChainSpec: EthChainSpec + BotanixHardforks> BotanixConsensus<ChainSpec> {
+impl BotanixConsensus<BotanixChainSpec> {
     /// Create a new instance of [`BotanixConsensus`]
-    pub fn new(chain_spec: Arc<ChainSpec>) -> Self {
-        Self {
-            inner: EthBeaconConsensus::new(chain_spec.clone()),
-            chain_spec,
-        }
+    pub fn new(chain_spec: Arc<BotanixChainSpec>) -> Self {
+        Self { chain_spec }
     }
 }
 
-impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator
-    for BotanixConsensus<ChainSpec>
-{
-    fn validate_header(
+impl BotanixConsensus<BotanixChainSpec> {
+    /// Validates PoA header standalone according to the authority consensus rules.
+    pub fn validate_header_standalone(
         &self,
-        _header: &SealedHeader,
+        header: &Header,
+        genesis_authorities: &[secp256k1::PublicKey],
+        aggregate_public_key: Option<&secp256k1::PublicKey>,
     ) -> Result<(), ConsensusError> {
-        // TODO: doesn't work because of extradata check
-        // self.inner.validate_header(header)
+        if aggregate_public_key.is_none() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+            ));
+        }
+
+        // run the reth header validation rule
+        let _sealed_header = header.clone().seal_slow();
+
+        // Validate EDH serialization and signature on block
+        self.validate_extra_data_header(
+            header,
+            genesis_authorities,
+            aggregate_public_key,
+        )?;
+
+        // Validate fee benificiary
+        self.validate_block_beneficiary(header)?;
 
         Ok(())
     }
 
+    /// Validate poa block beneficiary
+    fn validate_block_beneficiary(
+        &self,
+        header: &Header,
+    ) -> Result<(), ConsensusError> {
+        if header.beneficiary != Address::ZERO {
+            return Err(ConsensusError::BlockBeneficiaryIsNotBurnAddress);
+        }
+
+        Ok(())
+    }
+
+    /// Validate poa extra data header
+    fn validate_extra_data_header(
+        &self,
+        header: &Header,
+        _genesis_authorities: &[secp256k1::PublicKey],
+        aggregate_public_key: Option<&secp256k1::PublicKey>,
+    ) -> Result<(), ConsensusError> {
+        // Skip over genesis
+        if header.number == 0 {
+            return Ok(());
+        }
+
+        // there should alawys be an aggregate public key for poa
+        if aggregate_public_key.is_none() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+            ));
+        }
+
+        let extradata_len = header.extra_data.as_ref().len();
+        if extradata_len > MAXIMUM_EXTRA_DATA_SIZE {
+            return Err(ConsensusError::ExtraDataExceedsMax {
+                len: extradata_len,
+            });
+        }
+
+        // Attempt to deserialize the extra data header
+        let edh = header.deserialize_extra_data_header().map_err(|e| {
+            error!("Failed to deserialize extra data header: {:?}", e);
+            ConsensusError::ExtraDataInvalid
+        })?;
+
+        // Check total size of the extra data header
+        if edh.edh_size() > MAX_EDH_SIZE {
+            return Err(ConsensusError::ExtraDataHeaderExceedsMax {
+                len: edh.edh_size(),
+            });
+        }
+
+        Self::validate_chain_version(edh.chain_version)?;
+
+        // Past genesis NUMS point should never be used as the aggregated public key
+        if edh.aggregated_public_key == nums_secp256k1_pk() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis,
+            ));
+        }
+
+        if edh.aggregated_public_key != *aggregate_public_key.unwrap() {
+            return Err(ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::InvalidAggregatedPublicKey,
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Check the extra data header field has the current chain version
+    pub const fn validate_chain_version(
+        edh_chain_version: u32,
+    ) -> Result<(), ConsensusError> {
+        if edh_chain_version != CHAIN_VERSION {
+            return Err(ConsensusError::InvalidChainVersion);
+        }
+
+        Ok(())
+    }
+}
+
+impl BotanixConsensus<BotanixChainSpec> {
+    // Mainly copy and paste from Reth `fn validate_header()`
+    fn validate_header_inner(
+        &self,
+        header: &SealedHeader,
+    ) -> Result<(), botanix_evm::error::ConsensusError> {
+        let header = header.header();
+        let is_post_merge =
+            self.chain_spec.is_paris_active_at_block(header.number());
+
+        if is_post_merge {
+            if !header.difficulty().is_zero() {
+                return Err(ConsensusError::TheMergeDifficultyIsNotZero);
+            }
+
+            if !header.nonce().is_some_and(|nonce| nonce.is_zero()) {
+                return Err(ConsensusError::TheMergeNonceIsNotZero);
+            }
+
+            if header.ommers_hash() != EMPTY_OMMER_ROOT_HASH {
+                return Err(ConsensusError::TheMergeOmmerRootIsNotEmpty);
+            }
+        } else {
+            {
+                let present_timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+
+                if header.timestamp()
+                    > present_timestamp
+                        + alloy_eips::merge::ALLOWED_FUTURE_BLOCK_TIME_SECONDS
+                {
+                    return Err(ConsensusError::TimestampIsInFuture {
+                        timestamp: header.timestamp(),
+                        present_timestamp,
+                    });
+                }
+            }
+        }
+        // Not using the Reth `validate_header_extra_data()` since we have custom EDH validation
+        // checked in `validate_header_standalone()`.
+        validate_header_gas(header)
+            .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
+        validate_header_base_fee(header, &self.chain_spec)
+            .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
+
+        // EIP-4895: Beacon chain push withdrawals as operations
+        if self
+            .chain_spec
+            .is_shanghai_active_at_timestamp(header.timestamp())
+            && header.withdrawals_root().is_none()
+        {
+            return Err(ConsensusError::WithdrawalsRootMissing);
+        } else if !self
+            .chain_spec
+            .is_shanghai_active_at_timestamp(header.timestamp())
+            && header.withdrawals_root().is_some()
+        {
+            return Err(ConsensusError::WithdrawalsRootUnexpected);
+        }
+
+        // Ensures that EIP-4844 fields are valid once cancun is active.
+        if self
+            .chain_spec
+            .is_cancun_active_at_timestamp(header.timestamp())
+        {
+            validate_4844_header_standalone(
+                header,
+                self.chain_spec
+                    .blob_params_at_timestamp(header.timestamp())
+                    .unwrap_or_else(BlobParams::cancun),
+            )
+            .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
+        } else if header.blob_gas_used().is_some() {
+            return Err(ConsensusError::BlobGasUsedUnexpected);
+        } else if header.excess_blob_gas().is_some() {
+            return Err(ConsensusError::ExcessBlobGasUnexpected);
+        } else if header.parent_beacon_block_root().is_some() {
+            return Err(ConsensusError::ParentBeaconBlockRootUnexpected);
+        }
+
+        if self
+            .chain_spec
+            .is_prague_active_at_timestamp(header.timestamp())
+        {
+            if header.requests_hash().is_none() {
+                return Err(ConsensusError::RequestsRootMissing);
+            }
+        } else if header.requests_hash().is_some() {
+            return Err(ConsensusError::RequestsRootUnexpected);
+        }
+
+        Ok(())
+    }
+
+    /// Copy and paste Reth
+    /// Checks the gas limit for consistency between parent and self headers.
+    ///
+    /// The maximum allowable difference between self and parent gas limits is determined by the
+    /// parent's gas limit divided by the [`GAS_LIMIT_BOUND_DIVISOR`].
+    fn validate_against_parent_gas_limit<H: BlockHeader>(
+        &self,
+        header: &SealedHeader<H>,
+        parent: &SealedHeader<H>,
+    ) -> Result<(), ConsensusError> {
+        // Determine the parent gas limit, considering elasticity multiplier on the London fork.
+        let parent_gas_limit =
+            if !self.chain_spec.is_london_active_at_block(parent.number())
+                && self.chain_spec.is_london_active_at_block(header.number())
+            {
+                parent.gas_limit()
+                    * self
+                        .chain_spec
+                        .base_fee_params_at_timestamp(header.timestamp())
+                        .elasticity_multiplier as u64
+            } else {
+                parent.gas_limit()
+            };
+
+        // Check for an increase in gas limit beyond the allowed threshold.
+        if header.gas_limit() > parent_gas_limit {
+            if header.gas_limit() - parent_gas_limit
+                >= parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR
+            {
+                return Err(ConsensusError::GasLimitInvalidIncrease {
+                    parent_gas_limit,
+                    child_gas_limit: header.gas_limit(),
+                });
+            }
+        }
+        // Check for a decrease in gas limit beyond the allowed threshold.
+        else if parent_gas_limit - header.gas_limit()
+            >= parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR
+        {
+            return Err(ConsensusError::GasLimitInvalidDecrease {
+                parent_gas_limit,
+                child_gas_limit: header.gas_limit(),
+            });
+        }
+        // Check if the self gas limit is below the minimum required limit.
+        else if header.gas_limit() < MINIMUM_GAS_LIMIT {
+            return Err(ConsensusError::GasLimitInvalidMinimum {
+                child_gas_limit: header.gas_limit(),
+            });
+        }
+
+        Ok(())
+    }
+}
+
+impl HeaderValidator for BotanixConsensus<BotanixChainSpec> {
+    fn validate_header(
+        &self,
+        header: &SealedHeader,
+    ) -> Result<(), reth_consensus::ConsensusError> {
+        self.validate_header_inner(header).map_err(|e| e.into())
+    }
+
+    /// Copy and paste from Reth
     fn validate_header_against_parent(
         &self,
         header: &SealedHeader,
         parent: &SealedHeader,
-    ) -> Result<(), ConsensusError> {
+    ) -> Result<(), reth_consensus::ConsensusError> {
         validate_against_parent_hash_number(header.header(), parent)?;
 
-        let header_ts = calculate_millisecond_timestamp(header.header());
-        let parent_ts = calculate_millisecond_timestamp(parent.header());
-        if header_ts <= parent_ts {
-            return Err(ConsensusError::TimestampIsInPast {
-                parent_timestamp: parent_ts,
-                timestamp: header_ts,
-            });
-        }
+        validate_against_parent_timestamp(header.header(), parent.header())?;
+
+        self.validate_against_parent_gas_limit(header, parent)?;
+
+        validate_against_parent_eip1559_base_fee(
+            header.header(),
+            parent.header(),
+            &self.chain_spec,
+        )?;
 
         // ensure that the blob gas fields for this block
         if let Some(blob_params) =
-            self.chain_spec.blob_params_at_timestamp(header.timestamp)
+            self.chain_spec.blob_params_at_timestamp(header.timestamp())
         {
             validate_against_parent_4844(
                 header.header(),
@@ -101,138 +374,47 @@ impl<ChainSpec: EthChainSpec + BotanixHardforks> HeaderValidator
     }
 }
 
-impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
-    Consensus<BotanixBlock> for BotanixConsensus<ChainSpec>
-{
-    type Error = ConsensusError;
+use crate::consensus::{MAXIMUM_EXTRA_DATA_SIZE, MAX_EDH_SIZE};
+use crate::BotanixBlockBody;
+
+impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
+    type Error = RethConsensusError;
 
     fn validate_body_against_header(
         &self,
         body: &BotanixBlockBody,
         header: &SealedHeader,
-    ) -> Result<(), ConsensusError> {
-        Consensus::<BotanixBlock>::validate_body_against_header(
-            &self.inner,
-            body,
-            header,
-        )
+    ) -> Result<(), RethConsensusError> {
+        validate_body_against_header(body, header.header()).map_err(|e| {
+            RethConsensusError::Other(
+                format!("body validation failed: {}", e).into(),
+            )
+        })?;
+
+        Ok(())
     }
 
     fn validate_block_pre_execution(
         &self,
-        _block: &SealedBlock<BotanixBlock>,
-    ) -> Result<(), ConsensusError> {
-        // Check ommers hash
-        // let ommers_hash = block.body().calculate_ommers_root();
-        // if Some(block.ommers_hash()) != ommers_hash {
-        //     return Err(ConsensusError::BodyOmmersHashDiff(
-        //         GotExpected {
-        //             got: ommers_hash.unwrap_or(EMPTY_OMMER_ROOT_HASH),
-        //             expected: block.ommers_hash(),
-        //         }
-        //         .into(),
-        //     ))
-        // }
-
-        // // Check transaction root
-        // if let Err(error) = block.ensure_transaction_root_valid() {
-        //     return Err(ConsensusError::BodyTransactionRootDiff(error.into()))
-        // }
-
-        // if self.chain_spec.is_cancun_active_at_timestamp(block.timestamp()) {
-        //     validate_cancun_gas(block)?;
-        // } else {
-        //     return Ok(())
-        // }
-
-        Ok(())
-    }
-}
-
-impl<ChainSpec: EthChainSpec<Header = Header> + BotanixHardforks>
-    FullConsensus<BotanixPrimitives> for BotanixConsensus<ChainSpec>
-{
-    fn validate_block_post_execution(
-        &self,
-        block: &RecoveredBlock<BotanixBlock>,
-        result: &BlockExecutionResult<Receipt>,
-    ) -> Result<(), ConsensusError> {
-        FullConsensus::<BotanixPrimitives>::validate_block_post_execution(
-            &self.inner,
-            block,
-            result,
+        block: &SealedBlock<BotanixBlock>,
+    ) -> Result<(), RethConsensusError> {
+        validate_block_pre_execution(block, &self.chain_spec.inner()).map_err(
+            |e| {
+                RethConsensusError::Other(
+                    format!("pre-execution validation failed: {}", e).into(),
+                )
+            },
         )
     }
 }
 
-/// Calculate the millisecond timestamp of a block header.
-/// Refer to https://github.com/bnb-chain/BEPs/blob/master/BEPs/BEP-520.md.
-pub fn calculate_millisecond_timestamp<H: alloy_consensus::BlockHeader>(
-    header: &H,
-) -> u64 {
-    let seconds = header.timestamp();
-    let mix_digest = header.mix_hash().unwrap_or(B256::ZERO);
-
-    let milliseconds = if mix_digest != B256::ZERO {
-        let bytes = mix_digest.as_slice();
-        // Convert last 8 bytes to u64 (big-endian), equivalent to Go's
-        // uint256.SetBytes32().Uint64()
-        let mut result = 0u64;
-        for &byte in bytes.iter().skip(24).take(8) {
-            result = (result << 8) | u64::from(byte);
-        }
-        result
-    } else {
-        0
-    };
-
-    seconds * 1000 + milliseconds
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use alloy_consensus::Header;
-    use alloy_primitives::B256;
-
-    #[test]
-    fn test_calculate_millisecond_timestamp_without_mix_hash() {
-        // Create a header with current timestamp and zero mix_hash
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let header = Header {
-            timestamp,
-            mix_hash: B256::ZERO,
-            ..Default::default()
-        };
-
-        let result = calculate_millisecond_timestamp(&header);
-        assert_eq!(result, timestamp * 1000);
-    }
-
-    #[test]
-    fn test_calculate_millisecond_timestamp_with_milliseconds() {
-        // Create a header with current timestamp and mix_hash containing milliseconds
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let milliseconds = 750u64;
-        let mut mix_hash_bytes = [0u8; 32];
-        mix_hash_bytes[24..32].copy_from_slice(&milliseconds.to_be_bytes());
-        let mix_hash = B256::new(mix_hash_bytes);
-
-        let header = Header {
-            timestamp,
-            mix_hash,
-            ..Default::default()
-        };
-
-        let result = calculate_millisecond_timestamp(&header);
-        assert_eq!(result, timestamp * 1000 + milliseconds);
+impl FullConsensus<BotanixPrimitives> for BotanixConsensus<BotanixChainSpec> {
+    fn validate_block_post_execution(
+        &self,
+        _block: &RecoveredBlock<BotanixBlock>,
+        _result: &BlockExecutionResult<Receipt>,
+    ) -> Result<(), RethConsensusError> {
+        // TODO: implement post-execution validation
+        Ok(())
     }
 }

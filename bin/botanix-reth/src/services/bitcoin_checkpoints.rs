@@ -3,7 +3,7 @@ use botanix_bitcoin_checkpoint::{
     BitcoinCheckpointsChain, BitcoinCheckpointsChainSynchronizer,
     BitcoinHashBlockStream, DummyHashBlockStream,
 };
-use botanix_btc_wallet::bitcoind::BitcoindClient;
+use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::bitcoind::BitcoindArgs;
 use eyre::Ok;
@@ -24,7 +24,7 @@ use tokio::time::timeout;
 ///
 /// Returns a tuple containing the Bitcoin checkpoints chain synchronizer and the block hash stream.
 pub async fn setup_bitcoin_checkpoints(
-    bitcoind_client: BitcoindClient,
+    bitcoind_client: Arc<FallbackBitcoindClient>,
     bitcoind_cfg: &BitcoindArgs,
     chain: &BotanixChainSpec,
 ) -> eyre::Result<(
@@ -36,7 +36,7 @@ pub async fn setup_bitcoin_checkpoints(
 
     match tokio::time::timeout(
         Duration::from_secs(60),
-        bitcoind_client.get_rpc_client_dyn().wait_until_synced(),
+        bitcoind_client.wait_until_synced(),
     )
     .await
     {
@@ -59,7 +59,7 @@ pub async fn setup_bitcoin_checkpoints(
 
     let checkpoints_synchronizer = BitcoinCheckpointsChainSynchronizer::new(
         Arc::clone(&bitcoin_checkpoints),
-        bitcoind_client.into_rpc_arc(),
+        bitcoind_client,
     );
 
     // Connect to Bitcoin ZMQ socket to receive new block notifications

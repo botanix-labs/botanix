@@ -77,7 +77,7 @@ pub(crate) enum FinalizedPegoutIdsSyncSerializationError {
 }
 
 #[allow(dead_code)]
-pub struct FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient> {
+pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     /// Network Handler
     pub(crate) network_handle: NetworkHandle<BotanixNetworkPrimitives>,
     /// Frost network Handler
@@ -88,7 +88,7 @@ pub struct FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     pub(crate) signing_state_machine:
         SigningStateMachine<ToFrostMan, Source, BtcServerClient>,
     /// Shared storage to insert aggregate public key
-    pub(crate) storage: Storage<BF, RDB, BDB>,
+    pub(crate) storage: Storage<RDB, BDB>,
     /// A handle to the `DkgRunnerTask` task. This is only `Some` if no
     /// aggregate public key is available, and the `start_task` method has hence
     /// started the DKG process.
@@ -115,11 +115,10 @@ pub(crate) enum FrostTaskError {
     UnableToGetAllConnectedPeers(#[from] SendError<FrostCommand>),
 }
 
-impl<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient>
-    FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient>
+impl<RDB, BDB, ToFrostMan, Source, BtcServerClient>
+    FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient>
 where
     ToFrostMan: 'static + Send + Sync + ToFrostManager + Clone,
-    BF: Clone + 'static + Send + Sync,
     RDB: BlockReaderIdExt
         + StateProviderFactory
         + CanonStateSubscriptions
@@ -137,7 +136,7 @@ where
         network_handle: NetworkHandle<BotanixNetworkPrimitives>,
         frost_handle: ToFrostMan,
         config: FrostConfig,
-        storage: Storage<BF, RDB, BDB>,
+        storage: Storage<RDB, BDB>,
         compressor: DataParser,
         random_source_provider: Source,
         metrics: Arc<AuthorityMetrics>,
@@ -878,8 +877,8 @@ where
     }
 }
 
-impl<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient> std::fmt::Debug
-    for FrostTask<BF, RDB, BDB, ToFrostMan, Source, BtcServerClient>
+impl<RDB, BDB, ToFrostMan, Source, BtcServerClient> std::fmt::Debug
+    for FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient>
 where
     ToFrostMan: ToFrostManager + Clone,
     Source: RandomSource,
@@ -890,24 +889,23 @@ where
     }
 }
 
-struct DkgRunnerTask<BF, RDB, BDB, ToFrostMan, BtcServerClient> {
+struct DkgRunnerTask<RDB, BDB, ToFrostMan, BtcServerClient> {
     rx: mpsc::Receiver<DkgResponse>,
     // Frost network Handler
     frost_handle: ToFrostMan,
     // Frost Id lookup table
     frost_ids: HashMap<frost_secp256k1_tr::Identifier, secp256k1::PublicKey>,
     // Shared storage to insert aggregate public key
-    storage: Storage<BF, RDB, BDB>,
+    storage: Storage<RDB, BDB>,
     // btc-server client
     btc_server: BtcServerClient,
     // Authority Metrics
     metrics: Arc<AuthorityMetrics>,
 }
 
-impl<BF, RDB, BDB, ToFrostMan, BtcServerClient>
-    DkgRunnerTask<BF, RDB, BDB, ToFrostMan, BtcServerClient>
+impl<RDB, BDB, ToFrostMan, BtcServerClient>
+    DkgRunnerTask<RDB, BDB, ToFrostMan, BtcServerClient>
 where
-    BF: 'static + Send + Sync,
     RDB: BlockReaderIdExt
         + StateProviderFactory
         + CanonStateSubscriptions
@@ -923,7 +921,7 @@ where
     fn new(
         frost_handle: ToFrostMan,
         authorities: &[secp256k1::PublicKey],
-        storage: Storage<BF, RDB, BDB>,
+        storage: Storage<RDB, BDB>,
         btc_server: BtcServerClient,
         metrics: Arc<AuthorityMetrics>,
     ) -> mpsc::Sender<DkgResponse> {

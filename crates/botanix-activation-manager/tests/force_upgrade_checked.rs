@@ -1,10 +1,13 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{Db, ACTIVE_VERSION, UPGRADE_VERSION},
     ActivationManagerBuilder, OnProcessProposalDecision,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 #[test]
+#[cfg(feature = "test-utils")]
 fn force_upgrade_checked() {
     let quorum = 100;
     let min_validator_count = 3;

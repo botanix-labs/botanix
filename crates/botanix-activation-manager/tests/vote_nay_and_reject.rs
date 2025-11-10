@@ -1,3 +1,4 @@
+#[cfg(feature = "test-utils")]
 use botanix_activation_manager::{
     test_utils::{
         Expectations, UpgradeTestFixture, ACTIVE_VERSION, ALICE, BOB, EVE,
@@ -5,6 +6,7 @@ use botanix_activation_manager::{
     },
     ConditionList,
 };
+#[cfg(feature = "test-utils")]
 use botanix_storage::models::Vote;
 
 /// Tests that a validator can vote Nay and reject an upgrade.
@@ -18,6 +20,7 @@ use botanix_storage::models::Vote;
 /// 5. This leads to a consensus split where ALICE and BOB operate on the upgraded chain while EVE
 ///    rejects those blocks as dead ends
 #[test]
+#[cfg(feature = "test-utils")]
 fn activation_manager_vote_nay_and_reject() {
     let upgrade_height = 3;
     let required_approval_rate = 67;

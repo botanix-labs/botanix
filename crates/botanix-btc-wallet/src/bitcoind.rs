@@ -7,36 +7,9 @@ pub use bitcoincore_rpc::{
     jsonrpc, Auth, Client, Error as JsonRPCError, RpcApi,
 };
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use url::Url;
 
-#[derive(Debug, Error)]
-pub enum BitcoindError {
-    #[error("Client initialization failed")]
-    ClientInitFailed(bitcoincore_rpc::Error),
-    #[error("Block Header retrieval failed")]
-    BlockHeaderRetrievalFailed(bitcoincore_rpc::Error),
-    #[error("Block Tip retrieval failed")]
-    BlockTipRetrievalFailed(bitcoincore_rpc::Error),
-    #[error("Empty block tip")]
-    EmptyBlockTip,
-    #[error("Block hash retrieval failed")]
-    BlockHashRetrievalFailed(bitcoincore_rpc::Error),
-    #[error("Tx broadcast failed")]
-    TransactionBroadcastFailed(bitcoincore_rpc::Error),
-    #[error("Block index failed")]
-    BlockIndexStatusFailed(bitcoincore_rpc::Error),
-    #[error("Blockchain index failed")]
-    BlockchainInfoFailed(bitcoincore_rpc::Error),
-    #[error("Best block hash retrieval failed")]
-    BestBlockHashRetrievalFailed(bitcoincore_rpc::Error),
-    #[error("Block info retrieval failed")]
-    BlockInfoRetrievalFailed(bitcoincore_rpc::Error),
-    #[error("Smart estimate fee retrieval failed")]
-    EstimateSmartFeeFailed(bitcoincore_rpc::Error),
-    #[error("Block count failed")]
-    BlockCountFailed(bitcoincore_rpc::Error),
-}
+use crate::error::BitcoindError;
 
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct BitcoindConfig {

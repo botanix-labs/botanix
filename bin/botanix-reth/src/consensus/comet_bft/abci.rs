@@ -3,7 +3,9 @@
 use alloy_consensus::BlockHeader;
 use alloy_eips::Encodable2718;
 use botanix_authority_edh::header_ext::HeaderExt;
-use botanix_chainspec::constants::BOTANIX_TESTNET_CHAIN_ID;
+use botanix_chainspec::{
+    constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
+};
 use botanix_storage::models::RuntimeVersion;
 use reth_db::DatabaseEnv;
 use reth_ethereum::consensus::ConsensusError;
@@ -30,7 +32,7 @@ use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
-use reth_consensus::InvalidAggregatedPublicKeyError;
+use reth_consensus::{Consensus, InvalidAggregatedPublicKeyError};
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
@@ -62,7 +64,7 @@ use crate::{
     consensus::comet_bft::non_deterministic_data::{
         NonDeterministicData, RUNTIME_VERSION_GENESIS,
     },
-    node::BotanixNode,
+    node::{consensus::BotanixConsensus, BotanixNode},
     BotanixBlock,
 };
 
@@ -132,7 +134,7 @@ use crate::consensus::{
         get_staged_pegins_from_pegin_meta, get_staged_pegouts_from_pegout_data,
         transactions_signed_from_bytes,
     },
-    AuthorityConsensus, Storage,
+    Storage,
 };
 use botanix_activation_manager::{
     ActivationManager, NetworkUpgradePayload, OnFinalizeBlockDecision,
@@ -244,11 +246,11 @@ type BotanixNodeTypes = NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>;
 
 /// ABCI client builder
 #[derive(Clone)]
-pub struct ABCIClientBuilder<BF, RDB, BDB> {
-    storage: Storage<BF, RDB, BDB>,
+pub struct ABCIClientBuilder<RDB, BDB> {
+    storage: Storage<RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
-    authority_consensus: AuthorityConsensus,
+    botanix_consensus: BotanixConsensus<BotanixChainSpec>,
     cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
     is_fed_node: bool,
     metrics: Arc<AuthorityMetrics>,
@@ -264,7 +266,7 @@ pub struct ABCIClientBuilder<BF, RDB, BDB> {
     blockchain_db: BlockchainProvider<BotanixNodeTypes>,
 }
 
-impl<BF, RDB, BDB> ABCIClientBuilder<BF, RDB, BDB>
+impl<RDB, BDB> ABCIClientBuilder<RDB, BDB>
 where
     RDB: BlockReaderIdExt
         + StateProviderFactory
@@ -275,14 +277,13 @@ where
             ChainSpec: reth_chainspec::EthereumHardforks,
         > + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        storage: Storage<BF, RDB, BDB>,
+        storage: Storage<RDB, BDB>,
         activation_manager: ActivationManager<VoteWatcher, Address>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
-        authority_consensus: AuthorityConsensus,
+        botanix_consensus: BotanixConsensus<BotanixChainSpec>,
         cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
         is_fed_node: bool,
         metrics: Arc<AuthorityMetrics>,
@@ -314,7 +315,7 @@ where
             storage,
             activation_manager,
             bitcoin_checkpoints,
-            authority_consensus,
+            botanix_consensus,
             cbft_rpc_client_factory,
             is_fed_node,
             metrics,
@@ -356,7 +357,7 @@ where
             self.bitcoin_checkpoints.clone(),
             self.abci_driver_tx.clone(),
             self.cbft_rpc_client_factory.clone(),
-            self.authority_consensus.clone(),
+            self.botanix_consensus.clone(),
             self.is_fed_node,
             self.metrics.clone(),
             self.compressor.clone(),
@@ -426,8 +427,8 @@ struct BlockCache {
 }
 
 #[derive(Clone)]
-pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
-    storage: Storage<BF, RDB, DBD>,
+pub(crate) struct ABCIClient<RDB, DBD, Pool> {
+    storage: Storage<RDB, DBD>,
     pool: Pool,
     activation_manager: ActivationManager<VoteWatcher, Address>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
@@ -435,7 +436,7 @@ pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
     driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
     #[allow(dead_code)]
     cbft_rpc_provider: HttpCometBFTRpcClientFactory,
-    authority_consensus: AuthorityConsensus,
+    botanix_consensus: BotanixConsensus<BotanixChainSpec>,
     is_fed_node: bool,
     metrics: Arc<AuthorityMetrics>,
     task_executor: TaskExecutor,
@@ -452,7 +453,7 @@ pub(crate) struct ABCIClient<BF, RDB, DBD, Pool> {
     is_testnet: bool,
 }
 
-impl<BF, RDB, DBD, Pool> ABCIClient<BF, RDB, DBD, Pool>
+impl<RDB, DBD, Pool> ABCIClient<RDB, DBD, Pool>
 where
     RDB: BlockReaderIdExt
         + StateProviderFactory
@@ -463,18 +464,17 @@ where
             ChainSpec: reth_chainspec::EthereumHardforks,
         > + 'static,
     DBD: SnapshotReader + SnapshotWriter + Clone + 'static,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     fn new(
-        storage: Storage<BF, RDB, DBD>,
+        storage: Storage<RDB, DBD>,
         pool: Pool,
         activation_manager: ActivationManager<VoteWatcher, Address>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
         cbft_rpc_provider: HttpCometBFTRpcClientFactory,
-        authority_consensus: AuthorityConsensus,
+        botanix_consensus: BotanixConsensus<BotanixChainSpec>,
         is_fed_node: bool,
         metrics: Arc<AuthorityMetrics>,
         compressor: DataParser,
@@ -503,7 +503,7 @@ where
             block_cache,
             driver_tx,
             cbft_rpc_provider,
-            authority_consensus,
+            botanix_consensus,
             is_fed_node,
             metrics,
             compressor,
@@ -603,44 +603,57 @@ where
         &self,
         block: &RecoveredBlock<BotanixBlock>,
     ) -> ResponseProcessProposal {
-        // // validate_block_post_execution() is called when inserting the block (ABCIDriver)
-        // match self.authority_consensus.validate_block_pre_execution(block) {
-        //     Ok(_) => {}
-        //     Err(e) => {
-        //         error!("Error in validate_block_pre_execution(): {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // }
+        match self
+            .botanix_consensus
+            .validate_block_pre_execution(block.sealed_block())
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Error in validate_block_pre_execution(): {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        }
 
-        // // standard header validation
-        // match self.authority_consensus.validate_header(&block.header()) {
-        //     Ok(_) => {}
-        //     Err(e) => {
-        //         error!("Error in validate_header(): {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // }
+        // standard header validation
+        match self
+            .botanix_consensus
+            .validate_header(&block.sealed_header())
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Error in validate_header(): {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        }
 
-        // // poa validation
-        // let agg_pk = match self.aggregate_public_key() {
-        //     Ok(pk) => pk,
-        //     Err(e) => {
-        //         error!("Error getting aggregate public key: {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // };
+        // poa validation
+        let agg_pk = match self.aggregate_public_key() {
+            Ok(pk) => pk,
+            Err(e) => {
+                error!("Error getting aggregate public key: {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        };
 
-        // match self.authority_consensus.validate_header_standalone(
-        //     block.header(),
-        //     self.storage.genesis_authorities.as_slice(),
-        //     Some(&agg_pk),
-        // ) {
-        //     Ok(_) => {}
-        //     Err(e) => {
-        //         error!("Error in validate_header_standalone(): {:?}", e);
-        //         return ResponseProcessProposal { status: VERIFY_REJECT };
-        //     }
-        // }
+        match self.botanix_consensus.validate_header_standalone(
+            block.header(),
+            self.storage.genesis_authorities.as_slice(),
+            Some(&agg_pk),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Error in validate_header_standalone(): {:?}", e);
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        }
         return ResponseProcessProposal {
             status: VERIFY_REJECT,
         };
@@ -678,11 +691,10 @@ where
     }
 }
 
-impl<BF, RDB, BDB, Pool> ABCIClient<BF, RDB, BDB, Pool>
+impl<RDB, BDB, Pool> ABCIClient<RDB, BDB, Pool>
 where
     RDB: BlockReaderIdExt + StateProviderFactory + Clone + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool + Clone + 'static,
 {
     fn create_new_snapshot_sync(
@@ -718,7 +730,7 @@ where
     }
 }
 
-impl<BF, RDB, BDB, Pool> Application for ABCIClient<BF, RDB, BDB, Pool>
+impl<RDB, BDB, Pool> Application for ABCIClient<RDB, BDB, Pool>
 where
     RDB: BlockReaderIdExt
         + StateProviderFactory
@@ -729,7 +741,6 @@ where
             ChainSpec: reth_chainspec::EthereumHardforks,
         > + 'static,
     BDB: SnapshotReader + SnapshotWriter + Clone + 'static,
-    BF: BitcoindFactory + Clone + Unpin + 'static,
     Pool: TransactionPool<
             Transaction: reth_transaction_pool::PoolTransaction<
                 Consensus = alloy_consensus::EthereumTxEnvelope<
@@ -2152,7 +2163,7 @@ where
             &block_fee_recipient_address,
             self.storage.evm_config.clone(),
             &self.reth_provider_factory,
-            &self.storage.bitcoind_factory,
+            self.storage.bitcoind_factory.clone(),
             self.storage.btc_network,
             &non_deterministic_data.bitcoin_block_hash(),
             &agg_pk,
@@ -2465,7 +2476,7 @@ where
                     &block_fee_recipient_address,
                     self.storage.evm_config.clone(),
                     &self.reth_provider_factory,
-                    &self.storage.bitcoind_factory,
+                    self.storage.bitcoind_factory.clone(),
                     self.storage.btc_network,
                     &non_deterministic_data.bitcoin_block_hash(),
                     &non_deterministic_data.aggregated_public_key(),
