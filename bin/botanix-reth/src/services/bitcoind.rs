@@ -8,7 +8,7 @@ use botanix_btc_wallet::{
         BitcoindClientWrapper, ClientSelection, FallbackBitcoindClient,
     },
 };
-use botanix_cli_args::{bitcoind::BitcoindArgs, poa_node::PoaNodeArgs};
+use botanix_cli_args::bitcoind::BitcoindArgs;
 use eyre::{Context, Ok};
 
 fn create_bitcoind_client(
@@ -28,43 +28,35 @@ fn create_bitcoind_client(
 }
 
 fn get_bitcoind_config(
-    poa_cfg: &PoaNodeArgs,
     bitcoind_cfg: &BitcoindArgs,
     is_primary: bool,
 ) -> eyre::Result<BitcoindConfig> {
-    let mut bitcoind_config: BitcoindConfig = bitcoind_cfg.clone().into();
-
-    let bitcoind_config_path = if is_primary {
-        &poa_cfg.bitcoind_config_path
+    let bitcoind_config = if is_primary {
+        BitcoindConfig {
+            url: bitcoind_cfg.primary_url.clone(),
+            username: bitcoind_cfg.primary_username.clone(),
+            password: bitcoind_cfg.primary_password.clone(),
+        }
     } else {
-        &poa_cfg.bitcoind_fallback_config_path
+        BitcoindConfig {
+            url: bitcoind_cfg.secondary_url.clone(),
+            username: bitcoind_cfg.secondary_username.clone(),
+            password: bitcoind_cfg.secondary_password.clone(),
+        }
     };
-
-    if let Some(bitcoind_config_path) = &bitcoind_config_path {
-        let config = confy::load_path::<BitcoindArgs>(&bitcoind_config_path)
-            .wrap_err_with(|| {
-                format!("Could not load config file {:?}", bitcoind_config_path)
-            })?;
-
-        tracing::info!(target: "reth::cli", path = ?bitcoind_config_path, "Bitcoind config loaded from file");
-        bitcoind_config = config.into();
-    }
     Ok(bitcoind_config)
 }
 
 /// Sets up and returns a Bitcoind client using the provided configuration arguments.
 pub async fn setup_bitcoind_client(
     bitcoind_cfg: &BitcoindArgs,
-    poa_cfg: &PoaNodeArgs,
     client_selection: ClientSelection,
 ) -> eyre::Result<FallbackBitcoindClient> {
-    let primary_bitcoind_config =
-        get_bitcoind_config(poa_cfg, bitcoind_cfg, true)?;
+    let primary_bitcoind_config = get_bitcoind_config(bitcoind_cfg, true)?;
     let (primary_bitcoind_client, _) =
         create_bitcoind_client(&primary_bitcoind_config)?;
 
-    let secondary_bitcoind_config =
-        get_bitcoind_config(poa_cfg, bitcoind_cfg, false)?;
+    let secondary_bitcoind_config = get_bitcoind_config(bitcoind_cfg, false)?;
     let (secondary_bitcoind_client, _) =
         create_bitcoind_client(&secondary_bitcoind_config)?;
 

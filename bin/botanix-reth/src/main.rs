@@ -145,7 +145,7 @@ fn main() -> eyre::Result<()> {
             }
 
             // Create bitcoind client
-            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, &poa_cfg, ClientSelection::Fallback).await?;
+            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, ClientSelection::Fallback).await?;
             let bitcoind_client = Arc::new(bitcoind_client);
 
             // Migrate the db if needed
