@@ -10,9 +10,10 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
     Database,
 };
+use reth_node_types::NodeTypes;
 use reth_storage_errors::provider::{ProviderError, ProviderResult};
 
-impl<TX: DbTx> StagedHeaderReader for BotanixDatabaseProvider<TX> {
+impl<TX: DbTx, N: NodeTypes> StagedHeaderReader for BotanixDatabaseProvider<TX, N> {
     fn get_staged_headers(
         &self,
     ) -> ProviderResult<Vec<(B256, HeaderWithPegs)>> {
@@ -24,7 +25,7 @@ impl<TX: DbTx> StagedHeaderReader for BotanixDatabaseProvider<TX> {
     }
 }
 
-impl<DB: Database> StagedHeaderReader for BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> StagedHeaderReader for BotanixDatabaseProviderRW<DB, N> {
     #[inline(always)]
     fn get_staged_headers(
         &self,
@@ -33,7 +34,7 @@ impl<DB: Database> StagedHeaderReader for BotanixDatabaseProviderRW<DB> {
     }
 }
 
-impl<DB: Database> StagedHeaderWriter for BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> StagedHeaderWriter for BotanixDatabaseProviderRW<DB, N> {
     fn insert_staged_header(
         &self,
         id: B256,

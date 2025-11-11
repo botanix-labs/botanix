@@ -17,10 +17,11 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
     Database,
 };
+use reth_node_types::NodeTypes;
 use reth_storage_errors::provider::ProviderResult;
 use std::{collections::HashMap, ops::RangeInclusive};
 
-impl<TX: DbTx> SnapshotReader for BotanixDatabaseProvider<TX> {
+impl<TX: DbTx, N: NodeTypes> SnapshotReader for BotanixDatabaseProvider<TX, N> {
     fn get_snapshots(&self) -> ProviderResult<Vec<Snapshot>> {
         Ok(self
             .tx
@@ -183,7 +184,7 @@ impl<TX: DbTx> SnapshotReader for BotanixDatabaseProvider<TX> {
     }
 }
 
-impl<DB: Database> SnapshotReader for BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> SnapshotReader for BotanixDatabaseProviderRW<DB, N> {
     #[inline(always)]
     fn get_snapshots(&self) -> ProviderResult<Vec<Snapshot>> {
         self.0.get_snapshots()
@@ -287,7 +288,7 @@ impl<DB: Database> SnapshotReader for BotanixDatabaseProviderRW<DB> {
     }
 }
 
-impl<DB: Database> SnapshotWriter for BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> SnapshotWriter for BotanixDatabaseProviderRW<DB, N> {
     fn create_new_snapshot_sync(
         &self,
         height: u64,

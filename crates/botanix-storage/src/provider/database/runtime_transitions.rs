@@ -7,14 +7,15 @@ use reth_db_api::{
     cursor::DbCursorRO,
     transaction::{DbTx, DbTxMut},
 };
+use reth_node_types::NodeTypes;
 use reth_storage_errors::provider::{ProviderError, ProviderResult};
 
 /// The key where we keep the highest known runtime version. We have roughly ~3
 /// trillion years time before this becomes a problem.
 const LATEST_RUNTIME_KEY: BlockNumber = u64::MAX;
 
-impl<TX: DbTxMut + DbTx> RuntimeTransitionsReadWrite
-    for BotanixDatabaseProvider<TX>
+impl<TX: DbTxMut + DbTx, N: NodeTypes> RuntimeTransitionsReadWrite
+    for BotanixDatabaseProvider<TX, N>
 {
     fn insert_runtime_upgrade_version(
         &self,

@@ -5,6 +5,9 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
     Database,
 };
+use reth_node_types::NodeTypes;
+use reth_provider::providers::NodeTypesForProvider;
+use reth_provider::{DBProvider, DatabaseProvider};
 use reth_prune::PruneLimiter;
 use reth_storage_errors::{db::DatabaseError, provider::ProviderResult};
 use std::{
@@ -22,32 +25,32 @@ use std::{
 ///
 /// Use this type when you only need to read data from the database and want
 /// to ensure no accidental writes can occur.
-pub type BotanixDatabaseProviderRO<DB> =
-    BotanixDatabaseProvider<<DB as Database>::TX>;
+pub type BotanixDatabaseProviderRO<DB, N> =
+    BotanixDatabaseProvider<<DB as Database>::TX, N>;
 /// A [`BotanixDatabaseProvider`] that holds a read-write database transaction.
 ///
 /// Ideally this would be an alias type. However, there's some weird compiler error (<https://github.com/rust-lang/rust/issues/102211>), that forces us to wrap this in a struct instead.
 /// Once that issue is solved, we can probably revert back to being an alias type.
 #[derive(Debug)]
-pub struct BotanixDatabaseProviderRW<DB: Database>(
-    pub BotanixDatabaseProvider<<DB as Database>::TXMut>,
+pub struct BotanixDatabaseProviderRW<DB: Database, N: NodeTypes>(
+    pub BotanixDatabaseProvider<<DB as Database>::TXMut, N>,
 );
 
-impl<DB: Database> Deref for BotanixDatabaseProviderRW<DB> {
-    type Target = BotanixDatabaseProvider<<DB as Database>::TXMut>;
+impl<DB: Database, N: NodeTypes> Deref for BotanixDatabaseProviderRW<DB, N> {
+    type Target = BotanixDatabaseProvider<<DB as Database>::TXMut, N>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<DB: Database> DerefMut for BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> DerefMut for BotanixDatabaseProviderRW<DB, N> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<DB: Database> BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> BotanixDatabaseProviderRW<DB, N> {
     /// Commit database transaction and static file if it exists.
     ///
     /// Finalizes all pending write operations in the database transaction.
@@ -65,7 +68,8 @@ impl<DB: Database> BotanixDatabaseProviderRW<DB> {
     /// Changes are not persisted until this method is called successfully.
     /// Dropping the provider without calling commit will rollback all changes.
     pub fn commit(self) -> ProviderResult<bool> {
-        self.0.commit()
+        // Convert wrapper to inner provider and call commit
+        self.0.inner.commit()
     }
 
     /// Consume the provider and return the underlying database transaction.
@@ -77,54 +81,71 @@ impl<DB: Database> BotanixDatabaseProviderRW<DB> {
     ///
     /// The underlying mutable database transaction.
     pub fn into_tx(self) -> <DB as Database>::TXMut {
-        self.0.into_tx()
+        self.0.inner.into_tx()
+    }
+}
+
+impl<TX, N: NodeTypes> Deref for BotanixDatabaseProvider<TX, N> {
+    type Target = DatabaseProvider<TX, N>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<TX, N: NodeTypes> DerefMut for BotanixDatabaseProvider<TX, N> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
 /// A provider struct that fetches data from the database.
 ///
-/// This wrapper provides a unified interface around database transactions ([`DbTx`] and
-/// [`DbTxMut`]) for accessing Botanix storage data. It serves as the foundation for all database
-/// operations in the storage system.
+/// This wrapper provides a unified interface around Reth's [`DatabaseProvider`] for accessing
+/// Botanix storage data. It serves as the foundation for all database operations in the storage
+/// system, inheriting all of Reth's provider implementations while adding Botanix-specific
+/// extensions.
 #[derive(Debug)]
-pub struct BotanixDatabaseProvider<TX> {
-    /// Database transaction.
-    pub(super) tx: TX,
+pub struct BotanixDatabaseProvider<TX, N: NodeTypes> {
+    /// Inner Reth DatabaseProvider with full trait implementations
+    inner: DatabaseProvider<TX, N>,
 }
 
-impl<TX: DbTxMut> BotanixDatabaseProvider<TX> {
+impl<TX: DbTxMut, N: NodeTypes> BotanixDatabaseProvider<TX, N> {
     /// Creates a provider with an inner read-write transaction.
     ///
     /// Constructs a new database provider that can perform both read and write
-    /// operations using the provided mutable transaction.
+    /// operations using the provided mutable transaction and node types.
     ///
     /// # Parameters
     ///
-    /// * `tx` - A mutable database transaction that supports both reads and writes
+    /// * `inner` - A Reth DatabaseProvider with mutable transaction and node types
     ///
     /// # Returns
     ///
     /// A new `BotanixDatabaseProvider` instance capable of read-write operations.
-    pub const fn new_rw(tx: TX) -> Self {
-        Self { tx }
+    pub fn new_rw(inner: DatabaseProvider<TX, N>) -> Self {
+        Self { inner }
     }
 }
 
-impl<TX: DbTx> BotanixDatabaseProvider<TX> {
+impl<TX: DbTx + 'static, N: NodeTypes + NodeTypesForProvider>
+    BotanixDatabaseProvider<TX, N>
+{
     /// Creates a provider with an inner read-only transaction.
     ///
     /// Constructs a new database provider that can only perform read operations
-    /// using the provided read-only transaction.
+    /// using the provided read-only transaction and node types.
     ///
     /// # Parameters
     ///
-    /// * `tx` - A read-only database transaction
+    /// * `inner` - A Reth DatabaseProvider with read-only transaction and node types
     ///
     /// # Returns
     ///
     /// A new `BotanixDatabaseProvider` instance for read-only operations.
-    pub const fn new(tx: TX) -> Self {
-        Self { tx }
+    pub fn new(inner: DatabaseProvider<TX, N>) -> Self {
+        Self { inner }
     }
 
     /// Consume the provider and return the underlying database transaction.
@@ -136,7 +157,7 @@ impl<TX: DbTx> BotanixDatabaseProvider<TX> {
     ///
     /// The underlying database transaction (either read-only or read-write).
     pub fn into_tx(self) -> TX {
-        self.tx
+        self.inner.into_tx()
     }
 
     /// Get a mutable reference to the underlying database transaction.
@@ -148,7 +169,7 @@ impl<TX: DbTx> BotanixDatabaseProvider<TX> {
     ///
     /// A mutable reference to the underlying database transaction.
     pub fn tx_mut(&mut self) -> &mut TX {
-        &mut self.tx
+        self.inner.tx_mut()
     }
 
     /// Get an immutable reference to the underlying database transaction.
@@ -159,8 +180,8 @@ impl<TX: DbTx> BotanixDatabaseProvider<TX> {
     /// # Returns
     ///
     /// An immutable reference to the underlying database transaction.
-    pub const fn tx_ref(&self) -> &TX {
-        &self.tx
+    pub fn tx_ref(&self) -> &TX {
+        self.inner.tx_ref()
     }
 
     /// Return full table as Vec
@@ -180,7 +201,8 @@ impl<TX: DbTx> BotanixDatabaseProvider<TX> {
     where
         T::Key: Default + Ord,
     {
-        self.tx
+        self.inner
+            .tx_ref()
             .cursor_read::<T>()?
             .walk(Some(T::Key::default()))?
             .collect::<Result<Vec<_>, DatabaseError>>()
@@ -218,14 +240,17 @@ impl<TX: DbTx> BotanixDatabaseProvider<TX> {
         &self,
         range: impl RangeBounds<T::Key>,
     ) -> Result<Vec<KeyValue<T>>, DatabaseError> {
-        self.tx
+        self.inner
+            .tx_ref()
             .cursor_read::<T>()?
             .walk_range(range)?
             .collect::<Result<Vec<_>, _>>()
     }
 }
 
-impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
+impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes + NodeTypesForProvider>
+    BotanixDatabaseProvider<TX, N>
+{
     /// Commit database transaction.
     ///
     /// Finalizes all pending write operations in the database transaction.
@@ -243,7 +268,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// Changes are not persisted until this method is called successfully.
     /// Dropping the provider without calling commit will rollback all changes.
     pub fn commit(self) -> ProviderResult<bool> {
-        Ok(self.tx.commit()?)
+        self.inner.commit()
     }
 
     /// Remove list of entries from the table. Returns the number of entries removed.
@@ -270,11 +295,11 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// or are certain about the deletion before calling this method.
     #[inline]
     pub fn remove<T: Table>(
-        &self,
+        &mut self,
         range: impl RangeBounds<T::Key>,
     ) -> Result<usize, DatabaseError> {
         let mut entries = 0;
-        let mut cursor_write = self.tx.cursor_write::<T>()?;
+        let mut cursor_write = self.inner.tx_mut().cursor_write::<T>()?;
         let mut walker = cursor_write.walk_range(range)?;
         while walker.next().transpose()?.is_some() {
             walker.delete_current()?;
@@ -313,10 +338,10 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// the intended behavior before calling this method.
     #[inline]
     pub fn take<T: Table>(
-        &self,
+        &mut self,
         range: impl RangeBounds<T::Key>,
     ) -> Result<Vec<KeyValue<T>>, DatabaseError> {
-        let mut cursor_write = self.tx.cursor_write::<T>()?;
+        let mut cursor_write = self.inner.tx_mut().cursor_write::<T>()?;
         let mut walker = cursor_write.walk_range(range)?;
         let mut items = Vec::new();
         while let Some(i) = walker.next().transpose()? {
@@ -351,7 +376,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// will remain in the database. Only entries with keys > num are removed.
     #[inline]
     pub fn unwind_table_by_num<T>(
-        &self,
+        &mut self,
         num: u64,
     ) -> Result<usize, DatabaseError>
     where
@@ -387,7 +412,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// the selector function returns a value greater than the specified key.
     /// This allows for efficient unwinding from the end of the table.
     pub(crate) fn unwind_table<T, F>(
-        &self,
+        &mut self,
         key: u64,
         mut selector: F,
     ) -> Result<usize, DatabaseError>
@@ -395,7 +420,7 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
         T: Table,
         F: FnMut(T::Key) -> u64,
     {
-        let mut cursor = self.tx.cursor_write::<T>()?;
+        let mut cursor = self.inner.tx_mut().cursor_write::<T>()?;
         let mut reverse_walker = cursor.walk_back(None)?;
         let mut deleted = 0;
 
@@ -431,17 +456,17 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// * `Ok(())` - If all deletions completed successfully
     /// * `Err(DatabaseError)` - If there was a database access error
     pub fn unwind_table_by_walker<T1, T2>(
-        &self,
+        &mut self,
         range: impl RangeBounds<T1::Key>,
     ) -> Result<(), DatabaseError>
     where
         T1: Table,
         T2: Table<Key = T1::Value>,
     {
-        let mut cursor = self.tx.cursor_write::<T1>()?;
+        let mut cursor = self.inner.tx_mut().cursor_write::<T1>()?;
         let mut walker = cursor.walk_range(range)?;
         while let Some((_, value)) = walker.next().transpose()? {
-            self.tx.delete::<T2>(value, None)?;
+            self.inner.tx_mut().delete::<T2>(value, None)?;
         }
         Ok(())
     }
@@ -477,12 +502,12 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// - Calls the delete callback for each successfully deleted row
     /// - Skips keys that don't exist in the table without error
     pub fn prune_table_with_iterator<T: Table>(
-        &self,
+        &mut self,
         keys: impl IntoIterator<Item = T::Key>,
         limiter: &mut PruneLimiter,
         mut delete_callback: impl FnMut(TableRow<T>),
     ) -> Result<(usize, bool), DatabaseError> {
-        let mut cursor = self.tx.cursor_write::<T>()?;
+        let mut cursor = self.inner.tx_mut().cursor_write::<T>()?;
         let mut keys = keys.into_iter();
 
         let mut deleted_entries = 0;
@@ -544,13 +569,13 @@ impl<TX: DbTxMut + DbTx> BotanixDatabaseProvider<TX> {
     /// - Respects pruning limits and stops when limits are reached
     /// - Calls delete_callback for each successfully deleted row
     pub fn prune_table_with_range<T: Table>(
-        &self,
+        &mut self,
         keys: impl RangeBounds<T::Key> + Clone + Debug,
         limiter: &mut PruneLimiter,
         mut skip_filter: impl FnMut(&TableRow<T>) -> bool,
         mut delete_callback: impl FnMut(TableRow<T>),
     ) -> Result<(usize, bool), DatabaseError> {
-        let mut cursor = self.tx.cursor_write::<T>()?;
+        let mut cursor = self.inner.tx_mut().cursor_write::<T>()?;
         let mut walker = cursor.walk_range(keys)?;
 
         let mut deleted_entries = 0;
