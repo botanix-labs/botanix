@@ -53,7 +53,7 @@ jobs:
             --platform linux/amd64 \
             -t botanix_testnet_reth_node_v1 \
             -f Dockerfile \
-            --build-arg PACKAGE=reth \
+            --build-arg PACKAGE=reth_botanix \
             --build-arg BIN=reth-botanix \
             .
         working-directory: ./

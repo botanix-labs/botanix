@@ -1,7 +1,7 @@
 #syntax=docker/dockerfile:1.7-labs
 
 # Build deps
-FROM rust:1.85 AS base
+FROM rust:1.90 AS base
 
 ARG TARGETARCH
 
@@ -63,6 +63,7 @@ ARG FEATURES=""
 
 # Package to build (reth or btc-server)
 ARG BIN=reth
+ARG PACKAGE=""
 
 # Builds dependencies
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -72,7 +73,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --profile $PROFILE \
     --features "$FEATURES" \
     --recipe-path recipe.json \
-    --package "$BIN" \
+    --package "$PACKAGE" \
     --bin "$BIN" \
     --locked
 
@@ -90,7 +91,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build \
     --profile $PROFILE \
     --features "$FEATURES" \
-    --package "$BIN" \
+    --package "$PACKAGE" \
     --bin "$BIN" \
     --locked && \
     cp target/$OUT_DIRECTORY/$BIN /usr/local/bin/app
