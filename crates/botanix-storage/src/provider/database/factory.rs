@@ -16,6 +16,7 @@ use crate::{
 use alloy_primitives::{BlockNumber, Bytes, B256};
 use reth_db::{init_db, mdbx::DatabaseArguments, DatabaseEnv};
 use reth_db_api::database::Database;
+use reth_node_types::NodeTypes;
 use reth_storage_errors::provider::ProviderResult;
 use std::{collections::HashSet, ops::RangeInclusive, path::Path, sync::Arc};
 
@@ -54,12 +55,14 @@ use std::{collections::HashSet, ops::RangeInclusive, path::Path, sync::Arc};
 /// provider_rw.commit()?;
 /// ```
 #[derive(Debug, Clone)]
-pub struct BotanixProviderFactory<DB> {
+pub struct BotanixProviderFactory<DB, N: NodeTypes> {
     /// Database instance wrapped in Arc for thread-safe sharing
     db: Arc<DB>,
+    /// Marker for node types
+    _node_types: std::marker::PhantomData<N>,
 }
 
-impl<DB> BotanixProviderFactory<DB> {
+impl<DB, N: NodeTypes> BotanixProviderFactory<DB, N> {
     /// Create new database provider factory.
     ///
     /// Creates a new factory instance that wraps the provided database.
@@ -74,7 +77,10 @@ impl<DB> BotanixProviderFactory<DB> {
     ///
     /// A new `BotanixProviderFactory` instance
     pub fn new(db: DB) -> Self {
-        Self { db: Arc::new(db) }
+        Self {
+            db: Arc::new(db),
+            _node_types: std::marker::PhantomData,
+        }
     }
 
     /// Returns reference to the underlying database.
@@ -105,7 +111,7 @@ impl<DB> BotanixProviderFactory<DB> {
     }
 }
 
-impl BotanixProviderFactory<DatabaseEnv> {
+impl<N: NodeTypes> BotanixProviderFactory<DatabaseEnv, N> {
     /// Create new database provider by passing a path. [`BotanixProviderFactory`] will own the
     /// database instance.
     ///
@@ -147,15 +153,16 @@ impl BotanixProviderFactory<DatabaseEnv> {
     ) -> eyre::Result<Self> {
         Ok(Self {
             db: Arc::new(init_db(path, args)?),
+            _node_types: std::marker::PhantomData,
         })
     }
 }
 
-impl<DB> DatabaseProviderFactoryRO for BotanixProviderFactory<DB>
+impl<DB, N: NodeTypes> DatabaseProviderFactoryRO for BotanixProviderFactory<DB, N>
 where
     DB: Database,
 {
-    type Provider = BotanixDatabaseProviderRO<DB>;
+    type Provider = BotanixDatabaseProviderRO<DB, N>;
 
     #[track_caller]
     fn provider(&self) -> ProviderResult<Self::Provider> {
@@ -163,11 +170,11 @@ where
     }
 }
 
-impl<DB> DatabaseProviderFactoryRW for BotanixProviderFactory<DB>
+impl<DB, N: NodeTypes> DatabaseProviderFactoryRW for BotanixProviderFactory<DB, N>
 where
     DB: Database,
 {
-    type Provider = BotanixDatabaseProviderRW<DB>;
+    type Provider = BotanixDatabaseProviderRW<DB, N>;
 
     #[track_caller]
     fn provider_rw(&self) -> ProviderResult<Self::Provider> {
@@ -177,7 +184,7 @@ where
     }
 }
 
-impl<DB: Database> SnapshotReader for BotanixProviderFactory<DB> {
+impl<DB: Database, N: NodeTypes> SnapshotReader for BotanixProviderFactory<DB, N> {
     #[inline(always)]
     fn get_snapshots(&self) -> ProviderResult<Vec<Snapshot>> {
         self.provider()?.get_snapshots()
@@ -281,7 +288,7 @@ impl<DB: Database> SnapshotReader for BotanixProviderFactory<DB> {
     }
 }
 
-impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
+impl<DB: Database, N: NodeTypes> SnapshotWriter for BotanixProviderFactory<DB, N> {
     fn create_new_snapshot_sync(
         &self,
         block_id: BlockNumber,
@@ -454,7 +461,7 @@ impl<DB: Database> SnapshotWriter for BotanixProviderFactory<DB> {
     }
 }
 
-impl<DB: Database> WalletStateSyncReader for BotanixProviderFactory<DB> {
+impl<DB: Database, N: NodeTypes> WalletStateSyncReader for BotanixProviderFactory<DB, N> {
     #[inline(always)]
     fn get_state_sync_records(
         &self,
@@ -490,7 +497,7 @@ impl<DB: Database> WalletStateSyncReader for BotanixProviderFactory<DB> {
     }
 }
 
-impl<DB: Database> WalletStateSyncWriter for BotanixProviderFactory<DB> {
+impl<DB: Database, N: NodeTypes> WalletStateSyncWriter for BotanixProviderFactory<DB, N> {
     fn create_new_state_sync_record(
         &self,
         uuid: UuidID,
@@ -550,7 +557,7 @@ impl<DB: Database> WalletStateSyncWriter for BotanixProviderFactory<DB> {
     }
 }
 
-impl<DB: Database> StagedHeaderReader for BotanixProviderFactory<DB> {
+impl<DB: Database, N: NodeTypes> StagedHeaderReader for BotanixProviderFactory<DB, N> {
     #[inline(always)]
     fn get_staged_headers(
         &self,
@@ -559,7 +566,7 @@ impl<DB: Database> StagedHeaderReader for BotanixProviderFactory<DB> {
     }
 }
 
-impl<DB: Database> StagedHeaderWriter for BotanixProviderFactory<DB> {
+impl<DB: Database, N: NodeTypes> StagedHeaderWriter for BotanixProviderFactory<DB, N> {
     fn insert_staged_header(
         &self,
         id: B256,
@@ -587,7 +594,7 @@ impl<DB: Database> StagedHeaderWriter for BotanixProviderFactory<DB> {
     }
 }
 
-impl<DB: Database> RuntimeTransitionsReadWrite for BotanixProviderFactory<DB> {
+impl<DB: Database, N: NodeTypes> RuntimeTransitionsReadWrite for BotanixProviderFactory<DB, N> {
     fn insert_runtime_upgrade_version(
         &self,
         height: BlockNumber,

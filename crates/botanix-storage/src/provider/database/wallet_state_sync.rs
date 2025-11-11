@@ -13,10 +13,11 @@ use reth_db_api::{
     transaction::{DbTx, DbTxMut},
     Database,
 };
+use reth_node_types::NodeTypes;
 use reth_storage_errors::provider::ProviderResult;
 use std::collections::{HashMap, HashSet};
 
-impl<TX: DbTx> WalletStateSyncReader for BotanixDatabaseProvider<TX> {
+impl<TX: DbTx, N: NodeTypes> WalletStateSyncReader for BotanixDatabaseProvider<TX, N> {
     fn get_state_sync_records(
         &self,
     ) -> ProviderResult<Vec<WalletStateSyncRecord>> {
@@ -100,7 +101,7 @@ impl<TX: DbTx> WalletStateSyncReader for BotanixDatabaseProvider<TX> {
     }
 }
 
-impl<DB: Database> WalletStateSyncReader for BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> WalletStateSyncReader for BotanixDatabaseProviderRW<DB, N> {
     #[inline(always)]
     fn get_state_sync_records(
         &self,
@@ -135,7 +136,7 @@ impl<DB: Database> WalletStateSyncReader for BotanixDatabaseProviderRW<DB> {
     }
 }
 
-impl<DB: Database> WalletStateSyncWriter for BotanixDatabaseProviderRW<DB> {
+impl<DB: Database, N: NodeTypes> WalletStateSyncWriter for BotanixDatabaseProviderRW<DB, N> {
     fn create_new_state_sync_record(
         &self,
         uuid: UuidID,
