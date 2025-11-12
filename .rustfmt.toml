@@ -1,7 +1,36 @@
+# Botanix Rust Formatting Configuration
+
+# Edition
 edition = "2021"
+
+# Line width and formatting
 max_width = 80
+comment_width = 100
+doc_comment_code_block_width = 100
+
+# Imports
 reorder_imports = true
+imports_granularity = "Crate"
+
+# Modules
 reorder_modules = true
+
+# Spacing and indentation
 tab_spaces = 4
+use_small_heuristics = "Max"
+
+# Comments
+wrap_comments = true
+format_code_in_doc_comments = true
+
+# Code style
+binop_separator = "Back"
+trailing_comma = "Vertical"
+trailing_semicolon = false
 use_field_init_shorthand = true
 use_try_shorthand = true
+
+ignore = [
+    "bin/btc-server/client/src/**",
+    "bin/btc-server/src/rpc/btc_server.rs",
+]
