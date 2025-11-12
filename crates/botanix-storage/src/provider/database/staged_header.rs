@@ -11,13 +11,17 @@ use reth_db_api::{
     Database,
 };
 use reth_node_types::NodeTypes;
+use reth_provider::DBProvider;
 use reth_storage_errors::provider::{ProviderError, ProviderResult};
 
-impl<TX: DbTx, N: NodeTypes> StagedHeaderReader for BotanixDatabaseProvider<TX, N> {
+impl<TX: DbTx + 'static, N: NodeTypes> StagedHeaderReader
+    for BotanixDatabaseProvider<TX, N>
+{
     fn get_staged_headers(
         &self,
     ) -> ProviderResult<Vec<(B256, HeaderWithPegs)>> {
-        self.tx
+        self.inner
+            .tx_ref()
             .cursor_read::<StagedHeader>()?
             .walk(None)?
             .collect::<Result<Vec<(B256, HeaderWithPegs)>, _>>()
@@ -25,7 +29,9 @@ impl<TX: DbTx, N: NodeTypes> StagedHeaderReader for BotanixDatabaseProvider<TX, 
     }
 }
 
-impl<DB: Database, N: NodeTypes> StagedHeaderReader for BotanixDatabaseProviderRW<DB, N> {
+impl<DB: Database, N: NodeTypes> StagedHeaderReader
+    for BotanixDatabaseProviderRW<DB, N>
+{
     #[inline(always)]
     fn get_staged_headers(
         &self,
@@ -34,13 +40,15 @@ impl<DB: Database, N: NodeTypes> StagedHeaderReader for BotanixDatabaseProviderR
     }
 }
 
-impl<DB: Database, N: NodeTypes> StagedHeaderWriter for BotanixDatabaseProviderRW<DB, N> {
+impl<DB: Database, N: NodeTypes> StagedHeaderWriter
+    for BotanixDatabaseProviderRW<DB, N>
+{
     fn insert_staged_header(
         &self,
         id: B256,
         header: HeaderWithPegs,
     ) -> ProviderResult<()> {
-        Ok(self.tx.put::<StagedHeader>(id, header)?)
+        Ok(self.inner.tx_ref().put::<StagedHeader>(id, header)?)
     }
 
     fn remove_staged_header(&self, id: B256) -> ProviderResult<bool> {
