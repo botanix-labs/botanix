@@ -108,18 +108,18 @@ impl<TX, N: NodeTypes> DerefMut for BotanixDatabaseProvider<TX, N> {
 #[derive(Debug)]
 pub struct BotanixDatabaseProvider<TX, N: NodeTypes> {
     /// Inner Reth DatabaseProvider with full trait implementations
-    inner: DatabaseProvider<TX, N>,
+    pub(crate) inner: DatabaseProvider<TX, N>,
 }
 
 impl<TX: DbTxMut, N: NodeTypes> BotanixDatabaseProvider<TX, N> {
-    /// Creates a provider with an inner read-write transaction.
+    /// Creates a provider with a DatabaseProvider.
     ///
     /// Constructs a new database provider that can perform both read and write
-    /// operations using the provided mutable transaction and node types.
+    /// operations using the provided DatabaseProvider.
     ///
     /// # Parameters
     ///
-    /// * `inner` - A Reth DatabaseProvider with mutable transaction and node types
+    /// * `inner` - A Reth DatabaseProvider instance
     ///
     /// # Returns
     ///
@@ -132,14 +132,14 @@ impl<TX: DbTxMut, N: NodeTypes> BotanixDatabaseProvider<TX, N> {
 impl<TX: DbTx + 'static, N: NodeTypes + NodeTypesForProvider>
     BotanixDatabaseProvider<TX, N>
 {
-    /// Creates a provider with an inner read-only transaction.
+    /// Creates a provider with a DatabaseProvider.
     ///
     /// Constructs a new database provider that can only perform read operations
-    /// using the provided read-only transaction and node types.
+    /// using the provided DatabaseProvider.
     ///
     /// # Parameters
     ///
-    /// * `inner` - A Reth DatabaseProvider with read-only transaction and node types
+    /// * `inner` - A Reth DatabaseProvider instance
     ///
     /// # Returns
     ///
