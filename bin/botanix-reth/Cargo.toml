@@ -107,6 +107,7 @@ botanix-consensus-common.workspace = true
 botanix-data-parser.workspace = true
 botanix-evm = { workspace = true }
 botanix-fs-util.workspace = true
+botanix-primitives.workspace = true
 botanix-rpc-client.workspace = true
 botanix-rpc-config.workspace = true
 botanix-rpc-types.workspace = true

@@ -1,13 +1,15 @@
 //! The purpose of this module is to provide a bridge between the CometBFT and
 //! the EVM application state
 use alloy_consensus::BlockHeader;
-use alloy_eips::Encodable2718;
+use alloy_eips::{Encodable2718, NumHash};
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
 use botanix_storage::models::RuntimeVersion;
-use reth_chain_state::ExecutedBlock;
+use reth_chain_state::{
+    ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
+};
 use reth_db::DatabaseEnv;
 use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
@@ -15,6 +17,7 @@ use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_types::Block;
 use reth_primitives_traits::Block as BlockTrait;
 use reth_trie::updates::TrieUpdates;
+use reth_trie_common::KeccakKeyHasher;
 use std::{
     error::Error,
     io,
@@ -23,8 +26,8 @@ use std::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use alloy_primitives::{Address, BlockHash, BlockNumber, B256};
-use alloy_rpc_types_engine::PayloadAttributes;
+use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, B256};
+use alloy_rpc_types_engine::{ForkchoiceState, PayloadAttributes};
 use alloy_rpc_types_eth::BlockId;
 use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
 use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
@@ -32,12 +35,14 @@ use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
+use reth_chain_state::CanonStateNotification;
 use reth_consensus::{Consensus, InvalidAggregatedPublicKeyError};
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker,
-    ExecutionOutcome, ProviderError, ProviderFactory, StateProviderFactory,
+    providers::BlockchainProvider, BlockReaderIdExt, BlockWriter,
+    CanonChainTracker, Chain, ExecutionOutcome, ProviderError, ProviderFactory,
+    StateProviderFactory,
 };
 use reth_revm::primitives::FixedBytes;
 use reth_tasks::{TaskExecutor, TaskSpawner};
@@ -64,8 +69,9 @@ use crate::{
     consensus::comet_bft::non_deterministic_data::{
         NonDeterministicData, RUNTIME_VERSION_GENESIS,
     },
-    node::{consensus::BotanixConsensus, BotanixNode},
-    BotanixBlock,
+    node::{
+        consensus::BotanixConsensus, primitives::BotanixBlock, BotanixNode,
+    },
 };
 
 /// Runtime version 0.1 that Botanix launched with.
@@ -1062,7 +1068,7 @@ where
 
         //             (*snapshot_sync_state_lock)
         //                 .set_snapshot_height(snapshot.height)
-        //                 
+        //
         // .set_snapshot_hash(prost::bytes::Bytes::copy_from_slice(
         //                     snapshot.hash.as_ref(),
         //                 ))
@@ -2754,8 +2760,10 @@ pub struct ABCIDriver {
     driver_rx: Arc<Mutex<tokio::sync::mpsc::Receiver<ABCIDriverMessage>>>,
     // TODO: BlockchainProvider2 already contains ProviderFactory so we can get
     // it from there  instead of duplicating it here
-    reth_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
-    botanix_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+    reth_database_provider_factory:
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+    botanix_database_provider_factory:
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
     blockchain_provider: BlockchainProvider<
         NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
     >,
@@ -2767,9 +2775,11 @@ impl ABCIDriver {
         driver_rx: tokio::sync::mpsc::Receiver<ABCIDriverMessage>,
         reth_database_provider_factory: BotanixProviderFactory<
             Arc<DatabaseEnv>,
+            BotanixNode,
         >,
         botanix_database_provider_factory: BotanixProviderFactory<
             Arc<DatabaseEnv>,
+            BotanixNode,
         >,
         blockchain_provider: BlockchainProvider<
             NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
@@ -2803,14 +2813,17 @@ impl ABCIDriver {
 
                         let sealed_block_with_peg =
                             sealed_block_with_context.sealed_block_with_peg;
-                        let new_header =
-                            sealed_block_with_peg.block().header().clone();
+                        let recovered_block = sealed_block_with_peg.block();
+                        let new_header = recovered_block.header().clone();
+                        let sealed_header =
+                            recovered_block.clone_sealed_header();
+
                         let block_height = sealed_block_with_peg.block().number;
                         let sealed_block_with_senders =
                             sealed_block_with_peg.block().to_owned();
                         let hashed_state = sealed_block_with_context
                             .exec_outcome
-                            .hash_state_slow();
+                            .hash_state_slow::<KeccakKeyHasher>();
                         let trie_updates =
                             sealed_block_with_context.trie_updates;
 
@@ -2824,13 +2837,44 @@ impl ABCIDriver {
                             hashed_state: Arc::new(hashed_state.clone()),
                         };
 
+                        let executed_block_with_trie =
+                            ExecutedBlockWithTrieUpdates {
+                                block: executed_block,
+                                trie: ExecutedTrieUpdates::Present(Arc::new(
+                                    trie_updates.clone(),
+                                )),
+                            };
+
                         let pegins = sealed_block_with_peg
                             .pegins()
                             .iter()
                             .flat_map(|p| p.meta.clone())
                             .collect::<Vec<_>>();
-
-                        let pegouts = sealed_block_with_peg.pegouts().to_vec();
+                        // Serialize pegins to pass in Commit notification
+                        let pegin_bytes = pegins
+                            .iter()
+                            .map(|p| {
+                                Bytes::copy_from_slice(
+                                    p.serialize()
+                                        .expect("Pegins to be serialized")
+                                        .as_slice(),
+                                )
+                            })
+                            .collect::<Vec<Bytes>>();
+                        // Serialize pegouts to pass in Commit notification
+                        let pegout_bytes = vec![Bytes::copy_from_slice(
+                            sealed_block_with_peg
+                                .pegouts()
+                                .to_vec()
+                                .iter()
+                                .map(|p| {
+                                    p.serialize()
+                                        .expect("Pegouts to be serialized")
+                                })
+                                .collect::<Vec<_>>()
+                                .concat()
+                                .as_slice(),
+                        )];
 
                         // Prepare the staged entries for insertion into the
                         // database; this ensures that no pegins or pegouts are
@@ -2845,7 +2889,7 @@ impl ABCIDriver {
                             get_staged_pegins_from_pegin_meta(&pegins);
                         let staged_pegouts: Vec<PegoutData> =
                             get_staged_pegouts_from_pegout_data(
-                                &pegouts,
+                                &sealed_block_with_peg.pegouts(),
                                 new_header.number,
                             );
 
@@ -2915,7 +2959,7 @@ impl ABCIDriver {
 
                         reth_db_rw.append_blocks_with_state(
                             vec![sealed_block_with_senders.clone()],
-                            sealed_block_with_context.exec_outcome.clone(),
+                            &sealed_block_with_context.exec_outcome,
                             hashed_state.into_sorted(),
                             trie_updates,
                         )?;
@@ -2929,7 +2973,7 @@ impl ABCIDriver {
 
                         let new_chain =
                             reth_chain_state::NewCanonicalChain::Commit {
-                                new: vec![executed_block],
+                                new: vec![executed_block_with_trie],
                             };
                         self.blockchain_provider
                             .canonical_in_memory_state()
@@ -2940,14 +2984,17 @@ impl ABCIDriver {
                         );
 
                         self.blockchain_provider
-                            .set_canonical_head(new_header.clone());
-                        self.blockchain_provider.set_safe(new_header.clone());
+                            .set_canonical_head(sealed_header.clone());
                         self.blockchain_provider
-                            .set_finalized(new_header.clone());
+                            .set_safe(sealed_header.clone());
+                        self.blockchain_provider.set_finalized(sealed_header);
 
                         self.blockchain_provider
                             .canonical_in_memory_state()
-                            .remove_persisted_blocks(block_height - 1);
+                            .remove_persisted_blocks(NumHash::new(
+                                block_height - 1,
+                                new_header.hash_slow(),
+                            ));
 
                         debug!(
                             "eth block {block_height} committed to the state"
@@ -2964,8 +3011,8 @@ impl ABCIDriver {
                             .notify_canon_state(
                                 CanonStateNotification::Commit {
                                     new: Arc::new(chain),
-                                    pegins: Some(pegins),
-                                    pegouts: Some(pegouts),
+                                    pegins: Some(pegin_bytes),
+                                    pegouts: Some(pegout_bytes),
                                 },
                             );
 
@@ -3089,7 +3136,7 @@ impl ABCIDriver {
 // tokio_runtime().expect("to create runtime");         let task_manager =
 // TaskManager::new(tokio_runtime.handle().clone());         let task_executor =
 // task_manager.executor();         let validator =
-//             
+//
 // TransactionValidationTaskExecutor::eth_builder(storage.chain_spec.
 // inner_arc())                 .with_head_timestamp(0)
 //                 .kzg_settings(EnvKzgSettings::Default)
@@ -3319,7 +3366,7 @@ impl ABCIDriver {
 //         let request = RequestProcessProposal {
 //             txs: vec![ndd_bytes, signed_tx_bytes],
 //             proposer_address:
-// prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice()),            
+// prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice()),
 // time: Some(Timestamp::default()),             hash:
 // prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice()),
 //             ..Default::default()
@@ -3357,7 +3404,7 @@ impl ABCIDriver {
 //         let mut rw_lock = abci_client.block_cache.write().expect("should get
 // lock");         let sealed_block_with_context =
 // rw_lock.cache.pop_newest().expect("to have block").1;         let
-// expected_app_hash = prost::bytes::Bytes::copy_from_slice(             
+// expected_app_hash = prost::bytes::Bytes::copy_from_slice(
 // &sealed_block_with_context.sealed_block_with_peg.block().hash().0,         );
 
 //         let expected_response = ResponseFinalizeBlock {
@@ -3383,7 +3430,7 @@ impl ABCIDriver {
 //         let ndd =
 //             abci_client.non_deterministic_data(RUNTIME_VERSION_V1,
 // None).expect("to have ndd");         let ndd_bytes =
-//             
+//
 // abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect("to
 // serialize ndd");
 
@@ -3421,7 +3468,7 @@ impl ABCIDriver {
 //         s2.set_snapshot_height(100)
 //             .set_snapshot_chunks(30)
 //             .set_snapshot_format(1)
-//             
+//
 // .set_snapshot_hash(prost::bytes::Bytes::from("hash2".as_bytes()));
 
 //         assert_ne!(s1, s2);
