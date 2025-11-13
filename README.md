@@ -2,6 +2,10 @@
 
 A Botanix-compatible Reth client implementation. This project is **not** a fork of Reth, but rather an extension that leverages Reth's powerful `NodeBuilder` API to provide Botanix chain compatibility.
 
+## Note
+
+This repository will supersede the [Macbeth](https://github.com/botanix-labs/Macbeth) repository which is currently deployed to mainnet. This `botanix` repository will be deployed to a new testnet then to mainnet.  This is targeted for Q1 2026. Then the `Macbeth` repository will be deprecated.
+
 ## About
 
 This project aims to bring Reth's high-performance Ethereum client capabilities to the Botanix L2 network. By utilizing Reth's modular architecture and NodeBuilder API, we're building a Botanix-compatible client that maintains compatibility with Reth's ecosystem while adding Botanix-specific features.
