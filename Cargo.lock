@@ -12513,6 +12513,7 @@ dependencies = [
  "reth-rpc-engine-api",
  "reth-rpc-eth-api",
  "reth-stages",
+ "reth-storage-api",
  "reth-tasks",
  "reth-tracing",
  "reth-transaction-pool",

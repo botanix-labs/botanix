@@ -11,10 +11,12 @@ use crate::{
     },
     node::network::BotanixNetworkPrimitives,
 };
+use alloy_consensus::{BlockHeader, Sealable};
 use alloy_primitives::B256;
 use bitcoin::consensus::Encodable;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
+use botanix_authority_peg::peg_contract::{PeginMeta, PegoutWithId};
 use botanix_authority_rsp::RandomSource;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, ConsensusCheckpointRequest, GrpcClientError,
@@ -42,12 +44,13 @@ use reth_network::{
     },
     NetworkHandle,
 };
-use reth_primitives::Header;
+use reth_primitives::{Header, NodePrimitives};
 use reth_provider::{
     BlockReaderIdExt, CanonStateNotification, CanonStateSubscriptions,
     StateProviderFactory,
 };
 use reth_revm::primitives::FixedBytes;
+use reth_storage_api::NodePrimitivesProvider;
 use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 use tendermint_rpc::client::HttpClient;
 use tokio::sync::mpsc::{self, error::SendError};
@@ -90,16 +93,16 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     /// Shared storage to insert aggregate public key
     pub(crate) storage: Storage<RDB, BDB>,
     /// A handle to the `DkgRunnerTask` task. This is only `Some` if no
-    /// aggregate public key is available, and the `start_task` method has hence
-    /// started the DKG process.
+    /// aggregate public key is available, and the `start_task` method has
+    /// hence started the DKG process.
     dkg_task: Option<mpsc::Sender<DkgResponse>>,
     /// Pre-configured data-parser
     compressor: DataParser,
     /// btc server client
     btc_server: BtcServerClient,
-    /// Indicates whether staged headers should be checked by the Frost task and
-    /// submitted to the btc-server to initiate a checkpoint. This is `true` in
-    /// two scenarios:
+    /// Indicates whether staged headers should be checked by the Frost task
+    /// and submitted to the btc-server to initiate a checkpoint. This is
+    /// `true` in two scenarios:
     /// 1. On initial startup.
     /// 2. The connection to the btc-server has been interrupted.
     check_staged_headers: bool,
@@ -124,6 +127,7 @@ where
         + CanonStateSubscriptions
         + Clone
         + 'static,
+    <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader: HeaderExt + Sealable,
     BDB: StagedHeaderReader + StagedHeaderWriter + Clone + 'static,
     Source: RandomSource,
     BtcServerClient: BtcServerExtendedApi + Clone,
@@ -249,8 +253,8 @@ where
                 }
             }
 
-            if (received_healthy_chunks == total_expected_chunks)
-                && is_final_chunk_received
+            if (received_healthy_chunks == total_expected_chunks) &&
+                is_final_chunk_received
             {
                 trace!(target: "consensus::authority::forst_task::send_serialized_compressed_finalized_pegout_ids", "Received all chunks");
             } else {
@@ -267,21 +271,24 @@ where
     /// Handles the canon state commit notification by submitting the pegins and
     /// pegouts to the btc-server and initiating a checkpoint and signing
     /// session, if necessary.
-    async fn handle_canon_state_commit(
+    async fn handle_canon_state_commit<H>(
         &mut self,
         // Note: `header_hash` is the hash of the header that is being
-        // committed. We pass this on such that calling `header.hash_slow()` can
-        // be avoided. Ideally, this is already precomputed when passed on.
+        // committed. We pass this on such that calling `header.hash_slow()`
+        // can be avoided. Ideally, this is already precomputed when
+        // passed on.
         header_hash: B256,
-        header: &Header,
+        header: &H,
         pegins: Vec<Utxo>,
         pending_pegouts: Vec<PendingPegout>,
-    ) {
+    ) where
+        H: BlockHeader + Sealable + HeaderExt,
+    {
         debug_assert_eq!(header_hash, header.hash_slow());
 
         info!(
             target: "consensus::authority::frost_task::handle_canon_state_commit",
-            "Handling canon state commit for block number {:?}", header.number
+            "Handling canon state commit for block number {:?}", header.number()
         );
 
         let edh = match header.deserialize_extra_data_header() {
@@ -377,7 +384,8 @@ where
 
         // Check if this is an epoch block and if we are the coordinator. If
         // yes, initiate signing session.
-        if !is_poa_epoch(header.number, self.storage.chain_spec.epoch_length) {
+        if !is_poa_epoch(header.number(), self.storage.chain_spec.epoch_length)
+        {
             return;
         }
 
@@ -612,44 +620,65 @@ where
             }
 
             // Receive canon state notifications
-            // while let Ok(notification) = canon_state_notifs.try_recv() {
-            //     info!(target: "consensus::authority::frost_task::start_task", "canon state
-            // notification received for block number {:?}", notification.tip().number);
-            //     match notification {
-            //         CanonStateNotification::Commit { new, pegins, pegouts } => {
-            //             let tip = new.tip();
-            //             let header_hash = tip.hash();
-            //             let header = tip.header();
+            while let Ok(notification) = canon_state_notifs.try_recv() {
+                info!(target: "consensus::authority::frost_task::start_task", "canon state
+            notification received for block number {:?}", notification.tip().number());
+                match notification {
+                    CanonStateNotification::Commit { new, pegins, pegouts } => {
+                        let tip = new.tip();
+                        let header_hash = tip.hash();
+                        let header = tip.header();
 
-            //             // Convert pegins into correct format
-            //             let pegins = pegins.as_ref().map_or_else(Vec::new, |pegins| {
-            //                 get_utxos_from_pegin_meta(pegins.as_slice())
-            //             });
+                        // Convert pegins into correct format
+                        let pegins =
+                            pegins.as_ref().map_or_else(Vec::new, |pegins| {
+                                let deserialized = pegins.iter().filter_map(|bytes| {
+                                    match PeginMeta::deserialize(bytes) {
+                                        Ok((pegin, _)) => Some(pegin),
+                                        Err(e) => {
+                                            error!("Failed to deserialize pegin: {:?}", e);
+                                            None
+                                        }
+                                    }
+                                }).collect::<Vec<_>>();
+                                get_utxos_from_pegin_meta(deserialized.as_slice())
+                            });
 
-            //             // Convert pegouts into correct format
-            //             let pending_pegouts = pegouts.as_ref().map_or_else(Vec::new, |pegouts| {
-            //                 get_pending_pegouts_from_pegout_data(
-            //                     pegouts,
-            //                     tip.number,
-            //                     tip.header().timestamp,
-            //                 )
-            //             });
+                        // Convert pegouts into correct format
+                        let pending_pegouts =
+                            pegouts.as_ref().map_or_else(Vec::new, |pegouts| {
+                                let deserialized  = pegouts.iter().filter_map(|bytes| {
+                                    match PegoutWithId::deserialize(bytes) {
+                                        Ok(pegout) => Some(pegout),
+                                        Err(e) => {
+                                            error!("Failed to deserialize pegout: {:?}", e);
+                                            None
+                                        }
+                                    }
+                                }).collect::<Vec<_>>();
+                                get_pending_pegouts_from_pegout_data(
+                                    &deserialized,
+                                    tip.number(),
+                                    tip.header().timestamp(),
+                                )
+                            });
 
-            //             self.handle_canon_state_commit(
-            //                 header_hash,
-            //                 header,
-            //                 pegins,
-            //                 pending_pegouts,
-            //             )
-            //             .await;
-            //         }
-            //         _ => {
-            //             // Ignore other notifications
-            //         }
-            //     }
-            // }
+                        self.handle_canon_state_commit(
+                            header_hash,
+                            header,
+                            pegins,
+                            pending_pegouts,
+                        )
+                        .await;
+                    }
+                    _ => {
+                        // Ignore other notifications
+                    }
+                }
+            }
 
-            // receive over a channel message from other peers and update our state machine
+            // receive over a channel message from other peers and update our
+            // state machine
             while let Ok(message_context) = peer_messages_rx.try_recv() {
                 let peer_message = message_context.message;
                 let peer_id = message_context.peer_id;
@@ -667,7 +696,8 @@ where
                         continue;
                     }
                     PeerMessageResponse::WalletState(response) => {
-                        // Only handle response if it has no state: responses with state are also
+                        // Only handle response if it has no state: responses
+                        // with state are also
                         // sent to WalletStateSyncEngine::sync_wallet_state
                         // which updates the wallet state. This code block
                         // handles sending our wallet state to a peer
@@ -962,7 +992,8 @@ where
 
         loop {
             match tokio::time::timeout(timeout, self.rx.recv()).await {
-                // Received a DKG payload from the frost task, forwarding to btc-server.
+                // Received a DKG payload from the frost task, forwarding to
+                // btc-server.
                 Ok(Some(dkg)) => {
                     let req = botanix_btc_server_client::DkgPayload {
                         sender: dkg.sender,
@@ -987,7 +1018,8 @@ where
                     {
                         self.metrics.created_agg_pub_keys.increment(1);
 
-                        // decode the public key and assign it to the self variable
+                        // decode the public key and assign it to the self
+                        // variable
                         let public_key_package =
                             secp256k1::PublicKey::from_str(&resp.publickey)
                                 .expect("invalid aggregated public key");
@@ -996,7 +1028,8 @@ where
                         storage.aggregate_public_key = Some(public_key_package);
                     }
 
-                    // Update timeout at which point the btc-server should be called again.
+                    // Update timeout at which point the btc-server should be
+                    // called again.
                     timeout = Duration::from_millis(resp.timeout);
 
                     // Gossip the payloads to all frost peers.
@@ -1010,7 +1043,8 @@ where
                     info!(target: "consensus::authority::frost_task::DkgRunnerTask", "Received shutdown signal");
                     break;
                 }
-                // Timeout triggered, calling the btc-server to generate new payloads.
+                // Timeout triggered, calling the btc-server to generate new
+                // payloads.
                 Err(_) => {
                     warn!(target: "consensus::authority::frost_task::DkgRunnerTask", "DKG timeout triggered");
 
@@ -1027,7 +1061,8 @@ where
                         }
                     };
 
-                    // Update timeout at which point the btc-server should be called again.
+                    // Update timeout at which point the btc-server should be
+                    // called again.
                     timeout = Duration::from_millis(resp.timeout);
 
                     if self.gossip_payloads(resp.payloads).await.is_err() {
