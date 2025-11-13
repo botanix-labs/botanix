@@ -12432,6 +12432,7 @@ dependencies = [
  "botanix-data-parser",
  "botanix-evm",
  "botanix-fs-util",
+ "botanix-primitives",
  "botanix-rpc-client",
  "botanix-rpc-config",
  "botanix-rpc-types",
