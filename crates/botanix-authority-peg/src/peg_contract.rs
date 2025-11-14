@@ -9,7 +9,7 @@ use bitcoin::{
     },
     constants::COINBASE_MATURITY,
     merkle_tree::PartialMerkleTree,
-    TxOut,
+    Amount, Network, TxOut,
 };
 use btcserverlib::{
     pegout_id::PegoutId,
@@ -96,7 +96,8 @@ impl PeginData {
                     "invalid merkle proof: inclusion",
                 ));
             }
-            // And check that the merkle proof is indeed for the first header provided.
+            // And check that the merkle proof is indeed for the first header
+            // provided.
             if pegin.block_headers[0].merkle_root != root {
                 return Err(PeginDataError::Invalid(
                     "merkle proof and block header mismatch",
@@ -127,11 +128,11 @@ impl PeginData {
                 return Err(PeginDataError::Invalid("invalid script pubkey"));
             }
 
-            let output_value =
-                bitcoin::Amount::from_sat(output.value.to_sat()).to_wei();
+            let output_value = Amount::from_sat(output.value.to_sat()).to_wei();
             aggregate_value += output_value;
 
-            // check that the user provided an actual valid block header sequence
+            // check that the user provided an actual valid block header
+            // sequence
             let mut iter = pegin.block_headers.iter().peekable();
             while let Some(header) = iter.next() {
                 if let Some(next) = iter.peek() {
@@ -149,16 +150,17 @@ impl PeginData {
                 .iter()
                 .rev()
                 .skip_while(|h| h.block_hash() != commit_hash)
-                .count()
-                - 1; // minus one for the commitment itself
-                     // the latest block height minus the position of the user block in the list is the
-                     // height of the user block
+                .count() -
+                1; // minus one for the commitment itself
+                   // the latest block height minus the position of the user block in
+                   // the list is the height of the user block
             if bitcoin_commitment.1 - (diff as u32) != self.bitcoin_block_height
             {
                 return Err(PeginDataError::InvalidBitcoinBlockHeight);
             }
 
-            // If any of the inputs are coinbase and the tx is not coinbase, return an error
+            // If any of the inputs are coinbase and the tx is not coinbase,
+            // return an error
             if pegin.tx.is_coinbase() && (diff as u32) < COINBASE_MATURITY {
                 return Err(PeginDataError::Invalid(
                     "spending non-mature coinbase",
@@ -183,10 +185,10 @@ pub struct PeginMetaV0 {
     pub address: Address,
     /// Aggregate public key the funds were sent to
     pub aggregate_publickey: secp256k1::PublicKey,
-    /// Bitcoin block headers starting with the block the pegin is confirmed in,
-    /// going up until at least the mainchain commitment or beyond.
-    /// NB We need to allow to go beyond because between the user crafting the tx and
-    /// it getting confirmed, the commitment might update.
+    /// Bitcoin block headers starting with the block the pegin is confirmed
+    /// in, going up until at least the mainchain commitment or beyond.
+    /// NB We need to allow to go beyond because between the user crafting the
+    /// tx and it getting confirmed, the commitment might update.
     pub block_headers: Vec<Header>,
     /// Pegin tx
     pub tx: bitcoin::Transaction,
@@ -303,13 +305,7 @@ impl PeginMetaV1 {
             bytes.read_slice(&mut hash)?;
             B256::from_slice(&hash)
         };
-        Ok((
-            Self {
-                inner,
-                ref_block_hash,
-            },
-            proofs_size - bytes.len(),
-        ))
+        Ok((Self { inner, ref_block_hash }, proofs_size - bytes.len()))
     }
 
     /// Get the txout for the pegin
@@ -449,8 +445,8 @@ pub enum PeginDataError {
     /// Frost related error
     #[error("frost error: {0}")]
     FrostError(frost::Error),
-    /// Claimed length of block headers is greater than what could fit in the remaining bytes of
-    /// the message.
+    /// Claimed length of block headers is greater than what could fit in the
+    /// remaining bytes of the message.
     #[error("invalid bitcoin block header. Claimed = {claimed}, remaining = {remaining_bytes}")]
     InvalidLength {
         /// the number of block headers claimed in the message
@@ -461,7 +457,8 @@ pub enum PeginDataError {
     /// Invalid merkle block: failed to extract matching Txid's.
     #[error("invalid merkle block: {0}")]
     InvalidMerkleBlock(#[from] bitcoin::merkle_tree::MerkleBlockError),
-    /// Error when the number of block headers exceeds the maximum allowable limit.
+    /// Error when the number of block headers exceeds the maximum allowable
+    /// limit.
     #[error("too many bitcoin block headers {0}")]
     TooManyBlockHeaders(u64),
 }
@@ -477,20 +474,57 @@ impl From<bitcoin::io::Error> for PeginDataError {
 /// Error type for pegout data
 #[derive(Debug, Error)]
 pub enum PegoutDataError {
-    /// Invalid pegout proof
-    #[error("invalid pegout proof")]
+    /// Invalid pegout data
+    #[error("invalid pegout")]
     Invalid(&'static str, ethers::types::U256),
+    /// Invalid version
+    #[error("invalid version")]
+    InvalidVersion(#[from] bitcoin::consensus::encode::Error),
+    /// Wrong version
+    #[error("wrong version: {0}")]
+    WrongVersion(u8),
+    /// Invalid amount
+    #[error("invalid amount")]
+    InvalidAmount(#[from] bitcoin::io::Error),
+    /// Invalid address length encoding
+    #[error("invalid address length")]
+    InvalidAddressLength,
+    /// Insufficient bytes for address
+    #[error("insufficient bytes for address")]
+    InsufficientBytesForAddress,
+    /// Invalid address UTF-8 encoding
+    #[error("invalid address UTF-8")]
+    InvalidAddressUtf8,
+    /// Invalid address format
+    #[error("invalid address format")]
+    InvalidAddressFormat,
+    /// Invalid network byte
+    #[error("invalid network byte")]
+    InvalidNetworkByte,
+    /// Unknown network value
+    #[error("unknown network")]
+    UnknownNetwork,
+    /// Address not valid for network
+    #[error("address not valid for network")]
+    AddressNotValidForNetwork,
+    /// Insufficient bytes for pegout id
+    #[error("insufficient bytes for pegout id")]
+    InsufficientBytesForPegoutId,
+    /// Invalid pegout id
+    #[error("invalid pegout id")]
+    InvalidPegoutId,
 }
 
 /// Pegout data structure
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PegoutData {
     /// Amount to be pegged out
-    pub amount: bitcoin::Amount,
+    pub amount: Amount,
     /// Destination address
-    pub destination: bitcoin::Address,
+    pub destination:
+        bitcoin::address::Address<bitcoin::address::NetworkChecked>,
     /// Network the pegout should be performed on
-    pub network: bitcoin::Network,
+    pub network: Network,
 }
 
 /// Pegout with `PegoutId` data structure
@@ -502,13 +536,77 @@ pub struct PegoutWithId {
     pub id: PegoutId,
 }
 
+impl PegoutWithId {
+    /// Serialize a pegout with its id
+    pub fn serialize(&self) -> Result<Vec<u8>, PegoutDataError> {
+        let mut bytes = Vec::new();
+        bytes.push(PegoutData::version());
+        self.data.amount.consensus_encode(&mut bytes)?;
+        // Encode destination address as string
+        let addr_str = self.data.destination.to_string();
+        let addr_bytes = addr_str.as_bytes();
+        btcencode::VarInt(addr_bytes.len() as u64)
+            .consensus_encode(&mut bytes)?;
+        bytes.extend_from_slice(addr_bytes);
+        // Encode network
+        bytes.push(self.data.network as u8);
+        // Encode pegout id
+        bytes.extend_from_slice(&self.id.as_bytes());
+        Ok(bytes)
+    }
+
+    /// Deserialize bytes into a pegout with id
+    pub fn deserialize(mut bytes: &[u8]) -> Result<Self, PegoutDataError> {
+        // Decode and validate version
+        let version = u8::consensus_decode(&mut bytes)?;
+        if version != PegoutData::version() {
+            return Err(PegoutDataError::WrongVersion(version));
+        }
+        // Decode amount
+        let amount = Amount::consensus_decode(&mut bytes)?;
+        // Decode destination address
+        let addr_len =
+            btcencode::VarInt::consensus_decode(&mut bytes)?.0 as usize;
+        let mut addr_bytes = vec![0u8; addr_len];
+        bytes
+            .read_slice(&mut addr_bytes)
+            .map_err(|_| PegoutDataError::InsufficientBytesForAddress)?;
+        let addr_str = std::str::from_utf8(&addr_bytes)
+            .map_err(|_| PegoutDataError::InvalidAddressUtf8)?;
+        let unchecked_addr = bitcoin::address::Address::from_str(addr_str)
+            .map_err(|_| PegoutDataError::InvalidAddressFormat)?;
+        // Decode network
+        let network_byte = u8::consensus_decode(&mut bytes)?;
+        let network = match network_byte {
+            0 => Network::Bitcoin,
+            1 => Network::Testnet,
+            2 => Network::Signet,
+            3 => Network::Regtest,
+            _ => return Err(PegoutDataError::UnknownNetwork),
+        };
+        // Verify address is valid for the network
+        let destination = unchecked_addr
+            .require_network(network)
+            .map_err(|_| PegoutDataError::AddressNotValidForNetwork)?;
+        // Decode pegout id
+        let mut id_bytes = [0u8; 36];
+        bytes
+            .read_slice(&mut id_bytes)
+            .map_err(|_| PegoutDataError::InsufficientBytesForPegoutId)?;
+        let id = PegoutId::from_bytes(&id_bytes)
+            .map_err(|_| PegoutDataError::InvalidPegoutId)?;
+
+        Ok(Self { data: PegoutData { amount, destination, network }, id })
+    }
+}
+
 impl PegoutData {
     /// Create a new pegout data
     pub fn new(
-        amount: bitcoin::Amount,
+        amount: Amount,
         eth_amount: ethers::types::U256,
         address: String,
-        btc_network: bitcoin::Network,
+        btc_network: Network,
     ) -> Result<Self, PegoutDataError> {
         // Check for valid address
         let destination: bitcoin::address::Address<
@@ -776,10 +874,7 @@ mod tests {
             output: vec![tx_out],
         };
 
-        let outpoint = OutPoint {
-            txid: tx.compute_txid(),
-            vout: 0,
-        };
+        let outpoint = OutPoint { txid: tx.compute_txid(), vout: 0 };
 
         let txids = vec![
             // Another random txid
@@ -793,9 +888,8 @@ mod tests {
             let matches = vec![false, true];
             PartialMerkleTree::from_txids(&txids, &matches)
         };
-        let merkle_root = merkle_proof
-            .extract_matches(&mut tx_matches, &mut vouts)
-            .unwrap();
+        let merkle_root =
+            merkle_proof.extract_matches(&mut tx_matches, &mut vouts).unwrap();
 
         let header = Header {
             version: Version::default(),
@@ -806,12 +900,7 @@ mod tests {
             nonce: nonce.unwrap_or_default(),
         };
 
-        HeaderMetadata {
-            header,
-            merkle_proof,
-            outpoint,
-            tx,
-        }
+        HeaderMetadata { header, merkle_proof, outpoint, tx }
     }
 
     fn pegin_data_setup(
@@ -844,23 +933,21 @@ mod tests {
     fn random_pk() -> secp256k1::PublicKey {
         let secp = secp256k1::Secp256k1::new();
         let mut rng = rand::thread_rng();
-        secp256k1::PublicKey::from_secret_key(
-            &secp,
-            &secp256k1::SecretKey::new(&mut rng),
-        )
+        let mut secret_key_bytes = [0u8; 32];
+        use rand::RngCore;
+        rng.fill_bytes(&mut secret_key_bytes);
+        let secret_key =
+            secp256k1::SecretKey::from_byte_array(&secret_key_bytes)
+                .expect("valid secret key");
+        secp256k1::PublicKey::from_secret_key(&secp, &secret_key)
     }
 
     #[test]
     fn validate_pegin_data() {
         let pk = random_pk();
         let pegin_data = pegin_data_setup(None, None, &pk);
-        let header = pegin_data
-            .meta
-            .first()
-            .unwrap()
-            .block_headers()
-            .first()
-            .unwrap();
+        let header =
+            pegin_data.meta.first().unwrap().block_headers().first().unwrap();
 
         let aggregate_amount =
             pegin_data.validate(&(*header, 1_u32), &pk).expect("valid");
@@ -874,13 +961,8 @@ mod tests {
     fn validate_pegin_data_with_incorrect_version() {
         let pk = random_pk();
         let pegin_data = pegin_data_setup(Some(2_u32), None, &pk);
-        let header = pegin_data
-            .meta
-            .first()
-            .unwrap()
-            .block_headers()
-            .first()
-            .unwrap();
+        let header =
+            pegin_data.meta.first().unwrap().block_headers().first().unwrap();
 
         pegin_data.validate(&(*header, 1_u32), &pk).unwrap();
     }
@@ -1137,18 +1219,11 @@ mod tests {
     fn validate_pegin_data_with_different_pubkey() {
         let pk = random_pk();
         let pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data
-            .meta
-            .first()
-            .unwrap()
-            .block_headers()
-            .first()
-            .unwrap();
+        let header =
+            *pegin_data.meta.first().unwrap().block_headers().first().unwrap();
         let different_pk = random_pk();
 
-        pegin_data
-            .validate(&(header, 1_u32), &different_pk)
-            .unwrap();
+        pegin_data.validate(&(header, 1_u32), &different_pk).unwrap();
     }
 
     #[test]
@@ -1156,13 +1231,8 @@ mod tests {
     fn validate_pegin_data_with_invalid_block_sequence() {
         let pk = random_pk();
         let mut pegin_data = pegin_data_setup(None, None, &pk);
-        let header = *pegin_data
-            .meta
-            .first()
-            .unwrap()
-            .block_headers()
-            .first()
-            .unwrap();
+        let header =
+            *pegin_data.meta.first().unwrap().block_headers().first().unwrap();
 
         let second_header = bitcoin::block::Header {
             version: header.version,
@@ -1280,10 +1350,7 @@ mod tests {
             input: vec![coinbase_tx_in],
             output: vec![tx_out],
         };
-        let outpoint = OutPoint {
-            txid: tx.compute_txid(),
-            vout: 0,
-        };
+        let outpoint = OutPoint { txid: tx.compute_txid(), vout: 0 };
         let txids = vec![
             // Another random txid
             Txid::from_str("4fccd63b48697a66ae4155b183f7595694354def0345ac4b950a5765a7b90526")
@@ -1296,9 +1363,8 @@ mod tests {
             let matches = vec![false, true];
             PartialMerkleTree::from_txids(&txids, &matches)
         };
-        let merkle_root = merkle_proof
-            .extract_matches(&mut tx_matches, &mut vouts)
-            .unwrap();
+        let merkle_root =
+            merkle_proof.extract_matches(&mut tx_matches, &mut vouts).unwrap();
         let header = Header {
             version: Version::default(),
             prev_blockhash: BlockHash::all_zeros(),
@@ -1333,7 +1399,8 @@ mod tests {
             PeginDataError::Invalid("spending non-mature coinbase")
         ));
 
-        // Create a chain of 100 blocks with the coinbase tx in the last 100 blocks
+        // Create a chain of 100 blocks with the coinbase tx in the last 100
+        // blocks
         let mut headers = vec![header];
         for i in 1..101 {
             let mut header = create_header_metadata(None, &pk).header;
@@ -1360,5 +1427,152 @@ mod tests {
 
         let res = pegin_data.validate(&(headers[100], 100_u32), &pk).unwrap();
         assert_eq!(res, amount);
+    }
+
+    #[test]
+    fn pegout_with_id_serialize_deserialize() {
+        use bitcoin::Network;
+
+        // Create a pegout with id
+        let amount = Amount::from_sat(100);
+        let address_str =
+            "bc1p55du6q3lg7m3mywdtazfug27smjwnj2zauspw4vpcndtmxmeuteqsk4229";
+        let unchecked_addr = bitcoin::address::Address::from_str(address_str)
+            .expect("valid address");
+        let destination = unchecked_addr
+            .require_network(Network::Bitcoin)
+            .expect("valid network");
+
+        let pegout_data =
+            PegoutData { amount, destination, network: Network::Bitcoin };
+
+        let pegout_id = PegoutId::new([42u8; 32], 123);
+
+        let pegout_with_id = PegoutWithId { data: pegout_data, id: pegout_id };
+
+        // Serialize
+        let serialized =
+            pegout_with_id.serialize().expect("serialization should succeed");
+
+        // Deserialize
+        let deserialized = PegoutWithId::deserialize(&serialized)
+            .expect("deserialization should succeed");
+
+        // Verify all fields match
+        assert_eq!(deserialized.data.amount, pegout_with_id.data.amount);
+        assert_eq!(
+            deserialized.data.destination,
+            pegout_with_id.data.destination
+        );
+        assert_eq!(deserialized.data.network, pegout_with_id.data.network);
+        assert_eq!(deserialized.id.txid, pegout_with_id.id.txid);
+        assert_eq!(deserialized.id.idx, pegout_with_id.id.idx);
+    }
+
+    #[test]
+    fn pegout_with_id_serialize_deserialize_testnet() {
+        use bitcoin::Network;
+
+        let amount = Amount::from_sat(5000);
+        let address_str =
+            "tb1pcahg4rfz2378gp6f7fumn483nw4yew7yyswnm0vhplgl4ufq8hmsglyn87";
+        let unchecked_addr = bitcoin::address::Address::from_str(address_str)
+            .expect("valid address");
+        let destination = unchecked_addr
+            .require_network(Network::Testnet)
+            .expect("valid network");
+
+        let pegout_data =
+            PegoutData { amount, destination, network: Network::Testnet };
+
+        let pegout_id = PegoutId::new([1u8; 32], 999);
+
+        let pegout_with_id = PegoutWithId { data: pegout_data, id: pegout_id };
+
+        let serialized =
+            pegout_with_id.serialize().expect("serialization should succeed");
+        let deserialized = PegoutWithId::deserialize(&serialized)
+            .expect("deserialization should succeed");
+
+        assert_eq!(deserialized.data.amount, pegout_with_id.data.amount);
+        assert_eq!(
+            deserialized.data.destination,
+            pegout_with_id.data.destination
+        );
+        assert_eq!(deserialized.data.network, pegout_with_id.data.network);
+        assert_eq!(deserialized.id.txid, pegout_with_id.id.txid);
+        assert_eq!(deserialized.id.idx, pegout_with_id.id.idx);
+    }
+
+    #[test]
+    fn pegout_with_id_deserialize_invalid_version() {
+        let data = vec![1u8]; // Invalid version
+        let result = PegoutWithId::deserialize(&data);
+        assert!(matches!(result, Err(PegoutDataError::WrongVersion(1u8))));
+    }
+
+    #[test]
+    fn pegout_with_id_deserialize_insufficient_bytes() {
+        let data = vec![0u8]; // Only version byte, nothing else
+        let result = PegoutWithId::deserialize(&data);
+        assert!(matches!(result, Err(PegoutDataError::InvalidAmount(_))));
+    }
+
+    #[test]
+    fn pegout_with_id_deserialize_invalid_address_utf8() {
+        use bitcoin::consensus::encode::Encodable;
+
+        let mut data = Vec::new();
+        0u8.consensus_encode(&mut data).unwrap(); // version
+        Amount::from_sat(100).consensus_encode(&mut data).unwrap(); // amount
+
+        // Add invalid UTF-8 for address
+        btcencode::VarInt(3).consensus_encode(&mut data).unwrap(); // address length
+        data.extend_from_slice(&[0xFF, 0xFE, 0xFD]); // invalid UTF-8
+
+        1u8.consensus_encode(&mut data).unwrap(); // network (Bitcoin)
+
+        let result = PegoutWithId::deserialize(&data);
+        assert!(matches!(result, Err(PegoutDataError::InvalidAddressUtf8)));
+    }
+
+    #[test]
+    fn pegout_with_id_deserialize_invalid_address_format() {
+        use bitcoin::consensus::encode::Encodable;
+
+        let mut data = Vec::new();
+        0u8.consensus_encode(&mut data).unwrap(); // version
+        Amount::from_sat(100).consensus_encode(&mut data).unwrap(); // amount
+
+        let invalid_addr = "not_a_valid_address";
+        btcencode::VarInt(invalid_addr.len() as u64)
+            .consensus_encode(&mut data)
+            .unwrap();
+        data.extend_from_slice(invalid_addr.as_bytes());
+
+        0u8.consensus_encode(&mut data).unwrap(); // network (Bitcoin)
+
+        let result = PegoutWithId::deserialize(&data);
+        assert!(matches!(result, Err(PegoutDataError::InvalidAddressFormat)));
+    }
+
+    #[test]
+    fn pegout_with_id_deserialize_unknown_network() {
+        use bitcoin::consensus::encode::Encodable;
+
+        let mut data = Vec::new();
+        0u8.consensus_encode(&mut data).unwrap(); // version
+        Amount::from_sat(100).consensus_encode(&mut data).unwrap(); // amount
+
+        let address_str = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
+        btcencode::VarInt(address_str.len() as u64)
+            .consensus_encode(&mut data)
+            .unwrap();
+        data.extend_from_slice(address_str.as_bytes());
+
+        99u8.consensus_encode(&mut data).unwrap(); // invalid network byte
+
+        let result = PegoutWithId::deserialize(&data);
+        assert!(matches!(result, Err(PegoutDataError::UnknownNetwork)));
     }
 }

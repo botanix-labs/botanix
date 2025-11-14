@@ -107,6 +107,7 @@ botanix-consensus-common.workspace = true
 botanix-data-parser.workspace = true
 botanix-evm = { workspace = true }
 botanix-fs-util.workspace = true
+botanix-primitives.workspace = true
 botanix-rpc-client.workspace = true
 botanix-rpc-config.workspace = true
 botanix-rpc-types.workspace = true
@@ -196,10 +197,12 @@ reth-payload-primitives.workspace = true
 reth-primitives.workspace = true
 reth-primitives-traits.workspace = true
 reth-provider.workspace = true
+reth-prune-types ={ workspace = true }
 reth-revm.workspace = true
 reth-rpc-engine-api.workspace = true
 reth-rpc-eth-api.workspace = true
 reth-stages.workspace = true
+reth-storage-api.workspace = true
 reth-tasks = { workspace = true }
 reth-tracing.workspace = true
 reth-transaction-pool = { workspace = true, features = ["test-utils"] }

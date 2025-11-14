@@ -1,12 +1,15 @@
-//! The purpose of this module is to provide a bridge between the CometBFT and the EVM application
-//! state
+//! The purpose of this module is to provide a bridge between the CometBFT and
+//! the EVM application state
 use alloy_consensus::BlockHeader;
-use alloy_eips::Encodable2718;
+use alloy_eips::{Encodable2718, NumHash};
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
 use botanix_storage::models::RuntimeVersion;
+use reth_chain_state::{
+    ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
+};
 use reth_db::DatabaseEnv;
 use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
@@ -14,6 +17,7 @@ use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_types::Block;
 use reth_primitives_traits::Block as BlockTrait;
 use reth_trie::updates::TrieUpdates;
+use reth_trie_common::KeccakKeyHasher;
 use std::{
     error::Error,
     io,
@@ -22,22 +26,23 @@ use std::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use alloy_primitives::{Address, BlockHash, BlockNumber, B256};
-use alloy_rpc_types_engine::PayloadAttributes;
+use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, B256};
+use alloy_rpc_types_engine::{ForkchoiceState, PayloadAttributes};
 use alloy_rpc_types_eth::BlockId;
 use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
-use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
 use botanix_consensus_common::utils::unix_timestamp;
 use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
+use reth_chain_state::CanonStateNotification;
 use reth_consensus::{Consensus, InvalidAggregatedPublicKeyError};
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
-    providers::BlockchainProvider, BlockReaderIdExt, CanonChainTracker,
-    ExecutionOutcome, ProviderError, ProviderFactory, StateProviderFactory,
+    providers::BlockchainProvider, BlockReaderIdExt, BlockWriter,
+    CanonChainTracker, Chain, ExecutionOutcome, ProviderError, ProviderFactory,
+    StateProviderFactory,
 };
 use reth_revm::primitives::FixedBytes;
 use reth_tasks::{TaskExecutor, TaskSpawner};
@@ -64,15 +69,18 @@ use crate::{
     consensus::comet_bft::non_deterministic_data::{
         NonDeterministicData, RUNTIME_VERSION_GENESIS,
     },
-    node::{consensus::BotanixConsensus, BotanixNode},
-    BotanixBlock,
+    node::{
+        consensus::BotanixConsensus, primitives::BotanixBlock, BotanixNode,
+    },
 };
 
 /// Runtime version 0.1 that Botanix launched with.
 pub const RUNTIME_VERSION_V1: RuntimeVersion = RUNTIME_VERSION_GENESIS;
-/// Runtime version 0.2 that introduced a minimum base fee per gas of 0.005 Gwei.
+/// Runtime version 0.2 that introduced a minimum base fee per gas of 0.005
+/// Gwei.
 pub const RUNTIME_VERSION_V2: RuntimeVersion = RuntimeVersion::new(0, 2);
-/// Runtime version 0.3 that reduced the minimum base fee per gas to 0.0005 Gwei.
+/// Runtime version 0.3 that reduced the minimum base fee per gas to 0.0005
+/// Gwei.
 pub const RUNTIME_VERSION_V3: RuntimeVersion = RuntimeVersion::new(0, 3);
 
 /// The floor base fee for runtime version 0.2
@@ -96,13 +104,15 @@ enum SnapshotOfferResult {
     Unknown = 0, // Unknown result, abort all snapshot restoration
     Accept = 1,  // Snapshot is accepted, start applying chunks.
     #[allow(dead_code)]
-    Abort = 2, // Abort snapshot restoration, and don't try any other snapshots.
+    Abort = 2, /* Abort snapshot restoration, and don't try any other
+                  * snapshots. */
     #[allow(dead_code)]
     Reject = 3, // Reject this specific snapshot, try others.
     #[allow(dead_code)]
     RejectFormat = 4, // Reject all snapshots with this `format`, try others.
     #[allow(dead_code)]
-    RejectSender = 5, // Reject all snapshots from all senders of this snapshot, try others.
+    RejectSender = 5, /* Reject all snapshots from all senders of this
+                       * snapshot, try others. */
 }
 
 /// Apply Snapshot Results
@@ -514,8 +524,8 @@ where
             snapshot_format,
             block_fee_recipient_address,
             blockchain_db,
-            is_testnet: storage.chain_spec.inner().chain.id()
-                == BOTANIX_TESTNET_CHAIN_ID,
+            is_testnet: storage.chain_spec.inner().chain.id() ==
+                BOTANIX_TESTNET_CHAIN_ID,
         }
     }
 
@@ -545,7 +555,8 @@ where
         let payload_attributes = PayloadAttributes {
             // Attributes here dont really matter
             // We just want to build a payload with the best txs
-            timestamp: unix_timestamp(), /* We override this with timestamp from CometBFT during
+            timestamp: unix_timestamp(), /* We override this with timestamp
+                                          * from CometBFT during
                                           * build_and_execute() */
             prev_randao: FixedBytes::<32>::random(),
             suggested_fee_recipient: Address::ZERO,
@@ -610,23 +621,16 @@ where
             Ok(_) => {}
             Err(e) => {
                 error!("Error in validate_block_pre_execution(): {:?}", e);
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         }
 
         // standard header validation
-        match self
-            .botanix_consensus
-            .validate_header(&block.sealed_header())
-        {
+        match self.botanix_consensus.validate_header(&block.sealed_header()) {
             Ok(_) => {}
             Err(e) => {
                 error!("Error in validate_header(): {:?}", e);
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         }
 
@@ -635,9 +639,7 @@ where
             Ok(pk) => pk,
             Err(e) => {
                 error!("Error getting aggregate public key: {:?}", e);
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         };
 
@@ -649,14 +651,10 @@ where
             Ok(_) => {}
             Err(e) => {
                 error!("Error in validate_header_standalone(): {:?}", e);
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         }
-        return ResponseProcessProposal {
-            status: VERIFY_REJECT,
-        };
+        return ResponseProcessProposal { status: VERIFY_REJECT };
     }
 
     pub(crate) fn aggregate_public_key(
@@ -704,10 +702,8 @@ where
         total_chunks: u64,
         format: u64,
     ) -> Result<u64, SnapshotManagerError> {
-        let snapshot_sync_id = self
-            .storage
-            .botanix_database_factory
-            .create_new_snapshot_sync(
+        let snapshot_sync_id =
+            self.storage.botanix_database_factory.create_new_snapshot_sync(
                 block_id,
                 snapshot_hash,
                 total_chunks,
@@ -751,8 +747,8 @@ where
         + 'static,
 {
     // docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#init_chain
-    // Panic! on an error. Proceeding when the chain can't be initialized will lead
-    // to unexpected behavior.
+    // Panic! on an error. Proceeding when the chain can't be initialized will
+    // lead to unexpected behavior.
     #[instrument(level = "trace", ret, skip(self, request))]
     fn init_chain(&self, request: RequestInitChain) -> ResponseInitChain {
         let execution_start_time = std::time::Instant::now();
@@ -788,10 +784,7 @@ where
             "Chain {cometbft_chain_id} is initialized in {execution_time} secs",
         );
 
-        ResponseInitChain {
-            app_hash,
-            ..Default::default()
-        }
+        ResponseInitChain { app_hash, ..Default::default() }
     }
 
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#info
@@ -867,8 +860,9 @@ where
                     debug!("Historical syncing ongoing. No snapshots available yet ...");
                     return ResponseListSnapshots { snapshots: vec![] };
                 }
-                // filter out the snapshot that is the same as the current block as we might not be
-                // ready having all the chunks yet
+                // filter out the snapshot that is the same as the current block
+                // as we might not be ready having all the
+                // chunks yet
                 let resp = snapshots
                     .into_iter()
                     .filter(|s| {
@@ -919,86 +913,91 @@ where
         // let Some(snapshot) = request.snapshot else {
         //     error!("received empty snapshot");
 
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Unknown as i32 };
-        // };
+        //     return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Unknown as i32 }; };
 
         // tracing::Span::current().record("height", snapshot.height);
 
         // // ensure no historical sync is ongoing
-        // let snapshot_manager_state_lock = match self.snapshot_manager_state_lock.read() {
+        // let snapshot_manager_state_lock = match
+        // self.snapshot_manager_state_lock.read() {
         //     Ok(snapshot_manager_state_lock) => snapshot_manager_state_lock,
         //     Err(e) => {
         //         error!("Error getting a snapshot state lock: {:?}", e);
-        //         return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        //     }
+        //         return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 };     }
         // };
 
         // if snapshot_manager_state_lock.is_syncing_history() {
         //     drop(snapshot_manager_state_lock);
-        //     info!("Historical syncing ongoing. No snapshots available yet ...");
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        // }
+        //     info!("Historical syncing ongoing. No snapshots available yet
+        // ...");     return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 }; }
 
-        // // some other node is offering us a snapshot - we need to validate here if we want to
-        // accept // it
+        // // some other node is offering us a snapshot - we need to validate
+        // here if we want to accept // it
         // if request.app_hash.is_empty() {
-        //     warn!("Received empty app hash in offer_snapshot request, rejecting snapshot");
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        // }
+        //     warn!("Received empty app hash in offer_snapshot request,
+        // rejecting snapshot");     return ResponseOfferSnapshot {
+        // result: SnapshotOfferResult::Reject as i32 }; }
 
         // let client = self.storage.reth_database.clone();
         // let application_hash = match self.application_hash(&client) {
         //     Ok(application_hash) => application_hash,
         //     Err(e) => {
         //         error!("Error getting application hash: {:?}", e);
-        //         return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        //     }
+        //         return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 };     }
         // };
 
         // if application_hash == request.app_hash {
-        //     warn!("Application hash matches, snapshot must have already been applied, rejecting
-        // snapshot");     return ResponseOfferSnapshot { result:
-        // SnapshotOfferResult::Reject as i32 }; }
+        //     warn!("Application hash matches, snapshot must have already been
+        // applied, rejecting snapshot");     return
+        // ResponseOfferSnapshot { result: SnapshotOfferResult::Reject
+        // as i32 }; }
 
         // if snapshot.format != self.snapshot_format {
-        //     warn!("Received snapshot format is not supported, rejecting snapshot");
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::RejectFormat as i32 };
-        // }
+        //     warn!("Received snapshot format is not supported, rejecting
+        // snapshot");     return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::RejectFormat as i32 }; }
 
         // if snapshot.chunks == 0 {
         //     warn!("Received snapshot has no chunks, rejecting snapshot");
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        // }
+        //     return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 }; }
 
         // if snapshot.hash == prost::bytes::Bytes::default() {
-        //     warn!("Received snapshot has no hash (empty bytes), rejecting snapshot");
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        // }
+        //     warn!("Received snapshot has no hash (empty bytes), rejecting
+        // snapshot");     return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 }; }
 
-        // // read the lock and make sure we are not already syncing the snapshot we are being
-        // // offered
-        // if let Some(snapshot_sync_state_lock) = self.snapshot_sync_state_lock.as_ref() {
-        //     let snapshot_sync_state_lock = match snapshot_sync_state_lock.read() {
+        // // read the lock and make sure we are not already syncing the
+        // snapshot we are being // offered
+        // if let Some(snapshot_sync_state_lock) =
+        // self.snapshot_sync_state_lock.as_ref() {
+        //     let snapshot_sync_state_lock = match
+        // snapshot_sync_state_lock.read() {
         //         Ok(snapshot_sync_state_lock) => snapshot_sync_state_lock,
         //         Err(e) => {
         //             error!("Error getting a snapshot state lock: {:?}", e);
-        //             return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        //         }
+        //             return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 };         }
         //     };
 
         //     // we are already syncing the this snapshot
-        //     if (*snapshot_sync_state_lock).eq(&SnapshotSyncStateLock::from(&snapshot)) {
-        //         drop(snapshot_sync_state_lock);
-        //         // since the lock is still on the currently accepted snapshot, we must return
-        //         // accept
-        //         return ResponseOfferSnapshot { result: SnapshotOfferResult::Accept as i32 };
-        //     }
+        //     if (*snapshot_sync_state_lock).eq(&SnapshotSyncStateLock::from(&
+        // snapshot)) {         drop(snapshot_sync_state_lock);
+        //         // since the lock is still on the currently accepted
+        // snapshot, we must return         // accept
+        //         return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Accept as i32 };     }
         // }
 
         // // check that we should not have the block at height already
-        // if client.block_by_id(BlockId::number(snapshot.height)).ok().flatten().is_some() {
-        //     warn!("Block at height {:?} already exists, rejecting snapshot", snapshot.height);
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
+        // if client.block_by_id(BlockId::number(snapshot.height)).ok().
+        // flatten().is_some() {     warn!("Block at height {:?} already
+        // exists, rejecting snapshot", snapshot.height);     return
+        // ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
         // }
 
         // // get the latest header
@@ -1006,58 +1005,62 @@ where
         //     Ok(Some(header)) => header,
         //     Ok(None) => {
         //         error!("No latest header found");
-        //         return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        //     }
+        //         return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 };     }
         //     Err(e) => {
         //         error!("Error getting latest header: {:?}", e);
-        //         return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        //     }
+        //         return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 };     }
         // };
 
         // // check that the latest header is less than the snapshot height
         // if latest_header.header().number > snapshot.height {
         //     warn!(
-        //         "Latest header height {:?} is greater than snapshot height {:?}, rejecting
-        // snapshot",         latest_header.header().number, snapshot.height
-        //     );
-        //     return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        // }
+        //         "Latest header height {:?} is greater than snapshot height
+        // {:?}, rejecting snapshot",
+        // latest_header.header().number, snapshot.height     );
+        //     return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 }; }
 
-        // // ensure that the last sync lock is less than the newly offered height
-        // if let Some(snapshot_sync_state_lock) = self.snapshot_sync_state_lock.as_ref() {
-        //     let snapshot_sync_state_lock_height = match snapshot_sync_state_lock.read() {
-        //         Ok(snapshot_sync_state_lock_height) => snapshot_sync_state_lock_height,
-        //         Err(e) => {
+        // // ensure that the last sync lock is less than the newly offered
+        // height if let Some(snapshot_sync_state_lock) =
+        // self.snapshot_sync_state_lock.as_ref() {
+        //     let snapshot_sync_state_lock_height = match
+        // snapshot_sync_state_lock.read() {
+        //         Ok(snapshot_sync_state_lock_height) =>
+        // snapshot_sync_state_lock_height,         Err(e) => {
         //             error!("Error getting a snapshot state lock: {:?}", e);
-        //             return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        //         }
+        //             return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 };         }
         //     };
 
         //     let snapshot_sync_state_lock_height =
         //         snapshot_sync_state_lock_height.get_snapshot_height();
         //     if snapshot_sync_state_lock_height >= snapshot.height {
         //         warn!(
-        //                 "Offered Snapshot height {:?} is less than or equal to the last locked
-        // snapshot height {:?}, rejecting snapshot",                 snapshot.height,
-        // snapshot_sync_state_lock_height             );
-        //         return ResponseOfferSnapshot { result: SnapshotOfferResult::Reject as i32 };
-        //     }
+        //                 "Offered Snapshot height {:?} is less than or equal
+        // to the last locked snapshot height {:?}, rejecting snapshot",
+        // snapshot.height, snapshot_sync_state_lock_height
+        // );         return ResponseOfferSnapshot { result:
+        // SnapshotOfferResult::Reject as i32 };     }
         // }
 
         // match self.create_new_snapshot_sync(
         //     snapshot.height,
-        //     B256::new(snapshot.hash.as_ref().try_into().expect("slice with incorrect length")),
-        //     snapshot.chunks as u64,
+        //     B256::new(snapshot.hash.as_ref().try_into().expect("slice with
+        // incorrect length")),     snapshot.chunks as u64,
         //     snapshot.format as u64,
         // ) {
         //     Ok(_snapshot_id) => {
-        //         // update the rw lock here as we now want to sync against that offered snapshot
-        //         if let Some(snapshot_sync_state_lock) = self.snapshot_sync_state_lock.as_ref() {
-        //             let mut snapshot_sync_state_lock = match snapshot_sync_state_lock.write() {
-        //                 Ok(snapshot_sync_state_lock) => snapshot_sync_state_lock,
-        //                 Err(e) => {
-        //                     error!("Error getting a snapshot state lock: {:?}", e);
-        //                     return ResponseOfferSnapshot {
+        //         // update the rw lock here as we now want to sync against
+        // that offered snapshot         if let
+        // Some(snapshot_sync_state_lock) =
+        // self.snapshot_sync_state_lock.as_ref() {             let mut
+        // snapshot_sync_state_lock = match snapshot_sync_state_lock.write() {
+        //                 Ok(snapshot_sync_state_lock) =>
+        // snapshot_sync_state_lock,                 Err(e) => {
+        //                     error!("Error getting a snapshot state lock:
+        // {:?}", e);                     return ResponseOfferSnapshot {
         //                         result: SnapshotOfferResult::Reject as i32,
         //                     };
         //                 }
@@ -1065,7 +1068,8 @@ where
 
         //             (*snapshot_sync_state_lock)
         //                 .set_snapshot_height(snapshot.height)
-        //                 .set_snapshot_hash(prost::bytes::Bytes::copy_from_slice(
+        //
+        // .set_snapshot_hash(prost::bytes::Bytes::copy_from_slice(
         //                     snapshot.hash.as_ref(),
         //                 ))
         //                 .set_snapshot_chunks(snapshot.chunks as u64)
@@ -1074,13 +1078,13 @@ where
         //         };
         //         // we have accepted the snapshot already, just re-accept it
 
-        //         ResponseOfferSnapshot { result: SnapshotOfferResult::Accept as i32 }
-        //     }
+        //         ResponseOfferSnapshot { result: SnapshotOfferResult::Accept
+        // as i32 }     }
         //     Err(e) => {
         //         error!("error persisting new snapshot sync: {:?}", e);
 
-        //         ResponseOfferSnapshot { result: SnapshotOfferResult::Unknown as i32 }
-        //     }
+        //         ResponseOfferSnapshot { result: SnapshotOfferResult::Unknown
+        // as i32 }     }
         // }
         unimplemented!()
     }
@@ -1128,8 +1132,8 @@ where
             snapshot_manager_state_lock.get_block_id();
         drop(snapshot_manager_state_lock);
 
-        // check that we are not being asked to load the snapshot that we are currently syncing as
-        // it might not be ready yet
+        // check that we are not being asked to load the snapshot that we are
+        // currently syncing as it might not be ready yet
         if snapshot_manager_state_lock_block_id == request.height {
             warn!("Received snapshot height matches current block height, rejecting snapshot as it might not be ready yet");
 
@@ -1289,7 +1293,8 @@ where
         );
 
         // // ensure no historical sync is ongoing
-        // let snapshot_manager_state_lock = match self.snapshot_manager_state_lock.read() {
+        // let snapshot_manager_state_lock = match
+        // self.snapshot_manager_state_lock.read() {
         //     Ok(snapshot_manager_state_lock) => snapshot_manager_state_lock,
         //     Err(e) => {
         //         error!("Error getting a snapshot state lock: {:?}", e);
@@ -1303,20 +1308,22 @@ where
 
         // if snapshot_manager_state_lock.is_syncing_history() {
         //     drop(snapshot_manager_state_lock);
-        //     debug!("Historical syncing ongoing. No snapshots available yet ...");
-        //     return ResponseApplySnapshotChunk {
+        //     debug!("Historical syncing ongoing. No snapshots available yet
+        // ...");     return ResponseApplySnapshotChunk {
         //         result: ApplySnapshotResult::RetrySnapshot as i32,
         //         refetch_chunks: vec![],
         //         reject_senders: vec![],
         //     };
         // }
 
-        // let botanix_database_provider_factory = self.storage.botanix_database_factory.clone();
+        // let botanix_database_provider_factory =
+        // self.storage.botanix_database_factory.clone();
 
-        // // get the last snapshot sync id - there should always be one provided the offer_snapshot
-        // // has already run
+        // // get the last snapshot sync id - there should always be one
+        // provided the offer_snapshot // has already run
         // let last_snapshot_sync_id =
-        //     match botanix_database_provider_factory.get_last_snapshot_sync_id() {
+        //     match botanix_database_provider_factory.
+        // get_last_snapshot_sync_id() {
         //         Ok(Some(snapshot_sync_id)) => snapshot_sync_id,
         //         Ok(None) => {
         //             error!("No last snapshot sync found");
@@ -1360,12 +1367,14 @@ where
         // };
 
         // // check the snapshot sync is done in sequential manner
-        // info!("last applied chunk index: {:?}", snapshot.last_applied_chunk_index());
+        // info!("last applied chunk index: {:?}",
+        // snapshot.last_applied_chunk_index());
 
-        // // request index will be ahead `last_applied_chunk_index` by 1 except for the first chunk
-        // if snapshot.last_applied_chunk_index().saturating_sub(1) > request.index as u64 {
-        //     error!("Last applied chunk index is not sequential with the incoming chunk index");
-        //     return ResponseApplySnapshotChunk {
+        // // request index will be ahead `last_applied_chunk_index` by 1 except
+        // for the first chunk if snapshot.last_applied_chunk_index().
+        // saturating_sub(1) > request.index as u64 {     error!("Last
+        // applied chunk index is not sequential with the incoming chunk
+        // index");     return ResponseApplySnapshotChunk {
         //         result: ApplySnapshotResult::RetrySnapshot as i32,
         //         refetch_chunks: vec![],
         //         reject_senders: vec![],
@@ -1376,8 +1385,8 @@ where
         // snapshot.set_last_applied_chunk_index(request.index as u64);
 
         // // update the db
-        // if let Err(e) = self.update_snapshot_sync(last_snapshot_sync_id, snapshot.clone()) {
-        //     error!(
+        // if let Err(e) = self.update_snapshot_sync(last_snapshot_sync_id,
+        // snapshot.clone()) {     error!(
         //         "Error updating snapshot sync {:?} in the db. error = {:?}",
         //         last_snapshot_sync_id, e
         //     );
@@ -1398,8 +1407,8 @@ where
         //             let _ = compressor_task_tx.send(blocks_with_senders);
         //         }
         //         Err(e) => {
-        //             error!("Failed to deserialize and decompress snapshot chunk: {:?}", e);
-        //         }
+        //             error!("Failed to deserialize and decompress snapshot
+        // chunk: {:?}", e);         }
         //     };
         // }));
 
@@ -1407,8 +1416,8 @@ where
         // let blocks_with_senders = match compressor_task_rx.blocking_recv() {
         //     Ok(blocks_with_senders) => blocks_with_senders,
         //     Err(e) => {
-        //         error!("Failed to receive blocks from compressor task: {:?}", e);
-        //         return ResponseApplySnapshotChunk {
+        //         error!("Failed to receive blocks from compressor task: {:?}",
+        // e);         return ResponseApplySnapshotChunk {
         //             result: ApplySnapshotResult::RetrySnapshot as i32,
         //             refetch_chunks: vec![],
         //             reject_senders: vec![],
@@ -1442,17 +1451,18 @@ where
 
         // let hashed_state = exec_outcome.hash_state_slow();
         // let (_state_root, trie_updates) =
-        //     match StateRoot::overlay_root_with_updates(provider.tx_ref(), hashed_state.clone()) {
-        //         Ok((state_root, trie_updates)) => (state_root, trie_updates),
-        //         Err(e) => {
-        //             error!("Error overlaying root with updates: {:?}", e);
-        //             return ResponseApplySnapshotChunk { ..Default::default() };
-        //         }
+        //     match StateRoot::overlay_root_with_updates(provider.tx_ref(),
+        // hashed_state.clone()) {         Ok((state_root,
+        // trie_updates)) => (state_root, trie_updates),         Err(e)
+        // => {             error!("Error overlaying root with updates:
+        // {:?}", e);             return ResponseApplySnapshotChunk {
+        // ..Default::default() };         }
         //     };
 
         // // seal blocks
         // let sealed_blocks_with_senders =
-        //     blocks_with_senders.into_iter().map(|block| block.seal_slow()).collect::<Vec<_>>();
+        //     blocks_with_senders.into_iter().map(|block|
+        // block.seal_slow()).collect::<Vec<_>>();
 
         // if let Err(e) = provider.append_blocks_with_state(
         //     sealed_blocks_with_senders.clone(),
@@ -1461,8 +1471,8 @@ where
         //     trie_updates.clone(),
         // ) {
         //     error!(
-        //         "Error appending blocks with state {:?} in the db. error = {:?}",
-        //         last_snapshot_sync_id, e
+        //         "Error appending blocks with state {:?} in the db. error =
+        // {:?}",         last_snapshot_sync_id, e
         //     );
         //     return ResponseApplySnapshotChunk {
         //         result: ApplySnapshotResult::RetrySnapshot as i32,
@@ -1473,8 +1483,8 @@ where
 
         // if let Err(e) = provider.commit() {
         //     error!(
-        //         "Error committing db after appending blocks with state {:?} in the db. error =
-        // {:?}",         last_snapshot_sync_id, e
+        //         "Error committing db after appending blocks with state {:?}
+        // in the db. error = {:?}",         last_snapshot_sync_id, e
         //     );
         //     return ResponseApplySnapshotChunk {
         //         result: ApplySnapshotResult::RetrySnapshot as i32,
@@ -1483,8 +1493,9 @@ where
         //     };
         // };
 
-        // for sealed_block_with_senders in sealed_blocks_with_senders.into_iter() {
-        //     let senders = sealed_block_with_senders.senders().unwrap_or_default();
+        // for sealed_block_with_senders in
+        // sealed_blocks_with_senders.into_iter() {     let senders =
+        // sealed_block_with_senders.senders().unwrap_or_default();
         //     let hashed_state = exec_outcome.hash_state_slow();
         //     let block_height = sealed_block_with_senders.block.number;
         //     let new_header = sealed_block_with_senders.block.header.clone();
@@ -1499,11 +1510,13 @@ where
         //     );
 
         //     let new_chain =
-        //         reth_chain_state::NewCanonicalChain::Commit { new: vec![executed_block] };
-        //     self.blockchain_db.canonical_in_memory_state().update_chain(new_chain);
+        //         reth_chain_state::NewCanonicalChain::Commit { new:
+        // vec![executed_block] };     self.blockchain_db.
+        // canonical_in_memory_state().update_chain(new_chain);
 
-        //     self.blockchain_db.on_forkchoice_update_received(&ForkchoiceState::default());
-        //     self.blockchain_db.set_canonical_head(new_header.clone());
+        //     self.blockchain_db.on_forkchoice_update_received(&
+        // ForkchoiceState::default());     self.blockchain_db.
+        // set_canonical_head(new_header.clone());
         //     self.blockchain_db.set_safe(new_header.clone());
         //     self.blockchain_db.set_finalized(new_header.clone());
 
@@ -1512,16 +1525,18 @@ where
         //         .remove_persisted_blocks(block_height - 1);
 
         //     let chain =
-        //         Chain::new(vec![sealed_block_with_senders].into_iter(), exec_outcome.clone(),
-        // None);
+        //         Chain::new(vec![sealed_block_with_senders].into_iter(),
+        // exec_outcome.clone(), None);
 
-        //     // Note: we are not parsing the block for pegins and pegouts here.
-        //     // This is safe for rpc nodes but not for the federation nodes especially the
-        //     // coordinator: If the coordinator uses snapshots, it will be unaware of
-        //     // pending pegouts that need to be honored. The coordinator creates pegouts
-        //     // from pending pegouts in it's database. The coordinator must use block
-        //     // sync instead of snapshot sync. TODO: refactor to handle pegins/pegouts
-        //     self.blockchain_db.canonical_in_memory_state().notify_canon_state(
+        //     // Note: we are not parsing the block for pegins and pegouts
+        // here.     // This is safe for rpc nodes but not for the
+        // federation nodes especially the     // coordinator: If the
+        // coordinator uses snapshots, it will be unaware of     // pending
+        // pegouts that need to be honored. The coordinator creates pegouts
+        //     // from pending pegouts in it's database. The coordinator must
+        // use block     // sync instead of snapshot sync. TODO:
+        // refactor to handle pegins/pegouts     self.blockchain_db.
+        // canonical_in_memory_state().notify_canon_state(
         //         CanonStateNotification::Commit {
         //             new: Arc::new(chain),
         //             pegins: None,
@@ -1620,7 +1635,8 @@ where
         let non_deterministic_data_bytes_len =
             non_deterministic_data_bytes.len();
         if non_deterministic_data_bytes_len > max_tx_bytes {
-            // We should panic bc there is a critical bug and there should be a chain halt.
+            // We should panic bc there is a critical bug and there should be a
+            // chain halt.
             panic!(
                 "Non-deterministic data size to propose for height {}: {} exceeds the max tx
         bytes allowed size {}",
@@ -1714,8 +1730,8 @@ where
                     reth_basic_payload_builder::BuildOutcome::Better {
                         payload,
                         cached_reads: _,
-                    }
-                    | reth_basic_payload_builder::BuildOutcome::Freeze(
+                    } |
+                    reth_basic_payload_builder::BuildOutcome::Freeze(
                         payload,
                     ) => {
                         let block = payload.block();
@@ -1734,7 +1750,8 @@ where
                             })
                             .collect::<_>();
 
-                        // insert non-deterministic data tx at index 0 so historical sync will pass
+                        // insert non-deterministic data tx at index 0 so
+                        // historical sync will pass
                         // verification
 
                         txs.insert(0, non_deterministic_data_bytes);
@@ -1795,10 +1812,7 @@ where
         request: RequestProcessProposal,
     ) -> ResponseProcessProposal {
         let execution_start_time = std::time::Instant::now();
-        trace!(
-            "request={:?}",
-            RequestProcessProposalTruncatedDebug(&request)
-        );
+        trace!("request={:?}", RequestProcessProposalTruncatedDebug(&request));
 
         let txs_len = request.txs.len();
 
@@ -1810,7 +1824,8 @@ where
                     warn!("Aggregate public key for fed node is not set in process proposal");
                 }
 
-                // Rpc nodes will have an aggregate public key above block height 1
+                // Rpc nodes will have an aggregate public key above block
+                // height 1
                 if request.height > 1 {
                     warn!("Aggregate public key for rpc node is not set in process proposal");
                 }
@@ -1836,21 +1851,17 @@ where
                     );
                 }
 
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         };
 
-        // Extract block time: this must come from the CBFT block header NOT the system time
-        // As that will be underministic
+        // Extract block time: this must come from the CBFT block header NOT the
+        // system time As that will be underministic
         let block_time = match request.time {
             Some(time) => time,
             None => {
                 error!("Block time is not set in process proposal");
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         };
 
@@ -1888,16 +1899,12 @@ where
                     );
                 }
 
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         };
 
-        let reader_inner: Vec<u8> = vec![non_deterministic_data_bytes]
-            .into_iter()
-            .flatten()
-            .collect();
+        let reader_inner: Vec<u8> =
+            vec![non_deterministic_data_bytes].into_iter().flatten().collect();
         let reader = &mut io::Cursor::new(reader_inner);
 
         let non_deterministic_data = match NonDeterministicData::deserialize(
@@ -1940,16 +1947,14 @@ where
                     );
                 }
 
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         };
 
         trace!("non_deterministic_data={:?}", non_deterministic_data);
 
-        // Only NDD versions starting from 1 are supported for block production so validate
-        // `block_fee_recipient_address` exists
+        // Only NDD versions starting from 1 are supported for block production
+        // so validate `block_fee_recipient_address` exists
         let block_fee_recipient_address = match non_deterministic_data
             .block_fee_recipient_address()
         {
@@ -1981,9 +1986,7 @@ where
                     );
                 }
 
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         };
 
@@ -2022,9 +2025,7 @@ where
                 );
             }
 
-            return ResponseProcessProposal {
-                status: VERIFY_REJECT,
-            };
+            return ResponseProcessProposal { status: VERIFY_REJECT };
         }
 
         if agg_pk != non_deterministic_data.aggregated_public_key() {
@@ -2054,9 +2055,7 @@ where
                 );
             }
 
-            return ResponseProcessProposal {
-                status: VERIFY_REJECT,
-            };
+            return ResponseProcessProposal { status: VERIFY_REJECT };
         }
 
         // get txs skipping the first non-deterministic data tx
@@ -2091,9 +2090,7 @@ where
                     );
                 }
 
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         };
 
@@ -2110,10 +2107,7 @@ where
             .on_process_proposal(comet_height, runtime_version)
             .expect("db cannot fail")
         {
-            OnProcessProposalDecision::Process {
-                version,
-                conditions: _,
-            } => {
+            OnProcessProposalDecision::Process { version, conditions: _ } => {
                 debug!("process_proposal: Processing with version: {version}");
 
                 match version {
@@ -2142,18 +2136,17 @@ where
                     "process_proposal: Rejecting block using Botanix runtime version:
         {version}"
                 );
-                return ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                };
+                return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         }
 
         // Validation done as a result of this call:
-        // - botanix consensus package created on the fly and compared to the incoming block EDH
+        // - botanix consensus package created on the fly and compared to the
+        //   incoming block EDH
         // - mint validation checks
         // - state trie calculated for header
-        // This means no additional validation is needed when the ABCI driver inserts the block into
-        // the canonical chain
+        // This means no additional validation is needed when the ABCI driver
+        // inserts the block into the canonical chain
         match build_and_execute(
             txs,
             self.storage.chain_spec.clone(),
@@ -2175,11 +2168,10 @@ where
                 // validate block before caching
                 if !matches!(
                     self.validate_block(block),
-                    ResponseProcessProposal {
-                        status: VERIFY_ACCEPTED
-                    }
+                    ResponseProcessProposal { status: VERIFY_ACCEPTED }
                 ) {
-                    // we have logs inside validate_block so no need to repeat error here
+                    // we have logs inside validate_block so no need to repeat
+                    // error here
 
                     if tracing::enabled!(tracing::Level::WARN) {
                         let execution_time =
@@ -2208,9 +2200,7 @@ where
                         );
                     }
 
-                    return ResponseProcessProposal {
-                        status: VERIFY_REJECT,
-                    };
+                    return ResponseProcessProposal { status: VERIFY_REJECT };
                 }
 
                 match self.block_cache.write() {
@@ -2245,9 +2235,7 @@ where
                             );
                         }
 
-                        ResponseProcessProposal {
-                            status: VERIFY_ACCEPTED,
-                        }
+                        ResponseProcessProposal { status: VERIFY_ACCEPTED }
                     }
                     Err(e) => {
                         error!("Error getting block cache write lock: {:?}", e);
@@ -2280,9 +2268,7 @@ where
                             );
                         }
 
-                        ResponseProcessProposal {
-                            status: VERIFY_REJECT,
-                        }
+                        ResponseProcessProposal { status: VERIFY_REJECT }
                     }
                 }
             }
@@ -2313,9 +2299,7 @@ where
                     );
                 }
 
-                ResponseProcessProposal {
-                    status: VERIFY_REJECT,
-                }
+                ResponseProcessProposal { status: VERIFY_REJECT }
             }
         }
     }
@@ -2357,8 +2341,8 @@ where
                 block_with_context.clone()
             }
             None => {
-                // No block in cache: this happens during historical (block) sync
-                // Build the block
+                // No block in cache: this happens during historical (block)
+                // sync Build the block
 
                 debug!(
                     cbft_block_hash = hex::encode(cbft_block_hash),
@@ -2390,8 +2374,8 @@ where
                         }
                     };
 
-                // NDD V0 (no block_fee_recipient_address) is supported only for historical sync on
-                // // testnet
+                // NDD V0 (no block_fee_recipient_address) is supported only for
+                // historical sync on // testnet
                 let block_fee_recipient_address = match non_deterministic_data
                     .block_fee_recipient_address()
                 {
@@ -2399,8 +2383,8 @@ where
                         debug!(%address, "use proposed block fee recipient address");
                         address
                     }
-                    // Need to extract from `request.proposer_address` which is legacy block
-                    // building behavior
+                    // Need to extract from `request.proposer_address` which is
+                    // legacy block building behavior
                     None if self.is_testnet => {
                         let address = Address::new(
                             FixedBytes::<20>::from_slice(
@@ -2463,7 +2447,8 @@ where
                     // upcoming `ActivationManager::on_finalize_block(..)` call.
                     _ => {
                         warn!("finalize_block: Unrecognized runtime version: {runtime_version}");
-                        Some(FLOOR_BASE_FEE_PER_GAS_V3) // just apply the latest change.
+                        Some(FLOOR_BASE_FEE_PER_GAS_V3) // just apply the latest
+                                                        // change.
                     }
                 };
 
@@ -2558,13 +2543,14 @@ where
         {
             // Track the raw vote by the proposer. Note that the proposer might
             // be voting for a different version than the one we're interested
-            // in, or for none at all. The rendered metric is labeled accurately.
+            // in, or for none at all. The rendered metric is labeled
+            // accurately.
             self.metrics
                 .runtime_upgrade_vote(&proposer_address, &proposer_vote);
 
-            // Track the polling results for the specific version we're interested in.
-            self.metrics
-                .runtime_upgrade_polling(&upgrade_version, &polling);
+            // Track the polling results for the specific version we're
+            // interested in.
+            self.metrics.runtime_upgrade_polling(&upgrade_version, &polling);
         }
 
         // Track the finalized block hash for the commit stage.
@@ -2595,9 +2581,7 @@ where
             self.validate_block(
                 block_with_context.sealed_block_with_peg.block()
             ),
-            ResponseProcessProposal {
-                status: VERIFY_REJECT
-            }
+            ResponseProcessProposal { status: VERIFY_REJECT }
         ) {
             panic!(
                 "failed to finalize invalid block block {:?}",
@@ -2606,7 +2590,8 @@ where
         }
 
         let mut exec_results = vec![];
-        // insert non-deterministic data tx which is first in the block (already checked above)
+        // insert non-deterministic data tx which is first in the block (already
+        // checked above)
         let non_deterministic_data_tx = match request.txs.first() {
             Some(tx) => tx.clone(),
             None => {
@@ -2634,11 +2619,13 @@ where
             exec_results.push(ExecTxResult {
                 code: SUCCESS,
                 // From https://docs.cometbft.com/v0.38/spec/abci/abci++_app_requirements#gas
-                // In v0.34.x and earlier versions, CometBFT does not enforce anything about Gas in
-                // consensus, only in the mempool. ... The GasUsed field is ignored
-                // by CometBFT. CometBFT's genesis.json should have max_gas set to
-                // -1 as to not enforce any gas limit restrictions Gas and other
-                // block resource limits are enforced by the EVM/Reth
+                // In v0.34.x and earlier versions, CometBFT does not enforce
+                // anything about Gas in consensus, only in the
+                // mempool. ... The GasUsed field is ignored
+                // by CometBFT. CometBFT's genesis.json should have max_gas set
+                // to -1 as to not enforce any gas limit
+                // restrictions Gas and other block resource
+                // limits are enforced by the EVM/Reth
                 ..Default::default()
             });
         }
@@ -2676,9 +2663,10 @@ where
 
     /// docs: https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#commit
     /// Panic! if there's an error bc that means the block hasn't
-    /// been successfully committed to the database. There is no way to recover from
-    /// an application hash mismatch other than a manual rollback of the db to a healthy state.
-    /// Proceeding after an error will cause the app hash mismatch.
+    /// been successfully committed to the database. There is no way to recover
+    /// from an application hash mismatch other than a manual rollback of
+    /// the db to a healthy state. Proceeding after an error will cause the
+    /// app hash mismatch.
     #[instrument(level = "trace", skip(self), ret)]
     fn commit(&self) -> ResponseCommit {
         let execution_start_time = std::time::Instant::now();
@@ -2712,10 +2700,8 @@ where
 
         trace!("eth_block_header={:?}", block.header());
 
-        let eth_block_height = sealed_block_with_context
-            .sealed_block_with_peg
-            .block()
-            .number;
+        let eth_block_height =
+            sealed_block_with_context.sealed_block_with_peg.block().number;
 
         // We want to explicitly panic if we cannot send the commit message
         let (commit_tx, commit_rx) = std::sync::mpsc::channel::<()>();
@@ -2757,24 +2743,27 @@ where
 /// ABCI driver message
 #[derive(Debug)]
 pub enum ABCIDriverMessage {
-    /// Finalize a block, message includes the sealed block and the CBFT block hash
+    /// Finalize a block, message includes the sealed block and the CBFT block
+    /// hash
     CommitBlock((BlockWithContext<BotanixBlock>, std::sync::mpsc::Sender<()>)),
     /// Exit the driver
     Exit,
 }
 
-/// The driver is mainly responsible for driving block completion and finalization
-/// Once a finalize block is received the drive is responsible for
+/// The driver is mainly responsible for driving block completion and
+/// finalization Once a finalize block is received the drive is responsible for
 /// * Updating the canonical chain via DB
 /// * Sending pegins / pegouts to the btc server
 
 #[derive(Clone)]
 pub struct ABCIDriver {
     driver_rx: Arc<Mutex<tokio::sync::mpsc::Receiver<ABCIDriverMessage>>>,
-    // TODO: BlockchainProvider2 already contains ProviderFactory so we can get it from there
-    //  instead of duplicating it here
-    reth_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
-    botanix_database_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+    // TODO: BlockchainProvider2 already contains ProviderFactory so we can get
+    // it from there  instead of duplicating it here
+    reth_database_provider_factory:
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+    botanix_database_provider_factory:
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
     blockchain_provider: BlockchainProvider<
         NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
     >,
@@ -2786,9 +2775,11 @@ impl ABCIDriver {
         driver_rx: tokio::sync::mpsc::Receiver<ABCIDriverMessage>,
         reth_database_provider_factory: BotanixProviderFactory<
             Arc<DatabaseEnv>,
+            BotanixNode,
         >,
         botanix_database_provider_factory: BotanixProviderFactory<
             Arc<DatabaseEnv>,
+            BotanixNode,
         >,
         blockchain_provider: BlockchainProvider<
             NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
@@ -2811,151 +2802,226 @@ impl ABCIDriver {
                         sealed_block_with_context,
                         commit_tx,
                     )) => {
-                        // let _span = tracing::trace_span!(
-                        //     "ABCI driver commit block",
-                        //     eth_block_height =
-                        //         sealed_block_with_context.sealed_block_with_peg.block().number,
-                        //     eth_block_hash =
-                        //         %sealed_block_with_context.sealed_block_with_peg.block().hash(),
-                        // )
-                        // .entered();
+                        let _span = tracing::trace_span!(
+                            "ABCI driver commit block",
+                            eth_block_height =
+                                sealed_block_with_context.sealed_block_with_peg.block().number,
+                            eth_block_hash =
+                                %sealed_block_with_context.sealed_block_with_peg.block().hash(),
+                        )
+                        .entered();
 
-                        // let sealed_block_with_peg =
-                        // sealed_block_with_context.sealed_block_with_peg;
-                        // let new_header = sealed_block_with_peg.block().header().clone();
-                        // let block_height = sealed_block_with_peg.block().number;
-                        // let sealed_block_with_senders = sealed_block_with_peg.block().to_owned();
-                        // let hashed_state =
-                        // sealed_block_with_context.exec_outcome.hash_state_slow();
-                        // let trie_updates = sealed_block_with_context.trie_updates;
+                        let sealed_block_with_peg =
+                            sealed_block_with_context.sealed_block_with_peg;
+                        let recovered_block = sealed_block_with_peg.block();
+                        let new_header = recovered_block.header().clone();
+                        let sealed_header =
+                            recovered_block.clone_sealed_header();
 
-                        // let executed_block = ExecutedBlock {
-                        //     recovered_block: Arc::new(sealed_block_with_senders.block().clone()),
-                        //     // x: Arc::new(sealed_block_with_senders.senders.clone()),
-                        //     execution_output:
-                        // Arc::new(sealed_block_with_context.exec_outcome.clone()),
-                        //     hashed_state: Arc::new(hashed_state.clone()),
-                        //     // x: Arc::new(trie_updates.clone()),
-                        // };
+                        let block_height = sealed_block_with_peg.block().number;
+                        let sealed_block_with_senders =
+                            sealed_block_with_peg.block().to_owned();
+                        let hashed_state = sealed_block_with_context
+                            .exec_outcome
+                            .hash_state_slow::<KeccakKeyHasher>();
+                        let trie_updates =
+                            sealed_block_with_context.trie_updates;
 
-                        // let pegins = sealed_block_with_peg
-                        //     .pegins()
-                        //     .iter()
-                        //     .flat_map(|p| p.meta.clone())
-                        //     .collect::<Vec<_>>();
+                        let executed_block = ExecutedBlock {
+                            recovered_block: Arc::new(
+                                sealed_block_with_senders.clone(),
+                            ),
+                            execution_output: Arc::new(
+                                sealed_block_with_context.exec_outcome.clone(),
+                            ),
+                            hashed_state: Arc::new(hashed_state.clone()),
+                        };
 
-                        // let pegouts = sealed_block_with_peg.pegouts().to_vec();
+                        let executed_block_with_trie =
+                            ExecutedBlockWithTrieUpdates {
+                                block: executed_block,
+                                trie: ExecutedTrieUpdates::Present(Arc::new(
+                                    trie_updates.clone(),
+                                )),
+                            };
 
-                        // // Prepare the staged entries for insertion into the
-                        // // database; this ensures that no pegins or pegouts are
-                        // // ever accidentally dropped during a shutdown or
-                        // // interruption.
-                        // //
-                        // // Those staged entries are removed from the database
-                        // // once the Frost task has successfully initiated a new
-                        // // checkpoint on the btc-server.
+                        let pegins = sealed_block_with_peg
+                            .pegins()
+                            .iter()
+                            .flat_map(|p| p.meta.clone())
+                            .collect::<Vec<_>>();
+                        // Serialize pegins to pass in Commit notification
+                        let pegin_bytes = pegins
+                            .iter()
+                            .map(|p| {
+                                Bytes::copy_from_slice(
+                                    p.serialize()
+                                        .expect("Pegins to be serialized")
+                                        .as_slice(),
+                                )
+                            })
+                            .collect::<Vec<Bytes>>();
+                        // Serialize pegouts to pass in Commit notification
+                        let pegout_bytes = vec![Bytes::copy_from_slice(
+                            sealed_block_with_peg
+                                .pegouts()
+                                .to_vec()
+                                .iter()
+                                .map(|p| {
+                                    p.serialize()
+                                        .expect("Pegouts to be serialized")
+                                })
+                                .collect::<Vec<_>>()
+                                .concat()
+                                .as_slice(),
+                        )];
 
-                        // let staged_pegins: Vec<PeginData> =
-                        //     get_staged_pegins_from_pegin_meta(&pegins);
-                        // let staged_pegouts: Vec<PegoutData> =
-                        //     get_staged_pegouts_from_pegout_data(&pegouts, new_header.number);
+                        // Prepare the staged entries for insertion into the
+                        // database; this ensures that no pegins or pegouts are
+                        // ever accidentally dropped during a shutdown or
+                        // interruption.
+                        //
+                        // Those staged entries are removed from the database
+                        // once the Frost task has successfully initiated a new
+                        // checkpoint on the btc-server.
 
-                        // let header_with_pegs = HeaderWithPegs {
-                        //     pegins: staged_pegins,
-                        //     pegouts: staged_pegouts,
-                        //     header: new_header.header().clone(),
-                        // };
+                        let staged_pegins: Vec<PeginData> =
+                            get_staged_pegins_from_pegin_meta(&pegins);
+                        let staged_pegouts: Vec<PegoutData> =
+                            get_staged_pegouts_from_pegout_data(
+                                &sealed_block_with_peg.pegouts(),
+                                new_header.number,
+                            );
 
-                        // // Commit block data to both reth and botanix databases
+                        let header_with_pegs = HeaderWithPegs {
+                            pegins: staged_pegins,
+                            pegouts: staged_pegouts,
+                            header: new_header.clone(),
+                        };
 
-                        // // To ensure consistency between databases (one of the commits failed) we
-                        // // make the block commitment process idempotent:
-                        // // 1. Panic in case any of the commits failed
-                        // // 2. Reth process is restarted, that lead CometBFT to restart
-                        // // 3. Reth send previous block height CometBFT tries to replay the block
-                        // // 4. If botanix database commit failed (it goes first), then we are at
-                        // the //    previous block state for both databases
-                        // // 5. If reth database commit failed then we should have staged header in
-                        // //    the botanix database but reth database in previous block state
-                        // // 6. This is totally fine because `insert_staged_header` is idempotent
+                        // Commit block data to both reth and botanix databases
 
-                        // let botanix_db_rw = self
-                        //     .botanix_database_provider_factory
-                        //     .provider_rw()
-                        //     .unwrap_or_else(|e| panic!("can't get botanix rw provider: {e}"));
+                        // To ensure consistency between databases (one of the
+                        // commits failed) we
+                        // make the block commitment process idempotent:
+                        // 1. Panic in case any of the commits failed
+                        // 2. Reth process is restarted, that lead CometBFT to
+                        //    restart
+                        // 3. Reth send previous block height CometBFT tries to
+                        //    replay the block
+                        // 4. If botanix database commit failed (it goes first),
+                        //    then we are at the previous block state for both
+                        //    databases
+                        // 5. If reth database commit failed then we should have
+                        //    staged header in the botanix database but reth
+                        //    database in previous block state
+                        // 6. This is totally fine because
+                        //    `insert_staged_header` is idempotent
 
-                        // let reth_db_rw =
-                        //     self.reth_database_provider_factory.provider_rw().unwrap_or_else(|e|
-                        // {         panic!("Error getting database rw
-                        // provider: {:?}", e);     });
+                        let botanix_db_rw = self
+                            .botanix_database_provider_factory
+                            .provider_rw()
+                            .unwrap_or_else(|e| {
+                                panic!("can't get botanix rw provider: {e}")
+                            });
 
-                        // // Update botanix database with the new header and pegins/pegouts
+                        let reth_db_rw = self
+                            .reth_database_provider_factory
+                            .provider_rw()
+                            .unwrap_or_else(|e| {
+                                panic!(
+                                    "Error getting database rw
+                        provider: {:?}",
+                                    e
+                                );
+                            });
 
-                        // botanix_db_rw.insert_staged_header(new_header.hash(), header_with_pegs)?;
+                        // Update botanix database with the new header and
+                        // pegins/pegouts
 
-                        // // Track the last known runtime version.
+                        botanix_db_rw.insert_staged_header(
+                            new_header.hash_slow(),
+                            header_with_pegs,
+                        )?;
 
-                        // botanix_db_rw.insert_runtime_upgrade_version(
-                        //     new_header.number,
-                        //     sealed_block_with_context.runtime_version,
-                        // )?;
+                        // Track the last known runtime version.
 
-                        // botanix_db_rw.commit().unwrap_or_else(|err| {
-                        //     panic!("Failed to commit block to botanix database: {err}");
-                        // });
+                        botanix_db_rw.insert_runtime_upgrade_version(
+                            new_header.number,
+                            sealed_block_with_context.runtime_version,
+                        )?;
 
-                        // // Update reth database with the new block
+                        botanix_db_rw.commit().unwrap_or_else(|err| {
+                            panic!("Failed to commit block to botanix database: {err}");
+                        });
 
-                        // reth_db_rw.append_blocks_with_state(
-                        //     vec![sealed_block_with_senders.clone()],
-                        //     sealed_block_with_context.exec_outcome.clone(),
-                        //     hashed_state.into_sorted(),
-                        //     trie_updates,
-                        // )?;
+                        // Update reth database with the new block
 
-                        // reth_db_rw.commit().unwrap_or_else(|err| {
-                        //     panic!("Failed to commit block to reth database: {err}");
-                        // });
+                        reth_db_rw.append_blocks_with_state(
+                            vec![sealed_block_with_senders.clone()],
+                            &sealed_block_with_context.exec_outcome,
+                            hashed_state.into_sorted(),
+                            trie_updates,
+                        )?;
 
-                        // // Update the in-memory state with the new canonical chain
+                        reth_db_rw.commit().unwrap_or_else(|err| {
+                            panic!("Failed to commit block to reth database: {err}");
+                        });
 
-                        // let new_chain = reth_chain_state::NewCanonicalChain::Commit {
-                        //     new: vec![executed_block],
-                        // };
-                        // self.blockchain_provider
-                        //     .canonical_in_memory_state()
-                        //     .update_chain(new_chain);
+                        // Update the in-memory state with the new canonical
+                        // chain
 
-                        // self.blockchain_provider
-                        //     .on_forkchoice_update_received(&ForkchoiceState::default());
+                        let new_chain =
+                            reth_chain_state::NewCanonicalChain::Commit {
+                                new: vec![executed_block_with_trie],
+                            };
+                        self.blockchain_provider
+                            .canonical_in_memory_state()
+                            .update_chain(new_chain);
 
-                        // self.blockchain_provider.set_canonical_head(new_header.clone());
-                        // self.blockchain_provider.set_safe(new_header.clone());
-                        // self.blockchain_provider.set_finalized(new_header.clone());
+                        self.blockchain_provider.on_forkchoice_update_received(
+                            &ForkchoiceState::default(),
+                        );
 
-                        // self.blockchain_provider
-                        //     .canonical_in_memory_state()
-                        //     .remove_persisted_blocks(block_height - 1);
+                        self.blockchain_provider
+                            .set_canonical_head(sealed_header.clone());
+                        self.blockchain_provider
+                            .set_safe(sealed_header.clone());
+                        self.blockchain_provider.set_finalized(sealed_header);
 
-                        // debug!("eth block {block_height} committed to the state");
+                        self.blockchain_provider
+                            .canonical_in_memory_state()
+                            .remove_persisted_blocks(NumHash::new(
+                                block_height - 1,
+                                new_header.hash_slow(),
+                            ));
 
-                        // let chain = Chain::new(
-                        //     vec![sealed_block_with_senders].into_iter(),
-                        //     sealed_block_with_context.exec_outcome.clone(),
-                        //     None,
-                        // );
+                        debug!(
+                            "eth block {block_height} committed to the state"
+                        );
 
-                        // self.blockchain_provider.canonical_in_memory_state().notify_canon_state(
-                        //     CanonStateNotification::Commit {
-                        //         new: Arc::new(chain),
-                        //         pegins: Some(pegins),
-                        //         pegouts: Some(pegouts),
-                        //     },
-                        // );
+                        let chain = Chain::new(
+                            vec![sealed_block_with_senders].into_iter(),
+                            sealed_block_with_context.exec_outcome.clone(),
+                            None,
+                        );
 
-                        // if let Err(e) = commit_tx.send(()) {
-                        //     error!("Failed to send await on channel for
-                        // ABCIDriverMessage::CommitBlock message {e:?}"); }
+                        self.blockchain_provider
+                            .canonical_in_memory_state()
+                            .notify_canon_state(
+                                CanonStateNotification::Commit {
+                                    new: Arc::new(chain),
+                                    pegins: Some(pegin_bytes),
+                                    pegouts: Some(pegout_bytes),
+                                },
+                            );
+
+                        if let Err(e) = commit_tx.send(()) {
+                            error!(
+                                "Failed to send await on channel for
+                        ABCIDriverMessage::CommitBlock message {e:?}"
+                            );
+                        }
                     }
                     ABCIDriverMessage::Exit => {
                         break;
@@ -2990,17 +3056,19 @@ impl ABCIDriver {
 //     use botanix_storage::BotanixProviderFactory;
 //     use rand::thread_rng;
 //     use reth_cli_runner::tokio_runtime;
-//     use reth_db::test_utils::{create_test_rw_db, create_test_static_files_dir};
-//     use reth_db_common::init::init_genesis;
+//     use reth_db::test_utils::{create_test_rw_db,
+// create_test_static_files_dir};     use reth_db_common::init::init_genesis;
 //     use reth_evm_ethereum::MockExecutorProvider;
-//     use reth_node_core::{args::TxPoolArgs, cli::config::RethTransactionPoolConfig};
+//     use reth_node_core::{args::TxPoolArgs,
+// cli::config::RethTransactionPoolConfig};
 //     use reth_node_ethereum::EthEvmConfig;
 //     use reth_provider::providers::StaticFileProvider;
 //     use alloy_consensus::EnvKzgSettings;
 //     use reth_tasks::TaskManager;
 //     use reth_transaction_pool::{
-//         blobstore::InMemoryBlobStore, test_utils::TransactionGenerator, EthPooledTransaction,
-//         EthTransactionValidator, Pool as RethPool, TransactionOrigin, TransactionPool,
+//         blobstore::InMemoryBlobStore, test_utils::TransactionGenerator,
+// EthPooledTransaction,         EthTransactionValidator, Pool as RethPool,
+// TransactionOrigin, TransactionPool,
 //         TransactionValidationTaskExecutor,
 //     };
 //     use tendermint_abci::Application;
@@ -3027,22 +3095,25 @@ impl ABCIDriver {
 //         let pk = secp256k1::PublicKey::from_secret_key(&secp, &sk);
 
 //         // setup db client
-//         let reth_db = Arc::try_unwrap(create_test_rw_db()).unwrap().into_inner_db();
-//         let (_, reth_static_path) = create_test_static_files_dir();
+//         let reth_db =
+// Arc::try_unwrap(create_test_rw_db()).unwrap().into_inner_db();         let
+// (_, reth_static_path) = create_test_static_files_dir();
 
 //         let spec = Arc::new(BOTANIX_TESTNET.as_ref().to_owned());
 //         let factory = ProviderFactory::new(
 //             Arc::new(reth_db),
 //             spec.inner_arc(),
-//             StaticFileProvider::read_write(reth_static_path).expect("to create provider
-// factory"),         );
+//             StaticFileProvider::read_write(reth_static_path).expect("to
+// create provider factory"),         );
 //         let _ = init_genesis(factory.clone()).expect("to init genesis");
 
 //         let reth_provider =
-//             BlockchainProvider::new(factory.clone()).expect("to create blockchain provider");
+//             BlockchainProvider::new(factory.clone()).expect("to create
+// blockchain provider");
 
-//         let botanix_db = Arc::try_unwrap(create_test_rw_db()).unwrap().into_inner_db();
-//         let botanix_provider_factory = BotanixProviderFactory::new(Arc::new(botanix_db));
+//         let botanix_db =
+// Arc::try_unwrap(create_test_rw_db()).unwrap().into_inner_db();         let
+// botanix_provider_factory = BotanixProviderFactory::new(Arc::new(botanix_db));
 
 //         let storage = Storage::new(
 //             Vec::new(),
@@ -3061,12 +3132,13 @@ impl ABCIDriver {
 
 //         // setup validator with task executor
 //         let blob_store = InMemoryBlobStore::default();
-//         let tokio_runtime: tokio::runtime::Runtime = tokio_runtime().expect("to create runtime");
-//         let task_manager = TaskManager::new(tokio_runtime.handle().clone());
-//         let task_executor = task_manager.executor();
-//         let validator =
-//             TransactionValidationTaskExecutor::eth_builder(storage.chain_spec.inner_arc())
-//                 .with_head_timestamp(0)
+//         let tokio_runtime: tokio::runtime::Runtime =
+// tokio_runtime().expect("to create runtime");         let task_manager =
+// TaskManager::new(tokio_runtime.handle().clone());         let task_executor =
+// task_manager.executor();         let validator =
+//
+// TransactionValidationTaskExecutor::eth_builder(storage.chain_spec.
+// inner_arc())                 .with_head_timestamp(0)
 //                 .kzg_settings(EnvKzgSettings::Default)
 //                 .with_additional_tasks(1)
 //                 .build_with_tasks(task_executor.clone(), blob_store.clone());
@@ -3076,11 +3148,12 @@ impl ABCIDriver {
 // TxPoolArgs::default().pool_config());
 
 //         let activation_manager =
-//             ActivationManagerBuilder::new(VoteWatcher::default(), RUNTIME_VERSION_V1)
-//                 .build_ignore_nework_upgrade();
+//             ActivationManagerBuilder::new(VoteWatcher::default(),
+// RUNTIME_VERSION_V1)                 .build_ignore_nework_upgrade();
 
 //         let bitcoin_checkpoints_chain =
-//             BitcoinCheckpointsChain::try_new(1, 0, 0).expect("create a valid chain");
+//             BitcoinCheckpointsChain::try_new(1, 0, 0).expect("create a valid
+// chain");
 
 //         let bitcoin_header = Header {
 //             version: Version::default(),
@@ -3093,7 +3166,8 @@ impl ABCIDriver {
 //         };
 
 //         let bitcoin_checkpoint = BitcoinCheckpoint::new(bitcoin_header, 0);
-//         bitcoin_checkpoints_chain.push(bitcoin_checkpoint).expect("push a checkpoint");
+//         bitcoin_checkpoints_chain.push(bitcoin_checkpoint).expect("push a
+// checkpoint");
 
 //         let cometbft_rpc_factory = HttpCometBFTRpcClientFactory::default();
 
@@ -3125,8 +3199,8 @@ impl ABCIDriver {
 //     ) -> Result<prost::bytes::Bytes, ConsensusError> {
 //         client
 //             .non_deterministic_data(RUNTIME_VERSION_V1, None)
-//             .and_then(|ndd| client.serialize_non_deterministic_data_to_bytes(ndd))
-//     }
+//             .and_then(|ndd|
+// client.serialize_non_deterministic_data_to_bytes(ndd))     }
 
 //     #[test]
 //     #[should_panic(expected = "Chain ID mismatch")]
@@ -3155,11 +3229,11 @@ impl ABCIDriver {
 
 //         assert_eq!(response.consensus_params, expected_consensus_params);
 //         assert_eq!(response.validators, expected_validators);
-//         let _response_app_hash_hex = hex::encode(response.app_hash.to_vec().as_slice());
-//         assert_eq!(
+//         let _response_app_hash_hex =
+// hex::encode(response.app_hash.to_vec().as_slice());         assert_eq!(
 //             response.app_hash.to_vec(),
-//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap genesis
-// hash").0.to_vec()         );
+//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap
+// genesis hash").0.to_vec()         );
 //     }
 
 //     #[test]
@@ -3174,10 +3248,10 @@ impl ABCIDriver {
 //         assert_eq!(response.app_version, 1);
 //         assert_eq!(response.last_block_height, 0);
 //         let _response_app_hash_hex =
-// hex::encode(response.last_block_app_hash.to_vec().as_slice());         assert_eq!(
-//             response.last_block_app_hash.to_vec(),
-//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap genesis
-// hash").0.to_vec()         );
+// hex::encode(response.last_block_app_hash.to_vec().as_slice());
+// assert_eq!(             response.last_block_app_hash.to_vec(),
+//             BOTANIX_TESTNET.inner().genesis_hash.expect("Failed to unwrap
+// genesis hash").0.to_vec()         );
 //     }
 
 //     #[test]
@@ -3193,16 +3267,17 @@ impl ABCIDriver {
 //         let response = abci_client.prepare_proposal(request);
 
 //         let expected_ndd = NonDeterministicData::new_v2(
-//             abci_client.bitcoin_blockhash().expect("to have bitcoin blockhash"),
-//             abci_client.aggregate_public_key().expect("to have agg pk"),
-//             Address::ZERO,
+//             abci_client.bitcoin_blockhash().expect("to have bitcoin
+// blockhash"),             abci_client.aggregate_public_key().expect("to have
+// agg pk"),             Address::ZERO,
 //             RUNTIME_VERSION_GENESIS,
 //             None,
 //         );
-//         let response_ndd_bytes = response.txs.first().expect("to have tx").clone();
-//         let reader_inner: Vec<u8> = vec![response_ndd_bytes].into_iter().flatten().collect();
-//         let reader = &mut io::Cursor::new(reader_inner);
-//         let response_ndd = NonDeterministicData::deserialize(reader).expect("to deserialize");
+//         let response_ndd_bytes = response.txs.first().expect("to have
+// tx").clone();         let reader_inner: Vec<u8> =
+// vec![response_ndd_bytes].into_iter().flatten().collect();         let reader
+// = &mut io::Cursor::new(reader_inner);         let response_ndd =
+// NonDeterministicData::deserialize(reader).expect("to deserialize");
 
 //         assert_eq!(response.txs.len(), 1);
 //         assert_eq!(response_ndd, expected_ndd);
@@ -3220,8 +3295,8 @@ impl ABCIDriver {
 //         let rt = tokio::runtime::Runtime::new().expect("to create runtime");
 
 //         rt.block_on(async {
-//             match abci_client.pool.add_transaction(TransactionOrigin::Local, pooled_tx).await {
-//                 Ok(_) => {}
+//             match abci_client.pool.add_transaction(TransactionOrigin::Local,
+// pooled_tx).await {                 Ok(_) => {}
 //                 Err(e) => {
 //                     panic!("Error adding tx to pool: {:?}", e);
 //                 }
@@ -3232,14 +3307,15 @@ impl ABCIDriver {
 //         let response = abci_client.prepare_proposal(request);
 
 //         let expected_ndd = NonDeterministicData::new_v1(
-//             abci_client.bitcoin_blockhash().expect("to have agg bitcoin blockhash"),
-//             abci_client.aggregate_public_key().expect("to have agg pk"),
-//             Address::ZERO,
+//             abci_client.bitcoin_blockhash().expect("to have agg bitcoin
+// blockhash"),             abci_client.aggregate_public_key().expect("to have
+// agg pk"),             Address::ZERO,
 //         );
-//         let response_ndd_bytes = response.txs.first().expect("to have tx").clone();
-//         let reader_inner: Vec<u8> = vec![response_ndd_bytes].into_iter().flatten().collect();
-//         let reader = &mut io::Cursor::new(reader_inner);
-//         let response_ndd = NonDeterministicData::deserialize(reader).expect("to deserialize");
+//         let response_ndd_bytes = response.txs.first().expect("to have
+// tx").clone();         let reader_inner: Vec<u8> =
+// vec![response_ndd_bytes].into_iter().flatten().collect();         let reader
+// = &mut io::Cursor::new(reader_inner);         let response_ndd =
+// NonDeterministicData::deserialize(reader).expect("to deserialize");
 
 //         // todo: deserialize tx
 
@@ -3253,11 +3329,13 @@ impl ABCIDriver {
 
 //         let mut request = RequestProcessProposal::default();
 
-//         let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect("to have ndd");
+//         let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect("to
+// have ndd");
 
 //         request.txs = vec![ndd_bytes];
 
-//         let proposer_address = prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice());
+//         let proposer_address =
+// prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice());
 //         request.proposer_address = proposer_address;
 
 //         request.time = Some(Timestamp::default());
@@ -3274,28 +3352,31 @@ impl ABCIDriver {
 //         let abci_client = abci_client_builder();
 
 //         // first tx should be non-deterministic data
-//         let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect("to have ndd");
+//         let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect("to
+// have ndd");
 
 //         // second tx should be a signed transaction
 //         let mut tx_generator = TransactionGenerator::new(thread_rng());
 //         let signed_tx = tx_generator.transaction().into_legacy();
 //         let mut buf = Vec::new();
 //         signed_tx.encode_enveloped(&mut buf);
-//         let signed_tx_bytes = prost::bytes::Bytes::copy_from_slice(buf.as_slice());
+//         let signed_tx_bytes =
+// prost::bytes::Bytes::copy_from_slice(buf.as_slice());
 
 //         let request = RequestProcessProposal {
 //             txs: vec![ndd_bytes, signed_tx_bytes],
-//             proposer_address: prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice()),
-//             time: Some(Timestamp::default()),
-//             hash: prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice()),
+//             proposer_address:
+// prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice()),
+// time: Some(Timestamp::default()),             hash:
+// prost::bytes::Bytes::copy_from_slice(FixedBytes::<32>::random().as_slice()),
 //             ..Default::default()
 //         };
 
 //         let response = abci_client.process_proposal(request);
 
-//         // this fails bc prevrandao isn't being set in the evm env during tests
-//         // but all the custom code is executed successfully up to `build_and_execute`
-//         assert_eq!(response.status, VERIFY_REJECT);
+//         // this fails bc prevrandao isn't being set in the evm env during
+// tests         // but all the custom code is executed successfully up to
+// `build_and_execute`         assert_eq!(response.status, VERIFY_REJECT);
 //     }
 
 //     #[test]
@@ -3304,11 +3385,13 @@ impl ABCIDriver {
 
 //         let mut request = RequestFinalizeBlock::default();
 
-//         let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect("to have ndd");
+//         let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect("to
+// have ndd");
 
 //         request.txs = vec![ndd_bytes.clone()];
 
-//         let proposer_address = prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice());
+//         let proposer_address =
+// prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice());
 //         request.proposer_address = proposer_address;
 
 //         request.time = Some(Timestamp::default());
@@ -3318,16 +3401,16 @@ impl ABCIDriver {
 //         let response = abci_client.finalize_block(request);
 
 //         // get newly made block from cache to recreate expected app hash
-//         let mut rw_lock = abci_client.block_cache.write().expect("should get lock");
-//         let sealed_block_with_context = rw_lock.cache.pop_newest().expect("to have block").1;
-//         let expected_app_hash = prost::bytes::Bytes::copy_from_slice(
-//             &sealed_block_with_context.sealed_block_with_peg.block().hash().0,
-//         );
+//         let mut rw_lock = abci_client.block_cache.write().expect("should get
+// lock");         let sealed_block_with_context =
+// rw_lock.cache.pop_newest().expect("to have block").1;         let
+// expected_app_hash = prost::bytes::Bytes::copy_from_slice(
+// &sealed_block_with_context.sealed_block_with_peg.block().hash().0,         );
 
 //         let expected_response = ResponseFinalizeBlock {
 //             events: vec![],
-//             tx_results: vec![ExecTxResult { code: SUCCESS, data: ndd_bytes, ..Default::default()
-// }],             validator_updates: vec![],
+//             tx_results: vec![ExecTxResult { code: SUCCESS, data: ndd_bytes,
+// ..Default::default() }],             validator_updates: vec![],
 //             consensus_param_updates: None,
 //             app_hash: expected_app_hash,
 //         };
@@ -3345,21 +3428,24 @@ impl ABCIDriver {
 
 //         // first tx should be non-deterministic data
 //         let ndd =
-//             abci_client.non_deterministic_data(RUNTIME_VERSION_V1, None).expect("to have ndd");
-//         let ndd_bytes =
-//             abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect("to serialize
-// ndd");
+//             abci_client.non_deterministic_data(RUNTIME_VERSION_V1,
+// None).expect("to have ndd");         let ndd_bytes =
+//
+// abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect("to
+// serialize ndd");
 
 //         // second tx should be a signed transaction
 //         let mut tx_generator = TransactionGenerator::new(thread_rng());
 //         let signed_tx = tx_generator.transaction().into_legacy();
 //         let mut buf = Vec::new();
 //         signed_tx.encode_enveloped(&mut buf);
-//         let signed_tx_bytes = prost::bytes::Bytes::copy_from_slice(buf.as_slice());
+//         let signed_tx_bytes =
+// prost::bytes::Bytes::copy_from_slice(buf.as_slice());
 
 //         request.txs = vec![ndd_bytes.clone(), signed_tx_bytes];
 
-//         let proposer_address = prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice());
+//         let proposer_address =
+// prost::bytes::Bytes::copy_from_slice(Address::ZERO.0.as_slice());
 //         request.proposer_address = proposer_address;
 
 //         request.time = Some(Timestamp::default());
@@ -3382,7 +3468,8 @@ impl ABCIDriver {
 //         s2.set_snapshot_height(100)
 //             .set_snapshot_chunks(30)
 //             .set_snapshot_format(1)
-//             .set_snapshot_hash(prost::bytes::Bytes::from("hash2".as_bytes()));
+//
+// .set_snapshot_hash(prost::bytes::Bytes::from("hash2".as_bytes()));
 
 //         assert_ne!(s1, s2);
 

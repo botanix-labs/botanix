@@ -25,9 +25,15 @@ reth-codecs = { workspace = true }
 # reth
 reth-db = { workspace = true, features = ["mdbx"] }
 reth-db-api = { workspace = true }
+reth-execution-types = { workspace = true }
+reth-node-types = { workspace = true }
+reth-trie-common = { workspace = true }
 reth-primitives = { workspace = true, features = ["reth-codec"] }
+reth-primitives-traits = { workspace = true }
 reth-prune = { workspace = true }
 reth-prune-types = { workspace = true }
+reth-provider = { workspace = true }
+reth-storage-api = { workspace = true }
 reth-storage-errors = { workspace = true }
 secp256k1 = { workspace = true, features = [
   "global-context",
@@ -38,6 +44,9 @@ serde = { workspace = true, default-features = false }
 sha2 = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+
+# Botanix
+botanix-primitives = { workspace = true }
 
 [dev-dependencies]
 arbitrary = { workspace = true }
