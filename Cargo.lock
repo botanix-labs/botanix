@@ -2795,6 +2795,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "botanix-primitives"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types",
+ "bytes 1.10.1",
+ "derive_more 2.0.1",
+ "reth-db",
+ "reth-ethereum-primitives",
+ "reth-node-builder",
+ "reth-node-types",
+ "reth-primitives",
+ "reth-primitives-traits",
+ "serde",
+]
+
+[[package]]
 name = "botanix-rpc-client"
 version = "0.1.0"
 dependencies = [
@@ -2860,6 +2880,7 @@ dependencies = [
  "alloy-primitives",
  "arbitrary",
  "auto_impl",
+ "botanix-primitives",
  "bytes 1.10.1",
  "eyre",
  "itertools 0.10.5",
@@ -2869,10 +2890,16 @@ dependencies = [
  "reth-codecs",
  "reth-db",
  "reth-db-api",
+ "reth-execution-types",
+ "reth-node-types",
  "reth-primitives",
+ "reth-primitives-traits",
+ "reth-provider",
  "reth-prune",
  "reth-prune-types",
+ "reth-storage-api",
  "reth-storage-errors",
+ "reth-trie-common",
  "secp256k1 0.30.0",
  "serde",
  "sha2 0.9.9",
@@ -12405,6 +12432,7 @@ dependencies = [
  "botanix-data-parser",
  "botanix-evm",
  "botanix-fs-util",
+ "botanix-primitives",
  "botanix-rpc-client",
  "botanix-rpc-config",
  "botanix-rpc-types",
@@ -12480,10 +12508,12 @@ dependencies = [
  "reth-primitives",
  "reth-primitives-traits",
  "reth-provider",
+ "reth-prune-types",
  "reth-revm",
  "reth-rpc-engine-api",
  "reth-rpc-eth-api",
  "reth-stages",
+ "reth-storage-api",
  "reth-tasks",
  "reth-tracing",
  "reth-transaction-pool",

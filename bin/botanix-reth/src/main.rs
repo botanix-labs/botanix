@@ -1,6 +1,7 @@
 //! Botanix Reth node entry point.
 //!
-//! This crate provides the main entry point for running a Botanix Reth node with Botanix support.
+//! This crate provides the main entry point for running a Botanix Reth node
+//! with Botanix support.
 
 use botanix_authority_rsp::RandomSourceProvider;
 use botanix_btc_server_client::BtcServerExtendedClient;
@@ -25,7 +26,8 @@ use reth_botanix::{
         AuthorityConsensusBuilder,
     },
     node::{
-        consensus::BotanixConsensus, evm::config::BotanixEvmConfig, BotanixNode,
+        consensus::BotanixConsensus, evm::config::BotanixEvmConfig,
+        storage::BotanixStorage, BotanixNode,
     },
     services::{
         activation_manager::setup_activation_manager,
@@ -44,6 +46,7 @@ use reth_botanix::{
 use reth_cli_commands::NodeCommand;
 use reth_db::DatabaseEnv;
 use reth_node_core::version::version_metadata;
+use reth_prune_types::PruneModes;
 use std::{sync::Arc, time::Duration};
 
 // We use jemalloc for performance reasons
@@ -57,7 +60,8 @@ fn main() -> eyre::Result<()> {
     tracing::info!(target: "reth::cli", version = ?version_metadata().short_version, "Starting reth with poa");
     set_panic_hook();
 
-    // Enable backtraces unless a RUST_BACKTRACE value has already been explicitly provided.
+    // Enable backtraces unless a RUST_BACKTRACE value has already been
+    // explicitly provided.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
         std::env::set_var("RUST_BACKTRACE", "full");
     }
@@ -68,7 +72,8 @@ fn main() -> eyre::Result<()> {
     let node_cmd: &NodeCommand<BotanixChainSpecParser, BotanixArgs> =
         match &cli.command {
             Commands::Node(cmd) => cmd.as_ref(),
-            // If the user ran a non-node command (e.g. `reth db`), just execute it normally.
+            // If the user ran a non-node command (e.g. `reth db`), just execute
+            // it normally.
             _ => {
                 // fall back to running without custom launcher
                 cli.run_with_components::<BotanixNode>(
@@ -154,15 +159,17 @@ fn main() -> eyre::Result<()> {
                 &db_args
             )?;
 
-            let reth_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>>::new(reth_database.clone());
-            let botanix_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>>::new(botanix_database.clone());
 
             // Create a blockchain provider
-            let (blockchain_provider, _static_files_provider, reth_provider_factory) = create_blockchain_provider(
+            let (blockchain_provider, static_files_provider, reth_provider_factory) = create_blockchain_provider(
                 chain_spec_arc.clone(),
                 &datadir_args,
                 reth_database.clone()
             )?;
+
+            let storage = Arc::new(BotanixStorage::default());
+            let reth_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(reth_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
+            let botanix_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(botanix_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
 
             // Create and connect to btc signining server if in federation mode
             let mut btc_server_client = create_btc_server_client(&poa_cfg, &bitcoind_cfg).await?;

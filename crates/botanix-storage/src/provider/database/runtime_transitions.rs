@@ -7,14 +7,16 @@ use reth_db_api::{
     cursor::DbCursorRO,
     transaction::{DbTx, DbTxMut},
 };
+use reth_node_types::NodeTypes;
+use reth_provider::DBProvider;
 use reth_storage_errors::provider::{ProviderError, ProviderResult};
 
 /// The key where we keep the highest known runtime version. We have roughly ~3
 /// trillion years time before this becomes a problem.
 const LATEST_RUNTIME_KEY: BlockNumber = u64::MAX;
 
-impl<TX: DbTxMut + DbTx> RuntimeTransitionsReadWrite
-    for BotanixDatabaseProvider<TX>
+impl<TX: DbTxMut + DbTx + 'static, N: NodeTypes> RuntimeTransitionsReadWrite
+    for BotanixDatabaseProvider<TX, N>
 {
     fn insert_runtime_upgrade_version(
         &self,
@@ -22,7 +24,8 @@ impl<TX: DbTxMut + DbTx> RuntimeTransitionsReadWrite
         version: RuntimeVersion,
     ) -> ProviderResult<bool> {
         let latest = self
-            .tx
+            .inner
+            .tx_ref()
             .get::<tables::RuntimeTransitions>(LATEST_RUNTIME_KEY)?;
 
         // Only record the highest seen runtime versions.
@@ -33,9 +36,12 @@ impl<TX: DbTxMut + DbTx> RuntimeTransitionsReadWrite
         };
 
         // Insert runtime version transition.
-        self.tx
+        self.inner
+            .tx_ref()
             .put::<tables::RuntimeTransitions>(LATEST_RUNTIME_KEY, version)?;
-        self.tx.put::<tables::RuntimeTransitions>(height, version)?;
+        self.inner
+            .tx_ref()
+            .put::<tables::RuntimeTransitions>(height, version)?;
 
         Ok(true)
     }
@@ -43,7 +49,8 @@ impl<TX: DbTxMut + DbTx> RuntimeTransitionsReadWrite
     fn get_runtime_versions(
         &self,
     ) -> ProviderResult<Vec<(BlockNumber, RuntimeVersion)>> {
-        self.tx
+        self.inner
+            .tx_ref()
             .cursor_read::<tables::RuntimeTransitions>()?
             .walk(None)?
             .filter(|e| {
@@ -60,7 +67,8 @@ impl<TX: DbTxMut + DbTx> RuntimeTransitionsReadWrite
     fn get_last_runtime_version(
         &self,
     ) -> ProviderResult<Option<RuntimeVersion>> {
-        self.tx
+        self.inner
+            .tx_ref()
             .get::<tables::RuntimeTransitions>(LATEST_RUNTIME_KEY)
             .map_err(ProviderError::Database)
     }

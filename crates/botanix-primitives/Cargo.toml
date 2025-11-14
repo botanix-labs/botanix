@@ -1,0 +1,25 @@
+[package]
+name = "botanix-primitives"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+alloy-consensus = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-rlp = { workspace = true }
+alloy-rpc-types = { workspace = true }
+alloy-eips = { workspace = true }
+bytes = { workspace = true }
+derive_more = { workspace = true }
+reth-db = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
+reth-node-builder = { workspace = true }
+reth-node-types = { workspace = true }
+reth-primitives = { workspace = true }
+reth-primitives-traits = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

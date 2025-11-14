@@ -40,10 +40,12 @@ use reth_network::{
     NetworkHandle,
 };
 use reth_node_builder::NodeTypesWithDBAdapter;
+use reth_primitives::NodePrimitives;
 use reth_provider::{
     BlockReaderIdExt, CanonChainTracker, CanonStateSubscriptions,
     ProviderFactory, StateProviderFactory,
 };
+use reth_storage_api::NodePrimitivesProvider;
 use reth_tasks::TaskExecutor;
 use std::{
     net::SocketAddr,
@@ -193,9 +195,9 @@ where
         };
         info!("Aggregate public key: {:?}", agg_pk);
 
-        // authority length represents a non federation node since it would be out of bounds
-        // this prevents the node from signing blocks although there are other checks to stop this
-        // as well
+        // authority length represents a non federation node since it would be
+        // out of bounds this prevents the node from signing blocks
+        // although there are other checks to stop this as well
         let mut signer_index = Some(genesis_authorities.len() + 1);
         // only a federation node has a btc_server
         if is_fed_node {
@@ -217,8 +219,8 @@ where
             signer_index.expect("valid index"),
             pk,
             btc_network,
-            // Aggregate pk to be filled out by the dkg state machine if we are still on genesis
-            // block
+            // Aggregate pk to be filled out by the dkg state machine if we are
+            // still on genesis block
             agg_pk,
             authority_socket_addresses,
             evm_config,
@@ -249,9 +251,9 @@ where
         })
     }
 
-    /// Builds and returns the necessary components for the authority consensus, including the
-    /// consensus itself, the client used to interact with the consensus, and the block
-    /// production task.
+    /// Builds and returns the necessary components for the authority consensus,
+    /// including the consensus itself, the client used to interact with the
+    /// consensus, and the block production task.
     pub async fn build<BtcServerClient>(
         self,
     ) -> (
@@ -263,6 +265,7 @@ where
     where
         BtcServerClient: BtcServerExtendedApi + Clone + Send + Sync + 'static,
         BtcServerExtendedClient: Into<BtcServerClient>,
+    <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader: HeaderExt
     {
         let Self {
             btc_server_factory,
@@ -377,7 +380,8 @@ where
             None
         };
 
-        // run a background health monitoring task for the btc server, comet and bitcoind
+        // run a background health monitoring task for the btc server, comet and
+        // bitcoind
         if is_fed_node {
             let mut btc_server_client = btc_server_client;
             let cbft_rpc_provider =
@@ -429,11 +433,6 @@ where
             );
         }
 
-        (
-            frost_task,
-            abci_client_builder,
-            snapshot_manager,
-            wallet_sync,
-        )
+        (frost_task, abci_client_builder, snapshot_manager, wallet_sync)
     }
 }
