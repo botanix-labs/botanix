@@ -18,10 +18,7 @@ pub struct BotanixTxEnv {
 
 impl BotanixTxEnv {
     pub fn new(base: TxEnv) -> Self {
-        Self {
-            base,
-            is_system_transaction: false,
-        }
+        Self { base, is_system_transaction: false }
     }
 }
 
@@ -138,10 +135,7 @@ impl FromTxWithEncoded<TransactionSigned> for BotanixTxEnv {
             }
         };
 
-        Self {
-            base,
-            is_system_transaction: false,
-        }
+        Self { base, is_system_transaction: false }
     }
 }
 
@@ -177,10 +171,7 @@ impl SystemCallTx for BotanixTxEnv {
             .build()
             .unwrap();
 
-        Self {
-            base,
-            is_system_transaction: true,
-        }
+        Self { base, is_system_transaction: true }
     }
 }
 

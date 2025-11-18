@@ -49,8 +49,7 @@ where
         block: u64,
         remove_from: StorageLocation,
     ) -> ProviderResult<()> {
-        self.0
-            .remove_block_bodies_above(provider, block, remove_from)?;
+        self.0.remove_block_bodies_above(provider, block, remove_from)?;
 
         // TODO: Remove sidecars
 
@@ -75,10 +74,7 @@ where
 
         Ok(eth_bodies
             .into_iter()
-            .map(|inner| BotanixBlockBody {
-                inner,
-                sidecars: None,
-            })
+            .map(|inner| BotanixBlockBody { inner, sidecars: None })
             .collect())
     }
 }

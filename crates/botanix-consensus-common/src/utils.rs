@@ -6,10 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Returns the unix timestamp in seconds
 pub fn unix_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
 /// Splits block fees three ways:
@@ -36,11 +33,7 @@ pub const fn block_fees_split(total_block_fees: u128) -> (u128, u128, u128) {
         .checked_sub(botanix_fees)
         .expect("underflow when subtracting botanix_fees");
 
-    (
-        lst_fee_receiver_fees,
-        botanix_fees,
-        block_fee_recipient_fees,
-    )
+    (lst_fee_receiver_fees, botanix_fees, block_fee_recipient_fees)
 }
 
 /// Validate poa block beneficiary

@@ -128,10 +128,7 @@ pub trait OutPointExt: Into<OutPoint> {
     }
 
     fn from_bdk(outpoint: bdk_wallet::bitcoin::OutPoint) -> OutPoint {
-        bitcoin::OutPoint {
-            txid: outpoint.txid,
-            vout: outpoint.vout,
-        }
+        bitcoin::OutPoint { txid: outpoint.txid, vout: outpoint.vout }
     }
 }
 
@@ -163,10 +160,8 @@ pub fn deserialize_frost_peer_id(
     if id.len() != 32 {
         return Err(ParsingError::FrostPeerId);
     }
-    let peer_id_bytes: &[u8; 32] = id
-        .as_slice()
-        .try_into()
-        .map_err(|_e| ParsingError::FrostPeerId)?;
+    let peer_id_bytes: &[u8; 32] =
+        id.as_slice().try_into().map_err(|_e| ParsingError::FrostPeerId)?;
 
     let frost_id = frost::Identifier::deserialize(peer_id_bytes)
         .map_err(|_e| ParsingError::FrostPeerId)?;
@@ -309,11 +304,8 @@ pub fn validate_psbt(
         },
     };
 
-    let total_outputs_amount = psbt
-        .unsigned_tx
-        .output
-        .iter()
-        .fold(Amount::ZERO, |total, output| {
+    let total_outputs_amount =
+        psbt.unsigned_tx.output.iter().fold(Amount::ZERO, |total, output| {
             total.checked_add(output.value).unwrap_or_default()
         });
 
@@ -415,10 +407,8 @@ pub fn validate_psbt(
             if psbt_input.witness_utxo.is_none() {
                 return Err(ValidatePSBTError::MissingWitnessUtxo);
             }
-            let txout = psbt_input
-                .witness_utxo
-                .as_ref()
-                .expect("valid witness utxo");
+            let txout =
+                psbt_input.witness_utxo.as_ref().expect("valid witness utxo");
             // Check txout is valid
             let store_txout = utxo.expect("valid utxo").output;
             if store_txout != *txout {
@@ -679,8 +669,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         let mut psbt = create_psbt(1, 1, Some(get_change(&db)));
@@ -726,8 +715,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         let mut psbt = create_psbt(2, 1, Some(get_change(&db)));
@@ -798,8 +786,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         let mut psbt = create_psbt(2, 1, Some(get_change(&db)));
@@ -877,8 +864,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
 
@@ -913,8 +899,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
 
@@ -951,8 +936,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
 
@@ -992,8 +976,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
 
@@ -1020,8 +1003,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         db.store_utxos(&[&utxo]).unwrap();
         db.flush().unwrap();
@@ -1057,8 +1039,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         db.store_utxos(&[&utxo]).unwrap();
         db.flush().unwrap();
@@ -1080,8 +1061,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
 
@@ -1130,8 +1110,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         psbt.outputs[0].set_pegout_id(pegout_id.as_bytes());
@@ -1152,8 +1131,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         psbt.outputs[0].set_pegout_id(pegout_id.as_bytes());
@@ -1172,8 +1150,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         psbt.outputs[0].set_pegout_id(pegout_id.as_bytes());
@@ -1193,8 +1170,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         psbt.outputs[0].set_pegout_id(pegout_id.as_bytes());
@@ -1230,8 +1206,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
 
@@ -1292,8 +1267,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         let pegout_id = store_pending_pegout(&db);
         let mut psbt = create_psbt(2, 1, Some(get_change(&db)));
@@ -1341,8 +1315,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         // WARNING: Here we prepare a non-aggregated key package for the change output
         let malicious_output = TxOut {
@@ -1397,8 +1370,7 @@ mod tests {
         // Add the key packages as they are needed by validate_outputs
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         // Create a base PSBT
         let mut psbt = create_psbt(1, 1, Some(get_change(&db))); // 1 output + 1 change = 2 outputs in psbt.outputs
@@ -1873,8 +1845,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         // store finalized pegout
         let pegout_id = PegoutId::new(rand::thread_rng().gen::<[u8; 32]>(), 0);
@@ -1909,8 +1880,7 @@ mod tests {
         // Add the key packages
         db.set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        db.set_key_package(key_package.clone())
-            .expect("set key package");
+        db.set_key_package(key_package.clone()).expect("set key package");
 
         // store finalized pegout
         let pegout_id = PegoutId::new(rand::thread_rng().gen::<[u8; 32]>(), 0);

@@ -141,10 +141,7 @@ pub struct PegoutRequest {
 
 impl PegoutRequest {
     pub fn txout(&self) -> TxOut {
-        TxOut {
-            script_pubkey: self.spk.clone(),
-            value: self.value,
-        }
+        TxOut { script_pubkey: self.spk.clone(), value: self.value }
     }
 }
 
@@ -306,10 +303,7 @@ impl PegoutScheduler {
             self.txs_by_input.entry(input).or_default().push(tx.txid);
         }
         for (_utxo, pegout) in tx.pegouts() {
-            self.txs_by_pegout
-                .entry(pegout.clone())
-                .or_default()
-                .push(tx.txid);
+            self.txs_by_pegout.entry(pegout.clone()).or_default().push(tx.txid);
         }
         self.txs.insert(tx.txid, tx);
     }
@@ -474,17 +468,13 @@ impl PegoutScheduler {
             drop.relevant_inputs
         );
         for txid in drop.relevant_txs {
-            let tx = self
-                .txs
-                .get(&txid)
-                .expect("relevant tx should exist")
-                .clone();
+            let tx =
+                self.txs.get(&txid).expect("relevant tx should exist").clone();
             // Currently confirmed_txs is not used, could remove this
             self.confirmed_txs.remove(&txid);
             // TODO should we remove the expect here
             self.un_track_tx(&txid).expect("untrack tx");
-            self.add_tx_back_to_pending(&tx)
-                .expect("add tx back to pending");
+            self.add_tx_back_to_pending(&tx).expect("add tx back to pending");
         }
     }
 
@@ -506,11 +496,8 @@ impl PegoutScheduler {
 
         // To make sure we only update the index when the db is also synced,
         // first try store the new finalized UTXOs to the db, then update the index.
-        let mut all_inputs = block
-            .relevant_inputs
-            .iter()
-            .copied()
-            .collect::<HashSet<_>>();
+        let mut all_inputs =
+            block.relevant_inputs.iter().copied().collect::<HashSet<_>>();
         for txid in &block.relevant_txs {
             let tx = self
                 .txs
@@ -736,10 +723,7 @@ impl PegoutScheduler {
             .collect::<Vec<_>>();
         debug!(
             "Txids older than checkpoint: {:?}",
-            maybe_dropped_txs
-                .iter()
-                .map(|t| t.to_string())
-                .collect::<Vec<_>>()
+            maybe_dropped_txs.iter().map(|t| t.to_string()).collect::<Vec<_>>()
         );
 
         // Check if tx still exists
@@ -1277,10 +1261,7 @@ pub fn is_syncing(
         initialblockdownload: bool,
     }
 
-    if bitcoind
-        .call::<Res>("getblockchaininfo", &[])?
-        .initialblockdownload
-    {
+    if bitcoind.call::<Res>("getblockchaininfo", &[])?.initialblockdownload {
         return Ok(true);
     }
 
@@ -1300,9 +1281,8 @@ pub fn is_syncing(
         bitcoind.get_block_header_info(&best_block_hash)
     )?;
 
-    let elapsed = SystemTime::now()
-        .duration_since(tip.block_time())
-        .unwrap_or_default();
+    let elapsed =
+        SystemTime::now().duration_since(tip.block_time()).unwrap_or_default();
     if elapsed > Duration::from_secs(60 * 60) {
         // The tip is over an hour old, node is probably still syncing.
         return Ok(true);
@@ -1462,8 +1442,7 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
 
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let agg_pk = db
@@ -1474,10 +1453,8 @@ mod tests {
             .to_secp_pk()
             .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut {
-            value: Amount::from_sat(1000),
-            script_pubkey: change_spk,
-        };
+        let change_output =
+            TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
         let tx = create_tx(3, 3, Some(change_output.clone()));
         let pegout_idxs = vec![0, 1, 2];
         let change_idxs = vec![3];
@@ -1559,8 +1536,7 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
 
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1606,8 +1582,7 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
 
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let agg_pk = db
@@ -1618,10 +1593,8 @@ mod tests {
             .to_secp_pk()
             .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut {
-            value: Amount::from_sat(1000),
-            script_pubkey: change_spk,
-        };
+        let change_output =
+            TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
 
         let mut pegout_scheduler = PegoutScheduler::new(
             101,
@@ -1646,9 +1619,7 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         assert_eq!(last_blocks.len(), 2);
         let last_block = last_blocks.back().unwrap();
-        pegout_scheduler
-            .finalize_block(last_block)
-            .expect("finalize block");
+        pegout_scheduler.finalize_block(last_block).expect("finalize block");
 
         assert_eq!(pegout_scheduler.last_finalized, block.block_hash());
 
@@ -1673,8 +1644,7 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
 
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let agg_pk = db
@@ -1685,10 +1655,8 @@ mod tests {
             .to_secp_pk()
             .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut {
-            value: Amount::from_sat(1000),
-            script_pubkey: change_spk,
-        };
+        let change_output =
+            TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
 
         let mut pegout_scheduler = PegoutScheduler::new(
             101,
@@ -1715,9 +1683,7 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         let last_block = last_blocks.back().unwrap();
 
-        pegout_scheduler
-            .finalize_block(last_block)
-            .expect("finalize block");
+        pegout_scheduler.finalize_block(last_block).expect("finalize block");
 
         let utxos = db.get_all_utxos().unwrap();
         // there is now one change so there is one UTXO to add back to UTXO set
@@ -1735,8 +1701,7 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
 
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1767,9 +1732,7 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         let last_block = last_blocks.back().unwrap();
 
-        pegout_scheduler
-            .finalize_block(last_block)
-            .expect("finalize block");
+        pegout_scheduler.finalize_block(last_block).expect("finalize block");
 
         let utxos = db.get_all_utxos().unwrap();
         // No change so there is no UTXO to add back to UTXO set
@@ -1787,8 +1750,7 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
 
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
         let mut pegout_scheduler = PegoutScheduler::new(
             101,
@@ -1826,9 +1788,7 @@ mod tests {
         let last_blocks = pegout_scheduler.last_blocks.clone();
         let last_block = last_blocks.back().unwrap();
 
-        pegout_scheduler
-            .finalize_block(last_block)
-            .expect("finalize block");
+        pegout_scheduler.finalize_block(last_block).expect("finalize block");
 
         let utxos = db.get_all_utxos().unwrap();
         // No change so there is no UTXO to add back to UTXO set
@@ -1874,8 +1834,7 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
 
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
         let agg_pk = db
             .get_public_key_package()
@@ -1885,10 +1844,8 @@ mod tests {
             .to_secp_pk()
             .unwrap();
         let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
-        let change_output = TxOut {
-            value: Amount::from_sat(1000),
-            script_pubkey: change_spk,
-        };
+        let change_output =
+            TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
 
         let mut pegout_scheduler = PegoutScheduler::new(
             1,
@@ -1945,9 +1902,7 @@ mod tests {
         );
         assert_eq!(pegout_scheduler.txs.len(), 1);
 
-        pegout_scheduler
-            .un_track_tx(&tx.compute_txid())
-            .expect("untrack tx");
+        pegout_scheduler.un_track_tx(&tx.compute_txid()).expect("untrack tx");
         // Check the mapping is correct
         let txs_by_pegout = pegout_scheduler.txs_by_pegout.clone();
         assert_eq!(txs_by_pegout.len(), 0);
@@ -1969,8 +1924,7 @@ mod tests {
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -2043,8 +1997,7 @@ mod tests {
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
                 .expect("valid key package");
-        db.set_pubkey_package(pk_package)
-            .expect("set public key package");
+        db.set_pubkey_package(pk_package).expect("set public key package");
         db.set_key_package(key_package).expect("set key package");
 
         let mut pegout_scheduler = PegoutScheduler::new(

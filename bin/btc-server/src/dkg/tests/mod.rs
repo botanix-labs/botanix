@@ -113,11 +113,7 @@ impl CheckedSend {
             payloads.push(dkg);
         }
 
-        CheckedSend {
-            payloads,
-            sender,
-            cursor: 0,
-        }
+        CheckedSend { payloads, sender, cursor: 0 }
     }
     pub fn round1(
         mut self,
@@ -163,12 +159,7 @@ impl CheckedSend {
     ) -> Self {
         let dkg = &self.payloads[self.cursor];
 
-        let DkgMessage::Round2 {
-            initiator: i,
-            target: t,
-            ..
-        } = dkg.msg
-        else {
+        let DkgMessage::Round2 { initiator: i, target: t, .. } = dkg.msg else {
             panic!("Expected round2 message");
         };
 
@@ -188,11 +179,7 @@ impl CheckedSend {
     ) -> Self {
         let dkg = &self.payloads[self.cursor];
 
-        let DkgMessage::AckRound2 {
-            initiator: i,
-            target: t,
-        } = dkg.msg
-        else {
+        let DkgMessage::AckRound2 { initiator: i, target: t } = dkg.msg else {
             panic!("Expected ack_round2 message");
         };
 
@@ -249,8 +236,6 @@ impl CheckedSend {
             panic!("Not all messages were checked");
         }
 
-        self.payloads
-            .try_into()
-            .expect("Failed to retrieve messages")
+        self.payloads.try_into().expect("Failed to retrieve messages")
     }
 }

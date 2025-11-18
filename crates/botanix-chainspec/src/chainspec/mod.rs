@@ -119,11 +119,8 @@ impl BotanixChainSpec {
         let genesis_base_fee = self.clone().initial_base_fee_by_chain_id();
 
         // If Jalepeno is activated at genesis, we set the initial base fee as per EIP-1559.
-        (self
-            .inner
-            .fork(BotanixHardfork::Jalapeno)
-            .active_at_block(0))
-        .then_some(genesis_base_fee)
+        (self.inner.fork(BotanixHardfork::Jalapeno).active_at_block(0))
+            .then_some(genesis_base_fee)
     }
 }
 
@@ -259,10 +256,7 @@ impl BotanixChainSpec {
 
 impl From<ChainSpec> for BotanixChainSpec {
     fn from(value: ChainSpec) -> Self {
-        Self {
-            inner: value,
-            ..Default::default()
-        }
+        Self { inner: value, ..Default::default() }
     }
 }
 

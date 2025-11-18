@@ -62,9 +62,8 @@ pub fn get_round1_signing_package(
 
     let num_inputs = psbt.inputs.len();
 
-    let key_package = db
-        .get_key_package()?
-        .ok_or(SigningRound1Error::MissingKeyPackage)?;
+    let key_package =
+        db.get_key_package()?.ok_or(SigningRound1Error::MissingKeyPackage)?;
     // Get our secret package
     let secret = key_package.signing_share();
     let mut nonces = vec![];
@@ -125,15 +124,12 @@ pub fn get_round2_signing_package(
         }
     }
 
-    let key_package = db
-        .get_key_package()?
-        .ok_or(SigningRound2Error::MissingKeyPackage)?;
+    let key_package =
+        db.get_key_package()?.ok_or(SigningRound2Error::MissingKeyPackage)?;
 
     // Get a partial signature for each input
-    for (index, (signing_package, psbt_in)) in signing_packages
-        .iter_mut()
-        .zip(psbt.inputs.iter_mut())
-        .enumerate()
+    for (index, (signing_package, psbt_in)) in
+        signing_packages.iter_mut().zip(psbt.inputs.iter_mut()).enumerate()
     {
         let eth_address_tweak = psbt_in.eth_address();
         // TODO this will need to be revisited when we add tapleaves as all signatures will need

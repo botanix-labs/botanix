@@ -183,10 +183,8 @@ mod test {
         );
 
         // now decompress the prost message
-        let prost_serialized_decompressed = parser
-            .decompress(&prost_serialized_compressed)
-            .await
-            .unwrap();
+        let prost_serialized_decompressed =
+            parser.decompress(&prost_serialized_compressed).await.unwrap();
         let prost_serialized_decompressed_clone =
             prost_serialized_decompressed.clone();
         let prost_deserialized =

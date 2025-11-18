@@ -35,10 +35,7 @@ impl<'a> TableTransporter<'a> {
         reth_tx: &'a Tx<reth_db::mdbx::RW>,
         botanix_tx: &'a Tx<reth_db::mdbx::RW>,
     ) -> Self {
-        Self {
-            reth_tx,
-            botanix_tx,
-        }
+        Self { reth_tx, botanix_tx }
     }
 
     /// Transfers all entries from a reth database table to a botanix database table.

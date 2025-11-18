@@ -473,10 +473,7 @@ pub fn get_change(db: &database::Db) -> TxOut {
         .expect("valid secp pk");
     let change_script =
         crate::wallet::address::generate_taproot_change_scriptpubkey(&secp_pk);
-    TxOut {
-        value: Amount::from_sat(500),
-        script_pubkey: change_script,
-    }
+    TxOut { value: Amount::from_sat(500), script_pubkey: change_script }
 }
 
 pub fn store_pending_pegout(db: &database::Db) -> PegoutId {
@@ -507,10 +504,8 @@ pub fn add_dummy_signatures_to_psbt(
             )
             .expect("Valid dummy signature");
 
-            let taproot_sig = TaprootSignature {
-                signature: dummy_schnorr_sig,
-                sighash_type,
-            };
+            let taproot_sig =
+                TaprootSignature { signature: dummy_schnorr_sig, sighash_type };
 
             // Set the taproot signature
             input.tap_key_sig = Some(taproot_sig.clone());

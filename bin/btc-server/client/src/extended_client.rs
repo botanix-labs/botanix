@@ -356,10 +356,7 @@ pub struct GrpcClientFactory {
 
 impl GrpcClientFactory {
     pub fn new(grpc_url: String, jwt_secret: Option<JwtSecret>) -> Self {
-        Self {
-            grpc_url,
-            jwt_secret,
-        }
+        Self { grpc_url, jwt_secret }
     }
 
     pub async fn build_and_connect(
@@ -393,10 +390,8 @@ mod tests {
         let jwt_secret = JwtSecret::random();
 
         // create jwt token using the secret
-        let claims = Claims {
-            iat: to_u64(SystemTime::now()),
-            exp: Some(10000000000),
-        };
+        let claims =
+            Claims { iat: to_u64(SystemTime::now()), exp: Some(10000000000) };
         let jwt_token = jwt_secret.encode(&claims).unwrap();
 
         // encode and set the token as a metadata value

@@ -58,11 +58,7 @@ TODO: Additional test:
 * Incremental `.validate_*` calls
 */
 
-fn setup() -> (
-    DkgHandshakeManager,
-    DkgHandshakeManager,
-    DkgHandshakeManager,
-) {
+fn setup() -> (DkgHandshakeManager, DkgHandshakeManager, DkgHandshakeManager) {
     let secp = secp256k1::Secp256k1::new();
 
     let alice_sec = secp256k1::SecretKey::new(&mut rand::thread_rng());

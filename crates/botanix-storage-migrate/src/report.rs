@@ -40,10 +40,7 @@ impl MigrationReport {
         keys_count: usize,
         start_time: std::time::Instant,
     ) -> Self {
-        Self {
-            keys_count,
-            elapsed_time: start_time.elapsed(),
-        }
+        Self { keys_count, elapsed_time: start_time.elapsed() }
     }
 
     /// Checks if the migration has been performed by verifying if any keys were migrated.

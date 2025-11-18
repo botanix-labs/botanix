@@ -78,10 +78,8 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
         reth_database: RDB,
         botanix_database_factory: BDB,
     ) -> Self {
-        let storage_inner = StorageInner {
-            aggregate_public_key,
-            is_block_syncing: false,
-        };
+        let storage_inner =
+            StorageInner { aggregate_public_key, is_block_syncing: false };
 
         Self {
             reth_database,

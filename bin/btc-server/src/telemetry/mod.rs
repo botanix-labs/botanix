@@ -22,10 +22,7 @@ impl Telemetry {
                 .expect("msg: failed to create BtcServerMetrics"),
         ));
 
-        Ok(Arc::new(Self {
-            system,
-            btc_server_metrics,
-        }))
+        Ok(Arc::new(Self { system, btc_server_metrics }))
     }
 
     pub async fn start(&self) -> anyhow::Result<()> {

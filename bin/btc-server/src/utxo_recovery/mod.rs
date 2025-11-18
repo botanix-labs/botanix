@@ -30,15 +30,10 @@ impl TryFrom<UtxoRecoveryData> for UtxoToRecover {
     fn try_from(data: UtxoRecoveryData) -> Result<Self, Self::Error> {
         // Parse the hex string into a bitcoin::Txid first to ensure we handle endianness correctly
         let txid = data.txid.parse::<bitcoin::Txid>().map_err(|_| {
-            UtxoRecoveryError::InvalidTxid {
-                txid: data.txid.clone(),
-            }
+            UtxoRecoveryError::InvalidTxid { txid: data.txid.clone() }
         })?;
 
-        let bitcoin_outpoint = bitcoin::OutPoint {
-            txid,
-            vout: data.vout,
-        };
+        let bitcoin_outpoint = bitcoin::OutPoint { txid, vout: data.vout };
         let outpoint = OutPoint {
             txid: bitcoin_outpoint.txid.to_byte_array().to_vec(),
             vout: bitcoin_outpoint.vout,

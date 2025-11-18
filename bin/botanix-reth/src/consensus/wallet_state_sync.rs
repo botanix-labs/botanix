@@ -435,10 +435,7 @@ where
                     // (re-)start the current response cycle
                     current_response_cycle.write().await.replace(uuid);
                 }
-                CanonStateNotification::Reorg {
-                    old: _old,
-                    new: _new,
-                } => {
+                CanonStateNotification::Reorg { old: _old, new: _new } => {
                     warn!(target: "consensus::authority::snapshot_manager::run", "reorg detected, this should not happen");
                     continue;
                 }

@@ -145,9 +145,7 @@ impl NonDeterministicData {
     pub(crate) fn serialize(&self) -> Result<Vec<u8>, io::Error> {
         let mut writer = Vec::new();
         self.bitcoin_block_hash.consensus_encode(&mut writer)?;
-        self.aggregated_public_key
-            .serialize()
-            .consensus_encode(&mut writer)?;
+        self.aggregated_public_key.serialize().consensus_encode(&mut writer)?;
         self.version().consensus_encode(&mut writer)?;
 
         // Version 1 has a block fee recipient address.
