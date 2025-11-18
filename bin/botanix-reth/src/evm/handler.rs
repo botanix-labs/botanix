@@ -35,9 +35,7 @@ pub struct BotanixHandler<DB: revm::database::Database, INSP> {
 
 impl<DB: revm::database::Database, INSP> BotanixHandler<DB, INSP> {
     pub fn new() -> Self {
-        Self {
-            mainnet: MainnetHandler::default(),
-        }
+        Self { mainnet: MainnetHandler::default() }
     }
 }
 
@@ -155,10 +153,7 @@ impl<DB: Database, INSP> Handler for BotanixHandler<DB, INSP> {
         let tx = ctx.tx();
 
         if tx.is_system_transaction {
-            return Ok(InitialAndFloorGas {
-                initial_gas: 0,
-                floor_gas: 0,
-            });
+            return Ok(InitialAndFloorGas { initial_gas: 0, floor_gas: 0 });
         }
 
         self.mainnet.validate_initial_tx_gas(evm)
@@ -235,10 +230,9 @@ impl<DB: Database, INSP> Handler for BotanixHandler<DB, INSP> {
                 gas_used: final_gas_used,
                 output: output.into_data(),
             },
-            SuccessOrHalt::Halt(reason) => ExecutionResult::Halt {
-                reason,
-                gas_used: final_gas_used,
-            },
+            SuccessOrHalt::Halt(reason) => {
+                ExecutionResult::Halt { reason, gas_used: final_gas_used }
+            }
             // Only two internal return flags.
             flag @ (SuccessOrHalt::FatalExternalError
             | SuccessOrHalt::Internal(_)) => {

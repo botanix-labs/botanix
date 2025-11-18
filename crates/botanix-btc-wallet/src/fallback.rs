@@ -12,7 +12,7 @@ use std::sync::Arc;
 pub enum ClientSelection {
     #[default]
     Fallback, // Use all clients with fallback
-    Secondary, // Use only seconadary provider only
+    Secondary, // Use only secondary provider
     Primary,   // Use only first provider
 }
 
@@ -162,7 +162,6 @@ impl FallbackBitcoindClient {
         match error {
             BitcoindAdapterError::BitcoindRpc(_) => true, // Fallback on all rpc errors
             BitcoindAdapterError::NoClientsAvailable => false, // No point in falling back as no clients are available
-            _ => true, // Fallback on other errors
         }
     }
 }
@@ -413,18 +412,16 @@ mod tests {
     #[async_trait]
     impl BitcoindRpc for MockRpcClient {
         async fn is_synced(&self) -> Result<bool, BitcoindError> {
-            MockableRpcClient::is_synced(self)
-                .await
-                .map_err(|e| match e {
-                    BitcoindAdapterError::BitcoindRpc(err) => err,
-                    _ => BitcoindError::BlockchainInfoFailed(
-                        bitcoincore_rpc::Error::JsonRpc(
-                            bitcoincore_rpc::jsonrpc::error::Error::Transport(
-                                "Mock error".to_string().into(),
-                            ),
+            MockableRpcClient::is_synced(self).await.map_err(|e| match e {
+                BitcoindAdapterError::BitcoindRpc(err) => err,
+                _ => BitcoindError::BlockchainInfoFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            "Mock error".to_string().into(),
                         ),
                     ),
-                })
+                ),
+            })
         }
 
         async fn wait_until_synced(&self) {
@@ -557,10 +554,8 @@ mod tests {
         let expected_hash = BlockHash::all_zeros();
 
         // First client fails
-        mock_client1
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client1.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -570,7 +565,8 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
         // Second client succeeds
         mock_client2
@@ -631,10 +627,8 @@ mod tests {
         let mut mock_client2 = MockRpcClient::new();
 
         // Both clients fail
-        mock_client1
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client1.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -644,12 +638,11 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
-        mock_client2
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client2.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -659,7 +652,8 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
         let clients = vec![
             BitcoindClientWrapper::Mock(Arc::new(mock_client1)),
@@ -700,10 +694,8 @@ mod tests {
         let mut mock_client2 = MockRpcClient::new();
 
         // Primary client fails
-        mock_client1
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client1.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -713,7 +705,8 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
         // Second client should never be called in Primary mode
         mock_client2.expect_get_best_block_hash_rpc().times(0);
@@ -808,10 +801,8 @@ mod tests {
         let expected_hash = BlockHash::all_zeros();
 
         // First two clients fail with fallback-worthy errors
-        mock_client1
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client1.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -821,12 +812,11 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
-        mock_client2
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client2.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -836,7 +826,8 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
         // Third client succeeds
         mock_client3
@@ -895,10 +886,8 @@ mod tests {
         let mut mock_client2 = MockRpcClient::new();
 
         // Both clients fail with errors that should trigger fallback
-        mock_client1
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client1.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -908,12 +897,11 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
-        mock_client2
-            .expect_get_best_block_hash_rpc()
-            .times(1)
-            .returning(|| {
+        mock_client2.expect_get_best_block_hash_rpc().times(1).returning(
+            || {
                 Err(BitcoindAdapterError::BitcoindRpc(
                     BitcoindError::BestBlockHashRetrievalFailed(
                         bitcoincore_rpc::Error::JsonRpc(
@@ -923,7 +911,8 @@ mod tests {
                         ),
                     ),
                 ))
-            });
+            },
+        );
 
         let clients = vec![
             BitcoindClientWrapper::Mock(Arc::new(mock_client1)),
@@ -972,10 +961,7 @@ mod tests {
         });
 
         // Second client succeeds
-        mock_client2
-            .expect_is_synced()
-            .times(1)
-            .returning(|| Ok(true));
+        mock_client2.expect_is_synced().times(1).returning(|| Ok(true));
 
         let clients = vec![
             BitcoindClientWrapper::Mock(Arc::new(mock_client1)),
@@ -1007,20 +993,17 @@ mod tests {
         };
 
         // First client fails
-        mock_client1
-            .expect_get_block_header_rpc()
-            .times(1)
-            .returning(|_| {
-                Err(BitcoindAdapterError::BitcoindRpc(
-                    BitcoindError::BlockHeaderRetrievalFailed(
-                        bitcoincore_rpc::Error::JsonRpc(
-                            bitcoincore_rpc::jsonrpc::error::Error::Transport(
-                                "Connection failed".to_string().into(),
-                            ),
+        mock_client1.expect_get_block_header_rpc().times(1).returning(|_| {
+            Err(BitcoindAdapterError::BitcoindRpc(
+                BitcoindError::BlockHeaderRetrievalFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            "Connection failed".to_string().into(),
                         ),
                     ),
-                ))
-            });
+                ),
+            ))
+        });
 
         // Second client succeeds
         mock_client2

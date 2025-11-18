@@ -247,7 +247,6 @@ reth = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-basic-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 
 # Botanix deps
-reth_botanix = { path = "bin/botanix-reth" }
 reth-chain-state = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-chainspec = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-cli = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
@@ -259,7 +258,9 @@ reth-codecs-derive = { git = "https://github.com/botanix-labs/reth", branch = "b
 reth-config = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-consensus = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-consensus-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+  "mdbx",
+] }
 reth-db-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-db-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-db-models = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
@@ -330,6 +331,7 @@ reth-transaction-pool = { git = "https://github.com/botanix-labs/reth", branch =
 reth-trie = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-trie-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-trie-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth_botanix = { path = "bin/botanix-reth" }
 
 # revm - exact version to match fork
 revm = "=28.0.1"

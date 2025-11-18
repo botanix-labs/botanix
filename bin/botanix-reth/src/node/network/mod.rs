@@ -65,11 +65,7 @@ mod rlp {
                         body:
                             BotanixBlockBody {
                                 inner:
-                                    BlockBody {
-                                        transactions,
-                                        ommers,
-                                        withdrawals,
-                                    },
+                                    BlockBody { transactions, ommers, withdrawals },
                                 sidecars,
                             },
                     },
@@ -102,13 +98,7 @@ mod rlp {
     impl Decodable for BotanixNewBlock {
         fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
             let BotanixNewBlockHelper {
-                block:
-                    BlockHelper {
-                        header,
-                        transactions,
-                        ommers,
-                        withdrawals,
-                    },
+                block: BlockHelper { header, transactions, ommers, withdrawals },
                 td,
                 sidecars,
             } = BotanixNewBlockHelper::decode(buf)?;

@@ -19,11 +19,8 @@ pub fn truncate(
         tracing::info!(target: "db_cleaner::cli", "Processing snapshot {snapshot_id} ...");
 
         // === Chunks ===
-        let mut chunk_ids = snapshot
-            .chunk_ids()
-            .iter()
-            .cloned()
-            .collect::<Vec<ChunkId>>();
+        let mut chunk_ids =
+            snapshot.chunk_ids().iter().cloned().collect::<Vec<ChunkId>>();
         chunk_ids.sort();
         if let (Some(start), Some(end)) = (chunk_ids.first(), chunk_ids.last())
         {
@@ -34,11 +31,8 @@ pub fn truncate(
         }
 
         // === Blocks ===
-        let mut block_ids = snapshot
-            .block_ids()
-            .iter()
-            .cloned()
-            .collect::<Vec<BlockNumber>>();
+        let mut block_ids =
+            snapshot.block_ids().iter().cloned().collect::<Vec<BlockNumber>>();
         block_ids.sort();
         if let (Some(start), Some(end)) = (block_ids.first(), block_ids.last())
         {

@@ -45,10 +45,7 @@ impl BotanixConfig {
         bitcoin_network: bitcoin::Network,
         bitcoind_factory: Arc<FallbackBitcoindClient>,
     ) -> Self {
-        Self {
-            bitcoin_network,
-            bitcoind_factory,
-        }
+        Self { bitcoin_network, bitcoind_factory }
     }
 }
 
@@ -154,9 +151,7 @@ pub struct Botanix {
 impl Botanix {
     /// Creates and returns instance of [Botanix]
     pub const fn new(config: BotanixConfig) -> Self {
-        Self {
-            botanix_rpc_config: config,
-        }
+        Self { botanix_rpc_config: config }
     }
 
     /// Returns the configuration of botanix provider

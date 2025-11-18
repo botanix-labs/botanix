@@ -91,20 +91,15 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        let result = self
-            .inner
-            .system_call_one_with_caller(caller, contract, data)?;
+        let result =
+            self.inner.system_call_one_with_caller(caller, contract, data)?;
         let state = self.finalize();
         Ok(ResultAndState::new(result, state))
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
-        let Context {
-            block: block_env,
-            cfg: cfg_env,
-            journaled_state,
-            ..
-        } = self.inner.ctx;
+        let Context { block: block_env, cfg: cfg_env, journaled_state, .. } =
+            self.inner.ctx;
 
         (journaled_state.database, EvmEnv { block_env, cfg_env })
     }

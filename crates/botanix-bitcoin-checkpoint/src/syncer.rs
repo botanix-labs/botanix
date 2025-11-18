@@ -54,10 +54,7 @@ struct SyncedCheckpointInfo {
 /// Conversion from a [BitcoinCheckpoint] to [SyncedCheckpointInfo].
 impl From<&BitcoinCheckpoint> for SyncedCheckpointInfo {
     fn from(checkpoint: &BitcoinCheckpoint) -> Self {
-        Self {
-            height: checkpoint.height,
-            hash: checkpoint.hash,
-        }
+        Self { height: checkpoint.height, hash: checkpoint.hash }
     }
 }
 
@@ -110,11 +107,7 @@ impl BitcoinCheckpointsChainSynchronizer {
                     + checkpoints_chain.lowest_confirmation_depth() as u64
             });
 
-        Self {
-            rpc,
-            checkpoints_chain,
-            last_synced_height,
-        }
+        Self { rpc, checkpoints_chain, last_synced_height }
     }
 
     /// Synchronizes new Bitcoin blocks to the checkpoints chain.
@@ -471,6 +464,7 @@ async fn handle_new_blocks_sync_result(
     }
 }
 
+// TODO: fixme
 // #[cfg(test)]
 // mod tests {
 //     use super::*;

@@ -100,9 +100,7 @@ impl ExtraDataHeader {
         self.version.consensus_encode(writer)?;
         self.chain_version.consensus_encode(writer)?;
         self.bitcoin_block_hash.consensus_encode(writer)?;
-        self.aggregated_public_key
-            .serialize()
-            .consensus_encode(writer)?;
+        self.aggregated_public_key.serialize().consensus_encode(writer)?;
         let block_producer_address_bytes =
             self.block_fee_recipient_address.0 .0;
         let _ = writer.write(&block_producer_address_bytes)?;
@@ -122,8 +120,7 @@ impl ExtraDataHeader {
     /// Serialize the extra data header
     pub fn serialize(&self) -> Vec<u8> {
         let mut buf = Vec::new();
-        self.encode_into(&mut buf)
-            .expect("buffers produce no io errors");
+        self.encode_into(&mut buf).expect("buffers produce no io errors");
         buf
     }
 

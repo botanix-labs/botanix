@@ -52,10 +52,7 @@ pub enum CoordinatorError {
     #[error(
         "utxo merkle root mismatch: expected {expected}, actual {actual:?}"
     )]
-    UtxoMerkleRootMismatch {
-        expected: sha256::Hash,
-        actual: sha256::Hash,
-    },
+    UtxoMerkleRootMismatch { expected: sha256::Hash, actual: sha256::Hash },
     #[error("Secp256k1 error: {0}")]
     Secp256k1Error(#[from] bitcoin::secp256k1::Error),
     #[error("Missing final script")]

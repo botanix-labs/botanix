@@ -11,10 +11,7 @@ struct TruncatedSlice<'a, T> {
 
 impl<'a, T> TruncatedSlice<'a, T> {
     fn new(slice: &'a [T], max_len: usize) -> Self {
-        Self {
-            inner: slice,
-            max_len,
-        }
+        Self { inner: slice, max_len }
     }
 }
 
@@ -83,9 +80,7 @@ impl Debug for ResponsePrepareProposalTruncatedDebug<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let txs = TruncatedSlice::new(self.0.txs.as_slice(), 0);
 
-        f.debug_struct("ResponsePrepareProposal")
-            .field("txs", &txs)
-            .finish()
+        f.debug_struct("ResponsePrepareProposal").field("txs", &txs).finish()
     }
 }
 

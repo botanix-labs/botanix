@@ -29,32 +29,14 @@ impl BotanixHardfork {
             (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::SpuriousDragon.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::Constantinople.boxed(),
-                ForkCondition::Block(0),
-            ),
-            (
-                EthereumHardfork::Petersburg.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::MuirGlacier.boxed(),
-                ForkCondition::Block(0),
-            ),
-            (
-                EthereumHardfork::Berlin.boxed(),
-                ForkCondition::Block(31302048),
-            ),
-            (
-                EthereumHardfork::London.boxed(),
-                ForkCondition::Block(31302048),
-            ),
+            (EthereumHardfork::MuirGlacier.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(31302048)),
+            (EthereumHardfork::London.boxed(), ForkCondition::Block(31302048)),
             (
                 EthereumHardfork::Shanghai.boxed(),
                 ForkCondition::Timestamp(1705996800),
@@ -78,24 +60,12 @@ impl BotanixHardfork {
             (EthereumHardfork::Frontier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::SpuriousDragon.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::Constantinople.boxed(),
-                ForkCondition::Block(0),
-            ),
-            (
-                EthereumHardfork::Petersburg.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
-            (
-                EthereumHardfork::MuirGlacier.boxed(),
-                ForkCondition::Block(0),
-            ),
+            (EthereumHardfork::MuirGlacier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Shanghai.boxed(), ForkCondition::Block(0)),
@@ -122,8 +92,7 @@ where
     if let Some(fork) = fork.downcast_ref::<EthereumHardfork>() {
         return hardfork_fn(fork);
     }
-    fork.downcast_ref::<BotanixHardfork>()
-        .and_then(botanix_hardfork_fn)
+    fork.downcast_ref::<BotanixHardfork>().and_then(botanix_hardfork_fn)
 }
 
 impl From<BotanixHardfork> for SpecId {

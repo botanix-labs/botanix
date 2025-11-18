@@ -500,10 +500,7 @@ impl DkgStateMachine {
         }
 
         // Setup sending queue.
-        let queue = Queue {
-            i: VecDeque::new(),
-            my_frost_id,
-        };
+        let queue = Queue { i: VecDeque::new(), my_frost_id };
 
         let mut this = Self {
             config,
@@ -714,33 +711,30 @@ impl DkgStateMachine {
         }
 
         let t = match &self.state {
-            StageState::RoundOne {
-                out_round1_packages,
-                ..
-            } => out_round1_packages
-                .values()
-                .filter_map(|e| e.as_ref())
-                .filter_map(|e| e.timer)
-                .map(|t| t.saturating_duration_since(now))
-                .min(),
-            StageState::RoundTwo {
-                out_round2_packages,
-                ..
-            } => out_round2_packages
-                .values()
-                .filter_map(|e| e.as_ref())
-                .filter_map(|e| e.timer)
-                .map(|t| t.saturating_duration_since(now))
-                .min(),
-            StageState::RoundThree {
-                out_round3_packages,
-                ..
-            } => out_round3_packages
-                .values()
-                .filter_map(|e| e.as_ref())
-                .filter_map(|e| e.timer)
-                .map(|t| t.saturating_duration_since(now))
-                .min(),
+            StageState::RoundOne { out_round1_packages, .. } => {
+                out_round1_packages
+                    .values()
+                    .filter_map(|e| e.as_ref())
+                    .filter_map(|e| e.timer)
+                    .map(|t| t.saturating_duration_since(now))
+                    .min()
+            }
+            StageState::RoundTwo { out_round2_packages, .. } => {
+                out_round2_packages
+                    .values()
+                    .filter_map(|e| e.as_ref())
+                    .filter_map(|e| e.timer)
+                    .map(|t| t.saturating_duration_since(now))
+                    .min()
+            }
+            StageState::RoundThree { out_round3_packages, .. } => {
+                out_round3_packages
+                    .values()
+                    .filter_map(|e| e.as_ref())
+                    .filter_map(|e| e.timer)
+                    .map(|t| t.saturating_duration_since(now))
+                    .min()
+            }
             _ => None,
         };
 
@@ -829,10 +823,7 @@ impl DkgStateMachine {
                     self.queue.i.push_back(msg);
                 }
             }
-            StageState::RoundTwo {
-                out_round2_packages,
-                ..
-            } => {
+            StageState::RoundTwo { out_round2_packages, .. } => {
                 for ((initiator, target), entry) in out_round2_packages.iter() {
                     let Some(entry) = entry else {
                         // Package not available.
@@ -870,10 +861,7 @@ impl DkgStateMachine {
                     self.queue.i.push_back(msg);
                 }
             }
-            StageState::RoundThree {
-                out_round3_packages,
-                ..
-            } => {
+            StageState::RoundThree { out_round3_packages, .. } => {
                 for ((initiator, recipient), entry) in
                     out_round3_packages.iter()
                 {
@@ -927,10 +915,8 @@ impl DkgStateMachine {
 
             match payload.msg {
                 DkgMessage::Round1 { initiator, .. } => {
-                    let StageState::RoundOne {
-                        out_round1_packages,
-                        ..
-                    } = &mut self.state
+                    let StageState::RoundOne { out_round1_packages, .. } =
+                        &mut self.state
                     else {
                         // Already expired.
                         continue;
@@ -952,13 +938,9 @@ impl DkgStateMachine {
                         Some(now + self.config.round1_package_timeout);
                     entry.attempts += 1;
                 }
-                DkgMessage::Round2 {
-                    initiator, target, ..
-                } => {
-                    let StageState::RoundTwo {
-                        out_round2_packages,
-                        ..
-                    } = &mut self.state
+                DkgMessage::Round2 { initiator, target, .. } => {
+                    let StageState::RoundTwo { out_round2_packages, .. } =
+                        &mut self.state
                     else {
                         // Already expired.
                         continue;
@@ -976,10 +958,8 @@ impl DkgStateMachine {
                     entry.attempts += 1;
                 }
                 DkgMessage::Round3 { initiator, .. } => {
-                    let StageState::RoundThree {
-                        out_round3_packages,
-                        ..
-                    } = &mut self.state
+                    let StageState::RoundThree { out_round3_packages, .. } =
+                        &mut self.state
                     else {
                         // Already expired.
                         continue;
@@ -1038,12 +1018,7 @@ impl DkgStateMachine {
                 self.on_dkg_msg_ack_round1(initiator, sender)?;
                 self.transition_stage2_checked()?;
             }
-            DkgMessage::Round2 {
-                initiator,
-                target,
-                nonce,
-                package,
-            } => {
+            DkgMessage::Round2 { initiator, target, nonce, package } => {
                 self.on_dkg_msg_round2(
                     initiator, target, nonce, package, sender,
                 )?;
@@ -1053,10 +1028,7 @@ impl DkgStateMachine {
                 self.on_dkg_msg_ack_round2(initiator, target)?;
                 self.transition_stage3_checked()?;
             }
-            DkgMessage::Round3 {
-                initiator,
-                signature,
-            } => {
+            DkgMessage::Round3 { initiator, signature } => {
                 self.on_dkg_msg_round3(initiator, signature, sender)?;
                 self.transition_final_checked()?;
             }
@@ -1077,10 +1049,7 @@ impl DkgStateMachine {
             return Ok(());
         }
 
-        let StageState::RoundOne {
-            out_round1_packages,
-            ..
-        } = &mut self.state
+        let StageState::RoundOne { out_round1_packages, .. } = &mut self.state
         else {
             // Ignore
             return Ok(());
@@ -1099,10 +1068,7 @@ impl DkgStateMachine {
             return Ok(());
         }
 
-        let StageState::RoundTwo {
-            out_round2_packages,
-            ..
-        } = &mut self.state
+        let StageState::RoundTwo { out_round2_packages, .. } = &mut self.state
         else {
             // Ignore
             return Ok(());
@@ -1121,10 +1087,8 @@ impl DkgStateMachine {
             return Ok(());
         }
 
-        let StageState::RoundThree {
-            out_round3_packages,
-            ..
-        } = &mut self.state
+        let StageState::RoundThree { out_round3_packages, .. } =
+            &mut self.state
         else {
             // Ignore
             return Ok(());

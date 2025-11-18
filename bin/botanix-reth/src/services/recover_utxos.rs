@@ -30,9 +30,7 @@ pub async fn recover_missing_utxos(
         let recover_request = RecoverMissingUtxosRequest { utxos };
         // Only proceed if we have UTXOs to recover
         if !recover_request.utxos.is_empty() {
-            match btc_server_client
-                .recover_missing_utxos(recover_request)
-                .await
+            match btc_server_client.recover_missing_utxos(recover_request).await
             {
                 std::result::Result::Ok(response) => {
                     tracing::info!(target: "reth::cli",

@@ -192,9 +192,5 @@ pub fn botanix_testnet_head() -> Head {
 // TODO: fix this
 /// Returns the canonical head for Botanix Mainnet.
 pub fn botanix_mainnet_head() -> Head {
-    Head {
-        number: 40_000_000,
-        timestamp: 1751250600,
-        ..Default::default()
-    }
+    Head { number: 40_000_000, timestamp: 1751250600, ..Default::default() }
 }

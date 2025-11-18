@@ -48,7 +48,7 @@ fn get_bitcoind_config(
 }
 
 /// Sets up and returns a Bitcoind client using the provided configuration arguments.
-pub async fn setup_bitcoind_client(
+pub fn setup_bitcoind_client(
     bitcoind_cfg: &BitcoindArgs,
     client_selection: ClientSelection,
 ) -> eyre::Result<FallbackBitcoindClient> {
@@ -57,6 +57,14 @@ pub async fn setup_bitcoind_client(
         create_bitcoind_client(&primary_bitcoind_config)?;
 
     let secondary_bitcoind_config = get_bitcoind_config(bitcoind_cfg, false)?;
+
+    // Validate that primary and secondary are different endpoints
+    if primary_bitcoind_config.url == secondary_bitcoind_config.url {
+        return Err(eyre::eyre!(
+            "Primary and secondary bitcoind URLs must be different"
+        ));
+    }
+
     let (secondary_bitcoind_client, _) =
         create_bitcoind_client(&secondary_bitcoind_config)?;
 

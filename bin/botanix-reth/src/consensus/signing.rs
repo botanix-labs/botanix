@@ -407,12 +407,9 @@ where
         // get all frost peers connections
         let (peers_connections_sender, peers_connections_receiver) =
             tokio::sync::oneshot::channel::<HashMap<PeerId, PeerData>>();
-        if let Err(e) =
-            self.frost_handle
-                .send_command(FrostCommand::GetAllConnectedPeers(
-                    peers_connections_sender,
-                ))
-        {
+        if let Err(e) = self.frost_handle.send_command(
+            FrostCommand::GetAllConnectedPeers(peers_connections_sender),
+        ) {
             error!(target: "consensus::authority::signing", "Failed to send GetAllConnectedPeers frost message {:?}", e);
         }
         match peers_connections_receiver.await {
@@ -495,11 +492,8 @@ where
         signing_package: SigningPackage,
         response_type: SigningEventResponseType,
     ) -> Result<(), Error> {
-        let SigningPackage {
-            identifier: _,
-            signing_session_id,
-            psbt,
-        } = signing_package;
+        let SigningPackage { identifier: _, signing_session_id, psbt } =
+            signing_package;
 
         let fut = || async {
             // get all connected peers
@@ -590,9 +584,8 @@ where
 
         // As the cord we generate round 1 nonces and save them
         // then we send the psbt to other peers
-        let signing_round1_package = self
-            .get_round1_signing_package(signing_session_id, psbt)
-            .await?;
+        let signing_round1_package =
+            self.get_round1_signing_package(signing_session_id, psbt).await?;
         let my_frost_identifier = self.personal_frost_identifier;
         self.new_round1_signing_package(
             &my_frost_identifier,
@@ -603,8 +596,7 @@ where
         self.metrics.received_round1_signing_packages.increment(1);
 
         // send to all other peers
-        self.update_signing_state(session_id, SigningState::Round1)
-            .await;
+        self.update_signing_state(session_id, SigningState::Round1).await;
         if let Err(e) = self
             .gossip_to_peers(
                 signing_round1_package,
@@ -613,8 +605,7 @@ where
             .await
         {
             error!(target: "consensus::authority::signing::initate_signing_session", "Error gossiping round 1 to peers {:?}", e);
-            self.update_signing_state(session_id, SigningState::Failed)
-                .await;
+            self.update_signing_state(session_id, SigningState::Failed).await;
             return Err(e);
         }
         Ok(())
@@ -688,8 +679,7 @@ where
             }
         };
         // Update signing state
-        self.update_signing_state(session_id, SigningState::Round2)
-            .await;
+        self.update_signing_state(session_id, SigningState::Round2).await;
 
         // Broadcast signing round 1 to the coordinator
         if coordinator_frost_identifier != self.personal_frost_identifier {
@@ -787,8 +777,7 @@ where
             .await?;
             self.metrics.received_round2_signing_packages.increment(1);
 
-            self.update_signing_state(session_id, SigningState::Round2)
-                .await;
+            self.update_signing_state(session_id, SigningState::Round2).await;
             // if ok, send to all peers
             // TODO we really just need to send to all signers that responded to the round 1
             if let Err(e) = self
@@ -941,8 +930,7 @@ where
             .await
         {
             error!(target: "consensus::authority::signing::coordinator_process_round2", "Error adding round 2 signing package {:?}", e);
-            self.update_signing_state(session_id, SigningState::Failed)
-                .await;
+            self.update_signing_state(session_id, SigningState::Failed).await;
             return Err(e);
         }
         info!(target: "consensus::authority::signing::coordinator_process_round2", "round 2 added");

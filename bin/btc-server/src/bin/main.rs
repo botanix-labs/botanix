@@ -445,16 +445,12 @@ where
 
         // Prepare our secret key.
         let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
-        let sanitzed_key = raw
-            .chars()
-            .filter(|c| c.is_ascii_hexdigit())
-            .collect::<String>();
-        let secret_key = sanitzed_key
-            .as_str()
-            .parse::<secp256k1::SecretKey>()
-            .map_err(|_| {
-                dkg::Error::BadConfig("invalid p2p secret key".to_string())
-            })?;
+        let sanitzed_key =
+            raw.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>();
+        let secret_key =
+            sanitzed_key.as_str().parse::<secp256k1::SecretKey>().map_err(
+                |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
+            )?;
 
         let min_signers = config.min_signers;
         let max_signers = config.max_signers;
@@ -625,11 +621,7 @@ where
                 Some(session_nonce),
             )?;
 
-            let state = DkgState {
-                machine,
-                stage: None,
-                session_nonce: None,
-            };
+            let state = DkgState { machine, stage: None, session_nonce: None };
 
             Mutex::new(Some(state))
         } else {
@@ -659,10 +651,7 @@ where
     pub async fn serve_async(self) -> Result<StopHandle, Error> {
         // init grpc config
         let grpc_config = if let Some(toml_config) = self.config.toml.as_ref() {
-            TomlConfig::new(toml_config)
-                .await
-                .map_err(Error::Config)?
-                .grpc
+            TomlConfig::new(toml_config).await.map_err(Error::Config)?.grpc
         } else {
             GrpcConfig::default()
         };
@@ -749,9 +738,7 @@ where
             router.serve_with_shutdown(socket_addr, shutdown_recv.map(drop)),
         );
 
-        Ok(StopHandle {
-            stop_cmd_sender: shutdown_send,
-        })
+        Ok(StopHandle { stop_cmd_sender: shutdown_send })
     }
 
     /// Sync the pegout scheduler to the given checkpoint.
@@ -768,8 +755,7 @@ where
             self.btc_network,
             self.config.identifier,
         )?;
-        self.db
-            .store_pegout_mgr_finalized_block(lock.last_finalized())?;
+        self.db.store_pegout_mgr_finalized_block(lock.last_finalized())?;
         self.db.update_utxo_merkle_root()?;
         self.db.flush()?;
         Ok(())
@@ -853,9 +839,7 @@ where
                 error!("Failed to parse checkpoint hash: {}", e);
                 badarg!("Failed to parse checkpoint hash: {}", e)
             })?;
-        self.sync_pegout_scheduler(checkpoint.clone())
-            .await
-            .to_status()?;
+        self.sync_pegout_scheduler(checkpoint.clone()).await.to_status()?;
 
         // process and store pegin utxos
         let pegins_count = req.pegins.len();
@@ -951,11 +935,8 @@ where
             .map(|p| p.id)
             .collect();
         // Get Pegout Scheduler txs and add to hashset
-        let scheduler_txs = self
-            .pegout_scheduler
-            .lock()
-            .await
-            .tracked_pegout_request_ids();
+        let scheduler_txs =
+            self.pegout_scheduler.lock().await.tracked_pegout_request_ids();
         broadcasted_pegout_ids.extend(scheduler_txs);
         let pegouts_refs: Vec<&PegoutRequest> = pegouts
             .iter()
@@ -1000,10 +981,8 @@ where
             self,
             parse_signing_session_id(&req.signing_session_id)
         );
-        let signing_status = self
-            .db
-            .get_signing_status(&signing_session_id)
-            .to_status()?;
+        let signing_status =
+            self.db.get_signing_status(&signing_session_id).to_status()?;
 
         let res = tonic::Response::new(rpc::GetSigningStatusResponse {
             status: signing_status.into(),
@@ -1023,10 +1002,7 @@ where
             self.db.get_session_ids(req.max_results).to_status()?;
 
         let res = tonic::Response::new(rpc::GetSessionIdsResponse {
-            data: signing_session_ids
-                .into_iter()
-                .map(|s| s.to_vec())
-                .collect(),
+            data: signing_session_ids.into_iter().map(|s| s.to_vec()).collect(),
         });
 
         Ok(res)
@@ -1249,9 +1225,7 @@ where
             .map_err(|_| internal!("Failed to convert finalized pegout ids"))?;
         let pegout_refs: Vec<&btcserverlib::database::FinalizedPegout> =
             finalized_pegout_ids.iter().collect();
-        self.db
-            .reset_finalized_pegout_ids(&pegout_refs)
-            .to_status()?;
+        self.db.reset_finalized_pegout_ids(&pegout_refs).to_status()?;
         Ok(tonic::Response::new(rpc::Empty {}))
     }
 
@@ -1565,10 +1539,7 @@ where
         // This should be a ready to broadcast tx
         let tx = psbt.clone().extract_tx().to_status()?;
         let tx_bytes = bitcoin::consensus::encode::serialize(&tx);
-        info!(
-            "Signed pegout tx to be broadcast: {}",
-            hex::encode(&tx_bytes)
-        );
+        info!("Signed pegout tx to be broadcast: {}", hex::encode(&tx_bytes));
 
         let tx_id = match measure_rpc_latency!(
             &self.telemetry,
@@ -1816,34 +1787,26 @@ where
 
         // Select up to `UPPER_PEGOUT_BOUND` pegouts, sorted by age in ascending
         // order. Respectively, the oldest pegouts come first.
-        let pending_pegouts = match self
-            .db
-            .coord_pending_pegouts(UPPER_PEGOUT_BOUND)
-            .to_status()
-        {
-            Ok(pending_pegouts) => pending_pegouts,
-            Err(e) => {
-                if let Some(telemetry) = self.telemetry.as_ref() {
-                    telemetry.update_signing_error_metrics(
-                        self.btc_network,
-                        self.config.identifier,
-                        &e.to_string(),
-                    );
+        let pending_pegouts =
+            match self.db.coord_pending_pegouts(UPPER_PEGOUT_BOUND).to_status()
+            {
+                Ok(pending_pegouts) => pending_pegouts,
+                Err(e) => {
+                    if let Some(telemetry) = self.telemetry.as_ref() {
+                        telemetry.update_signing_error_metrics(
+                            self.btc_network,
+                            self.config.identifier,
+                            &e.to_string(),
+                        );
+                    }
+                    return Err(e);
                 }
-                return Err(e);
-            }
-        };
+            };
 
         let outputs = pending_pegouts
             .iter()
             .map(|p| {
-                (
-                    TxOut {
-                        value: p.value,
-                        script_pubkey: p.spk.clone(),
-                    },
-                    p.id,
-                )
+                (TxOut { value: p.value, script_pubkey: p.spk.clone() }, p.id)
             })
             .collect::<Vec<(TxOut, PegoutId)>>();
 
@@ -2326,11 +2289,7 @@ where
             }
         };
 
-        let payload = dkg::DkgPayload {
-            sender,
-            recipient,
-            msg,
-        };
+        let payload = dkg::DkgPayload { sender, recipient, msg };
 
         match &payload.msg {
             dkg::DkgMessage::Round1 {
@@ -2371,10 +2330,7 @@ where
                     );
                 }
             }
-            dkg::DkgMessage::Round3 {
-                initiator: _,
-                signature: _,
-            } => {
+            dkg::DkgMessage::Round3 { initiator: _, signature: _ } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_round3_dkg_metrics(
                         self.btc_network,
@@ -3232,9 +3188,7 @@ mod tests {
         app.db
             .set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        app.db
-            .set_key_package(key_package.clone())
-            .expect("set key package");
+        app.db.set_key_package(key_package.clone()).expect("set key package");
 
         // Add some pegin utxos
         let mut pegins = vec![];
@@ -3347,9 +3301,7 @@ mod tests {
         app.db
             .set_pubkey_package(pk_package.clone())
             .expect("set public key package");
-        app.db
-            .set_key_package(key_package.clone())
-            .expect("set key package");
+        app.db.set_key_package(key_package.clone()).expect("set key package");
 
         // Add some pegin utxos
         let mut pegins = vec![];
@@ -3451,9 +3403,7 @@ mod tests {
         let finalized_pegout_ids_slice = finalized_pegout_ids
             .iter()
             .collect::<Vec<&btcserverlib::database::FinalizedPegout>>();
-        app.db
-            .store_finalized_pegout_ids(&finalized_pegout_ids_slice)
-            .unwrap();
+        app.db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
 
         let chunk_size = 10;
         let req = tonic::Request::new(rpc::GetFinalizedPegoutIdsRequest {
@@ -3491,9 +3441,7 @@ mod tests {
         let finalized_pegout_ids_slice = finalized_pegout_ids
             .iter()
             .collect::<Vec<&btcserverlib::database::FinalizedPegout>>();
-        app.db
-            .store_finalized_pegout_ids(&finalized_pegout_ids_slice)
-            .unwrap();
+        app.db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
 
         let chunk_size = 10;
         let req = tonic::Request::new(rpc::GetFinalizedPegoutIdsRequest {
@@ -3596,9 +3544,7 @@ mod tests {
             ),
         ];
         let utxo_refs: Vec<&database::Utxo> = utxos.iter().collect();
-        app.db
-            .store_utxos(&utxo_refs)
-            .expect("Failed to store UTXOs");
+        app.db.store_utxos(&utxo_refs).expect("Failed to store UTXOs");
 
         // Verify all UTXOs are in database initially
         assert!(app.db.get_utxo(input_1).unwrap().is_some());
@@ -3693,9 +3639,7 @@ mod tests {
             ),
         ];
         let utxo_refs: Vec<&database::Utxo> = utxos.iter().collect();
-        app.db
-            .store_utxos(&utxo_refs)
-            .expect("Failed to store UTXOs");
+        app.db.store_utxos(&utxo_refs).expect("Failed to store UTXOs");
 
         // Verify both UTXOs are in database initially
         assert!(app.db.get_utxo(input_1).unwrap().is_some());
@@ -3725,12 +3669,8 @@ mod tests {
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
-        app.db
-            .set_pubkey_package(pk_package)
-            .expect("set public key package");
-        app.db
-            .set_key_package(key_package.clone())
-            .expect("set key package");
+        app.db.set_pubkey_package(pk_package).expect("set public key package");
+        app.db.set_key_package(key_package.clone()).expect("set key package");
         (app, key_package)
     }
 
@@ -3777,9 +3717,7 @@ mod tests {
         );
 
         let utxo_refs: Vec<&database::Utxo> = vec![&utxo];
-        app.db
-            .store_utxos(&utxo_refs)
-            .expect("Failed to store UTXO");
+        app.db.store_utxos(&utxo_refs).expect("Failed to store UTXO");
     }
 
     #[tokio::test]

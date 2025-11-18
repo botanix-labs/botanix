@@ -102,10 +102,9 @@ pub enum MintContractError {
 impl From<ParseMintEventError> for MintContractError {
     fn from(e: ParseMintEventError) -> Self {
         match e {
-            ParseMintEventError::InvalidLog(e) => Self::InvalidLog {
-                event: "Mint",
-                error: e.into(),
-            },
+            ParseMintEventError::InvalidLog(e) => {
+                Self::InvalidLog { event: "Mint", error: e.into() }
+            }
             ParseMintEventError::InvalidPeginData {
                 error,
                 revert_address,
@@ -122,10 +121,9 @@ impl From<ParseMintEventError> for MintContractError {
 impl From<ParseBurnEventError> for MintContractError {
     fn from(e: ParseBurnEventError) -> Self {
         match e {
-            ParseBurnEventError::InvalidLog(e) => Self::InvalidLog {
-                event: "Burn",
-                error: e.into(),
-            },
+            ParseBurnEventError::InvalidLog(e) => {
+                Self::InvalidLog { event: "Burn", error: e.into() }
+            }
             ParseBurnEventError::InvalidPegoutData(e) => {
                 Self::InvalidPegoutData(e)
             }
@@ -188,9 +186,10 @@ pub fn try_parse_mint_event(
         return Err(ParseMintEventError::InvalidLog("wrong number of params"));
     }
 
-    let amount = params[0].clone().into_uint().ok_or(
-        ParseMintEventError::InvalidLog("invalid mint amount params"),
-    )?;
+    let amount = params[0]
+        .clone()
+        .into_uint()
+        .ok_or(ParseMintEventError::InvalidLog("invalid mint amount params"))?;
 
     let bitcoin_block_height = params[1]
         .clone()

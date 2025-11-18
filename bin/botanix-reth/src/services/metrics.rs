@@ -38,9 +38,7 @@ pub async fn run_metrics_service(
                 target_triple: "VERGEN_CARGO_TARGET_TRIPLE",
                 build_profile: "BUILD_PROFILE_NAME",
             },
-            ChainSpecInfo {
-                name: chain_spec.chain().id().to_string(),
-            },
+            ChainSpecInfo { name: chain_spec.chain().id().to_string() },
             task_executor.clone(),
             hooks,
         );

@@ -57,13 +57,7 @@ impl WalletStateSyncRecord {
         if let Some(tuples) = data {
             let (blocks, data_bytes): (Vec<u64>, Vec<Bytes>) =
                 tuples.into_iter().unzip();
-            Self {
-                uuid,
-                data: data_bytes,
-                blocks,
-                chunks_count,
-                peer_id,
-            }
+            Self { uuid, data: data_bytes, blocks, chunks_count, peer_id }
         } else {
             Self {
                 uuid,

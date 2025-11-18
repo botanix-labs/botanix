@@ -58,10 +58,7 @@ pub async fn setup_and_run_rpc(
     let mut server = rpc_builder.build(module_config, eth_api);
 
     // Add a custom rpc namespace
-    let custom_rpc = BotanixRpcExt {
-        provider,
-        botanix: botanix_provider,
-    };
+    let custom_rpc = BotanixRpcExt { provider, botanix: botanix_provider };
     server.merge_configured(custom_rpc.into_rpc())?;
 
     // Start the server & keep it alive

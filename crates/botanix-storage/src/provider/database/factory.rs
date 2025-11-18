@@ -507,8 +507,7 @@ impl<DB: Database, N: NodeTypes + NodeTypesForProvider> WalletStateSyncReader
         &self,
         min_required_criterion: u64,
     ) -> ProviderResult<(bool, HashSet<(u64, Bytes)>)> {
-        self.provider()?
-            .get_minimum_superset(min_required_criterion)
+        self.provider()?.get_minimum_superset(min_required_criterion)
     }
 }
 

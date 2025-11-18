@@ -219,10 +219,8 @@ where
             is_system_transaction: true,
         };
 
-        let result_and_state = self
-            .evm
-            .transact(tx_env)
-            .map_err(BlockExecutionError::other)?;
+        let result_and_state =
+            self.evm.transact(tx_env).map_err(BlockExecutionError::other)?;
 
         let ResultAndState { result, state } = result_and_state;
 
@@ -267,9 +265,7 @@ where
         info.code = Some(code);
 
         let transition = account.change(info, Default::default());
-        self.evm
-            .db_mut()
-            .apply_transition(vec![(address, transition)]);
+        self.evm.db_mut().apply_transition(vec![(address, transition)]);
         Ok(())
     }
 
@@ -367,9 +363,7 @@ where
 
         let (mut block_reward, mut transition) = system_account.drain_balance();
         transition.info = None;
-        self.evm
-            .db_mut()
-            .apply_transition(vec![(SYSTEM_ADDRESS, transition)]);
+        self.evm.db_mut().apply_transition(vec![(SYSTEM_ADDRESS, transition)]);
         let balance_increment = vec![(validator, block_reward)];
 
         self.evm
@@ -401,9 +395,8 @@ where
             block_reward -= reward_to_system;
         }
 
-        let tx = self
-            .system_contracts
-            .pay_validator_tx(validator, block_reward);
+        let tx =
+            self.system_contracts.pay_validator_tx(validator, block_reward);
         self.transact_system_tx(&tx, validator)?;
         Ok(())
     }
@@ -612,10 +605,7 @@ where
 
         self.distribute_block_rewards(self.evm.block().beneficiary)?;
 
-        if self
-            .spec
-            .is_jalapeno_active_at_block(self.evm.block().number.to())
-        {
+        if self.spec.is_jalapeno_active_at_block(self.evm.block().number.to()) {
             for tx in system_txs {
                 self.handle_finality_reward_tx(&tx)?;
             }

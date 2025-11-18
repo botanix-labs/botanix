@@ -5,8 +5,14 @@ use reth::{
     args::{DatabaseArgs, DatadirArgs},
     prometheus_exporter::install_prometheus_recorder,
 };
+use reth_db::mdbx::tx::Tx;
+use reth_db::mdbx::RO;
 use reth_db::DatabaseEnv;
+use reth_node_types::NodeTypesWithDBAdapter;
+use reth_provider::DatabaseProvider;
 use std::{fs, sync::Arc};
+
+use crate::node::BotanixNode;
 
 const BOTANIX_DB_PATH: &str = "botanix_db";
 
@@ -14,6 +20,7 @@ const BOTANIX_DB_PATH: &str = "botanix_db";
 ///
 /// # Arguments
 ///
+/// * `reth_database` - The Reth database environment.
 /// * `datadir` - The data directory arguments.
 /// * `chain_arc` - The Botanix chain specification.
 /// * `db` - The database arguments.
@@ -21,15 +28,12 @@ const BOTANIX_DB_PATH: &str = "botanix_db";
 /// # Returns
 ///
 /// * `eyre::Result<()>` - Returns Ok if migration succeeds, otherwise an error.
-pub fn init_and_migrate_db(
+pub fn init_and_migrate_botanix_db(
+    reth_database: Arc<DatabaseEnv>,
     datadir: &DatadirArgs,
     chain_arc: Arc<BotanixChainSpec>,
     db: &DatabaseArgs,
-) -> eyre::Result<(Arc<DatabaseEnv>, Arc<DatabaseEnv>)> {
-    // Register the prometheus recorder before creating the database,
-    // because database init needs it to register metrics.
-    let _prometheus_handle = install_prometheus_recorder();
-
+) -> eyre::Result<Arc<DatabaseEnv>> {
     let data_dir = datadir
         .datadir
         .unwrap_or_chain_default(chain_arc.chain(), datadir.clone());
@@ -40,12 +44,7 @@ pub fn init_and_migrate_db(
     let is_migration_needed =
         is_migration_needed(&reth_db_path, &botanix_db_path)?;
 
-    tracing::info!(target: "reth::cli", path = ?reth_db_path, "Opening reth database");
-    let reth_database = Arc::new(
-        reth_db::init_db(&reth_db_path, db.database_args())?.with_metrics(),
-    );
-
-    tracing::info!(target: "reth::cli", path = ?botanix_db_path, "Opening botanix database");
+    tracing::info!(target: "reth::cli", path = ?botanix_db_path, "Creating botanix database");
     let botanix_database =
         reth_db::init_db(&botanix_db_path, db.database_args())?;
     let botanix_database = Arc::new(botanix_database);
@@ -64,5 +63,5 @@ pub fn init_and_migrate_db(
             },
         )?;
     }
-    Ok((reth_database, botanix_database))
+    Ok(botanix_database)
 }

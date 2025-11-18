@@ -103,11 +103,7 @@ impl<R, Spec, EvmFactory> BotanixBlockExecutorFactory<R, Spec, EvmFactory> {
         spec: Spec,
         evm_factory: EvmFactory,
     ) -> Self {
-        Self {
-            receipt_builder,
-            spec,
-            evm_factory,
-        }
+        Self { receipt_builder, spec, evm_factory }
     }
 
     /// Exposes the receipt builder.
@@ -213,10 +209,7 @@ where
             .zip(blob_params)
             .map(|(excess_blob_gas, params)| {
                 let blob_gasprice = params.calc_blob_fee(excess_blob_gas);
-                BlobExcessGasAndPrice {
-                    excess_blob_gas,
-                    blob_gasprice,
-                }
+                BlobExcessGasAndPrice { excess_blob_gas, blob_gasprice }
             });
 
         let eth_spec = SpecId::from(spec);
@@ -262,9 +255,8 @@ where
             .with_chain_id(self.chain_spec().chain().id())
             .with_spec(spec_id);
 
-        let blob_params = self
-            .chain_spec()
-            .blob_params_at_timestamp(attributes.timestamp);
+        let blob_params =
+            self.chain_spec().blob_params_at_timestamp(attributes.timestamp);
 
         // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
         // cancun now, we need to set the excess blob gas to the default value(0)
@@ -278,10 +270,7 @@ where
                 let blob_gasprice = blob_params
                     .unwrap_or_else(BlobParams::cancun)
                     .calc_blob_fee(excess_blob_gas);
-                BlobExcessGasAndPrice {
-                    excess_blob_gas,
-                    blob_gasprice,
-                }
+                BlobExcessGasAndPrice { excess_blob_gas, blob_gasprice }
             });
 
         let mut basefee = parent.next_block_base_fee(

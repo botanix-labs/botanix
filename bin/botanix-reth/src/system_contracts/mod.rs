@@ -38,11 +38,7 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     pub(crate) fn new(chain_spec: Spec) -> Self {
         let validator_abi = serde_json::from_str(*VALIDATOR_SET_ABI).unwrap();
         let stake_hub_abi = serde_json::from_str(*STAKE_HUB_ABI).unwrap();
-        Self {
-            validator_abi,
-            stake_hub_abi,
-            chain_spec,
-        }
+        Self { validator_abi, stake_hub_abi, chain_spec }
     }
 
     /// Creates a deposit tx to pay block reward to a validator.
@@ -51,12 +47,8 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
         address: Address,
         block_reward: u128,
     ) -> TransactionSigned {
-        let function = self
-            .validator_abi
-            .function("deposit")
-            .unwrap()
-            .first()
-            .unwrap();
+        let function =
+            self.validator_abi.function("deposit").unwrap().first().unwrap();
         let input = function
             .abi_encode_input(&[DynSolValue::Address(address)])
             .unwrap();
@@ -101,12 +93,8 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     }
 
     pub(crate) fn genesis_contracts_txs(&self) -> Vec<TransactionSigned> {
-        let function = self
-            .validator_abi
-            .function("init")
-            .unwrap()
-            .first()
-            .unwrap();
+        let function =
+            self.validator_abi.function("init").unwrap().first().unwrap();
         let input = function.abi_encode_input(&[]).unwrap();
 
         let contracts = vec![
@@ -141,12 +129,8 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     }
 
     pub(crate) fn jalapeno_contracts_txs(&self) -> Vec<TransactionSigned> {
-        let function = self
-            .stake_hub_abi
-            .function("initialize")
-            .unwrap()
-            .first()
-            .unwrap();
+        let function =
+            self.stake_hub_abi.function("initialize").unwrap().first().unwrap();
         let input = function.abi_encode_input(&[]).unwrap();
 
         let signature =

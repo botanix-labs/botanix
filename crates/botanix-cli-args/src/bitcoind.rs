@@ -28,7 +28,7 @@ pub struct BitcoindArgs {
     /// bitcoind RPC primary url
     ///
     /// The primary url of the bitcoind server.
-    #[arg(default_value_t=Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"), value_parser = parse_url, long = "bitcoind.primary_url", name = "bitcoind.url", value_name = "BITCOIND_URL", env = "RETH_BITCOIND_URL"
+    #[arg(default_value_t=Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"), value_parser = parse_url, long = "bitcoind.primary_url", name = "bitcoind.primary_url", value_name = "BITCOIND_PRIMARY_URL", env = "RETH_BITCOIND_PRIMARY_URL"
     )]
     pub primary_url: Url,
 
@@ -59,7 +59,7 @@ pub struct BitcoindArgs {
     /// bitcoind RPC secondary url
     ///
     /// The secondary url of the bitcoind server.
-    #[arg(default_value_t=Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"), value_parser = parse_url, long = "bitcoind.secondary_url", name = "bitcoind.url", value_name = "BITCOIND_URL", env = "RETH_BITCOIND_URL"
+    #[arg(default_value_t=Url::parse(DEFAULT_BITCOIND_URL).expect("valid url"), value_parser = parse_url, long = "bitcoind.secondary_url", name = "bitcoind.secondary_url", value_name = "BITCOIND_SECONDARY_URL", env = "RETH_BITCOIND_SECONDARY_URL"
     )]
     pub secondary_url: Url,
 

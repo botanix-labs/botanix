@@ -475,12 +475,8 @@ impl ProposingTestFixture<'_> {
         );
 
         // Each party processes and finalizes the block
-        for (i, (manager, db)) in self
-            .i
-            .managers
-            .iter_mut()
-            .zip(self.i.dbs.iter())
-            .enumerate()
+        for (i, (manager, db)) in
+            self.i.managers.iter_mut().zip(self.i.dbs.iter()).enumerate()
         {
             let Some(manager) = manager.as_mut() else {
                 assert!(
@@ -506,10 +502,7 @@ impl ProposingTestFixture<'_> {
                 .unwrap();
 
             match decision {
-                OnProcessProposalDecision::Process {
-                    version,
-                    conditions,
-                } => {
+                OnProcessProposalDecision::Process { version, conditions } => {
                     assert!(expect.process_pass, "expected process pass");
                     assert_eq!(
                         version, proposer_version,

@@ -69,12 +69,7 @@ impl System {
         // just assume that it is usually not changing on runtime).
         let cpu_physical_core_count = system.physical_core_count();
 
-        Self {
-            system,
-            specifics,
-            cpu_physical_core_count,
-            pid,
-        }
+        Self { system, specifics, cpu_physical_core_count, pid }
     }
 
     pub fn refresh(&mut self) {
@@ -274,11 +269,7 @@ impl TryFrom<(&sysinfo::System, Pid)> for Process {
         let usage = percent_usage(size, total);
 
         Ok(Self {
-            memory: Memory {
-                size,
-                free: None,
-                usage,
-            },
+            memory: Memory { size, free: None, usage },
             ..Self::from(process)
         })
     }
@@ -497,9 +488,7 @@ fn percent_usage(current: u64, max: u64) -> Decimal {
 
 #[inline]
 fn decimal(current: f32) -> Decimal {
-    Decimal::from_f32(current)
-        .unwrap_or_default()
-        .round_dp(DECIMAL_PRECISION)
+    Decimal::from_f32(current).unwrap_or_default().round_dp(DECIMAL_PRECISION)
 }
 
 #[cfg(test)]
@@ -518,9 +507,7 @@ mod tests {
 
     impl From<&System> for Metrics {
         fn from(system: &System) -> Self {
-            Self {
-                system: system.metrics().expect("metrics"),
-            }
+            Self { system: system.metrics().expect("metrics") }
         }
     }
 
@@ -553,10 +540,7 @@ mod tests {
                     cpu_usage: Decimal::new(1234, 2),
                     memory: memory.clone(),
                 },
-                memory: SystemMemory {
-                    system: memory.clone(),
-                    swap: memory,
-                },
+                memory: SystemMemory { system: memory.clone(), swap: memory },
                 load_average: LoadAverage(1.2, 2.3, 3.4),
                 host: Host {
                     os_version: "os-version".to_string(),
