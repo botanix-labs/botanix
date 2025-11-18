@@ -215,10 +215,8 @@ impl DkgHandshakeManager {
         package: &round1::Package,
     ) -> Result<(), Error> {
         let mut commit = vec![0; 32];
-        let fed_static = self
-            .fed_members
-            .get(&initiator.0)
-            .ok_or(Error::NotAFedMember)?;
+        let fed_static =
+            self.fed_members.get(&initiator.0).ok_or(Error::NotAFedMember)?;
 
         // Compute the challenge bytes to be verified against the provided
         // signature; notably, we commit the ephemeral key and the round1
@@ -266,9 +264,7 @@ impl DkgHandshakeManager {
         debug_assert_eq!(self.eph_keys.len(), self.fed_members.len());
 
         let mut round1_commits: Vec<(frost::Identifier, Vec<u8>)> =
-            std::mem::take(&mut self.round1_commits)
-                .into_iter()
-                .collect();
+            std::mem::take(&mut self.round1_commits).into_iter().collect();
 
         // Sort in ascending order, by the frost_id.
         round1_commits.sort_by(|a, b| a.0.cmp(&b.0));
@@ -344,11 +340,7 @@ impl DkgHandshakeManager {
             };
 
             // Track the symmetric key for this target.
-            let entry = SymmetricKeyEntry {
-                sending,
-                receiving,
-                nonce: 0,
-            };
+            let entry = SymmetricKeyEntry { sending, receiving, nonce: 0 };
 
             symmetric_keys.insert(*fed_id, entry);
         }
@@ -550,8 +542,7 @@ impl KeyVerificationManager {
 
         self.transcript
             .append_message(b"round3_package", package.serialize()?.as_slice());
-        self.transcript
-            .challenge_bytes(b"round3_commit", &mut commit);
+        self.transcript.challenge_bytes(b"round3_commit", &mut commit);
 
         let msg =
             secp256k1::Message::from_digest_slice(&commit).expect("valid size");
@@ -587,10 +578,8 @@ impl KeyVerificationManager {
             return Err(Error::AwaitingChallengeGeneration);
         };
 
-        let fed_static = self
-            .fed_members
-            .get(&initiator.0)
-            .ok_or(Error::NotAFedMember)?;
+        let fed_static =
+            self.fed_members.get(&initiator.0).ok_or(Error::NotAFedMember)?;
 
         // Verify the signature using the public key of the fed member.
         let msg = secp256k1::Message::from_digest_slice(challenge)
@@ -622,9 +611,7 @@ impl KeyVerificationManager {
         let mut round3_commits: Vec<(
             frost::Identifier,
             secp256k1::ecdsa::Signature,
-        )> = std::mem::take(&mut self.round3_commits)
-            .into_iter()
-            .collect();
+        )> = std::mem::take(&mut self.round3_commits).into_iter().collect();
 
         // Sort in ascending order, by the frost_id.
         round3_commits.sort_by(|a, b| a.0.cmp(&b.0));

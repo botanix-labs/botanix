@@ -19,6 +19,7 @@ use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
+use reth::providers::DatabaseProviderFactory;
 use reth_botanix::{
     consensus::{
         comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable,
@@ -36,7 +37,7 @@ use reth_botanix::{
         botanix_provider::create_botanix_provider,
         btc_server::create_btc_server_client,
         cometbft::create_cometbft_factory, frost::setup_frost,
-        metrics::run_metrics_service, migrator::init_and_migrate_db,
+        metrics::run_metrics_service, migrator::init_and_migrate_botanix_db,
         network_builder::setup_network_builder,
         provider::create_blockchain_provider,
         recover_utxos::recover_missing_utxos, reth::load_reth_config,
@@ -63,9 +64,8 @@ fn main() -> eyre::Result<()> {
     // Enable backtraces unless a RUST_BACKTRACE value has already been
     // explicitly provided.
     if std::env::var_os("RUST_BACKTRACE").is_none() {
-        std::env::set_var("RUST_BACKTRACE", "1");
+        std::env::set_var("RUST_BACKTRACE", "full");
     }
-
     // Parse everything first
     let cli = Cli::<BotanixChainSpecParser, BotanixArgs>::parse();
 
@@ -103,7 +103,7 @@ fn main() -> eyre::Result<()> {
                 "p2p addr={} port={} trusted_only={}",
                 network_args.addr, network_args.port, network_args.trusted_only
             );
-
+    
             // Bitcoind Config
             let bitcoind_cfg = args.bitcoind.clone();
 
@@ -114,7 +114,7 @@ fn main() -> eyre::Result<()> {
             let poa_cfg = args.poa.clone();
 
             // State Sync Config
-            let state_sync_cfg = args.state_sync.clone();
+            let state_sync_cfg = args.poa.state_sync.clone();
 
             // Reth Config
             let mut reth_cfg = load_reth_config(&args.poa, &network_args)?;
@@ -150,35 +150,8 @@ fn main() -> eyre::Result<()> {
             }
 
             // Create bitcoind client
-            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, ClientSelection::Fallback).await?;
+            let bitcoind_client = setup_bitcoind_client(&bitcoind_cfg, ClientSelection::Fallback)?;
             let bitcoind_client = Arc::new(bitcoind_client);
-
-            // Migrate the db if needed
-            let (reth_database, botanix_database) = init_and_migrate_db(
-                &datadir_args,
-                Arc::clone(&chain_spec_arc),
-                &db_args
-            )?;
-
-
-            // Create a blockchain provider
-            let (blockchain_provider, static_files_provider, reth_provider_factory) = create_blockchain_provider(
-                chain_spec_arc.clone(),
-                &datadir_args,
-                reth_database.clone()
-            )?;
-
-            let storage = Arc::new(BotanixStorage::default());
-            let reth_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(reth_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
-            let botanix_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(botanix_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
-
-            // Create and connect to btc signining server if in federation mode
-            let mut btc_server_client = create_btc_server_client(&poa_cfg, &bitcoind_cfg).await?;
-
-            // Eventually we want to recover missing UTXOs on every start
-            if let Some((_, ref mut btc_server_client)) = btc_server_client.as_mut() {
-                recover_missing_utxos(&poa_cfg, btc_server_client).await?;
-            }
 
             // Setup the activation manager
             let activation_manager = setup_activation_manager(&botanix_network);
@@ -206,10 +179,39 @@ fn main() -> eyre::Result<()> {
             // build the node
             let node = BotanixNode::default();
 
+            let reth_database: Arc<DatabaseEnv> = builder.db().clone();
+
             // launch the node
             // TODO: this launches the Engine API which we don't use since we use CometBFT
             let reth::builder::NodeHandle { node, node_exit_future } =
-                builder.node(node).launch().await?;
+                builder.node(node).launch().await?;  
+
+            // Migrate the db if needed
+            let botanix_database = init_and_migrate_botanix_db(
+                reth_database.clone(),
+                &datadir_args,
+                Arc::clone(&chain_spec_arc),
+                &db_args
+            )?;
+
+            // Create a blockchain provider
+            let (blockchain_provider, static_files_provider, reth_provider_factory) = create_blockchain_provider(
+                chain_spec_arc.clone(),
+                &datadir_args,
+                reth_database.clone()
+            )?;
+
+            let storage = Arc::new(BotanixStorage::default());
+            let reth_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(reth_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
+            let botanix_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(botanix_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
+
+            // Create and connect to btc signining server if in federation mode
+            let mut btc_server_client = create_btc_server_client(&poa_cfg, &bitcoind_cfg).await?;
+
+            // Eventually we want to recover missing UTXOs on every start
+            if let Some((_, ref mut btc_server_client)) = btc_server_client.as_mut() {
+                recover_missing_utxos(&poa_cfg, btc_server_client).await?;
+            }
 
             // Setup and launch RPC server
             setup_and_run_rpc(
@@ -274,7 +276,6 @@ fn main() -> eyre::Result<()> {
                     bitcoind_cfg.btc_network,
                     frost_setup_result.genesis_authorities.clone(),
                     frost_setup_result.authorities_socket_addresses,
-                    bitcoind_client.clone(),
                     botanix_evm_config,
                     cometbft_rpc_factory,
                     RandomSourceProvider::new(),

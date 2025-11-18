@@ -81,8 +81,8 @@ impl<TX: DbTx + 'static, N: NodeTypes> WalletStateSyncReader
             .walk(None)?
             .filter_map(|item| match item {
                 Ok((peer_id, wallet_state_sync_record)) => {
-                    if wallet_state_sync_record.get_data().len() as u64 >=
-                        wallet_state_sync_record.get_chunks_count()
+                    if wallet_state_sync_record.get_data().len() as u64
+                        >= wallet_state_sync_record.get_chunks_count()
                     {
                         return Some((peer_id, wallet_state_sync_record));
                     }
@@ -92,8 +92,8 @@ impl<TX: DbTx + 'static, N: NodeTypes> WalletStateSyncReader
             })
             .collect::<HashMap<_, _>>();
 
-        if already_reached_wallet_state_sync_peers.len() <
-            min_required_criterion as usize
+        if already_reached_wallet_state_sync_peers.len()
+            < min_required_criterion as usize
         {
             return Ok((false, HashSet::new()));
         }

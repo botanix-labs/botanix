@@ -230,9 +230,7 @@ impl BotanixConsensus<BotanixChainSpec> {
             .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
 
         // EIP-4895: Beacon chain push withdrawals as operations
-        if self
-            .chain_spec
-            .is_shanghai_active_at_timestamp(header.timestamp())
+        if self.chain_spec.is_shanghai_active_at_timestamp(header.timestamp())
             && header.withdrawals_root().is_none()
         {
             return Err(ConsensusError::WithdrawalsRootMissing);
@@ -245,10 +243,7 @@ impl BotanixConsensus<BotanixChainSpec> {
         }
 
         // Ensures that EIP-4844 fields are valid once cancun is active.
-        if self
-            .chain_spec
-            .is_cancun_active_at_timestamp(header.timestamp())
-        {
+        if self.chain_spec.is_cancun_active_at_timestamp(header.timestamp()) {
             validate_4844_header_standalone(
                 header,
                 self.chain_spec
@@ -264,10 +259,7 @@ impl BotanixConsensus<BotanixChainSpec> {
             return Err(ConsensusError::ParentBeaconBlockRootUnexpected);
         }
 
-        if self
-            .chain_spec
-            .is_prague_active_at_timestamp(header.timestamp())
-        {
+        if self.chain_spec.is_prague_active_at_timestamp(header.timestamp()) {
             if header.requests_hash().is_none() {
                 return Err(ConsensusError::RequestsRootMissing);
             }

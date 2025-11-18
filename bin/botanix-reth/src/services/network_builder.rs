@@ -82,9 +82,8 @@ pub fn lookup_head(
         .header_by_number(head)?
         .ok_or_else(|| eyre::eyre!("missing header for block {}", head))?;
 
-    let total_difficulty = blockchain_provider
-        .header_td_by_number(head)?
-        .ok_or_else(|| {
+    let total_difficulty =
+        blockchain_provider.header_td_by_number(head)?.ok_or_else(|| {
             eyre::eyre!("missing total difficulty for block {}", head)
         })?;
 

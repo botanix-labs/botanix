@@ -113,11 +113,7 @@ impl FinalizedPegout {
         block_number: u64,
         timestamp: Option<u64>,
     ) -> Self {
-        FinalizedPegout {
-            id,
-            block_number,
-            timestamp,
-        }
+        FinalizedPegout { id, block_number, timestamp }
     }
 }
 
@@ -578,8 +574,7 @@ impl Db {
 
         ciborium::into_writer(&dkg_round2_package, &mut bytes)
             .map_err(Error::CiboriumWrite)?;
-        self.round2_dkg_packages
-            .insert(&peer_id_bytes[..], &bytes[..])?;
+        self.round2_dkg_packages.insert(&peer_id_bytes[..], &bytes[..])?;
         Ok(bytes.len())
     }
 
@@ -610,8 +605,7 @@ impl Db {
         let mut bytes = Vec::new();
         ciborium::into_writer(&dkg_round1, &mut bytes)
             .map_err(Error::CiboriumWrite)?;
-        self.round1_dkg_packages
-            .insert(&peer_id_bytes[..], &bytes[..])?;
+        self.round1_dkg_packages.insert(&peer_id_bytes[..], &bytes[..])?;
         Ok(bytes.len())
     }
 
@@ -897,8 +891,7 @@ impl Db {
         &self,
         block_hash: BlockHash,
     ) -> Result<(), Error> {
-        self.db
-            .insert(KEY_PEGOUTMGR_TIP, &block_hash.to_byte_array())?;
+        self.db.insert(KEY_PEGOUTMGR_TIP, &block_hash.to_byte_array())?;
         Ok(())
     }
 
@@ -930,8 +923,7 @@ impl Db {
 
         let root = bitcoin::merkle_tree::calculate_root(utxos.into_iter())
             .ok_or(Error::EmptyMerkleRoot)?;
-        self.db
-            .insert(KEY_UTXO_MERKLE_ROOT, root.to_byte_array().to_vec())?;
+        self.db.insert(KEY_UTXO_MERKLE_ROOT, root.to_byte_array().to_vec())?;
         Ok(())
     }
 
@@ -1182,8 +1174,7 @@ impl Db {
         finalized_pegout_ids: &[FinalizedPegout],
     ) -> Result<(), Error> {
         for pegout_id in finalized_pegout_ids.iter() {
-            self.finalized_pegout_ids
-                .remove(&pegout_id.id.as_bytes()[..])?;
+            self.finalized_pegout_ids.remove(&pegout_id.id.as_bytes()[..])?;
         }
         Ok(())
     }
@@ -1436,10 +1427,7 @@ impl TryFrom<RpcUtxo> for Utxo {
         // create the utxo
         Ok(Utxo::new(
             OutPoint::new(txid, vout),
-            TxOut {
-                value: tx_out_val,
-                script_pubkey: script,
-            },
+            TxOut { value: tx_out_val, script_pubkey: script },
             if value.eth_address.is_empty() {
                 None
             } else {
@@ -1722,9 +1710,7 @@ mod tests {
 
         // Create script bytes using the OLD way (consensus encoding with length prefix)
         let mut consensus_encoded_bytes = vec![];
-        raw_script
-            .consensus_encode(&mut consensus_encoded_bytes)
-            .unwrap();
+        raw_script.consensus_encode(&mut consensus_encoded_bytes).unwrap();
 
         // Create a mock RpcUtxo with the consensus-encoded script bytes
         let rpc_utxo = RpcUtxo {
@@ -1971,11 +1957,9 @@ mod tests {
             };
             finalized_pegout_ids.push(finalized_pegout);
         }
-        let finalized_pegout_ids_slice = finalized_pegout_ids
-            .iter()
-            .collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
-            .unwrap();
+        let finalized_pegout_ids_slice =
+            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
         db.update_finalized_pegout_ids_merkle_root().unwrap();
         db.flush().unwrap();
 
@@ -2021,27 +2005,23 @@ mod tests {
         }
 
         // update finalized pegout to be within the pruning window
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         finalized_pegout_ids[0].timestamp = Some(now);
 
         // update finalized pegout to be outside the pruning window
         finalized_pegout_ids[1].timestamp =
             Some(now.saturating_sub(RETENTION_WINDOW_SECONDS + 1));
 
-        let finalized_pegout_ids_slice = finalized_pegout_ids
-            .iter()
-            .collect::<Vec<&FinalizedPegout>>();
+        let finalized_pegout_ids_slice =
+            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
 
         // We now have 3 finalized pegouts in the following order:
         // - one with a timestamp within the pruning window
         // - one with a timestamp outside the pruning window
         // - one without a timestamp (None)
 
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
-            .unwrap();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
         db.flush().unwrap();
 
         db.prune_finalized_pegout_ids().unwrap();
@@ -2086,11 +2066,9 @@ mod tests {
             };
             finalized_pegout_ids.push(finalized_pegout);
         }
-        let finalized_pegout_ids_slice = finalized_pegout_ids
-            .iter()
-            .collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
-            .unwrap();
+        let finalized_pegout_ids_slice =
+            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
         db.flush().unwrap();
 
         let chunk_size = 10;
@@ -2132,11 +2110,9 @@ mod tests {
             };
             finalized_pegout_ids.push(finalized_pegout);
         }
-        let finalized_pegout_ids_slice = finalized_pegout_ids
-            .iter()
-            .collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice)
-            .unwrap();
+        let finalized_pegout_ids_slice =
+            finalized_pegout_ids.iter().collect::<Vec<&FinalizedPegout>>();
+        db.store_finalized_pegout_ids(&finalized_pegout_ids_slice).unwrap();
         db.flush().unwrap();
 
         let chunk_size = 10;
@@ -2178,8 +2154,7 @@ mod tests {
             pegouts.push(finalized_pegout);
         }
         let pegout_slice = pegouts.iter().collect::<Vec<&FinalizedPegout>>();
-        db.store_finalized_pegout_ids_atomically(&pegout_slice)
-            .unwrap();
+        db.store_finalized_pegout_ids_atomically(&pegout_slice).unwrap();
         db.flush().unwrap();
 
         // Get all pegout ids
@@ -2608,10 +2583,8 @@ mod tests {
         let mut rng = thread_rng();
         // Simulate old serialized data (without timestamp field)
         let pegout_id = PegoutId::new(rng.gen::<[u8; 32]>(), 1 as u32);
-        let old_pegout = OldFinalizedPegout {
-            id: pegout_id.clone(),
-            block_number: 100,
-        };
+        let old_pegout =
+            OldFinalizedPegout { id: pegout_id.clone(), block_number: 100 };
 
         // Serialize with old structure
         let serialized_old = serde_json::to_vec(&old_pegout).unwrap();
@@ -2686,9 +2659,8 @@ mod tests {
         assert!(prev_pk.is_some());
 
         // ERR: Bad password!
-        let err = db
-            .import_key_package(bad_pass, export_1.clone())
-            .unwrap_err();
+        let err =
+            db.import_key_package(bad_pass, export_1.clone()).unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad IV/nonce!
@@ -2706,8 +2678,7 @@ mod tests {
         assert_eq!(err, Error::BadExportedPackageFormatVersion);
 
         // OK: Successful import with good passphrase and export package.
-        db.import_key_package(good_pass.clone(), export_2.clone())
-            .unwrap();
+        db.import_key_package(good_pass.clone(), export_2.clone()).unwrap();
 
         // Sanity check.
         let new_pk_package = db.get_public_key_package().unwrap().unwrap();

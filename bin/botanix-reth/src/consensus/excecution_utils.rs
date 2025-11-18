@@ -393,10 +393,8 @@ pub(crate) mod authority_execution_utils {
         header.receipts_root = if receipts.is_empty() {
             EMPTY_RECEIPTS
         } else {
-            let receipts_with_bloom = receipts
-                .iter()
-                .map(ReceiptWithBloom::from)
-                .collect::<Vec<_>>();
+            let receipts_with_bloom =
+                receipts.iter().map(ReceiptWithBloom::from).collect::<Vec<_>>();
             header.logs_bloom = receipts_with_bloom
                 .iter()
                 .fold(Bloom::ZERO, |bloom, r| bloom | r.logs_bloom);

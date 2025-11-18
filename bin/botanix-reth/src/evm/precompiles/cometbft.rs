@@ -188,12 +188,7 @@ impl ConsensusState {
         next_validator_set_hash: Bytes,
         validators: ValidatorSet,
     ) -> Self {
-        Self {
-            chain_id,
-            height,
-            next_validator_set_hash,
-            validators,
-        }
+        Self { chain_id, height, next_validator_set_hash, validators }
     }
 
     fn apply_light_block(
@@ -264,12 +259,11 @@ impl ConsensusState {
             }
         }
 
-        let validator_set_changed =
-            self.validators.hash().as_bytes().ne(light_block
-                .signed_header
-                .header()
-                .validators_hash
-                .as_bytes());
+        let validator_set_changed = self
+            .validators
+            .hash()
+            .as_bytes()
+            .ne(light_block.signed_header.header().validators_hash.as_bytes());
         self.height = light_block.height().value();
         self.next_validator_set_hash = Bytes::from(
             light_block
@@ -374,9 +368,7 @@ fn decode_consensus_state(input: &Bytes) -> DecodeConsensusStateResult {
     pos += CHAIN_ID_LENGTH;
 
     let height = u64::from_be_bytes(
-        input[pos as usize..(pos + HEIGHT_LENGTH) as usize]
-            .try_into()
-            .unwrap(),
+        input[pos as usize..(pos + HEIGHT_LENGTH) as usize].try_into().unwrap(),
     );
     pos += HEIGHT_LENGTH;
 
@@ -475,11 +467,7 @@ mod tests {
             ));
 
             let result = cometbft_light_block_validation_run(&input, 100_000);
-            let PrecompileOutput {
-                gas_used,
-                bytes,
-                reverted,
-            } = match result {
+            let PrecompileOutput { gas_used, bytes, reverted } = match result {
                 Ok(output) => output,
                 Err(_) => panic!("cometbft_light_block_validation_run failed"),
             };
@@ -805,11 +793,7 @@ mod tests {
 
         let result =
             cometbft_light_block_validation_run_before_hertz(&input, 100_000);
-        let PrecompileOutput {
-            gas_used,
-            bytes,
-            reverted,
-        } = match result {
+        let PrecompileOutput { gas_used, bytes, reverted } = match result {
             Ok(output) => output,
             Err(_) => panic!("cometbft_light_block_validation_run failed"),
         };

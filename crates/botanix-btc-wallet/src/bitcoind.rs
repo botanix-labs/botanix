@@ -42,11 +42,7 @@ impl BitcoindConfig {
 
 impl BitcoindConfig {
     pub fn new(url: Url, username: String, password: String) -> Self {
-        Self {
-            url,
-            username,
-            password,
-        }
+        Self { url, username, password }
     }
 }
 
@@ -157,9 +153,8 @@ impl BitcoindRpc for Client {
     }
 
     fn get_block_count_rpc(&self) -> Result<u64, BitcoindError> {
-        let block_count = self
-            .get_block_count()
-            .map_err(BitcoindError::BlockCountFailed)?;
+        let block_count =
+            self.get_block_count().map_err(BitcoindError::BlockCountFailed)?;
         Ok(block_count)
     }
 }
@@ -184,11 +179,7 @@ impl BitcoindFactory for BitcoindClientFactory {
     }
 
     fn build_and_connect(&self) -> Result<BitcoindClient, JsonRPCError> {
-        let BitcoindConfig {
-            url,
-            username,
-            password,
-        } = &self.config;
+        let BitcoindConfig { url, username, password } = &self.config;
         let creds = Auth::UserPass(username.clone(), password.clone());
         let rpc = Client::new(url.to_string().as_str(), creds)?;
         Ok(BitcoindClient::new_boxed(Box::new(rpc)))
@@ -210,11 +201,7 @@ impl BitcoindClient {
     }
 
     pub fn new(config: BitcoindConfig) -> Result<Self, BitcoindError> {
-        let BitcoindConfig {
-            url,
-            username,
-            password,
-        } = config;
+        let BitcoindConfig { url, username, password } = config;
         let creds = Auth::UserPass(username, password);
         let rpc = Client::new(url.to_string().as_str(), creds)
             .map_err(BitcoindError::ClientInitFailed)?;

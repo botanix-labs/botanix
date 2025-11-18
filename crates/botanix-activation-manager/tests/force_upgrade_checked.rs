@@ -31,10 +31,7 @@ fn force_upgrade_checked() {
     let res = manager.on_process_proposal(100, UPGRADE_VERSION).unwrap();
     assert!(matches!(
         res,
-        OnProcessProposalDecision::RejectBlock {
-            version: UPGRADE_VERSION,
-            ..
-        }
+        OnProcessProposalDecision::RejectBlock { version: UPGRADE_VERSION, .. }
     ));
 
     // FORCE wrong upgrade version.
@@ -48,10 +45,7 @@ fn force_upgrade_checked() {
     let res = manager.on_process_proposal(100, UPGRADE_VERSION).unwrap();
     assert!(matches!(
         res,
-        OnProcessProposalDecision::RejectBlock {
-            version: UPGRADE_VERSION,
-            ..
-        }
+        OnProcessProposalDecision::RejectBlock { version: UPGRADE_VERSION, .. }
     ));
 
     // FORCE tracked upgrade version; manager will immediately fast-forward to the upgrade.
@@ -65,9 +59,6 @@ fn force_upgrade_checked() {
     let res = manager.on_process_proposal(100, UPGRADE_VERSION).unwrap();
     assert!(matches!(
         res,
-        OnProcessProposalDecision::Process {
-            version: UPGRADE_VERSION,
-            ..
-        }
+        OnProcessProposalDecision::Process { version: UPGRADE_VERSION, .. }
     ));
 }

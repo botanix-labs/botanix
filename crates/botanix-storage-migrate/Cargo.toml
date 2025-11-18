@@ -21,6 +21,7 @@ eyre = { workspace = true }
 # reth
 reth-db = { workspace = true, features = ["mdbx"] }
 reth-db-api = { workspace = true }
+reth-node-types = { workspace = true }
 reth-primitives = { workspace = true }
 
 tracing = { workspace = true }

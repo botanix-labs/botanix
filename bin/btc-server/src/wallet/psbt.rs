@@ -76,10 +76,8 @@ pub trait PsbtInputExt: BorrowMut<PsbtInput> {
 
     /// Gets the version of a UTXO from a PSBT input
     fn get_version_from_psbt_input(&self) -> Option<UtxoVersion> {
-        self.borrow()
-            .proprietary
-            .get(&UTXO_VERSION_TYPE_KEY)
-            .and_then(|bytes| {
+        self.borrow().proprietary.get(&UTXO_VERSION_TYPE_KEY).and_then(
+            |bytes| {
                 if bytes.len() == 4 {
                     let version =
                         u32::from_le_bytes(bytes.as_slice().try_into().ok()?);
@@ -87,22 +85,20 @@ pub trait PsbtInputExt: BorrowMut<PsbtInput> {
                 } else {
                     None
                 }
-            })
+            },
+        )
     }
 
     fn eth_address(&self) -> Option<EthAddress> {
-        self.borrow()
-            .proprietary
-            .get(&ETH_ADDRESS_KEY)
-            .and_then(|b| {
-                if b.len() == 20 {
-                    let mut ret = [0u8; 20];
-                    ret.copy_from_slice(&b[..]);
-                    Some(ret)
-                } else {
-                    None
-                }
-            })
+        self.borrow().proprietary.get(&ETH_ADDRESS_KEY).and_then(|b| {
+            if b.len() == 20 {
+                let mut ret = [0u8; 20];
+                ret.copy_from_slice(&b[..]);
+                Some(ret)
+            } else {
+                None
+            }
+        })
     }
 
     /// Set the signing commitment for this input.
@@ -242,11 +238,7 @@ impl PsbtOutputExt for PsbtOutput {}
 pub trait PsbtExt: BorrowMut<Psbt> {
     /// Get all pegouts ids from this PSBT
     fn pegout_ids(&self) -> Vec<PegoutId> {
-        self.borrow()
-            .outputs
-            .iter()
-            .filter_map(|o| o.pegout_id())
-            .collect()
+        self.borrow().outputs.iter().filter_map(|o| o.pegout_id()).collect()
     }
 
     /// Converts this PSBT into a vector of Frost signing packages.

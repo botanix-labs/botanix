@@ -23,10 +23,7 @@ impl LightCBFTClientBuilder {
     pub fn new(rpc_client_factory: HttpCometBFTRpcClientFactory) -> Self {
         let light_store = Box::new(MemoryStore::new());
 
-        Self {
-            rpc_client_factory,
-            light_store,
-        }
+        Self { rpc_client_factory, light_store }
     }
 
     /// Set the light store

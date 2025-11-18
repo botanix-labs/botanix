@@ -23,11 +23,8 @@ impl TxIn {
         if self.previous_outpoint.is_none() {
             return Err("previous_outpoint field is required".to_string());
         } else {
-            let txid = self
-                .previous_outpoint
-                .clone()
-                .expect("outpoint to exist")
-                .txid;
+            let txid =
+                self.previous_outpoint.clone().expect("outpoint to exist").txid;
             if let Err(e) = Txid::from_slice(&txid) {
                 return Err(format!("invalid txid: {}", e));
             }
@@ -96,15 +93,10 @@ impl TryFrom<OutPoint> for BtcOutPoint {
 
     fn try_from(outpoint: OutPoint) -> Result<Self, Self::Error> {
         let txid = bitcoin::Txid::from_slice(&outpoint.txid).map_err(|_| {
-            TryFromError::ConversionError {
-                variant: "invalid_txid",
-            }
+            TryFromError::ConversionError { variant: "invalid_txid" }
         })?;
 
-        Ok(BtcOutPoint {
-            txid,
-            vout: outpoint.vout,
-        })
+        Ok(BtcOutPoint { txid, vout: outpoint.vout })
     }
 }
 
@@ -227,10 +219,7 @@ mod tests {
             pegout_idxs: vec![],
             pegout_requests: vec![],
             change_idxs: vec![],
-            created: Some(Timestamp {
-                seconds: 0,
-                nanos: 0,
-            }),
+            created: Some(Timestamp { seconds: 0, nanos: 0 }),
         };
 
         assert!(tracked_tx.validate().is_ok());
@@ -244,10 +233,7 @@ mod tests {
             pegout_idxs: vec![],
             pegout_requests: vec![],
             change_idxs: vec![],
-            created: Some(Timestamp {
-                seconds: 0,
-                nanos: 0,
-            }),
+            created: Some(Timestamp { seconds: 0, nanos: 0 }),
         };
 
         let error = tracked_tx.validate().unwrap_err();
@@ -336,10 +322,7 @@ mod tests {
 
     #[test]
     fn test_tx_out_validate_missing_script_pubkey() {
-        let tx_out = rpc::TxOut {
-            value: 0,
-            script_pubkey: None,
-        };
+        let tx_out = rpc::TxOut { value: 0, script_pubkey: None };
 
         let error = tx_out.validate().unwrap_err();
         assert_eq!(error, "script_pubkey field is required");
@@ -392,10 +375,8 @@ mod tests {
             "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
                 .parse::<bitcoin::Txid>()
                 .unwrap();
-        let original_bitcoin_outpoint = BtcOutPoint {
-            txid: original_txid,
-            vout: 42,
-        };
+        let original_bitcoin_outpoint =
+            BtcOutPoint { txid: original_txid, vout: 42 };
 
         // Convert bitcoin -> protobuf -> bitcoin
         let proto_outpoint = OutPoint::from(original_bitcoin_outpoint);

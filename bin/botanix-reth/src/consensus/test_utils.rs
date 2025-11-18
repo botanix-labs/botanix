@@ -267,10 +267,7 @@ impl HeaderProvider for MockProvider {
         &self,
         _num: u64,
     ) -> ProviderResult<Option<Self::Header>> {
-        Ok(Some(Header {
-            timestamp: self.timestamp,
-            ..Default::default()
-        }))
+        Ok(Some(Header { timestamp: self.timestamp, ..Default::default() }))
     }
 
     fn header(

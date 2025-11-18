@@ -338,9 +338,7 @@ mod tests {
     #[tokio::test]
     async fn test_encode_decode() {
         let parser = DataParser::default();
-        let original_data = TestData {
-            field: "test".to_string(),
-        };
+        let original_data = TestData { field: "test".to_string() };
         let encoded = parser.encode(&original_data).await.unwrap();
         let decoded: TestData = parser.decode(&encoded).await.unwrap();
         assert_eq!(original_data, decoded);
@@ -348,9 +346,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_serialization_types() {
-        let data = TestData {
-            field: "test".to_string(),
-        };
+        let data = TestData { field: "test".to_string() };
 
         for serialization_type in [
             SerializationType::Bincode,
@@ -367,9 +363,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_compression_strategies() {
-        let data = TestData {
-            field: "test".to_string(),
-        };
+        let data = TestData { field: "test".to_string() };
         let compression_strategies: Vec<Arc<dyn CompressionStrategy>> = vec![
             Arc::new(ZLibCompressionStrategy),
             Arc::new(GzipCompressionStrategy),

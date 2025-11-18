@@ -250,9 +250,7 @@ fn apply_fees_and_create_psbt(
                 filtered_pegout_ids,
             ))
         }
-        FilterResult::SomeFiltered {
-            filtered_pegout_ids,
-        } => {
+        FilterResult::SomeFiltered { filtered_pegout_ids } => {
             debug!(
                 "Filtered out {} outputs due to dust or insufficient funds",
                 filtered_pegout_ids.len()
@@ -295,9 +293,7 @@ fn apply_fees_and_create_psbt(
                     ),
                     filtered_pegout_ids,
                 )),
-                FilterResult::SomeFiltered {
-                    filtered_pegout_ids: _,
-                } => {
+                FilterResult::SomeFiltered { filtered_pegout_ids: _ } => {
                     // should never happen
                     return Err(
                         SanityCheckError::RecalculationFilteredMoreOutputs
@@ -330,10 +326,7 @@ fn try_apply_fees_and_filter_dust(
             .value
             .checked_sub(fees_to_subtract[i])
             .unwrap_or(Amount::ZERO);
-        let updated_output = TxOut {
-            value: value_after_fee,
-            ..txout
-        };
+        let updated_output = TxOut { value: value_after_fee, ..txout };
 
         let dust_threshold = updated_output.script_pubkey.minimal_non_dust();
         if updated_output.value >= dust_threshold {
@@ -350,9 +343,7 @@ fn try_apply_fees_and_filter_dust(
     } else if result.is_empty() {
         Err(CoinSelectionError::NoViableOutputs)
     } else {
-        Ok(FilterResult::SomeFiltered {
-            filtered_pegout_ids,
-        })
+        Ok(FilterResult::SomeFiltered { filtered_pegout_ids })
     }
 }
 
@@ -449,10 +440,8 @@ fn create_change(
     pegouts: &[(TxOut, PegoutIdBytes)],
     change_script: ScriptBuf,
 ) -> Result<Option<TxOut>, CoinSelectionError> {
-    let total_selected_inputs = selected_inputs
-        .iter()
-        .map(|i| i.output.value)
-        .sum::<Amount>();
+    let total_selected_inputs =
+        selected_inputs.iter().map(|i| i.output.value).sum::<Amount>();
     let total_pegout_target =
         pegouts.iter().map(|(txout, _)| txout.value).sum::<Amount>();
     let final_change_amount = total_selected_inputs
@@ -475,10 +464,8 @@ fn sanity_check_psbt(
     total_pegout_target: Amount,
 ) -> Result<(), CoinSelectionError> {
     let tx: bitcoin::Transaction = psbt.clone().extract_tx().unwrap();
-    let total_input_value = selected_inputs
-        .iter()
-        .map(|i| i.output.value)
-        .sum::<Amount>();
+    let total_input_value =
+        selected_inputs.iter().map(|i| i.output.value).sum::<Amount>();
     let change_output_value = tx
         .output
         .iter()
@@ -897,16 +884,10 @@ mod tests {
         let remaining_value = total_input_value - total_pegout_value;
 
         // Find pegout outputs (p2wpkh) vs change output (p2tr)
-        let pegout_outputs: Vec<_> = tx
-            .output
-            .iter()
-            .filter(|o| o.script_pubkey.is_p2wpkh())
-            .collect();
-        let change_outputs: Vec<_> = tx
-            .output
-            .iter()
-            .filter(|o| o.script_pubkey.is_p2tr())
-            .collect();
+        let pegout_outputs: Vec<_> =
+            tx.output.iter().filter(|o| o.script_pubkey.is_p2wpkh()).collect();
+        let change_outputs: Vec<_> =
+            tx.output.iter().filter(|o| o.script_pubkey.is_p2tr()).collect();
 
         assert_eq!(
             change_outputs.len(),

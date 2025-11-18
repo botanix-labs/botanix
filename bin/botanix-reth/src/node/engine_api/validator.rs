@@ -61,9 +61,7 @@ pub struct BotanixEngineValidator {
 impl BotanixEngineValidator {
     /// Instantiates a new validator.
     pub fn new(chain_spec: Arc<BotanixChainSpec>) -> Self {
-        Self {
-            inner: BotanixExecutionPayloadValidator { inner: chain_spec },
-        }
+        Self { inner: BotanixExecutionPayloadValidator { inner: chain_spec } }
     }
 }
 
@@ -111,9 +109,7 @@ impl PayloadValidator<BotanixPayloadTypes> for BotanixEngineValidator {
             .inner
             .ensure_well_formed_payload(payload)
             .map_err(NewPayloadError::other)?;
-        sealed_block
-            .try_recover()
-            .map_err(|e| NewPayloadError::Other(e.into()))
+        sealed_block.try_recover().map_err(|e| NewPayloadError::Other(e.into()))
     }
 
     fn validate_block_post_execution_with_hashed_state(

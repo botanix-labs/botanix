@@ -24,13 +24,9 @@ fn dkg_session_reset_stage_one() {
             .round1(alice_addr, bob_addr)
             .msgs();
 
-        let DkgMessage::Round1 { nonce, .. } = a1.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = a1.msg else { panic!() };
         assert_eq!(nonce, 0);
-        let DkgMessage::Round1 { nonce, .. } = a2.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = a2.msg else { panic!() };
         assert_eq!(nonce, 0);
 
         eve.recv(a1).unwrap();
@@ -49,9 +45,7 @@ fn dkg_session_reset_stage_one() {
             .round1(bob_addr, alice_addr)
             .msgs();
 
-        let DkgMessage::Round1 { nonce, .. } = b2.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = b2.msg else { panic!() };
         assert_eq!(nonce, 0);
 
         alice.recv(b1).unwrap();
@@ -66,9 +60,7 @@ fn dkg_session_reset_stage_one() {
             .round1(eve_addr, alice_addr)
             .msgs();
 
-        let DkgMessage::Round1 { nonce, .. } = e2.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = e2.msg else { panic!() };
         assert_eq!(nonce, 0);
 
         alice.recv(e1).unwrap();
@@ -89,14 +81,10 @@ fn dkg_session_reset_stage_one() {
             .round1(alice_addr, bob_addr)
             .msgs();
 
-        let DkgMessage::Round1 { nonce, .. } = a1.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = a1.msg else { panic!() };
         assert_eq!(nonce, 1);
 
-        let DkgMessage::Round1 { nonce, .. } = a2.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = a2.msg else { panic!() };
         assert_eq!(nonce, 1);
 
         eve.recv(a1).unwrap();
@@ -111,9 +99,7 @@ fn dkg_session_reset_stage_one() {
             .round1(bob_addr, alice_addr)
             .msgs();
 
-        let DkgMessage::Round1 { nonce, .. } = b2.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = b2.msg else { panic!() };
         assert_eq!(nonce, 1);
 
         let _ = (b1, b2);
@@ -127,9 +113,7 @@ fn dkg_session_reset_stage_one() {
             .round1(eve_addr, alice_addr)
             .msgs();
 
-        let DkgMessage::Round1 { nonce, .. } = e2.msg else {
-            panic!()
-        };
+        let DkgMessage::Round1 { nonce, .. } = e2.msg else { panic!() };
         assert_eq!(nonce, 1);
 
         let _ = (e1, e2);

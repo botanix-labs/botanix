@@ -124,10 +124,7 @@ where
 
     fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> BotanixBlock {
         let alloy_rpc_types::Block {
-            header,
-            transactions,
-            withdrawals,
-            ..
+            header, transactions, withdrawals, ..
         } = rpc_block;
         BotanixBlock {
             header: header.inner,

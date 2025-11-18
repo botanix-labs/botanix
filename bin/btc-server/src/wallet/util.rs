@@ -296,11 +296,8 @@ mod tests {
         // Test 1: Create a pegout with exactly the max number of inputs
         let tx =
             create_signed_tx(max_number_of_inputs, UPPER_PEGOUT_BOUND as u64);
-        let tx_weight = tx
-            .clone()
-            .extract_tx()
-            .expect("Failed to extract tx")
-            .weight();
+        let tx_weight =
+            tx.clone().extract_tx().expect("Failed to extract tx").weight();
 
         // The tx weight should be just below the max transaction weight
         assert!(
@@ -314,11 +311,8 @@ mod tests {
             max_number_of_inputs + 1,
             UPPER_PEGOUT_BOUND as u64,
         );
-        let tx_weight = tx
-            .clone()
-            .extract_tx()
-            .expect("Failed to extract tx")
-            .weight();
+        let tx_weight =
+            tx.clone().extract_tx().expect("Failed to extract tx").weight();
 
         // The tx weight should be above the max transaction weight
         assert!(
@@ -335,11 +329,8 @@ mod tests {
 
         // Test 1: Create a sweep with max number of inputs
         let tx = create_signed_tx(max_number_of_inputs, 1);
-        let tx_weight = tx
-            .clone()
-            .extract_tx()
-            .expect("Failed to extract tx")
-            .weight();
+        let tx_weight =
+            tx.clone().extract_tx().expect("Failed to extract tx").weight();
         // The tx weight should be just below the max transaction weight
         assert!(
             tx_weight.to_wu() <= MAX_BITCOIN_TX_WEIGHT,
@@ -349,11 +340,8 @@ mod tests {
 
         // Test 2: Create a sweep with one more input than the max number of inputs
         let tx = create_signed_tx(max_number_of_inputs + 1, 1);
-        let tx_weight = tx
-            .clone()
-            .extract_tx()
-            .expect("Failed to extract tx")
-            .weight();
+        let tx_weight =
+            tx.clone().extract_tx().expect("Failed to extract tx").weight();
 
         assert!(
             tx_weight.to_wu() > MAX_BITCOIN_TX_WEIGHT,

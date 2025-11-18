@@ -191,9 +191,7 @@ where
 
     /// Remove oldest snapshot
     fn remove_oldest_snapshot(&self) -> Result<(), SnapshotManagerError> {
-        self.storage
-            .botanix_database_factory
-            .remove_oldest_snapshot()?;
+        self.storage.botanix_database_factory.remove_oldest_snapshot()?;
 
         Ok(())
     }
@@ -258,10 +256,8 @@ where
 
     /// Get snapshots count
     fn get_snapshots_count(&self) -> Result<usize, SnapshotManagerError> {
-        let snapshots_count = self
-            .storage
-            .botanix_database_factory
-            .get_snapshots_count()?;
+        let snapshots_count =
+            self.storage.botanix_database_factory.get_snapshots_count()?;
 
         Ok(snapshots_count)
     }
@@ -270,10 +266,8 @@ where
     fn get_last_snapshot_height(
         &self,
     ) -> Result<Option<(SnapshotId, BlockNumber)>, SnapshotManagerError> {
-        let last_snapshot_height = self
-            .storage
-            .botanix_database_factory
-            .get_last_snapshot_height()?;
+        let last_snapshot_height =
+            self.storage.botanix_database_factory.get_last_snapshot_height()?;
 
         Ok(last_snapshot_height)
     }
@@ -309,10 +303,8 @@ where
     fn get_latest_persisted_block_height(
         &self,
     ) -> Result<Option<BlockNumber>, SnapshotManagerError> {
-        if let Some((_snapshot_id, block_number)) = self
-            .storage
-            .botanix_database_factory
-            .get_last_snapshot_height()?
+        if let Some((_snapshot_id, block_number)) =
+            self.storage.botanix_database_factory.get_last_snapshot_height()?
         {
             return Ok(Some(block_number));
         }
@@ -351,9 +343,8 @@ where
         info!(target: "consensus::authority::snapshot_manager::run", "Latest comet block height {:?}", latest_block_height);
 
         // get the latest persisted snapshot block height
-        let latest_persisted_block_height = self
-            .get_latest_persisted_block_height()?
-            .unwrap_or_default();
+        let latest_persisted_block_height =
+            self.get_latest_persisted_block_height()?.unwrap_or_default();
         info!(target: "consensus::authority::snapshot_manager::run", "Latest persisted block height {}", latest_persisted_block_height);
 
         // start from the next block after the latest persisted block height
@@ -547,9 +538,8 @@ where
             .set_block_number(block.number);
         drop(state_lock);
 
-        let snapshot = self
-            .get_snapshot_by_id(last_snapshot_id)?
-            .expect("checked above");
+        let snapshot =
+            self.get_snapshot_by_id(last_snapshot_id)?.expect("checked above");
         let chunk_id = match snapshot.get_latest_chunk_id() {
             Some(chunk_id) => {
                 // Check if there is enough space in the latest chunk
@@ -711,10 +701,8 @@ mod tests {
         assert!(snapshot_by_id.block_ids().is_empty());
         assert!(snapshot_by_id.chunk_ids().is_empty());
 
-        let snapshot_id_by_block_id = client
-            .get_snapshot_id_by_block_id(block_number)
-            .unwrap()
-            .unwrap();
+        let snapshot_id_by_block_id =
+            client.get_snapshot_id_by_block_id(block_number).unwrap().unwrap();
         assert!(snapshot_id == snapshot_id_by_block_id);
 
         client.remove_oldest_snapshot().unwrap(); // should be 1
@@ -739,9 +727,8 @@ mod tests {
 
         // insert a new snapshot
         let block_id = 1;
-        let snapshot_id = client
-            .create_new_snapshot(block_id, B256::random())
-            .unwrap();
+        let snapshot_id =
+            client.create_new_snapshot(block_id, B256::random()).unwrap();
 
         // insert block with some chunks
         let (first_block_id, first_block_chunks) = (1, 1..=10);
@@ -780,9 +767,8 @@ mod tests {
 
         // insert a new snapshot
         let block_id = 1;
-        let snapshot_id = client
-            .create_new_snapshot(block_id, B256::random())
-            .unwrap();
+        let snapshot_id =
+            client.create_new_snapshot(block_id, B256::random()).unwrap();
 
         // insert block with some chunks
         let (first_block_id, first_block_chunks) = (1, 1..=10);
@@ -819,9 +805,8 @@ mod tests {
 
         // insert a new snapshot
         let block_id = 1;
-        let snapshot_id = client
-            .create_new_snapshot(block_id, B256::random())
-            .unwrap();
+        let snapshot_id =
+            client.create_new_snapshot(block_id, B256::random()).unwrap();
         assert!(snapshot_id == 1);
 
         // insert block with some chunks
@@ -896,15 +881,10 @@ mod tests {
         let client = provider_factory.provider_rw().unwrap();
 
         // insert a new snapshot sync
-        client
-            .create_new_snapshot_sync(1, B256::random(), 10, 1)
-            .unwrap();
-        client
-            .create_new_snapshot_sync(2, B256::random(), 20, 1)
-            .unwrap();
-        let id = client
-            .create_new_snapshot_sync(3, B256::random(), 30, 1)
-            .unwrap();
+        client.create_new_snapshot_sync(1, B256::random(), 10, 1).unwrap();
+        client.create_new_snapshot_sync(2, B256::random(), 20, 1).unwrap();
+        let id =
+            client.create_new_snapshot_sync(3, B256::random(), 30, 1).unwrap();
 
         let mut snapshot_sync_by_id =
             client.get_snapshot_sync_by_id(id).unwrap().unwrap();

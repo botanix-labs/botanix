@@ -602,13 +602,7 @@ where
         debug_assert_eq!(total, t4);
         debug_assert_eq!(ayes + nays + abstained, total);
 
-        let polling = Polling {
-            ayes,
-            nays,
-            abstained,
-            compliant,
-            total,
-        };
+        let polling = Polling { ayes, nays, abstained, compliant, total };
 
         Ok(Some((upgrade.version, polling)))
     }

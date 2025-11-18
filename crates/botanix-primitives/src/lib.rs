@@ -175,12 +175,7 @@ mod rlp {
     impl<'a> From<&'a BotanixBlockBody> for BlockBodyHelper<'a> {
         fn from(value: &'a BotanixBlockBody) -> Self {
             let BotanixBlockBody {
-                inner:
-                    BlockBody {
-                        transactions,
-                        ommers,
-                        withdrawals,
-                    },
+                inner: BlockBody { transactions, ommers, withdrawals },
                 sidecars,
             } = value;
 
@@ -199,12 +194,7 @@ mod rlp {
                 header,
                 body:
                     BotanixBlockBody {
-                        inner:
-                            BlockBody {
-                                transactions,
-                                ommers,
-                                withdrawals,
-                            },
+                        inner: BlockBody { transactions, ommers, withdrawals },
                         sidecars,
                     },
             } = value;
@@ -231,12 +221,8 @@ mod rlp {
 
     impl Decodable for BotanixBlockBody {
         fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
-            let BlockBodyHelper {
-                transactions,
-                ommers,
-                withdrawals,
-                sidecars,
-            } = BlockBodyHelper::decode(buf)?;
+            let BlockBodyHelper { transactions, ommers, withdrawals, sidecars } =
+                BlockBodyHelper::decode(buf)?;
             Ok(Self {
                 inner: BlockBody {
                     transactions: transactions.into_owned(),

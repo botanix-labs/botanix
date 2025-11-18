@@ -60,9 +60,7 @@ where
     S: Serializer,
 {
     let mut buffer = Vec::new();
-    value
-        .consensus_encode(&mut buffer)
-        .map_err(serde::ser::Error::custom)?;
+    value.consensus_encode(&mut buffer).map_err(serde::ser::Error::custom)?;
     serializer.serialize_bytes(&buffer)
 }
 

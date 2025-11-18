@@ -36,11 +36,7 @@ impl DummyHashBlockStream {
     /// * `interval` — Minimum duration to wait between consecutive messages (except the first,
     ///   which is immediate).
     pub fn new(interval: Duration) -> Self {
-        Self {
-            interval,
-            first_poll: true,
-            sleep: None,
-        }
+        Self { interval, first_poll: true, sleep: None }
     }
 }
 

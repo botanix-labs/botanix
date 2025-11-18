@@ -62,7 +62,7 @@ reth-chain-state = { workspace = true }
 reth-chainspec = { workspace = true }
 reth-consensus = { workspace = true }
 reth-consensus-common = { workspace = true }
-reth-db = { workspace = true }
+reth-db = { workspace = true, features = ["mdbx"] }
 reth-ethereum = { workspace = true, features = ["rpc"] }
 reth-ethereum-consensus = { workspace = true }
 reth-ethereum-payload-builder = { workspace = true }

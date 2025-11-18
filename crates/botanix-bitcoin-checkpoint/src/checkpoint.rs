@@ -34,11 +34,7 @@ impl BitcoinCheckpoint {
     /// A new `BitcoinCheckpoint` instance
     pub fn new(header: BitcoinHeader, height: u32) -> Self {
         let hash = header.block_hash();
-        Self {
-            header,
-            height,
-            hash,
-        }
+        Self { header, height, hash }
     }
 }
 

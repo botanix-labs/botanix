@@ -298,18 +298,14 @@ fn name_payload(msg: &DkgMessage) -> String {
         DkgMessage::AckRound1 { initiator, .. } => {
             format!("AckRound1({})", name_addr(&initiator.0))
         }
-        DkgMessage::Round2 {
-            initiator, target, ..
-        } => {
+        DkgMessage::Round2 { initiator, target, .. } => {
             format!(
                 "Round2({}.{})",
                 name_addr(&initiator.0),
                 name_addr(&target.0)
             )
         }
-        DkgMessage::AckRound2 {
-            initiator, target, ..
-        } => {
+        DkgMessage::AckRound2 { initiator, target, .. } => {
             format!(
                 "AckRound2({}.{})",
                 name_addr(&initiator.0),

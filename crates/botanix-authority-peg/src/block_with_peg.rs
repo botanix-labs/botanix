@@ -20,11 +20,7 @@ impl<B: Block> SealedBlockWithPeg<B> {
         pegins: Vec<PeginData>,
         pegouts: Vec<PegoutWithId>,
     ) -> Self {
-        Self {
-            block,
-            pegins,
-            pegouts,
-        }
+        Self { block, pegins, pegouts }
     }
 
     /// Returns the block

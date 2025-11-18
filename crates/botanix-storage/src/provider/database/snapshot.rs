@@ -163,8 +163,8 @@ impl<TX: DbTx + 'static, N: NodeTypes> SnapshotReader
                 .tx_ref()
                 .cursor_read::<Chunks>()?
                 .walk_range(
-                    chunk_ids.first().cloned().unwrap_or_default()..=
-                        chunk_ids.last().cloned().unwrap_or_default(),
+                    chunk_ids.first().cloned().unwrap_or_default()
+                        ..=chunk_ids.last().cloned().unwrap_or_default(),
                 )?
                 .collect::<Result<HashMap<_, _>, _>>()?
                 .values()
@@ -669,9 +669,9 @@ mod tests {
         let expected_snapshot_size = snapshot.size();
         let expected_chunk_1_size = std::mem::size_of::<u64>() + data1.len();
         let expected_chunk_2_size = std::mem::size_of::<u64>() + data2.len();
-        let expected_total_size = expected_snapshot_size +
-            expected_chunk_1_size +
-            expected_chunk_2_size;
+        let expected_total_size = expected_snapshot_size
+            + expected_chunk_1_size
+            + expected_chunk_2_size;
 
         assert_eq!(total_size, expected_total_size);
     }

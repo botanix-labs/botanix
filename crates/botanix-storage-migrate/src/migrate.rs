@@ -1,9 +1,14 @@
 use crate::table_transporter::TableTransporter;
 use botanix_storage::tables::Tables;
+use botanix_storage::DatabaseProviderFactoryRO;
 use eyre::Context;
+use reth_db::mdbx::tx::Tx;
+use reth_db::mdbx::RO;
 use reth_db::{Database, DatabaseEnv};
 use reth_db_api::transaction::DbTx;
+use reth_node_types::NodeTypesWithDBAdapter;
 use std::path::Path;
+use std::sync::Arc;
 
 /// Checks if a migration from a reth database to a botanix database is needed.
 ///
@@ -130,12 +135,8 @@ pub fn migrate_botanix_tables(
 
     // Commit the transactions
 
-    botanix_tx
-        .commit()
-        .wrap_err("Failed to commit botanix transaction")?;
-    reth_tx
-        .commit()
-        .wrap_err("Failed to commit reth transaction")?;
+    botanix_tx.commit().wrap_err("Failed to commit botanix transaction")?;
+    reth_tx.commit().wrap_err("Failed to commit reth transaction")?;
 
     let skipped_tables_count = Tables::ALL.len() - migrated_tables_count;
 

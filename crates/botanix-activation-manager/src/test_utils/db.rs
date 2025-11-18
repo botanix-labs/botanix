@@ -14,9 +14,7 @@ pub struct Db {
 
 impl Db {
     pub fn new() -> Self {
-        Db {
-            votes: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Db { votes: Arc::new(RwLock::new(HashMap::new())) }
     }
 }
 
@@ -51,11 +49,8 @@ impl ActivationManagerReaderWriter<Address> for Db {
                 e.botanix_height = botanix_height;
             }
             Entry::Vacant(v) => {
-                let _ = v.insert(VoteEntry {
-                    vote,
-                    is_compliant,
-                    botanix_height,
-                });
+                let _ =
+                    v.insert(VoteEntry { vote, is_compliant, botanix_height });
             }
         }
 
@@ -76,10 +71,8 @@ impl ActivationManagerReaderWriter<Address> for Db {
 
     fn get_abstained_votes(&self) -> ProviderResult<(usize, usize)> {
         let votes = self.votes.read().unwrap();
-        let abstains = votes
-            .iter()
-            .filter(|(_, e)| e.vote == Vote::Abstain)
-            .count();
+        let abstains =
+            votes.iter().filter(|(_, e)| e.vote == Vote::Abstain).count();
         Ok((abstains, votes.len()))
     }
 

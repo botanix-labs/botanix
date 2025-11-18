@@ -39,12 +39,7 @@ impl BotanixPrecompiles {
             jalapeno()
         };
 
-        Self {
-            inner: EthPrecompiles {
-                precompiles,
-                spec: spec.into(),
-            },
-        }
+        Self { inner: EthPrecompiles { precompiles, spec: spec.into() } }
     }
 
     #[inline]

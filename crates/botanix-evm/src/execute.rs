@@ -341,11 +341,8 @@ where
         let mut receipts: Vec<Receipt> =
             Vec::with_capacity(block.body().transactions().len());
 
-        for (tx_index, (sender, transaction)) in block
-            .senders()
-            .iter()
-            .zip(block.body().transactions())
-            .enumerate()
+        for (tx_index, (sender, transaction)) in
+            block.senders().iter().zip(block.body().transactions()).enumerate()
         {
             // The sum of the transaction’s gas limit, Tg, and the gas utilized in this block prior,
             // must be no greater than the block’s gasLimit.
@@ -390,20 +387,18 @@ where
                 <N::Primitives as NodePrimitives>::SignedTx,
             > = Recovered::new_unchecked(transaction.clone(), *sender);
             let tx_hash = transaction.tx_hash();
-            let ResultAndState {
-                mut result,
-                mut state,
-            } = evm.transact(recovered_tx).map_err(move |err| {
-                BlockExecutionError::Internal(
-                    InternalBlockExecutionError::Other(
-                        format!(
-                            "EVM error for transaction {}: {}",
-                            tx_hash, err
-                        )
-                        .into(),
-                    ),
-                )
-            })?;
+            let ResultAndState { mut result, mut state } =
+                evm.transact(recovered_tx).map_err(move |err| {
+                    BlockExecutionError::Internal(
+                        InternalBlockExecutionError::Other(
+                            format!(
+                                "EVM error for transaction {}: {}",
+                                tx_hash, err
+                            )
+                            .into(),
+                        ),
+                    )
+                })?;
 
             // calculate the total transaction fee
             let mut transaction_fee = transaction
@@ -724,10 +719,8 @@ where
                 let mut tx_hash_array = [0u8; 32];
                 tx_hash_array.copy_from_slice(tx_hash.as_slice());
                 let pegout_id = PegoutId::new(tx_hash_array, index as u32);
-                let pegout_with_id = PegoutWithId {
-                    data: pegout_data,
-                    id: pegout_id,
-                };
+                let pegout_with_id =
+                    PegoutWithId { data: pegout_data, id: pegout_id };
                 pegouts.push(pegout_with_id);
             }
         }

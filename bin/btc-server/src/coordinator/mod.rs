@@ -207,10 +207,7 @@ pub fn attempt_make_tx(
         .iter()
         .flat_map(|tx| tx.pegout_requests.iter().map(|p| p.id))
         .collect::<HashSet<_>>();
-    debug!(
-        "tracked_pegout_request_ids = {:?}",
-        tracked_pegout_request_ids
-    );
+    debug!("tracked_pegout_request_ids = {:?}", tracked_pegout_request_ids);
 
     // Collect all pegout ids being retried.
     let matching_pegouts_ids: Vec<&PegoutId> = outputs

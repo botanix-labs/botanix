@@ -80,10 +80,7 @@ where
         best_payload,
         max_tx_bytes: _,
     } = args;
-    let PayloadConfig {
-        parent_header,
-        attributes,
-    } = config;
+    let PayloadConfig { parent_header, attributes } = config;
 
     let state_provider = client.state_by_block_hash(parent_header.hash())?;
     let state = StateProviderDatabase::new(&state_provider);
@@ -284,17 +281,11 @@ blob transaction because it would exceed the max blob count per block");
         // Release db
         drop(builder);
         // can skip building the block
-        return Ok(BuildOutcome::Aborted {
-            fees: total_fees,
-            cached_reads,
-        });
+        return Ok(BuildOutcome::Aborted { fees: total_fees, cached_reads });
     }
 
-    let BlockBuilderOutcome {
-        execution_result,
-        block,
-        ..
-    } = builder.finish(&state_provider)?;
+    let BlockBuilderOutcome { execution_result, block, .. } =
+        builder.finish(&state_provider)?;
 
     let requests = chain_spec
         .is_prague_active_at_timestamp(attributes.timestamp)
@@ -313,16 +304,10 @@ blob transaction because it would exceed the max blob count per block");
         let ommers = body.ommers().unwrap_or_default().to_vec();
         let withdrawals = body.withdrawals().cloned();
 
-        let eth_body = alloy_consensus::BlockBody {
-            transactions,
-            ommers,
-            withdrawals,
-        };
+        let eth_body =
+            alloy_consensus::BlockBody { transactions, ommers, withdrawals };
 
-        let eth_block = alloy_consensus::Block {
-            header,
-            body: eth_body,
-        };
+        let eth_block = alloy_consensus::Block { header, body: eth_body };
 
         let block_hash = sealed_block.hash();
         reth_primitives_traits::SealedBlock::new_unchecked(
@@ -334,8 +319,5 @@ blob transaction because it would exceed the max blob count per block");
         // add blob sidecars from the executed txs
         .with_sidecars(blob_sidecars);
 
-    Ok(BuildOutcome::Better {
-        payload,
-        cached_reads,
-    })
+    Ok(BuildOutcome::Better { payload, cached_reads })
 }

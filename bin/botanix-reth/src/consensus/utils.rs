@@ -189,13 +189,7 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(
                 bitcoin::consensus::serialize(&tx_out.script_pubkey);
             let eth_address = pegin.address().to_vec();
 
-            models::PeginData {
-                txid,
-                vout,
-                value,
-                script_pubkey,
-                eth_address,
-            }
+            models::PeginData { txid, vout, value, script_pubkey, eth_address }
         })
         .collect()
 }
@@ -212,9 +206,7 @@ pub(crate) fn get_utxos_from_staged_pegins(
             }),
             output: Some(TxOut {
                 value: pegin.value,
-                script_pubkey: Some(ScriptBuf {
-                    script: pegin.script_pubkey,
-                }),
+                script_pubkey: Some(ScriptBuf { script: pegin.script_pubkey }),
             }),
             eth_address: hex::encode(pegin.eth_address),
         })
@@ -233,12 +225,7 @@ pub(crate) fn get_staged_pegouts_from_pegout_data(
                 pegout.data.destination.script_pubkey().into_bytes();
             let amount = pegout.data.amount.to_sat();
 
-            models::PegoutData {
-                pegout_id,
-                script_pubkey,
-                amount,
-                height,
-            }
+            models::PegoutData { pegout_id, script_pubkey, amount, height }
         })
         .collect()
 }

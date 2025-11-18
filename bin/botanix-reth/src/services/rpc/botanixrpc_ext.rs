@@ -91,11 +91,7 @@ where
     }
 
     async fn get_btc_fee_rate(&self) -> RpcResult<Option<U256>> {
-        self.botanix
-            .get_btc_fee_rate()
-            .await
-            .map(Some)
-            .to_rpc_result()
+        self.botanix.get_btc_fee_rate().await.map(Some).to_rpc_result()
     }
 }
 

@@ -737,12 +737,8 @@ mod tests {
                 create_checkpoint(100, BitcoinBlockHash::all_zeros());
             let checkpoint2 = create_checkpoint(101, checkpoint1.hash);
 
-            chain
-                .push(checkpoint1.clone())
-                .expect("push first checkpoint");
-            chain
-                .push(checkpoint2.clone())
-                .expect("push second checkpoint");
+            chain.push(checkpoint1.clone()).expect("push first checkpoint");
+            chain.push(checkpoint2.clone()).expect("push second checkpoint");
 
             // Should contain the confirmation depth and checkpoint info
             assert!(chain.to_string().contains(
@@ -804,11 +800,7 @@ mod tests {
             nonce: Default::default(),
         };
 
-        BitcoinCheckpoint {
-            height,
-            hash: header.block_hash(),
-            header,
-        }
+        BitcoinCheckpoint { height, hash: header.block_hash(), header }
     }
 
     fn create_checkpoints_and_push_to_chain(
