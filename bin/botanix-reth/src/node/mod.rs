@@ -137,7 +137,6 @@ where
                     ommers: Default::default(),
                     withdrawals,
                 },
-                sidecars: None,
             },
         }
     }

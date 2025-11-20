@@ -1,9 +1,6 @@
 #![allow(clippy::owned_cow)]
 use crate::{
-    node::{
-        primitives::{BotanixBlobTransactionSidecar, BotanixPrimitives},
-        BotanixNode,
-    },
+    node::{primitives::BotanixPrimitives, BotanixNode},
     BotanixBlock,
 };
 use alloy_rlp::{Decodable, Encodable};
@@ -53,7 +50,6 @@ mod rlp {
     struct BotanixNewBlockHelper<'a> {
         block: BlockHelper<'a>,
         td: U128,
-        sidecars: Option<Cow<'a, Vec<BotanixBlobTransactionSidecar>>>,
     }
 
     impl<'a> From<&'a BotanixNewBlock> for BotanixNewBlockHelper<'a> {
@@ -66,7 +62,6 @@ mod rlp {
                             BotanixBlockBody {
                                 inner:
                                     BlockBody { transactions, ommers, withdrawals },
-                                sidecars,
                             },
                     },
                 td,
@@ -80,7 +75,6 @@ mod rlp {
                     withdrawals: withdrawals.as_ref().map(Cow::Borrowed),
                 },
                 td: *td,
-                sidecars: sidecars.as_ref().map(Cow::Borrowed),
             }
         }
     }
@@ -100,7 +94,6 @@ mod rlp {
             let BotanixNewBlockHelper {
                 block: BlockHelper { header, transactions, ommers, withdrawals },
                 td,
-                sidecars,
             } = BotanixNewBlockHelper::decode(buf)?;
 
             Ok(BotanixNewBlock(NewBlock {
@@ -112,7 +105,6 @@ mod rlp {
                             ommers: ommers.into_owned(),
                             withdrawals: withdrawals.map(|w| w.into_owned()),
                         },
-                        sidecars: sidecars.map(|s| s.into_owned()),
                     },
                 },
                 td,
@@ -141,7 +133,8 @@ pub type BotanixNetworkPrimitives = BasicNetworkPrimitives<
 pub struct BotanixNetworkBuilder {}
 
 impl BotanixNetworkBuilder {
-    /// Returns the [`NetworkConfig`] that contains the settings to launch the p2p network.
+    /// Returns the [`NetworkConfig`] that contains the settings to launch the
+    /// p2p network.
     ///
     /// This applies the configured [`BotanixNetworkBuilder`] settings.
     pub fn network_config<Node>(

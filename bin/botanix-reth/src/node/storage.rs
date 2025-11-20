@@ -23,22 +23,12 @@ where
         bodies: Vec<(u64, Option<BotanixBlockBody>)>,
         write_to: StorageLocation,
     ) -> ProviderResult<()> {
-        let (eth_bodies, _sidecars) = bodies
+        // Convert BotanixBlockBody to underlying BlockBody
+        let bodies = bodies
             .into_iter()
-            .map(|(block_number, body)| {
-                if let Some(BotanixBlockBody { inner, sidecars }) = body {
-                    (
-                        (block_number, Some(inner)),
-                        (block_number, Some(sidecars)),
-                    )
-                } else {
-                    ((block_number, None), (block_number, None))
-                }
-            })
-            .unzip::<_, _, Vec<_>, Vec<_>>();
-        self.0.write_block_bodies(provider, eth_bodies, write_to)?;
-
-        // TODO: Write sidecars
+            .map(|(num, body)| (num, body.map(|b| b.inner)))
+            .collect();
+        self.0.write_block_bodies(provider, bodies, write_to)?;
 
         Ok(())
     }
@@ -74,7 +64,7 @@ where
 
         Ok(eth_bodies
             .into_iter()
-            .map(|inner| BotanixBlockBody { inner, sidecars: None })
+            .map(|inner| BotanixBlockBody { inner })
             .collect())
     }
 }

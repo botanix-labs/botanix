@@ -56,7 +56,8 @@ pub(crate) mod authority_execution_utils {
 
     use crate::consensus::comet_bft::abci::BlockWithContext;
 
-    /// Builds and executes a new block with the given transactions, on the provided [Executor].
+    /// Builds and executes a new block with the given transactions, on the
+    /// provided [Executor].
     ///
     /// This returns bundle state, block, and gas used.
     #[allow(clippy::too_many_arguments)]
@@ -110,7 +111,8 @@ pub(crate) mod authority_execution_utils {
             }
         }
 
-        // Create a block with no ommers or withdrawals as these are not used in authority consensus
+        // Create a block with no ommers or withdrawals as these are not used in
+        // authority consensus
         let mut block = BotanixBlock {
             header,
             body: BotanixBlockBody {
@@ -119,7 +121,6 @@ pub(crate) mod authority_execution_utils {
                     ommers: Default::default(),
                     withdrawals: None,
                 },
-                sidecars: None,
             },
         };
 
@@ -154,7 +155,8 @@ pub(crate) mod authority_execution_utils {
             agg_pk,
         )?;
 
-        // Replace header with the one that is completed and create new recovered block
+        // Replace header with the one that is completed and create new
+        // recovered block
         block.header = completed_header.clone();
         let recovered_block =
             RecoveredBlock::<BotanixBlock>::try_recover(block.clone())
@@ -244,8 +246,8 @@ pub(crate) mod authority_execution_utils {
         Ok(block_with_context)
     }
 
-    /// Fills in pre-execution header fields based on the current best block and given
-    /// transactions.
+    /// Fills in pre-execution header fields based on the current best block and
+    /// given transactions.
     fn build_header_template(
         transactions: &[TransactionSigned],
         database_provider: &ProviderFactory<
@@ -302,8 +304,9 @@ pub(crate) mod authority_execution_utils {
                 None
             };
 
-        // Construct [ExtraDataHeader] with the bitcoin checkpoint and aggregated public key
-        // so the botanix consensus package can be constructed from the EDH
+        // Construct [ExtraDataHeader] with the bitcoin checkpoint and
+        // aggregated public key so the botanix consensus package can be
+        // constructed from the EDH
         let edh = ExtraDataHeader::new(
             EXTRA_HEADER_VERSION,
             CHAIN_VERSION,
@@ -314,7 +317,8 @@ pub(crate) mod authority_execution_utils {
         let mut header = Header {
             parent_hash: best_hash,
             ommers_hash: EMPTY_OMMER_ROOT_HASH,
-            beneficiary: Address::ZERO, // burn the block reward so not to increase ether supply
+            beneficiary: Address::ZERO, /* burn the block reward so not to
+                                         * increase ether supply */
             state_root: Default::default(),
             transactions_root: Default::default(),
             receipts_root: Default::default(),
@@ -370,8 +374,9 @@ pub(crate) mod authority_execution_utils {
         Ok(header)
     }
 
-    /// Fills in the post-execution header fields based on the given PostState and gas used.
-    /// In doing this, the state root is calculated and the final header is returned.
+    /// Fills in the post-execution header fields based on the given PostState
+    /// and gas used. In doing this, the state root is calculated and the
+    /// final header is returned.
     #[allow(clippy::too_many_arguments)]
     fn complete_header(
         mut header: Header,
@@ -432,10 +437,11 @@ pub(crate) mod authority_execution_utils {
         Ok(header)
     }
 
-    // TODO: refactor - this is only used for snapshot which are not currently in use
-    // pub(crate) fn batch_execute<DB, EF>(
+    // TODO: refactor - this is only used for snapshot which are not currently
+    // in use pub(crate) fn batch_execute<DB, EF>(
     //     blocks: Vec<RecoveredBlock<Block>>,
-    //     database_provider: &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode,
+    //     database_provider:
+    // &ProviderFactory<NodeTypesWithDBAdapter<EthereumNode,
     // Arc<DatabaseEnv>>>,     executor_factory: EF,
     // ) -> Result<ExecutionOutcome, BlockExecutionError>
     // where
@@ -444,13 +450,13 @@ pub(crate) mod authority_execution_utils {
     // {
     //     // Assuming blocks are sorted
     //     if blocks.is_empty() {
-    //         return Err(BlockExecutionError::msg("cannot execute empty batch"));
-    //     }
+    //         return Err(BlockExecutionError::msg("cannot execute empty
+    // batch"));     }
 
-    //     let starting_block_number = blocks.first().expect("checked above").number;
-    //     let ending_block_number = blocks.last().expect("checked above").number;
-    //     let provider = database_provider
-    //         .provider()?
+    //     let starting_block_number = blocks.first().expect("checked
+    // above").number;     let ending_block_number =
+    // blocks.last().expect("checked above").number;     let provider =
+    // database_provider         .provider()?
     //         .state_provider_by_block_number(starting_block_number - 1)?;
     //     let db = State::builder()
     //         .with_database_boxed(Box::new(StateProviderDatabase::new(provider)))
@@ -467,9 +473,11 @@ pub(crate) mod authority_execution_utils {
     //     Ok(out)
     // }
 
-    /// Executes the block with the given block and senders, on the provided [Executor].
+    /// Executes the block with the given block and senders, on the provided
+    /// [Executor].
     ///
-    /// This returns the poststate from execution and post-block changes, as well as the gas used.
+    /// This returns the poststate from execution and post-block changes, as
+    /// well as the gas used.
     fn execute(
         block: &RecoveredBlock<BotanixBlock>,
         database_provider: &ProviderFactory<
@@ -481,10 +489,11 @@ pub(crate) mod authority_execution_utils {
         chain_spec: Arc<BotanixChainSpec>,
         evm_config: BotanixEvmConfig,
     ) -> Result<BotanixBlockExecutionOutput<Receipt>, BlockExecutionError> {
-        // We cannot call `execute_and_verify_receipt()` here as we dont know the gas used yet
-        // We must set those values on the executor after the execution
-        // This is only an execution for the block builder, all other executing operations
-        // should use `execute_and_verify_receipt`
+        // We cannot call `execute_and_verify_receipt()` here as we dont know
+        // the gas used yet We must set those values on the executor
+        // after the execution This is only an execution for the block
+        // builder, all other executing operations should use
+        // `execute_and_verify_receipt`
         let provider = database_provider.provider()?;
         let state_provider = provider
             .history_by_block_hash(block.parent_hash)
