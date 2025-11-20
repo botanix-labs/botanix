@@ -42,9 +42,6 @@ pub struct BotanixChainSpec {
     /// How many historical checkpoints to keep (depth > strong) for validation
     pub weak_bitcoin_checkpoints_count: usize,
 
-    /// Block times in seconds
-    pub leader_selection_window: Option<u64>,
-
     /// Botanix fee recipient
     pub botanix_fee_recipient: Option<String>,
 
@@ -64,7 +61,6 @@ impl BotanixChainSpec {
             bitcoin_checkpoint_confirmation_depth: Default::default(),
             historical_bitcoin_checkpoints_count: Default::default(),
             weak_bitcoin_checkpoints_count: Default::default(),
-            leader_selection_window: None,
             botanix_fee_recipient: None,
             lst_fee_receiver: None,
             epoch_length: Default::default(),
@@ -76,7 +72,6 @@ impl Default for BotanixChainSpec {
     fn default() -> Self {
         Self {
             inner: ChainSpec::default(),
-            leader_selection_window: None,
             botanix_fee_recipient: None,
             lst_fee_receiver: None,
             bitcoin_checkpoint_confirmation_depth: 0,
