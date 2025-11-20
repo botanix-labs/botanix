@@ -74,13 +74,15 @@ pub fn is_inturn(
 
     // Determine the current signer index based on the position in the cycle
     // Each signer's turn lasts for `block_time` seconds
-    // (position_in_cycle / time_range_u256) % authorities_len_u256 == signer_index_u256
+    // (position_in_cycle / time_range_u256) % authorities_len_u256 ==
+    // signer_index_u256
 
     // TODO: change to round robin
     signer_index == 0
 }
 
-/// Returns the index of the authority which is currently in turn based on the seconds passed
+/// Returns the index of the authority which is currently in turn based on the
+/// seconds passed
 pub const fn current_inturn_index(
     authorities_len: u64,
     reference_timestamp: u64,

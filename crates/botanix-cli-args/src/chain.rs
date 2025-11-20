@@ -16,6 +16,7 @@ use botanix_chainspec::{
 use botanix_cli_parsers::parsers::SUPPORTED_CHAINS;
 use botanix_configs::federation::FederationTomlConfig;
 use std::{fs, path::PathBuf, str::FromStr};
+use tracing::info;
 
 /// The help info for the --chain flag
 pub fn chain_help() -> String {
@@ -81,7 +82,9 @@ pub fn get_botanix_chain(
     // our own toml format
     let genesis_toml_config = FederationTomlConfig::from_str(raw)?;
     let botanix_fee_recipient = genesis_toml_config.botanix_fee_recipient;
+    info!("Botanix fee recipient: {:?}", botanix_fee_recipient);
     let lst_fee_receiver = genesis_toml_config.lst_fee_receiver;
+    info!("LST fee receiver: {:?}", lst_fee_receiver);
 
     let extra_data_header = ExtraDataHeader::new(
         EXTRA_HEADER_VERSION,

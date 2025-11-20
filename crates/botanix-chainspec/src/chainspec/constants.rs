@@ -22,7 +22,8 @@ pub const BOTANIX_MAINNET_GENESIS: B256 =
 pub const BOTANIX_TESTNET_GENESIS: B256 =
     b256!("3797638175875c37cefa72ef546db685e43c81ba4af8238b48a495f98d61588d");
 
-/// factor of 1000 less than the initial base fee of 1 gwei suggested in EIP-1559
+/// factor of 1000 less than the initial base fee of 1 gwei suggested in
+/// EIP-1559
 pub const BOTANIX_INITIAL_BASE_FEE: u64 = 1_000_000;
 
 /// The Botanix specs
@@ -162,7 +163,7 @@ pub fn create_botanix_config_with_genesis(
         ..Default::default()
     };
 
-    let botanix_spec = BotanixChainSpec {
+    BotanixChainSpec {
         inner: chainspec,
         bitcoin_checkpoint_confirmation_depth: pegin_conf_depth,
         weak_bitcoin_checkpoints_count: 0,
@@ -170,8 +171,7 @@ pub fn create_botanix_config_with_genesis(
         botanix_fee_recipient: Some(botanix_fee_recipient),
         lst_fee_receiver: Some(lst_fee_receiver),
         epoch_length,
-    };
-    botanix_spec
+    }
 }
 
 // TODO: fix this

@@ -35,8 +35,8 @@ pub struct BotanixChainSpec {
     /// The number of confirmations we require for pegins from the mainchain.
     pub bitcoin_checkpoint_confirmation_depth: u32,
 
-    /// How many checkpoints before the strong confirmation depth to keep (depth < strong)
-    /// for validation
+    /// How many checkpoints before the strong confirmation depth to keep
+    /// (depth < strong) for validation
     pub historical_bitcoin_checkpoints_count: usize,
 
     /// How many historical checkpoints to keep (depth > strong) for validation
@@ -46,7 +46,8 @@ pub struct BotanixChainSpec {
     pub botanix_fee_recipient: Option<String>,
 
     /// LST fee receiver
-    /// This is the contract address that receives block fees as part of native staking
+    /// This is the contract address that receives block fees as part of native
+    /// staking
     pub lst_fee_receiver: Option<String>,
 
     /// EIP-225: Clique Proof-of-Authority consensus protocol.
@@ -110,10 +111,12 @@ impl BotanixChainSpec {
 
     /// Get the initial base fee of the genesis block.
     pub fn initial_base_fee(&self) -> Option<u64> {
-        // If the base fee is set in the genesis block, we use that instead of the default.
+        // If the base fee is set in the genesis block, we use that instead of
+        // the default.
         let genesis_base_fee = self.clone().initial_base_fee_by_chain_id();
 
-        // If Jalepeno is activated at genesis, we set the initial base fee as per EIP-1559.
+        // If Jalepeno is activated at genesis, we set the initial base fee as
+        // per EIP-1559.
         (self.inner.fork(BotanixHardfork::Jalapeno).active_at_block(0))
             .then_some(genesis_base_fee)
     }

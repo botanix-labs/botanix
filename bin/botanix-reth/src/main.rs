@@ -76,6 +76,7 @@ fn main() -> eyre::Result<()> {
             // If the user ran a non-node command (e.g. `reth db`), just execute
             // it normally.
             _ => {
+                // TODO: print error as there is no use case for this path
                 // fall back to running without custom launcher
                 cli.run_with_components::<BotanixNode>(
                     |spec| {
