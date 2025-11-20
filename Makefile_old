@@ -674,6 +674,7 @@ start-btc-server-3:
 start-poa-server-1:
 	cd ./bin/botanix-reth && \
 	cargo run --bin reth-botanix -- node \
+	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NODE_1_DIR}/federation.toml" \
 	--federation-mode \
@@ -711,6 +712,7 @@ start-poa-server-1:
 start-poa-server-2:
 	cd ./bin/botanix-reth && \
 	cargo run --bin reth-botanix -- node \
+	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NODE_2_DIR}/federation.toml" \
 	--federation-mode \
@@ -748,6 +750,7 @@ start-poa-server-2:
 start-poa-server-3:
 	cd ./bin/botanix-reth && \
 	cargo run --bin reth-botanix -- node \
+	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NODE_3_DIR}/federation.toml" \
 	--federation-mode \
@@ -785,6 +788,7 @@ start-poa-server-3:
 start-non-fed-server-1:
 	cd ./bin/botanix-reth && \
 	cargo run --bin reth-botanix -- node \
+	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NON_FED_1_DIR}/federation.toml" \
 	--datadir ${NON_FED_1_DIR} \
