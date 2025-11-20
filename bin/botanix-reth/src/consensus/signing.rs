@@ -427,15 +427,10 @@ where
         &self,
     ) -> Result<Option<(PeerData, u64)>, Error> {
         // check if we are in turn
-        let leader_selection_window = self
-            .chain_spec
-            .leader_selection_window
-            .expect("block times to be set for PoA consensus");
-
         let is_inturn = is_inturn(
             self.frost_config.authorities.len() as u64,
             self.frost_config.authority_index as u64,
-            leader_selection_window,
+            0, //TODO: Change to selection time range when we move to robin
             self.random_source_provider.random_source(),
         );
         match is_inturn {
@@ -450,7 +445,7 @@ where
                 let current_inturn_authority_index = current_inturn_index(
                     self.frost_config.authorities.len() as u64,
                     unix_timestamp(),
-                    leader_selection_window,
+                    0, //TODO: Change to selection time range when we move to robin
                 );
                 let current_inturn_authority_frost_identifier =
                     authority_index_to_frost_identifier(
@@ -475,14 +470,11 @@ where
 
     /// Returns if we are a coordinator or not
     pub(crate) fn is_coordinator(&self) -> bool {
-        let leader_selection_window = self
-            .chain_spec
-            .leader_selection_window
-            .expect("block times to be set for PoA consensus");
+
         is_inturn(
             self.frost_config.authorities.len() as u64,
             self.frost_config.authority_index as u64,
-            leader_selection_window,
+            0, //TODO: Change to selection time range when we move to robin
             self.random_source_provider.random_source(),
         )
     }
