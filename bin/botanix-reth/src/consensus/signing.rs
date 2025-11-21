@@ -470,7 +470,6 @@ where
 
     /// Returns if we are a coordinator or not
     pub(crate) fn is_coordinator(&self) -> bool {
-
         is_inturn(
             self.frost_config.authorities.len() as u64,
             self.frost_config.authority_index as u64,

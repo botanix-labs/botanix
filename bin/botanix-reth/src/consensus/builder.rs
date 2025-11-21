@@ -434,6 +434,12 @@ where
             );
         }
 
-        (frost_task, abci_client_builder, snapshot_manager, wallet_sync, consensus)
+        (
+            frost_task,
+            abci_client_builder,
+            snapshot_manager,
+            wallet_sync,
+            consensus,
+        )
     }
 }
