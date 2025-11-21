@@ -104,7 +104,7 @@ fn main() -> eyre::Result<()> {
                 "p2p addr={} port={} trusted_only={}",
                 network_args.addr, network_args.port, network_args.trusted_only
             );
-    
+
             // Bitcoind Config
             let bitcoind_cfg = args.bitcoind.clone();
 
@@ -183,7 +183,8 @@ fn main() -> eyre::Result<()> {
             let reth_database: Arc<DatabaseEnv> = builder.db().clone();
 
             // launch the node
-            // TODO: this launches the Engine API which we don't use since we use CometBFT
+            // TODO: this launches the Engine API which we don't use.
+            // Create a custom launcher that doesn't launch the engine API. 
             let reth::builder::NodeHandle { node, node_exit_future } =
                 builder.node(node).launch().await?;  
 
@@ -213,16 +214,6 @@ fn main() -> eyre::Result<()> {
             if let Some((_, ref mut btc_server_client)) = btc_server_client.as_mut() {
                 recover_missing_utxos(&poa_cfg, btc_server_client).await?;
             }
-
-            // Setup and launch RPC server
-            setup_and_run_rpc(
-                blockchain_provider.clone(),
-                &rpc_server_args,
-                &node.task_executor,
-                Arc::clone(&chain_spec_arc),
-                botanix_provider.clone(),
-                node.pool.clone(),
-            ).await?;
 
             let (network_handle, network_manager, tx_pool_p2p, eth_request_handler_p2p, frost_p2p) =
             setup_network_builder(
@@ -262,7 +253,7 @@ fn main() -> eyre::Result<()> {
             let btc_server_factory = btc_server_client.unzip().0;
             let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
 
-            let (frost_task, abci_client_builder, snapshot_manager, wallet_sync) =
+            let (frost_task, abci_client_builder, snapshot_manager, wallet_sync, consensus) =
                 match AuthorityConsensusBuilder::try_new(
                     chain_spec_arc.clone(),
                     blockchain_provider.clone(),
@@ -292,6 +283,18 @@ fn main() -> eyre::Result<()> {
                         return Err(eyre::eyre!("AuthorityConsensusBuilderError : {:?}", e));
                     }
                 };
+
+                // Setup and launch RPC server
+                setup_and_run_rpc(
+                    blockchain_provider.clone(),
+                    &rpc_server_args,
+                    &node.task_executor,
+                    Arc::clone(&chain_spec_arc),
+                    botanix_provider.clone(),
+                    node.pool.clone(),
+                    network_handle.clone(),
+                    consensus,
+                ).await?;
 
                 if let Some(mut snapshot_manager) = snapshot_manager {
                     tracing::info!("Snapshot manager is enabled.");
