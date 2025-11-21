@@ -1,13 +1,19 @@
-use crate::services::network_builder::{BotanixNetworkHandle, BotanixPool};
 use crate::{
-    node::{evm::config::BotanixEvmConfig, BotanixNode},
-    services::rpc::botanixrpc_ext::{BotanixRpcExt, BotanixRpcExtApiServer},
+    node::{
+        evm::config::BotanixEvmConfig, primitives::BotanixPrimitives,
+        BotanixNode,
+    },
+    services::{
+        network_builder::{BotanixNetworkHandle, BotanixPool},
+        rpc::botanixrpc_ext::{BotanixRpcExt, BotanixRpcExtApiServer},
+    },
+    BotanixBlock,
 };
 use botanix_chainspec::BotanixChainSpec;
 use botanix_rpc_config::botanix_config::Botanix;
 use futures::TryFutureExt;
-use reth::consensus::noop::NoopConsensus;
 use reth::{args::RpcServerArgs, tasks::TaskExecutor};
+use reth_consensus::{Consensus, ConsensusError, FullConsensus};
 use reth_ethereum::{
     network::api::noop::NoopNetwork,
     node::api::NodeTypesWithDBAdapter,
@@ -25,7 +31,7 @@ use std::{net::SocketAddr, sync::Arc};
 /// Sets up and runs the RPC server for the Botanix node, wiring providers,
 /// network and transaction pool, configuring transports (HTTP/WS/IPC), and
 /// starting the server; returns an error if server startup fails.
-pub async fn setup_and_run_rpc(
+pub async fn setup_and_run_rpc<C>(
     provider: BlockchainProvider<
         NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
     >,
@@ -34,13 +40,21 @@ pub async fn setup_and_run_rpc(
     chain_spec: Arc<BotanixChainSpec>,
     botanix_provider: Botanix,
     pool: BotanixPool,
-) -> eyre::Result<()> {
+    network: BotanixNetworkHandle,
+    consensus: C,
+) -> eyre::Result<()>
+where
+    C: Consensus<BotanixBlock, Error = ConsensusError>
+        + FullConsensus<BotanixPrimitives>
+        + Clone
+        + 'static,
+{
     let rpc_builder = RpcModuleBuilder::default()
         .with_provider(provider.clone())
         .with_pool(pool.clone())
-        .with_network(NoopNetwork::default())
+        .with_network(network)
         .with_executor(Box::new(task_executor.clone()))
-        .with_consensus(NoopConsensus::default())
+        .with_consensus(consensus)
         .with_evm_config(BotanixEvmConfig::new(chain_spec.clone()));
 
     let eth_api = EthApiBuilder::new(
