@@ -66,8 +66,9 @@ where
     .build();
 
     // Pick which namespaces to expose.
-    let module_config =
-        TransportRpcModuleConfig::default().with_http([RethRpcModule::Eth]);
+    let module_config = TransportRpcModuleConfig::default()
+        .with_http([RethRpcModule::all_variants()])
+        .with_ws([RethRpcModule::all_variants()]);
 
     let mut server = rpc_builder.build(module_config, eth_api);
 
