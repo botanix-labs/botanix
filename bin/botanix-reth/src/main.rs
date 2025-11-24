@@ -44,7 +44,6 @@ use reth_botanix::{
         rpc::rpc::setup_and_run_rpc,
     },
 };
-use reth_cli_commands::NodeCommand;
 use reth_db::DatabaseEnv;
 use reth_node_core::version::version_metadata;
 use reth_prune_types::PruneModes;
@@ -67,34 +66,52 @@ fn main() -> eyre::Result<()> {
         std::env::set_var("RUST_BACKTRACE", "full");
     }
     // Parse everything first
-    let cli = Cli::<BotanixChainSpecParser, BotanixArgs>::parse();
+    let mut cli = Cli::<BotanixChainSpecParser, BotanixArgs>::parse();
 
-    // Pull out the Node subcommand so we can access its fields like `network`.
-    let node_cmd: &NodeCommand<BotanixChainSpecParser, BotanixArgs> =
-        match &cli.command {
-            Commands::Node(cmd) => cmd.as_ref(),
-            // If the user ran a non-node command (e.g. `reth db`), just execute
-            // it normally.
-            _ => {
-                // TODO: print error as there is no use case for this path
-                // fall back to running without custom launcher
-                cli.run_with_components::<BotanixNode>(
-                    |spec| {
-                        (
-                            BotanixEvmConfig::new(spec.clone()),
-                            BotanixConsensus::new(spec),
-                        )
-                    },
-                    |_builder, _args| async { Ok(()) },
-                )?;
-                std::process::exit(0);
-            }
-        };
-    let network_args = node_cmd.network.clone();
-    let rpc_server_args = node_cmd.rpc.clone();
-    let datadir_args = node_cmd.datadir.clone();
-    let db_args = node_cmd.db.clone();
-    let metrics_args = node_cmd.metrics.clone();
+    // Pull out the Node subcommands.
+    let (
+        network_args,
+        original_rpc_server_args,
+        datadir_args,
+        db_args,
+        metrics_args,
+    ) = match &cli.command {
+        Commands::Node(cmd) => {
+            let node_cmd = cmd.as_ref();
+            (
+                node_cmd.network.clone(),
+                node_cmd.rpc.clone(),
+                node_cmd.datadir.clone(),
+                node_cmd.db.clone(),
+                node_cmd.metrics.clone(),
+            )
+        }
+        _ => {
+            // TODO: print error as there is no use case for this path
+            // fall back to running without custom launcher
+            cli.run_with_components::<BotanixNode>(
+                |spec| {
+                    (
+                        BotanixEvmConfig::new(spec.clone()),
+                        BotanixConsensus::new(spec),
+                    )
+                },
+                |_builder, _args| async { Ok(()) },
+            )?;
+            std::process::exit(0);
+        }
+    };
+
+    // Now disable Reth's RPC
+    match &mut cli.command {
+        Commands::Node(cmd) => {
+            let node_cmd_mut = cmd.as_mut();
+            node_cmd_mut.rpc.http = false;
+            node_cmd_mut.rpc.ws = false;
+            node_cmd_mut.rpc.ipcdisable = true;
+        }
+        _ => {}
+    }
 
     cli.run_with_components::<BotanixNode>(
     |spec| (BotanixEvmConfig::new(spec.clone()), BotanixConsensus::new(spec)),
@@ -287,7 +304,7 @@ fn main() -> eyre::Result<()> {
                 // Setup and launch RPC server
                 setup_and_run_rpc(
                     blockchain_provider.clone(),
-                    &rpc_server_args,
+                    &original_rpc_server_args,
                     &node.task_executor,
                     Arc::clone(&chain_spec_arc),
                     botanix_provider.clone(),
