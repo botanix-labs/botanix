@@ -261,6 +261,7 @@ where
         Option<ABCIClientBuilder<RDB, BDB>>,
         Option<SnapshotManager<RDB, BDB>>,
         Option<WalletStateSyncEngine<RDB, BDB, ToFrostMan, BtcServerClient>>,
+        BotanixConsensus<BotanixChainSpec>,
     )
     where
         BtcServerClient: BtcServerExtendedApi + Clone + Send + Sync + 'static,
@@ -433,6 +434,12 @@ where
             );
         }
 
-        (frost_task, abci_client_builder, snapshot_manager, wallet_sync)
+        (
+            frost_task,
+            abci_client_builder,
+            snapshot_manager,
+            wallet_sync,
+            consensus,
+        )
     }
 }
