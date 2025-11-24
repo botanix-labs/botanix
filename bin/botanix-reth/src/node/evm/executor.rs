@@ -6,7 +6,7 @@ use crate::{
     evm::transaction::BotanixTxEnv,
     system_contracts::{
         get_upgrade_system_contracts, is_system_transaction, SystemContract,
-        STAKE_HUB_CONTRACT, SYSTEM_REWARD_CONTRACT,
+        MINTING_CONTRACT,
     },
 };
 use alloy_consensus::constants::ETH_TO_WEI;
@@ -153,7 +153,7 @@ where
         if !self
             .evm
             .db_mut()
-            .storage(STAKE_HUB_CONTRACT, U256::ZERO)
+            .storage(MINTING_CONTRACT, U256::ZERO)
             .map_err(BlockExecutionError::other)?
             .is_zero()
         {
@@ -374,7 +374,7 @@ where
         let system_reward_balance = self
             .evm
             .db_mut()
-            .basic(SYSTEM_REWARD_CONTRACT)
+            .basic(MINTING_CONTRACT)
             .map_err(BlockExecutionError::other)?
             .unwrap_or_default()
             .balance;

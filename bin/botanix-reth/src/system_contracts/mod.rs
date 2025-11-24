@@ -64,7 +64,7 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
                 gas_price: 0,
                 value: U256::from(block_reward),
                 input: Bytes::from(input),
-                to: TxKind::Call(VALIDATOR_CONTRACT),
+                to: TxKind::Call(MINTING_CONTRACT),
             }),
             signature,
         )
@@ -86,7 +86,7 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
                 gas_price: 0,
                 value: U256::from(system_reward),
                 input: Bytes::default(),
-                to: TxKind::Call(SYSTEM_REWARD_CONTRACT),
+                to: TxKind::Call(MINTING_CONTRACT),
             }),
             signature,
         )
@@ -97,15 +97,7 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
             self.validator_abi.function("init").unwrap().first().unwrap();
         let input = function.abi_encode_input(&[]).unwrap();
 
-        let contracts = vec![
-            VALIDATOR_CONTRACT,
-            SLASH_CONTRACT,
-            LIGHT_CLIENT_CONTRACT,
-            RELAYER_HUB_CONTRACT,
-            TOKEN_HUB_CONTRACT,
-            RELAYER_INCENTIVIZE_CONTRACT,
-            CROSS_CHAIN_CONTRACT,
-        ];
+        let contracts = vec![MINTING_CONTRACT];
 
         let signature =
             Signature::new(Default::default(), Default::default(), false);
@@ -136,13 +128,7 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
         let signature =
             Signature::new(Default::default(), Default::default(), false);
 
-        let contracts = vec![
-            STAKE_HUB_CONTRACT,
-            GOVERNOR_CONTRACT,
-            GOV_TOKEN_CONTRACT,
-            TIMELOCK_CONTRACT,
-            TOKEN_RECOVER_PORTAL_CONTRACT,
-        ];
+        let contracts = vec![MINTING_CONTRACT];
 
         contracts
             .into_iter()
@@ -163,62 +149,11 @@ impl<Spec: EthChainSpec> SystemContract<Spec> {
     }
 }
 
-pub const VALIDATOR_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001000");
-pub const SLASH_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001001");
-pub const SYSTEM_REWARD_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001002");
-pub const LIGHT_CLIENT_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001003");
-pub const TOKEN_HUB_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001004");
-pub const RELAYER_INCENTIVIZE_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001005");
-pub const RELAYER_HUB_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001006");
-pub const GOV_HUB_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001007");
-pub const TOKEN_MANAGER_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000001008");
-pub const CROSS_CHAIN_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000002000");
-pub const STAKING_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000002001");
-pub const STAKE_HUB_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000002002");
-pub const STAKE_CREDIT_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000002003");
-pub const GOVERNOR_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000002004");
-pub const GOV_TOKEN_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000002005");
-pub const TIMELOCK_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000002006");
-pub const TOKEN_RECOVER_PORTAL_CONTRACT: Address =
-    address!("0x0000000000000000000000000000000000003000");
 pub const MINTING_CONTRACT: Address =
     address!("0x0000000000000000000000000000000000003001");
 
 lazy_static! {
     pub static ref SYSTEM_CONTRACTS_SET: Vec<Address> = vec![
-        VALIDATOR_CONTRACT,
-        SLASH_CONTRACT,
-        SYSTEM_REWARD_CONTRACT,
-        LIGHT_CLIENT_CONTRACT,
-        TOKEN_HUB_CONTRACT,
-        RELAYER_INCENTIVIZE_CONTRACT,
-        RELAYER_HUB_CONTRACT,
-        GOV_HUB_CONTRACT,
-        TOKEN_MANAGER_CONTRACT,
-        CROSS_CHAIN_CONTRACT,
-        STAKING_CONTRACT,
-        STAKE_HUB_CONTRACT,
-        STAKE_CREDIT_CONTRACT,
-        GOVERNOR_CONTRACT,
-        GOV_TOKEN_CONTRACT,
-        TIMELOCK_CONTRACT,
-        TOKEN_RECOVER_PORTAL_CONTRACT,
         MINTING_CONTRACT,
     ];
 
@@ -247,78 +182,10 @@ impl SystemContractName {
 }
 
 fn get_all_system_contracts() -> Vec<SystemContractName> {
-    let res = vec![
-        SystemContractName::new(
-            "ValidatorContract".to_string(),
-            VALIDATOR_CONTRACT,
-        ),
-        SystemContractName::new("SlashContract".to_string(), SLASH_CONTRACT),
-        SystemContractName::new(
-            "SystemRewardContract".to_string(),
-            SYSTEM_REWARD_CONTRACT,
-        ),
-        SystemContractName::new(
-            "LightClientContract".to_string(),
-            LIGHT_CLIENT_CONTRACT,
-        ),
-        SystemContractName::new(
-            "TokenHubContract".to_string(),
-            TOKEN_HUB_CONTRACT,
-        ),
-        SystemContractName::new(
-            "RelayerIncentivizeContract".to_string(),
-            RELAYER_INCENTIVIZE_CONTRACT,
-        ),
-        SystemContractName::new(
-            "RelayerHubContract".to_string(),
-            RELAYER_HUB_CONTRACT,
-        ),
-        SystemContractName::new("GovHubContract".to_string(), GOV_HUB_CONTRACT),
-        SystemContractName::new(
-            "TokenHubContract".to_string(),
-            TOKEN_HUB_CONTRACT,
-        ),
-        SystemContractName::new(
-            "TokenManagerContract".to_string(),
-            TOKEN_MANAGER_CONTRACT,
-        ),
-        SystemContractName::new(
-            "CrossChainContract".to_string(),
-            CROSS_CHAIN_CONTRACT,
-        ),
-        SystemContractName::new(
-            "StakingContract".to_string(),
-            STAKING_CONTRACT,
-        ),
-        SystemContractName::new(
-            "StakeHubContract".to_string(),
-            STAKE_HUB_CONTRACT,
-        ),
-        SystemContractName::new(
-            "StakeCreditContract".to_string(),
-            STAKE_CREDIT_CONTRACT,
-        ),
-        SystemContractName::new(
-            "GovTokenContract".to_string(),
-            GOV_TOKEN_CONTRACT,
-        ),
-        SystemContractName::new(
-            "GovernorContract".to_string(),
-            GOVERNOR_CONTRACT,
-        ),
-        SystemContractName::new(
-            "TimelockContract".to_string(),
-            TIMELOCK_CONTRACT,
-        ),
-        SystemContractName::new(
-            "TokenRecoverPortalContract".to_string(),
-            TOKEN_RECOVER_PORTAL_CONTRACT,
-        ),
-        SystemContractName::new(
-            "MintingContract".to_string(),
-            MINTING_CONTRACT,
-        ),
-    ];
+    let res = vec![SystemContractName::new(
+        "MintingContract".to_string(),
+        MINTING_CONTRACT,
+    )];
 
     res
 }

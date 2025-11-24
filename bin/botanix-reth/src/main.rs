@@ -3,6 +3,7 @@
 //! This crate provides the main entry point for running a Botanix Reth node
 //! with Botanix support.
 
+use botanix_authority_peg::mint_validation::MINT_CONTRACT_ADDRESS;
 use botanix_authority_rsp::RandomSourceProvider;
 use botanix_btc_server_client::BtcServerExtendedClient;
 use botanix_btc_wallet::fallback::ClientSelection;
@@ -19,11 +20,14 @@ use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use eyre::Ok;
 use reth::cli::{Cli, Commands};
+use reth::providers::CanonStateSubscriptions;
 use reth::providers::DatabaseProviderFactory;
 use reth_botanix::{
     consensus::{
-        comet_bft::abci::ABCIDriver, snapshot_manager::SnapshotRunnable,
-        utils::retry_exec, wallet_state_sync::WalletStateSync,
+        comet_bft::abci::ABCIDriver,
+        snapshot_manager::SnapshotRunnable,
+        utils::{is_known_minting_contract, retry_exec},
+        wallet_state_sync::WalletStateSync,
         AuthorityConsensusBuilder,
     },
     node::{
@@ -36,18 +40,26 @@ use reth_botanix::{
         bitcoind::setup_bitcoind_client,
         botanix_provider::create_botanix_provider,
         btc_server::create_btc_server_client,
-        cometbft::create_cometbft_factory, frost::setup_frost,
-        metrics::run_metrics_service, migrator::init_and_migrate_botanix_db,
-        network_builder::setup_network_builder,
+        cometbft::create_cometbft_factory,
+        frost::setup_frost,
+        metrics::run_metrics_service,
+        migrator::init_and_migrate_botanix_db,
+        network_builder::{lookup_head, setup_network_builder},
         provider::create_blockchain_provider,
-        recover_utxos::recover_missing_utxos, reth::load_reth_config,
+        recover_utxos::recover_missing_utxos,
+        reth::load_reth_config,
         rpc::rpc::setup_and_run_rpc,
     },
 };
 use reth_db::DatabaseEnv;
+use reth_node_builder::RethTransactionPoolConfig;
 use reth_node_core::version::version_metadata;
 use reth_prune_types::PruneModes;
+use reth_transaction_pool::{
+    blobstore::InMemoryBlobStore, TransactionValidationTaskExecutor,
+};
 use std::{sync::Arc, time::Duration};
+use tracing::{debug, error, info};
 
 // We use jemalloc for performance reasons
 #[cfg(all(feature = "jemalloc", unix))]
@@ -66,7 +78,7 @@ fn main() -> eyre::Result<()> {
         std::env::set_var("RUST_BACKTRACE", "full");
     }
     // Parse everything first
-    let mut cli = Cli::<BotanixChainSpecParser, BotanixArgs>::parse();
+    let cli = Cli::<BotanixChainSpecParser, BotanixArgs>::parse();
 
     // Pull out the Node subcommands.
     let (
@@ -75,6 +87,7 @@ fn main() -> eyre::Result<()> {
         datadir_args,
         db_args,
         metrics_args,
+        txpool_args,
     ) = match &cli.command {
         Commands::Node(cmd) => {
             let node_cmd = cmd.as_ref();
@@ -84,6 +97,7 @@ fn main() -> eyre::Result<()> {
                 node_cmd.datadir.clone(),
                 node_cmd.db.clone(),
                 node_cmd.metrics.clone(),
+                node_cmd.txpool.clone(),
             )
         }
         _ => {
@@ -101,17 +115,6 @@ fn main() -> eyre::Result<()> {
             std::process::exit(0);
         }
     };
-
-    // Now disable Reth's RPC
-    match &mut cli.command {
-        Commands::Node(cmd) => {
-            let node_cmd_mut = cmd.as_mut();
-            node_cmd_mut.rpc.http = false;
-            node_cmd_mut.rpc.ws = false;
-            node_cmd_mut.rpc.ipcdisable = true;
-        }
-        _ => {}
-    }
 
     cli.run_with_components::<BotanixNode>(
     |spec| (BotanixEvmConfig::new(spec.clone()), BotanixConsensus::new(spec)),
@@ -136,6 +139,9 @@ fn main() -> eyre::Result<()> {
 
             // Reth Config
             let mut reth_cfg = load_reth_config(&args.poa, &network_args)?;
+
+            // Tx Pool Config
+            let tx_pool_config = txpool_args.pool_config();
 
             // Testnet and Devnet should result in the same chain spec
             let botanix_network = BotanixNetwork::from_args(poa_cfg.is_testnet, poa_cfg.is_devnet)?;
@@ -198,15 +204,8 @@ fn main() -> eyre::Result<()> {
             let node = BotanixNode::default();
 
             let reth_database: Arc<DatabaseEnv> = builder.db().clone();
-
-            // launch the node
-            // TODO: this launches the Engine API which we don't use.
-            // Create a custom launcher that doesn't launch the engine API. 
-            let reth::builder::NodeHandle { node, node_exit_future } =
-                builder.node(node).launch().await?;  
-
             // Migrate the db if needed
-            let botanix_database = init_and_migrate_botanix_db(
+           let botanix_database = init_and_migrate_botanix_db(
                 reth_database.clone(),
                 &datadir_args,
                 Arc::clone(&chain_spec_arc),
@@ -220,6 +219,52 @@ fn main() -> eyre::Result<()> {
                 reth_database.clone()
             )?;
 
+            // Get the task executor
+            let task_executor = builder.task_executor().clone();
+            
+            // Create a tx pool
+            let blob_store = InMemoryBlobStore::default();
+            let head = lookup_head(&blockchain_provider)?;
+            let validator = TransactionValidationTaskExecutor::eth_builder(blockchain_provider.clone())
+            .with_head_timestamp(head.timestamp)
+            .with_minimum_priority_fee(tx_pool_config.minimum_priority_fee)
+            .with_additional_tasks(1)
+            .build_with_tasks(task_executor.clone(), blob_store.clone());
+
+            let pool = reth_transaction_pool::Pool::eth_pool(validator, blob_store, tx_pool_config);
+            info!(target: "reth::cli", "Transaction pool initialized");
+
+            // spawn txpool maintenance task
+            {
+                let pool = pool.clone();
+                let chain_events = blockchain_provider.canonical_state_stream();
+                task_executor.spawn_critical(
+                    "txpool maintenance task",
+                    reth_transaction_pool::maintain::maintain_transaction_pool_future(
+                        blockchain_provider.clone(),
+                        pool,
+                        chain_events,
+                        task_executor.clone(),
+                        Default::default(),
+                    ),
+                );
+                debug!(target: "reth::cli", "Spawned txpool maintenance task");
+            }
+
+            let state_provider = reth_provider_factory.latest().expect("provider factory to exist");
+            let deployed_bytecode = state_provider
+                .account_code(&*MINT_CONTRACT_ADDRESS)
+                .expect("Minting contract address exists")
+                .expect("Minting contract bytecode to exist");
+            if let Err(e) = is_known_minting_contract(
+                frost_setup_result.federation_config.minting_contract_bytecode.clone(),
+                deployed_bytecode.bytecode(),
+            ) {
+                error!(target: "reth::cli", "{}", e);
+                panic!("{}", e);
+            }
+
+            // Create provider factories
             let storage = Arc::new(BotanixStorage::default());
             let reth_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(reth_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
             let botanix_db_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(botanix_database.clone(), chain_spec_arc.clone(), static_files_provider.clone(), PruneModes::none(), storage.clone());
@@ -242,15 +287,15 @@ fn main() -> eyre::Result<()> {
                 &poa_cfg,
                 &network_args,
                 &datadir_args,
-                node.task_executor.clone(),
-                node.pool.clone(),
+                task_executor.clone(),
+                pool.clone(),
             ).await?;
 
             // Start all the p2p tasks
             let frost_handle = if poa_cfg.federation_mode {
                 let frost_manager = frost_p2p.expect("should be some");
                 let frost_handle = frost_manager.handle();
-                node.task_executor.spawn_critical("p2p frost", frost_manager);
+                task_executor.spawn_critical("p2p frost", frost_manager);
                 Some(frost_handle)
             } else {
                 None
@@ -264,7 +309,6 @@ fn main() -> eyre::Result<()> {
                 blockchain_provider.clone(),
             );
 
-            let task_executor = node.task_executor.clone();
             let botanix_evm_config = BotanixEvmConfig::new(chain_spec_arc.clone());
             let cometbft_rpc_factory = create_cometbft_factory(&poa_cfg);
             let btc_server_factory = btc_server_client.unzip().0;
@@ -305,17 +349,17 @@ fn main() -> eyre::Result<()> {
                 setup_and_run_rpc(
                     blockchain_provider.clone(),
                     &original_rpc_server_args,
-                    &node.task_executor,
+                    &task_executor,
                     Arc::clone(&chain_spec_arc),
                     botanix_provider.clone(),
-                    node.pool.clone(),
+                    pool.clone(),
                     network_handle.clone(),
                     consensus,
                 ).await?;
 
                 if let Some(mut snapshot_manager) = snapshot_manager {
                     tracing::info!("Snapshot manager is enabled.");
-                    node.task_executor.spawn_critical(
+                    task_executor.spawn_critical(
                         "Snapshot Manager",
                         Box::pin(async move {
                             if let Err(e) = snapshot_manager.run().await {
@@ -326,7 +370,7 @@ fn main() -> eyre::Result<()> {
                 }
 
                 if let Some(wallet_sync) = wallet_sync {
-                    node.task_executor.spawn_critical(
+                    task_executor.spawn_critical(
                         "Wallet Sync",
                         Box::pin(async move {
                             if let Err(e) = wallet_sync.sync_wallet_state().await {
@@ -337,7 +381,7 @@ fn main() -> eyre::Result<()> {
                 }
 
                 if poa_cfg.federation_mode {
-                    node.task_executor.spawn_critical(
+                    task_executor.spawn_critical(
                         "Frost Task",
                         Box::pin(async move {
                             frost_task.expect("frost task exists").start_task(abci_started_rx).await;
@@ -350,8 +394,8 @@ fn main() -> eyre::Result<()> {
                 let fut = || async {
                     abci_client_builder
                         .start_server(
-                            &node.task_executor.clone(),
-                            node.pool.clone(),
+                            &task_executor.clone(),
+                            pool.clone(),
                             poa_cfg.abci_host.to_string(),
                             poa_cfg.abci_port,
                         )
@@ -367,15 +411,15 @@ fn main() -> eyre::Result<()> {
                 };
 
             // add metrics if necessary
-            run_metrics_service(metrics_args, &node.task_executor, chain_spec_arc).await?;
+            run_metrics_service(metrics_args, &task_executor, chain_spec_arc).await?;
 
             // launch the network manager task
-            node.task_executor.spawn_critical("network p2p", network_manager);
-            node.task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
-            node.task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
+            task_executor.spawn_critical("network p2p", network_manager);
+            task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
+            task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
 
             // launch the bitcoin checkpoints synchronizer task
-            node.task_executor.spawn_critical(
+            task_executor.spawn_critical(
                 "async bitcoin checkpoint chain synchronization task",
                 checkpoints_synchronizer.sync(bitcoin_zmq_block_hash_stream),
             );
@@ -384,7 +428,7 @@ fn main() -> eyre::Result<()> {
             // send the signal that abci driver can start
             abci_started_tx.send(()).expect("abci started tx");
             let (tx, rx) = tokio::sync::oneshot::channel();
-            node.task_executor.spawn_critical(
+            task_executor.spawn_critical(
                 "abci driver",
                 Box::pin(async move {
                     let res = abci_driver.start().await;
@@ -403,10 +447,10 @@ fn main() -> eyre::Result<()> {
             tracing::debug!(target: "reth::cli", "Spawning stages metrics listener task");
             let (_sync_metrics_tx, sync_metrics_rx) = tokio::sync::mpsc::unbounded_channel();
             let sync_metrics_listener = reth_stages::MetricsListener::new(sync_metrics_rx);
-            node.task_executor.spawn_critical("stages metrics listener task", sync_metrics_listener);
+            task_executor.spawn_critical("stages metrics listener task", sync_metrics_listener);
 
             // Block and wait for node termination
-            node_exit_future.await
+            Ok(())
         },
     )?;
 

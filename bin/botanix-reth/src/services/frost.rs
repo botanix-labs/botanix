@@ -8,7 +8,9 @@ use botanix_cli_args::{
     state_sync::StateSyncArgs,
 };
 use botanix_comet_bft_rpc::CometBftRpcFactory;
-use botanix_configs::federation::load_federation_config_toml;
+use botanix_configs::federation::{
+    load_federation_config_toml, FederationTomlConfig,
+};
 use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
 use reth_db::DatabaseEnv;
@@ -38,6 +40,7 @@ pub struct FrostConfigSetupResult {
     pub authorities_socket_addresses: Vec<SocketAddr>,
     pub secret_key: SecretKey,
     pub genesis_authorities: Vec<PublicKey>,
+    pub federation_config: FederationTomlConfig,
 }
 
 /// Sets up the Frost configuration for a node, returning `Some(FrostConfig)` if the node is a federation node,
@@ -147,6 +150,7 @@ pub fn setup_frost(
         authorities_socket_addresses,
         secret_key,
         genesis_authorities,
+        federation_config,
     })
 }
 
