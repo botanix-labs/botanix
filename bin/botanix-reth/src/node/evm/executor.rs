@@ -2,15 +2,8 @@ use super::patch::{
     patch_chapel_after_tx, patch_chapel_before_tx, patch_mainnet_after_tx,
     patch_mainnet_before_tx,
 };
-use crate::{
-    evm::transaction::BotanixTxEnv,
-    system_contracts::{
-        get_upgrade_system_contracts, is_system_transaction, SystemContract,
-        STAKE_HUB_CONTRACT, SYSTEM_REWARD_CONTRACT,
-    },
-};
-use alloy_consensus::constants::ETH_TO_WEI;
-use alloy_consensus::{Transaction, TxReceipt};
+use crate::evm::transaction::BotanixTxEnv;
+use alloy_consensus::{constants::ETH_TO_WEI, Transaction, TxReceipt};
 use alloy_eips::{
     eip2935::{HISTORY_STORAGE_ADDRESS, HISTORY_STORAGE_CODE},
     eip7685::Requests,
@@ -73,8 +66,6 @@ where
     system_txs: Vec<R::Transaction>,
     /// Receipt builder.
     receipt_builder: R,
-    /// System contracts used to trigger fork specific logic.
-    system_contracts: SystemContract<Spec>,
     /// Context for block execution.
     _ctx: EthBlockExecutionCtx<'a>,
     /// Utility to call system caller.
@@ -106,7 +97,6 @@ where
         _ctx: EthBlockExecutionCtx<'a>,
         spec: Spec,
         receipt_builder: R,
-        system_contracts: SystemContract<Spec>,
     ) -> Self {
         let spec_clone = spec.clone();
         Self {
@@ -116,7 +106,6 @@ where
             receipts: vec![],
             system_txs: vec![],
             receipt_builder,
-            system_contracts,
             _ctx,
             system_caller: SystemCaller::new(spec_clone),
         }
@@ -128,7 +117,9 @@ where
             &self.spec,
             self.evm.block().number.to(),
             self.evm.block().timestamp.to(),
-            self.evm.block().timestamp.to::<u64>() - 3_000, /* TODO: how to get parent block
+            self.evm.block().timestamp.to::<u64>() - 3_000, /* TODO: how to
+                                                             * get parent
+                                                             * block
                                                              * timestamp? */
         )
         .map_err(|_| {
@@ -200,14 +191,17 @@ where
                 gas_limit: u64::MAX / 2,
                 value: tx.value(),
                 data: tx.input().clone(),
-                // Setting the gas price to zero enforces that no value is transferred as part of
-                // the call, and that the call will not count against the block's
+                // Setting the gas price to zero enforces that no value is
+                // transferred as part of the call, and that the
+                // call will not count against the block's
                 // gas limit
                 gas_price: 0,
-                // The chain ID check is not relevant here and is disabled if set to None
+                // The chain ID check is not relevant here and is disabled if
+                // set to None
                 chain_id: Some(self.spec.chain().id()),
-                // Setting the gas priority fee to None ensures the effective gas price is
-                //derived         // from the `gas_price` field, which we need to be zero
+                // Setting the gas priority fee to None ensures the effective
+                // gas price is derived         // from the
+                // `gas_price` field, which we need to be zero
                 gas_priority_fee: None,
                 access_list: Default::default(),
                 // blob fields can be None for this tx
@@ -305,8 +299,8 @@ where
         );
 
         let input = tx.input();
-        let is_finality_reward_tx = input.len() >= 4
-            && input[..4] == distributeFinalityRewardCall::SELECTOR;
+        let is_finality_reward_tx = input.len() >= 4 &&
+            input[..4] == distributeFinalityRewardCall::SELECTOR;
 
         if is_finality_reward_tx {
             let signer =
@@ -331,8 +325,8 @@ where
         );
 
         let input = tx.input();
-        let is_update_validator_set_v2_tx = input.len() >= 4
-            && input[..4] == updateValidatorSetV2Call::SELECTOR;
+        let is_update_validator_set_v2_tx = input.len() >= 4 &&
+            input[..4] == updateValidatorSetV2Call::SELECTOR;
 
         if is_update_validator_set_v2_tx {
             let signer =
@@ -354,9 +348,9 @@ where
             .load_cache_account(SYSTEM_ADDRESS)
             .map_err(BlockExecutionError::other)?;
 
-        if system_account.account.is_none()
-            || system_account.account.as_ref().unwrap().info.balance
-                == U256::ZERO
+        if system_account.account.is_none() ||
+            system_account.account.as_ref().unwrap().info.balance ==
+                U256::ZERO
         {
             return Ok(());
         }
@@ -379,12 +373,13 @@ where
             .unwrap_or_default()
             .balance;
 
-        // Kepler introduced a max system reward limit, so we need to pay the system reward to the
-        // system contract if the limit is not exceeded.
+        // Kepler introduced a max system reward limit, so we need to pay the
+        // system reward to the system contract if the limit is not
+        // exceeded.
         if !self
             .spec
-            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to())
-            && system_reward_balance < U256::from(MAX_SYSTEM_REWARD)
+            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to()) &&
+            system_reward_balance < U256::from(MAX_SYSTEM_REWARD)
         {
             let reward_to_system = block_reward >> SYSTEM_REWARD_PERCENT;
             if reward_to_system > 0 {
@@ -455,7 +450,8 @@ where
     fn apply_pre_execution_changes(
         &mut self,
     ) -> Result<(), BlockExecutionError> {
-        // Set state clear flag if the block is after the Spurious Dragon hardfork.
+        // Set state clear flag if the block is after the Spurious Dragon
+        // hardfork.
         let state_clear_flag = self
             .spec
             .is_spurious_dragon_active_at_block(self.evm.block().number.to());
@@ -590,8 +586,8 @@ where
 
         if self
             .spec
-            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to())
-            && !self.spec.is_pectra_active_at_timestamp(
+            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to()) &&
+            !self.spec.is_pectra_active_at_timestamp(
                 self.evm.block().timestamp.to::<u64>() - 100,
             )
         {
