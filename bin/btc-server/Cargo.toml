@@ -21,9 +21,6 @@ path = "src/bin/utils.rs"
 [features]
 default = []
 
-[lints.rust]
-deprecated = "allow"
-
 [dependencies]
 
 # Actix
