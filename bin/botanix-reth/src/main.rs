@@ -112,7 +112,9 @@ fn main() -> eyre::Result<()> {
                 },
                 |_builder, _args| async { Ok(()) },
             )?;
-            std::process::exit(0);
+            return Err(eyre::eyre!(
+               "Unsupported command. Only 'botanix-reth node' is supported in this custom launcher."
+            ));
         }
     };
 

@@ -23,7 +23,7 @@ use btc_server::btc_server_server::{BtcServer, BtcServerServer};
 use btcserverlib::{
     badarg,
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
-    coordinator::{self, error::CoordinatorError},
+    coordinator::{self},
     database::{self},
     dkg,
     federation_args::FederationTomlConfig,
@@ -1555,43 +1555,13 @@ where
                         self.config.identifier,
                     );
                 }
-                Ok(Some(tx_id))
+                Some(tx_id)
             }
             Err(err) => {
-                let err_msg = err.to_string();
-                match err_msg.as_str() {
-                    msg if msg.contains("already in chain") => {
-                        info!("Transaction already in chain, skipping");
-                        Ok(None)
-                    }
-                    msg if msg.contains("bad-txns-inputs-missingorspent") => {
-                        error!("Invalid input detected: {}", msg);
-                        self.handle_invalid_inputs(&tx).to_status()?;
-                        if let Some(telemetry) = self.telemetry.as_ref() {
-                            telemetry
-                                .increment_failed_broadcasted_pegout_txs_count(
-                                    self.btc_network,
-                                    self.config.identifier,
-                                );
-                        }
-                        Err(CoordinatorError::FailedToBroadcastTx(err))
-                    }
-                    _ => {
-                        error!("Failed to broadcast transaction: {}", err_msg);
-                        error!("Failed tx: {:?}", tx);
-                        if let Some(telemetry) = self.telemetry.as_ref() {
-                            telemetry
-                                .increment_failed_broadcasted_pegout_txs_count(
-                                    self.btc_network,
-                                    self.config.identifier,
-                                );
-                        }
-                        Err(CoordinatorError::FailedToBroadcastTx(err))
-                    }
-                }
+                self.handle_broadcast_error(err, &tx).await?;
+                None
             }
-        }
-        .to_status()?;
+        };
 
         // set last attempted pegout height
         if let Some(telemetry) = self.telemetry.as_ref() {
@@ -2692,6 +2662,52 @@ impl<BitcoindClient: bitcoincore_rpc::RpcApi> App<BitcoindClient> {
         }
         Ok(())
     }
+
+    async fn handle_broadcast_error(
+        &self,
+        err: bitcoincore_rpc::Error,
+        tx: &Transaction,
+    ) -> Result<(), tonic::Status> {
+        let err_msg = err.to_string();
+        match err_msg.as_str() {
+            msg if msg.contains("already in chain") => {
+                warn!("Transaction already in chain, skipping");
+                return Ok(());
+            }
+            msg if msg.contains("bad-txns-inputs-missingorspent") => {
+                error!("Invalid input detected: {}", msg);
+                self.handle_invalid_inputs(&tx).to_status()?;
+
+                let mut lock = self.pegout_scheduler.lock().await;
+                lock.un_track_tx(&tx.compute_txid()).to_status()?;
+                drop(lock);
+
+                if let Some(telemetry) = self.telemetry.as_ref() {
+                    telemetry.increment_failed_broadcasted_pegout_txs_count(
+                        self.btc_network,
+                        self.config.identifier,
+                    );
+                }
+                return Err(tonic::Status::internal("Failed to broadcast tx"));
+            }
+            _ => {
+                error!("Failed to broadcast transaction: {}", err_msg);
+                error!("Failed tx: {:?}", tx);
+
+                let mut lock = self.pegout_scheduler.lock().await;
+                lock.un_track_tx(&tx.compute_txid()).to_status()?;
+                drop(lock);
+
+                if let Some(telemetry) = self.telemetry.as_ref() {
+                    telemetry.increment_failed_broadcasted_pegout_txs_count(
+                        self.btc_network,
+                        self.config.identifier,
+                    );
+                }
+                return Err(tonic::Status::internal("Failed to broadcast tx"));
+            }
+        }
+    }
 }
 
 #[tokio::main]
@@ -2844,7 +2860,8 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use bitcoin::{secp256k1, OutPoint, Script, Txid};
     use btcserverlib::{
-        dkg::DkgMessage, wallet::address::generate_taproot_change_scriptpubkey,
+        dkg::DkgMessage, test_utils::pegout_requests_from_tx,
+        wallet::address::generate_taproot_change_scriptpubkey,
     };
     use frost_secp256k1_tr::keys::dkg::round1;
     use rand::{thread_rng, Rng};
@@ -2931,6 +2948,74 @@ mod tests {
         std::mem::forget(temp_secret_key);
 
         app
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_failure_untracks_tx() {
+        let app = setup().await;
+
+        // Set up a tracked transaction
+        let mut rng = thread_rng();
+        let tx =
+            create_test_transaction(vec![create_random_outpoint(&mut rng)]);
+        let pegouts = pegout_requests_from_tx(&tx, &[0]);
+
+        // Add the tx to pegout_scheduler
+        let mut lock = app.pegout_scheduler.lock().await;
+        lock.add_tx(tx.clone(), &pegouts, SystemTime::now());
+        assert_eq!(lock.txs.len(), 1); // Verify it's tracked
+        drop(lock);
+
+        // Create an RPC error
+        use bitcoincore_rpc::jsonrpc;
+        let rpc_err = jsonrpc::Error::Rpc(jsonrpc::error::RpcError {
+            code: -26,
+            message: "minrelaytxfee too low".to_string(),
+            data: None,
+        });
+        let err = bitcoincore_rpc::Error::JsonRpc(rpc_err);
+
+        // should return error and untrack tx
+        let result = app.handle_broadcast_error(err, &tx).await;
+        assert!(result.is_err());
+
+        // Verify the tx was untracked
+        let lock = app.pegout_scheduler.lock().await;
+        assert_eq!(lock.txs.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_failure_already_in_chain() {
+        let app = setup().await;
+
+        // Set up a tracked transaction
+        let mut rng = thread_rng();
+        let tx =
+            create_test_transaction(vec![create_random_outpoint(&mut rng)]);
+        let pegouts = pegout_requests_from_tx(&tx, &[0]);
+
+        // Add the tx to pegout_scheduler
+        let mut lock = app.pegout_scheduler.lock().await;
+        lock.add_tx(tx.clone(), &pegouts, SystemTime::now());
+        assert_eq!(lock.txs.len(), 1); // Verify it's tracked
+        drop(lock);
+
+        // Create an "already in chain" error
+        use bitcoincore_rpc::jsonrpc;
+        let rpc_err = jsonrpc::Error::Rpc(jsonrpc::error::RpcError {
+            code: -26,
+            message: "already in chain".to_string(),
+            data: None,
+        });
+        let err = bitcoincore_rpc::Error::JsonRpc(rpc_err);
+
+        // should not return error and not untrack tx
+        let result = app.handle_broadcast_error(err, &tx).await;
+        assert!(result.is_ok());
+
+        // Verify the tx was NOT untracked
+        let lock = app.pegout_scheduler.lock().await;
+        assert_eq!(lock.txs.len(), 1);
     }
 
     #[tokio::test]

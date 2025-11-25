@@ -10,4 +10,3 @@ pub mod node;
 pub mod services;
 
 pub use node::primitives::{BotanixBlock, BotanixBlockBody, BotanixPrimitives};
-mod system_contracts;

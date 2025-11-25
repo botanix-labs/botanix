@@ -6,6 +6,7 @@ members = [
   "bin/botanix-db-cleaner",
   "bin/botanix-reth",
   "bin/btc-server",
+  "bin/pegin-recovery",
   "bin/btc-server/client",
   "crates/botanix-activation-manager",
   "crates/botanix-authority-edh",
@@ -184,6 +185,7 @@ botanix-data-parser = { path = "crates/botanix-data-parser" }
 botanix-db-cleaner = { path = "bin/botanix-db-cleaner" }
 botanix-evm = { path = "crates/botanix-evm" }
 botanix-fs-util = { path = "crates/botanix-fs-util" }
+botanix-pegin-recovery = { path = "bin/pegin-recovery" }
 botanix-primitives = { path = "crates/botanix-primitives" }
 botanix-rpc-client = { path = "crates/botanix-rpc-client" }
 botanix-rpc-config = { path = "crates/botanix-rpc-config" }
