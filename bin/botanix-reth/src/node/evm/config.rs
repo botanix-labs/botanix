@@ -2,8 +2,7 @@
 use super::{executor::BotanixBlockExecutor, factory::BotanixEvmFactory};
 use crate::{
     evm::transaction::BotanixTxEnv,
-    node::engine_api::validator::BotanixExecutionData,
-    system_contracts::SystemContract, BotanixPrimitives,
+    node::engine_api::validator::BotanixExecutionData, BotanixPrimitives,
 };
 use alloy_consensus::{
     transaction::SignerRecoverable, BlockHeader, Header, TxReceipt,
@@ -59,7 +58,8 @@ impl BotanixEvmConfig {
 }
 
 impl BotanixEvmConfig {
-    /// Creates a new Ethereum EVM configuration with the given chain spec and EVM factory.
+    /// Creates a new Ethereum EVM configuration with the given chain spec and
+    /// EVM factory.
     pub fn new_with_evm_factory(
         chain_spec: Arc<BotanixChainSpec>,
         evm_factory: BotanixEvmFactory,
@@ -96,8 +96,8 @@ pub struct BotanixBlockExecutorFactory<
 }
 
 impl<R, Spec, EvmFactory> BotanixBlockExecutorFactory<R, Spec, EvmFactory> {
-    /// Creates a new [`BotanixBlockExecutorFactory`] with the given spec, [`EvmFactory`], and
-    /// [`ReceiptBuilder`].
+    /// Creates a new [`BotanixBlockExecutorFactory`] with the given spec,
+    /// [`EvmFactory`], and [`ReceiptBuilder`].
     pub const fn new(
         receipt_builder: R,
         spec: Spec,
@@ -159,7 +159,6 @@ where
             ctx,
             self.spec().clone(),
             self.receipt_builder(),
-            SystemContract::new(self.spec().clone()),
         )
     }
 }
@@ -202,8 +201,8 @@ where
             cfg_env.set_max_blobs_per_tx(blob_params.max_blobs_per_tx);
         }
 
-        // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and the current
-        // blobparams
+        // derive the EIP-4844 blob fees from the header's `excess_blob_gas` and
+        // the current blobparams
         let blob_excess_gas_and_price = header
             .excess_blob_gas
             .zip(blob_params)
@@ -223,8 +222,9 @@ where
             } else {
                 header.difficulty()
             },
-            // Botanix does not replace the DIFFICULTY output with prevrandao so here we are setting
-            // this to the difficulty values to ensure correct opcode outputs
+            // Botanix does not replace the DIFFICULTY output with prevrandao so
+            // here we are setting this to the difficulty values to
+            // ensure correct opcode outputs
             prevrandao: if eth_spec >= SpecId::MERGE {
                 Some(header.difficulty().into())
             } else {
@@ -258,8 +258,9 @@ where
         let blob_params =
             self.chain_spec().blob_params_at_timestamp(attributes.timestamp);
 
-        // if the parent block did not have excess blob gas (i.e. it was pre-cancun), but it is
-        // cancun now, we need to set the excess blob gas to the default value(0)
+        // if the parent block did not have excess blob gas (i.e. it was
+        // pre-cancun), but it is cancun now, we need to set the excess
+        // blob gas to the default value(0)
         let blob_excess_gas_and_price = parent
             .maybe_next_block_excess_blob_gas(blob_params)
             .or_else(|| {
@@ -280,8 +281,9 @@ where
 
         let mut gas_limit = U256::from(parent.gas_limit);
 
-        // If we are on the London fork boundary, we need to multiply the parent's gas limit by the
-        // elasticity multiplier to get the new gas limit.
+        // If we are on the London fork boundary, we need to multiply the
+        // parent's gas limit by the elasticity multiplier to get the
+        // new gas limit.
         if self
             .chain_spec()
             .inner
@@ -386,7 +388,8 @@ where
     }
 }
 
-/// Map the latest active hardfork at the given timestamp or block number to a [`BotanixHardfork`].
+/// Map the latest active hardfork at the given timestamp or block number to a
+/// [`BotanixHardfork`].
 pub fn revm_spec_by_timestamp_and_block_number(
     chain_spec: impl BotanixHardforks,
     timestamp: u64,
