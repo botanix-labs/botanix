@@ -260,7 +260,7 @@ fn main() -> eyre::Result<()> {
                 .expect("Minting contract bytecode to exist");
             if let Err(e) = is_known_minting_contract(
                 frost_setup_result.federation_config.minting_contract_bytecode.clone(),
-                deployed_bytecode.bytecode(),
+                &deployed_bytecode.original_bytes(),
             ) {
                 error!(target: "reth::cli", "{}", e);
                 panic!("{}", e);
