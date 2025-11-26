@@ -311,7 +311,9 @@ impl Db {
         &self,
     ) -> Result<Option<frost::keys::PublicKeyPackage>, Error> {
         if let Some(b) = self.db.get(TREE_PUBKEY_PACKAGE)? {
-            let ret = ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(b.as_ref())?;
+            let ret = ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(
+                b.as_ref(),
+            )?;
             Ok(Some(ret))
         } else {
             Ok(None)
@@ -319,9 +321,13 @@ impl Db {
     }
 
     /// Retrieves the legacy (pre-DynaFed) key package stored in the database, if available.
-    pub fn get_legacy_key_package(&self) -> Result<Option<frost::keys::KeyPackage>, Error> {
+    pub fn get_legacy_key_package(
+        &self,
+    ) -> Result<Option<frost::keys::KeyPackage>, Error> {
         if let Some(b) = self.db.get(TREE_KEY_PACKAGE)? {
-            let ret = ciborium::from_reader::<frost::keys::KeyPackage, _>(b.as_ref())?;
+            let ret = ciborium::from_reader::<frost::keys::KeyPackage, _>(
+                b.as_ref(),
+            )?;
             Ok(Some(ret))
         } else {
             Ok(None)
@@ -336,7 +342,9 @@ impl Db {
     /// Returns `Ok(None)` if the public key package is not found.
     /// Returns `Err` in case of deserialization or other errors.
     #[deprecated(note = "use fn get_public_key_package_by_id")]
-    pub fn get_public_key_package(&self) -> Result<Option<frost::keys::PublicKeyPackage>, Error> {
+    pub fn get_public_key_package(
+        &self,
+    ) -> Result<Option<frost::keys::PublicKeyPackage>, Error> {
         self.get_public_key_package_by_id(LEGACY_MULTISIG_ID)
     }
 
@@ -348,7 +356,9 @@ impl Db {
     /// Returns `Ok(None)` if the key package is not found.
     /// Returns `Err` in case of deserialization or other errors.
     #[deprecated(note = "use fn get_key_package_by_id")]
-    pub fn get_key_package(&self) -> Result<Option<frost::keys::KeyPackage>, Error> {
+    pub fn get_key_package(
+        &self,
+    ) -> Result<Option<frost::keys::KeyPackage>, Error> {
         self.get_key_package_by_id(LEGACY_MULTISIG_ID)
     }
 
@@ -363,7 +373,10 @@ impl Db {
     /// Returns `Ok(())` if the key package is successfully stored in the database.
     /// Returns `Err` in case of serialization or other errors.
     #[deprecated(note = "use fn set_key_package_by_id")]
-    pub fn set_key_package(&self, key_package: frost::keys::KeyPackage) -> Result<(), Error> {
+    pub fn set_key_package(
+        &self,
+        key_package: frost::keys::KeyPackage,
+    ) -> Result<(), Error> {
         self.set_key_package_by_id(LEGACY_MULTISIG_ID, key_package)
     }
 
@@ -402,7 +415,9 @@ impl Db {
     ) -> Result<Option<frost::keys::KeyPackage>, Error> {
         let key = multisig_id.to_le_bytes();
         if let Some(b) = self.key_packages.get(&key)? {
-            let ret = ciborium::from_reader::<frost::keys::KeyPackage, _>(b.as_ref())?;
+            let ret = ciborium::from_reader::<frost::keys::KeyPackage, _>(
+                b.as_ref(),
+            )?;
             Ok(Some(ret))
         } else {
             Ok(None)
@@ -426,7 +441,9 @@ impl Db {
     ) -> Result<Option<frost::keys::PublicKeyPackage>, Error> {
         let key = multisig_id.to_le_bytes();
         if let Some(b) = self.pubkey_packages.get(&key)? {
-            let ret = ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(b.as_ref())?;
+            let ret = ciborium::from_reader::<frost::keys::PublicKeyPackage, _>(
+                b.as_ref(),
+            )?;
             Ok(Some(ret))
         } else {
             Ok(None)
@@ -517,8 +534,8 @@ impl Db {
     /// Returns `Err` in case of database or serialization errors.
     pub fn migrate_legacy_key_package(&self) -> Result<bool, Error> {
         // Check if new format already has key at multisig_id = 0
-        if self.get_key_package_by_id(LEGACY_MULTISIG_ID)?.is_some() &&
-            self.get_public_key_package_by_id(LEGACY_MULTISIG_ID)?.is_some()
+        if self.get_key_package_by_id(LEGACY_MULTISIG_ID)?.is_some()
+            && self.get_public_key_package_by_id(LEGACY_MULTISIG_ID)?.is_some()
         {
             info!(
                 "Key migration skipped: key already exists in new multi-key format (multisig_id={})",
@@ -531,7 +548,9 @@ impl Db {
         let legacy_key_package = self.get_legacy_key_package()?;
         let legacy_pubkey_package = self.get_legacy_public_key_package()?;
 
-        if let (Some(key_package), Some(pk_package)) = (legacy_key_package, legacy_pubkey_package) {
+        if let (Some(key_package), Some(pk_package)) =
+            (legacy_key_package, legacy_pubkey_package)
+        {
             info!("Starting key package migration from legacy single-key to multi-key format...");
 
             // Store in new format with multisig_id = 0
@@ -577,7 +596,9 @@ impl Db {
             return Ok(None);
         };
 
-        let Some(pk_package) = self.get_public_key_package_by_id(multisig_id)? else {
+        let Some(pk_package) =
+            self.get_public_key_package_by_id(multisig_id)?
+        else {
             return Ok(None);
         };
 
@@ -587,7 +608,8 @@ impl Db {
             .expect("serialization to buffer");
 
         let mut pk_package_bytes = Vec::new();
-        ciborium::into_writer(&pk_package, &mut pk_package_bytes).expect("serialization to buffer");
+        ciborium::into_writer(&pk_package, &mut pk_package_bytes)
+            .expect("serialization to buffer");
 
         // IMPORTANT: We randomly generate a single nonce, which is included in
         // the export and saved alongside the encrypted data in plaintext. Since
@@ -2836,8 +2858,10 @@ mod tests {
         let origin_key_package = key_package;
 
         // Each export creates a new nonce.
-        let mut export_1 = db.export_key_package_by_id(0, good_pass.clone()).unwrap().unwrap();
-        let export_2 = db.export_key_package_by_id(0, good_pass.clone()).unwrap().unwrap();
+        let mut export_1 =
+            db.export_key_package_by_id(0, good_pass.clone()).unwrap().unwrap();
+        let export_2 =
+            db.export_key_package_by_id(0, good_pass.clone()).unwrap().unwrap();
         //
         assert_ne!(export_1.iv, export_2.iv);
         assert_ne!(export_1, export_2);
@@ -2849,24 +2873,32 @@ mod tests {
         assert!(db.get_public_key_package_by_id(0).unwrap().is_none());
 
         // ERR: Bad password!
-        let err = db.import_key_package_by_id(0, bad_pass, export_1.clone()).unwrap_err();
+        let err = db
+            .import_key_package_by_id(0, bad_pass, export_1.clone())
+            .unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad IV/nonce!
         export_1.iv = export_2.iv;
-        let err = db.import_key_package_by_id(0, good_pass.clone(), export_1.clone()).unwrap_err();
+        let err = db
+            .import_key_package_by_id(0, good_pass.clone(), export_1.clone())
+            .unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad version indicator!
         export_1.version = u16::MAX;
-        let err = db.import_key_package_by_id(0, good_pass.clone(), export_1.clone()).unwrap_err();
+        let err = db
+            .import_key_package_by_id(0, good_pass.clone(), export_1.clone())
+            .unwrap_err();
         assert_eq!(err, Error::BadExportedPackageFormatVersion);
 
         // OK: Successful import with good passphrase and export package.
-        db.import_key_package_by_id(0, good_pass.clone(), export_2.clone()).unwrap();
+        db.import_key_package_by_id(0, good_pass.clone(), export_2.clone())
+            .unwrap();
 
         // Sanity check.
-        let new_pk_package = db.get_public_key_package_by_id(0).unwrap().unwrap();
+        let new_pk_package =
+            db.get_public_key_package_by_id(0).unwrap().unwrap();
         let new_key_package = db.get_key_package_by_id(0).unwrap().unwrap();
         //
         assert_eq!(new_pk_package, origin_pk_package);
@@ -2878,9 +2910,11 @@ mod tests {
         let (db, _temp_dir) = setup_db();
 
         // Generate key packages for multiple multisigs
-        let id = frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
+        let id =
+            frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
         let (shares, pk_package) = trusted_dealer_setup(2, 3);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Store with multisig_id = 0
         db.set_key_package_by_id(0, key_package.clone()).unwrap();
@@ -2903,12 +2937,15 @@ mod tests {
         let (db, _temp_dir) = setup_db();
 
         // Generate key packages for multiple multisigs
-        let id = frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
+        let id =
+            frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
         let (shares1, pk_package1) = trusted_dealer_setup(2, 3);
-        let key_package1 = frost::keys::KeyPackage::try_from(shares1[&id].clone()).unwrap();
+        let key_package1 =
+            frost::keys::KeyPackage::try_from(shares1[&id].clone()).unwrap();
 
         let (shares2, pk_package2) = trusted_dealer_setup(3, 5);
-        let key_package2 = frost::keys::KeyPackage::try_from(shares2[&id].clone()).unwrap();
+        let key_package2 =
+            frost::keys::KeyPackage::try_from(shares2[&id].clone()).unwrap();
 
         // Store with different multisig_ids
         db.set_key_package_by_id(1, key_package1.clone()).unwrap();
@@ -2919,12 +2956,14 @@ mod tests {
 
         // Retrieve and verify both are correct
         let retrieved_key1 = db.get_key_package_by_id(1).unwrap().unwrap();
-        let retrieved_pk1 = db.get_public_key_package_by_id(1).unwrap().unwrap();
+        let retrieved_pk1 =
+            db.get_public_key_package_by_id(1).unwrap().unwrap();
         assert_eq!(retrieved_key1, key_package1);
         assert_eq!(retrieved_pk1, pk_package1);
 
         let retrieved_key2 = db.get_key_package_by_id(2).unwrap().unwrap();
-        let retrieved_pk2 = db.get_public_key_package_by_id(2).unwrap().unwrap();
+        let retrieved_pk2 =
+            db.get_public_key_package_by_id(2).unwrap().unwrap();
         assert_eq!(retrieved_key2, key_package2);
         assert_eq!(retrieved_pk2, pk_package2);
     }
@@ -2938,9 +2977,11 @@ mod tests {
         assert!(ids.is_empty());
 
         // Generate and store key packages with different multisig_ids
-        let id = frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
+        let id =
+            frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
         let (shares, _pk_package) = trusted_dealer_setup(2, 3);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Add in non-sequential order
         db.set_key_package_by_id(10, key_package.clone()).unwrap();
@@ -2959,7 +3000,8 @@ mod tests {
             key_package: frost::keys::KeyPackage,
         ) -> Result<(), Error> {
             let mut bytes = Vec::new();
-            ciborium::into_writer(&key_package, &mut bytes).expect("writing to buffer");
+            ciborium::into_writer(&key_package, &mut bytes)
+                .expect("writing to buffer");
 
             self.db.insert(TREE_KEY_PACKAGE, &bytes[..])?;
             Ok(())
@@ -2970,7 +3012,8 @@ mod tests {
             pk_package: frost::keys::PublicKeyPackage,
         ) -> Result<(), Error> {
             let mut bytes = Vec::new();
-            ciborium::into_writer(&pk_package, &mut bytes).expect("writing to buffer");
+            ciborium::into_writer(&pk_package, &mut bytes)
+                .expect("writing to buffer");
 
             self.db.insert(TREE_PUBKEY_PACKAGE, &bytes[..])?;
             Ok(())
@@ -2982,9 +3025,11 @@ mod tests {
         let (db, _temp_dir) = setup_db();
 
         // Generate key packages
-        let id = frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
+        let id =
+            frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
         let (shares, pk_package) = trusted_dealer_setup(2, 3);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Store using old methods (simulating legacy production data)
         db.set_legacy_key_package(key_package.clone()).unwrap();
@@ -3023,7 +3068,10 @@ mod tests {
 
         // No legacy data, no new data - migration should be skipped
         let migrated = db.migrate_legacy_key_package().unwrap();
-        assert!(!migrated, "Migration should be skipped when no legacy data exists");
+        assert!(
+            !migrated,
+            "Migration should be skipped when no legacy data exists"
+        );
     }
 
     #[test]
@@ -3031,15 +3079,20 @@ mod tests {
         let (db, _temp_dir) = setup_db();
 
         // Generate only key package, not public key (incomplete legacy data)
-        let id = frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
+        let id =
+            frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
         let (shares, _pk_package) = trusted_dealer_setup(2, 3);
-        let key_package = frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Store only key package (incomplete)
         db.set_legacy_key_package(key_package).unwrap();
 
         // Migration should be skipped due to incomplete data
         let migrated = db.migrate_legacy_key_package().unwrap();
-        assert!(!migrated, "Migration should be skipped when legacy data is incomplete");
+        assert!(
+            !migrated,
+            "Migration should be skipped when legacy data is incomplete"
+        );
     }
 }
