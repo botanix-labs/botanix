@@ -184,9 +184,9 @@ fn main() -> eyre::Result<()> {
 
             // launch the node
             // TODO: this launches the Engine API which we don't use.
-            // Create a custom launcher that doesn't launch the engine API. 
+            // Create a custom launcher that doesn't launch the engine API.
             let reth::builder::NodeHandle { node, node_exit_future } =
-                builder.node(node).launch().await?;  
+                builder.node(node).launch().await?;
 
             // Migrate the db if needed
             let botanix_database = init_and_migrate_botanix_db(
