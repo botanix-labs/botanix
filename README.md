@@ -4,7 +4,7 @@ A Botanix-compatible Reth client implementation. This project is **not** a fork 
 
 ## Note
 
-This repository will supersede the [Macbeth](https://github.com/botanix-labs/Macbeth) repository which is currently deployed to mainnet. This `botanix` repository will be deployed to a new testnet then to mainnet.  This is targeted for Q1 2026. Then the `Macbeth` repository will be deprecated.
+This repository will supersede the [Macbeth](https://github.com/botanix-labs/Macbeth) repository which is currently deployed to mainnet. This `botanix` repository will be deployed to a new testnet then to mainnet. This is targeted for Q1 2026. Then the `Macbeth` repository will be deprecated.
 
 ## About
 
