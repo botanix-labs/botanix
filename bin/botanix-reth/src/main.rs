@@ -223,7 +223,7 @@ fn main() -> eyre::Result<()> {
 
             // Get the task executor
             let task_executor = builder.task_executor().clone();
-            
+
             // Create a tx pool
             let blob_store = InMemoryBlobStore::default();
             let head = lookup_head(&blockchain_provider)?;
