@@ -513,7 +513,8 @@ start-poa-server-1:
 	--sync.enable_historical_sync \
 	--block-fee-recipient-address "${BLOCK_FEE_RECIPIENT_ADDRESS}" \
 	--txpool.minimum-priority-fee 2500000 \
-	--txpool.minimal-protocol-fee 5000000
+	--txpool.minimal-protocol-fee 5000000 \
+	--cometbft-rpc-port=26657
 
 start-poa-server-2:
 	cd ./bin/botanix-reth && \
@@ -551,7 +552,8 @@ start-poa-server-2:
 	--sync.enable_historical_sync \
 	--block-fee-recipient-address "${BLOCK_FEE_RECIPIENT_ADDRESS}" \
 	--txpool.minimum-priority-fee 2500000 \
-	--txpool.minimal-protocol-fee 5000000
+	--txpool.minimal-protocol-fee 5000000 \
+	--cometbft-rpc-port=36657
 
 start-poa-server-3:
 	cd ./bin/botanix-reth && \
@@ -589,7 +591,8 @@ start-poa-server-3:
 	--sync.enable_historical_sync \
 	--block-fee-recipient-address "${BLOCK_FEE_RECIPIENT_ADDRESS}" \
 	--txpool.minimum-priority-fee 2500000 \
-	--txpool.minimal-protocol-fee 5000000
+	--txpool.minimal-protocol-fee 5000000 \
+	--cometbft-rpc-port=46657
 
 start-non-fed-server-1:
 	cd ./bin/botanix-reth && \
@@ -619,7 +622,36 @@ start-non-fed-server-1:
 	--sync.enable_state_sync \
 	--sync.enable_historical_sync \
   --txpool.minimum-priority-fee 2500000 \
-  --txpool.minimal-protocol-fee 5000000
+  --txpool.minimal-protocol-fee 5000000 
+
+start-cometbft-1:
+	cometbft node \
+	--home "${NODE_1_DIR}/cometbft" \
+	--proxy_app 127.0.0.1:26658 \
+	--p2p.laddr tcp://0.0.0.0:26656 \
+	--moniker node-1 \
+	--rpc.laddr=tcp://0.0.0.0:26657 \
+	--p2p.persistent_peers ${PERSISTENT_PEERS} \
+
+start-cometbft-2:
+	cometbft node \
+	--home "${NODE_2_DIR}/cometbft" \
+	--proxy_app 127.0.0.1:36658 \
+	--p2p.laddr tcp://0.0.0.0:36656 \
+	--moniker node-2 \
+	--rpc.laddr=tcp://0.0.0.0:36657 \
+	--p2p.persistent_peers ${PERSISTENT_PEERS} \
+
+start-cometbft-3:
+	cometbft node \
+	--home "${NODE_3_DIR}/cometbft" \
+	--proxy_app 127.0.0.1:46658 \
+	--p2p.laddr tcp://0.0.0.0:46656 \
+	--moniker node-3 \
+	--rpc.laddr=tcp://0.0.0.0:46657 \
+	--p2p.persistent_peers ${PERSISTENT_PEERS} \
+
+
 
 clean-poa-3:
 	cd ${NODE_3_DIR} && \
