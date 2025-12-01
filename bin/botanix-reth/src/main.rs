@@ -391,6 +391,11 @@ fn main() -> eyre::Result<()> {
                     );
                 }
 
+                // launch the network manager task
+                task_executor.spawn_critical("network p2p", network_manager);
+                task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
+                task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
+
                 // NOTE: the node will block here until DKG has completed
                 let abci_client_builder = abci_client_builder.expect("abci client builder exists");
                 let fut = || async {
@@ -415,10 +420,7 @@ fn main() -> eyre::Result<()> {
             // add metrics if necessary
             run_metrics_service(metrics_args, &task_executor, chain_spec_arc).await?;
 
-            // launch the network manager task
-            task_executor.spawn_critical("network p2p", network_manager);
-            task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
-            task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
+        
 
             // launch the bitcoin checkpoints synchronizer task
             task_executor.spawn_critical(
