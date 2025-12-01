@@ -2851,30 +2851,44 @@ impl ABCIDriver {
                             .flat_map(|p| p.meta.clone())
                             .collect::<Vec<_>>();
                         // Serialize pegins to pass in Commit notification
-                        let pegin_bytes = pegins
-                            .iter()
-                            .map(|p| {
-                                Bytes::copy_from_slice(
+                        let pegin_bytes =
+                            if pegins.is_empty() {
+                                None
+                            } else {
+                                Some(
+                                    pegins
+                                        .iter()
+                                        .map(|p| {
+                                            Bytes::copy_from_slice(
                                     p.serialize()
                                         .expect("Pegins to be serialized")
                                         .as_slice(),
                                 )
-                            })
-                            .collect::<Vec<Bytes>>();
+                                        })
+                                        .collect::<Vec<Bytes>>(),
+                                )
+                            };
+                        debug!("Pegin bytes: {:?}", pegin_bytes);
                         // Serialize pegouts to pass in Commit notification
-                        let pegout_bytes = vec![Bytes::copy_from_slice(
-                            sealed_block_with_peg
-                                .pegouts()
-                                .to_vec()
-                                .iter()
-                                .map(|p| {
+                        let pegouts = sealed_block_with_peg.pegouts().to_vec();
+                        let pegout_bytes =
+                            if pegouts.is_empty() {
+                                None
+                            } else {
+                                Some(
+                                    pegouts
+                                        .iter()
+                                        .map(|p| {
+                                            Bytes::copy_from_slice(
                                     p.serialize()
                                         .expect("Pegouts to be serialized")
-                                })
-                                .collect::<Vec<_>>()
-                                .concat()
-                                .as_slice(),
-                        )];
+                                        .as_slice(),
+                                )
+                                        })
+                                        .collect::<Vec<Bytes>>(),
+                                )
+                            };
+                        debug!("Pegout bytes: {:?}", pegout_bytes);
 
                         // Prepare the staged entries for insertion into the
                         // database; this ensures that no pegins or pegouts are
@@ -3011,8 +3025,8 @@ impl ABCIDriver {
                             .notify_canon_state(
                                 CanonStateNotification::Commit {
                                     new: Arc::new(chain),
-                                    pegins: Some(pegin_bytes),
-                                    pegouts: Some(pegout_bytes),
+                                    pegins: pegin_bytes,
+                                    pegouts: pegout_bytes,
                                 },
                             );
 
