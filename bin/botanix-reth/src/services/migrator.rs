@@ -27,7 +27,7 @@ const BOTANIX_DB_PATH: &str = "botanix_db";
 ///
 /// # Returns
 ///
-/// * `eyre::Result<()>` - Returns Ok if migration succeeds, otherwise an error.
+/// * `eyre::Result<Arc<DatabaseEnv>>` - Returns Ok if migration succeeds, otherwise an error.
 pub fn init_and_migrate_botanix_db(
     reth_database: Arc<DatabaseEnv>,
     datadir: &DatadirArgs,
@@ -44,7 +44,7 @@ pub fn init_and_migrate_botanix_db(
     let is_migration_needed =
         is_migration_needed(&reth_db_path, &botanix_db_path)?;
 
-    tracing::info!(target: "reth::cli", path = ?botanix_db_path, "Creating botanix database");
+    tracing::info!(target: "reth::cli", path = ?botanix_db_path, "Creating/Opening botanix database");
     let botanix_database =
         reth_db::init_db(&botanix_db_path, db.database_args())?;
     let botanix_database = Arc::new(botanix_database);
