@@ -13,7 +13,7 @@ use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use futures::Stream;
 use futures_util::StreamExt;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::{mpsc, Mutex as TokioMutex, Mutex};
+use tokio::sync::{mpsc, Mutex};
 
 /// Bitcoin block hash stream
 pub type BitcoinHashBlockStream = Box<
@@ -273,8 +273,8 @@ impl BitcoinCheckpointsChainSynchronizer {
     ///   synchronizations.
     /// - Synces at startup to ensure no missed blocks prior to beginning event stream consumption.
     pub async fn sync(self, bitcoin_block_hash_stream: BitcoinHashBlockStream) {
-        // We need interior mutability so that we can move `self` into spawn_blocking
-        let syncer_lock = Arc::new(TokioMutex::new(self));
+        // We need interior mutability so that we can move `self` into async tasks
+        let syncer_lock = Arc::new(Mutex::new(self));
 
         // Create a channel to signal when we need to sync checkpoints
         // We use a bounded channel for throttling: if sync is already in progress,
@@ -294,13 +294,10 @@ impl BitcoinCheckpointsChainSynchronizer {
         while rx.recv().await.is_some() {
             let syncer_lock_clone = Arc::clone(&syncer_lock);
 
-            let result = tokio::task::spawn_blocking(move || async move {
-                let mut syncer = syncer_lock_clone.blocking_lock();
+            let result = {
+                let mut syncer = syncer_lock_clone.lock().await;
                 syncer.sync_new_blocks().await
-            })
-            .await
-            .expect("spawned blocking task failed to sync bitcoin checkpoints")
-            .await;
+            };
 
             match handle_new_blocks_sync_result(
                 result,

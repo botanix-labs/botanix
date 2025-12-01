@@ -12,10 +12,13 @@ use reth_chainspec::ChainSpec;
 use reth_config::Config;
 use reth_db::DatabaseEnv;
 use reth_network::{
-    eth_requests::EthRequestHandler, frost::manager::FrostManager,
-    transactions::TransactionsManager, NetworkConfigBuilder, NetworkHandle,
-    NetworkManager,
+    eth_requests::EthRequestHandler,
+    frost::{manager::FrostManager, protocol::FrostProtoHandler},
+    protocol::IntoRlpxSubProtocol,
+    transactions::TransactionsManager,
+    NetworkConfigBuilder, NetworkHandle, NetworkManager,
 };
+use reth_network_peers::pk2id;
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_provider::{
     providers::BlockchainProvider, BlockHashReader, ProviderFactory,
@@ -24,10 +27,13 @@ use reth_provider::{
 use reth_stages::StageId;
 use reth_tasks::TaskExecutor;
 use reth_transaction_pool::{
-    blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction,
-    EthTransactionValidator, TransactionValidationTaskExecutor,
+    blobstore::{DiskFileBlobStore, InMemoryBlobStore},
+    CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator,
+    TransactionValidationTaskExecutor,
 };
+use secp256k1::SECP256K1;
 use std::sync::Arc;
+use tokio_stream::wrappers::ReceiverStream;
 
 pub type BotanixPool = reth::transaction_pool::Pool<
     TransactionValidationTaskExecutor<
@@ -39,7 +45,7 @@ pub type BotanixPool = reth::transaction_pool::Pool<
         >,
     >,
     CoinbaseTipOrdering<EthPooledTransaction>,
-    DiskFileBlobStore,
+    InMemoryBlobStore,
 >;
 pub type BotanixNetworkHandle = NetworkHandle<BotanixNetworkPrimitives>;
 pub type BotanixNetworkManager = NetworkManager<BotanixNetworkPrimitives>;
@@ -54,7 +60,7 @@ pub type BotanixTxPoolP2P = TransactionsManager<
             >,
         >,
         CoinbaseTipOrdering<EthPooledTransaction>,
-        DiskFileBlobStore,
+        InMemoryBlobStore,
     >,
     BotanixNetworkPrimitives,
 >;
@@ -149,6 +155,19 @@ pub async fn setup_network_builder(
             network_args.addr,
             network_args.port,
         ));
+
+    // Frost sub protocol is only supported by federation nodes
+    if poa_cfg.federation_mode {
+        let (protocol_events_tx, protocol_events_rx) =
+            tokio::sync::mpsc::channel(10_000);
+        let my_peer_id = pk2id(&secret_key.public_key(SECP256K1));
+        let protocol_handler =
+            FrostProtoHandler { my_peer_id, protocol_events_tx };
+
+        network_cfg_builder = network_cfg_builder
+            .frost_protocol_events_rx(ReceiverStream::new(protocol_events_rx))
+            .add_rlpx_sub_protocol(protocol_handler.into_rlpx_sub_protocol());
+    }
 
     // Optionally disable discovery if needed
     if network_args.trusted_only {
