@@ -524,8 +524,8 @@ where
             snapshot_format,
             block_fee_recipient_address,
             blockchain_db,
-            is_testnet: storage.chain_spec.inner().chain.id()
-                == BOTANIX_TESTNET_CHAIN_ID,
+            is_testnet: storage.chain_spec.inner().chain.id() ==
+                BOTANIX_TESTNET_CHAIN_ID,
         }
     }
 
@@ -654,7 +654,7 @@ where
                 return ResponseProcessProposal { status: VERIFY_REJECT };
             }
         }
-        return ResponseProcessProposal { status: VERIFY_REJECT };
+        return ResponseProcessProposal { status: VERIFY_ACCEPTED };
     }
 
     pub(crate) fn aggregate_public_key(
@@ -1730,8 +1730,8 @@ where
                     reth_basic_payload_builder::BuildOutcome::Better {
                         payload,
                         cached_reads: _,
-                    }
-                    | reth_basic_payload_builder::BuildOutcome::Freeze(
+                    } |
+                    reth_basic_payload_builder::BuildOutcome::Freeze(
                         payload,
                     ) => {
                         let block = payload.block();
