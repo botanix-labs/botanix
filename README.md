@@ -19,10 +19,10 @@ This project aims to bring Reth's high-performance Ethereum client capabilities 
 ## Getting Started
 
 Refer to the [Reth documentation](https://reth.rs/) for general guidance on running a node and be sure to
-add these 2 cli required to start reth-botanix:
+add these 2 cli required to start botanix-reth:
 
 ```bash
-cargo run --bin reth-botanix
+cargo run --bin botanix-reth
 --chain botanix-testnet \
     --db.max-size 7TB
 ```

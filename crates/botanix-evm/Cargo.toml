@@ -47,7 +47,7 @@ botanix-consensus-common = { workspace = true }
 bitcoin = { workspace = true }
 
 # BTC Server
-btc-server = { workspace = true }
+botanix-btc-server = { workspace = true }
 
 # Misc
 derive_more = { workspace = true }

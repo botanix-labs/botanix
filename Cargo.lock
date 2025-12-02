@@ -935,7 +935,7 @@ checksum = "24f9a598f010f048d8b8226492b6401104f5a5c1273c2869b72af29b48bb4ba9"
 dependencies = [
  "alloy-sol-macro-input",
  "const-hex",
- "heck",
+ "heck 0.5.0",
  "indexmap 2.10.0",
  "proc-macro-error2",
  "proc-macro2",
@@ -953,7 +953,7 @@ checksum = "f494adf9d60e49aa6ce26dfd42c7417aa6d4343cf2ae621f20e4d92a5ad07d85"
 dependencies = [
  "const-hex",
  "dunce",
- "heck",
+ "heck 0.5.0",
  "macro-string",
  "proc-macro2",
  "quote",
@@ -1117,6 +1117,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ansi_term"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d52a9bb7ec0cf484c551830a7ce27bd20d67eac647e1befb56b0be4ee39a55d2"
+dependencies = [
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "anstream"
 version = "0.6.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1208,6 +1217,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eae2ed21cd55021f05707a807a5fc85695dafb98832921f6cfa06db67ca5b869"
 dependencies = [
  "triomphe",
+]
+
+[[package]]
+name = "argh"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ff18325c8a36b82f992e533ece1ec9f9a9db446bd1c14d4f936bac88fcd240"
+dependencies = [
+ "argh_derive",
+ "argh_shared",
+ "rust-fuzzy-search",
+]
+
+[[package]]
+name = "argh_derive"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adb7b2b83a50d329d5d8ccc620f5c7064028828538bdf5646acd60dc1f767803"
+dependencies = [
+ "argh_shared",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "argh_shared"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a464143cc82dedcdc3928737445362466b7674b5db4e2eb8e869846d6d84f4f6"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1996,7 +2037,7 @@ dependencies = [
  "bitflags 2.9.1",
  "cexpr",
  "clang-sys",
- "itertools 0.11.0",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -2059,7 +2100,7 @@ dependencies = [
  "base64 0.21.7",
  "bech32 0.11.0",
  "bitcoin-internals 0.3.0",
- "bitcoin-io",
+ "bitcoin-io 0.1.3",
  "bitcoin-units",
  "bitcoin_hashes 0.14.0",
  "hex-conservative 0.2.1",
@@ -2084,10 +2125,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitcoin-internals"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15df5c0565e4041487788ce234397083cc0666f69c835fd4430e131f99e690a2"
+
+[[package]]
 name = "bitcoin-io"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b47c4ab7a93edb0c7198c5535ed9b52b63095f4e9b45279c6736cec4b856baf"
+
+[[package]]
+name = "bitcoin-io"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26792cd2bf245069a1c5acb06aa7ad7abe1de69b507c90b490bca81e0665d0ee"
+dependencies = [
+ "bitcoin-internals 0.4.1",
+]
 
 [[package]]
 name = "bitcoin-units"
@@ -2115,9 +2171,19 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb18c03d0db0247e147a21a6faafd5a7eb851c743db062de72018b6b7e8e4d16"
 dependencies = [
- "bitcoin-io",
+ "bitcoin-io 0.1.3",
  "hex-conservative 0.2.1",
  "serde",
+]
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e5d09f16329cd545d7e6008b2c6b2af3a90bc678cf41ac3d2f6755943301b16"
+dependencies = [
+ "bitcoin-io 0.2.0",
+ "hex-conservative 0.3.1",
 ]
 
 [[package]]
@@ -2471,8 +2537,8 @@ dependencies = [
  "assert_matches",
  "bitcoin 0.32.7",
  "bitcoincore-rpc",
+ "botanix-btc-server",
  "botanix-btc-wallet",
- "btc-server",
  "ethabi",
  "ethers",
  "frost-secp256k1-tr",
@@ -2511,6 +2577,73 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "botanix-btc-server"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-server",
+ "actix-web",
+ "alloy-primitives",
+ "anyhow",
+ "assert_matches",
+ "async-stream",
+ "async-trait",
+ "base64 0.22.1",
+ "bdk_wallet",
+ "bitcoin 0.32.7",
+ "bitcoin_hashes 0.14.0",
+ "bitcoincore-rpc",
+ "botanix-btc-server-client",
+ "botanix-fs-util",
+ "chacha20poly1305",
+ "ciborium",
+ "clap",
+ "confy",
+ "const_format",
+ "derive_more 1.0.0",
+ "displaydoc",
+ "dotenvy",
+ "env_logger",
+ "frost-secp256k1-tr",
+ "futures",
+ "futures-util",
+ "hex 0.4.3",
+ "jsonwebtoken 9.3.1",
+ "lazy_static",
+ "log",
+ "merlin",
+ "miniscript 12.3.5",
+ "once_cell",
+ "parking_lot 0.12.4",
+ "prometheus",
+ "prost 0.13.5",
+ "prost-build",
+ "prost-types 0.13.5",
+ "rand 0.8.5",
+ "rpassword",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "serde_prometheus",
+ "sled",
+ "sysinfo 0.29.11",
+ "tempfile",
+ "test-log",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "toml 0.8.23",
+ "tonic",
+ "tonic-build",
+ "tonic-health",
+ "tonic-reflection",
+ "tracing-actix-web",
+ "url",
+ "vergen 8.3.2",
+ "zeroize",
 ]
 
 [[package]]
@@ -2737,6 +2870,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "botanix-reth",
  "botanix-storage",
  "clap",
  "reth-chainspec",
@@ -2759,10 +2893,10 @@ dependencies = [
  "bitcoin 0.32.7",
  "botanix-authority-edh",
  "botanix-authority-peg",
+ "botanix-btc-server",
  "botanix-btc-wallet",
  "botanix-chainspec",
  "botanix-consensus-common",
- "btc-server",
  "derive_more 2.0.1",
  "reth-basic-payload-builder",
  "reth-chainspec",
@@ -2796,6 +2930,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "botanix-pegin-recovery"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitcoin 0.32.7",
+ "bitcoincore-rpc",
+ "botanix-btc-server",
+ "botanix-pegin-recovery-client",
+ "chacha20poly1305",
+ "ciborium",
+ "clap",
+ "env_logger",
+ "frost-secp256k1-tr",
+ "hex 0.4.3",
+ "log",
+ "merlin",
+ "miniscript 12.3.5",
+ "prost 0.13.5",
+ "prost-build",
+ "prost-types 0.13.5",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sled",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "tonic-health",
+ "tonic-reflection",
+ "zeroize",
+]
+
+[[package]]
+name = "botanix-pegin-recovery-client"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "assert_matches",
+ "bitcoin 0.32.7",
+ "displaydoc",
+ "futures-util",
+ "hex 0.4.3",
+ "prost 0.13.5",
+ "prost-types 0.13.5",
+ "rand 0.8.5",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "botanix-primitives"
 version = "0.1.0"
 dependencies = [
@@ -2816,6 +3006,158 @@ dependencies = [
 ]
 
 [[package]]
+name = "botanix-reth"
+version = "0.1.0"
+dependencies = [
+ "alloy-chains",
+ "alloy-consensus",
+ "alloy-dyn-abi",
+ "alloy-eip2124",
+ "alloy-eips",
+ "alloy-evm",
+ "alloy-genesis",
+ "alloy-json-abi",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types",
+ "alloy-rpc-types-engine",
+ "alloy-rpc-types-eth",
+ "alloy-signer",
+ "alloy-sol-macro",
+ "alloy-sol-types",
+ "async-trait",
+ "auto_impl",
+ "bitcoin 0.32.7",
+ "bitcoincore-rpc",
+ "bitcoincore-zmq",
+ "bls_on_arkworks",
+ "botanix-activation-manager",
+ "botanix-authority-edh",
+ "botanix-authority-metrics",
+ "botanix-authority-peg",
+ "botanix-authority-rsp",
+ "botanix-bitcoin-checkpoint",
+ "botanix-btc-server",
+ "botanix-btc-server-client",
+ "botanix-btc-wallet",
+ "botanix-chainspec",
+ "botanix-cli-args",
+ "botanix-cli-parsers",
+ "botanix-comet-bft-rpc",
+ "botanix-configs",
+ "botanix-consensus-common",
+ "botanix-data-parser",
+ "botanix-evm",
+ "botanix-fs-util",
+ "botanix-primitives",
+ "botanix-rpc-client",
+ "botanix-rpc-config",
+ "botanix-rpc-types",
+ "botanix-storage",
+ "botanix-storage-migrate",
+ "botanix-utils",
+ "bytes 1.10.1",
+ "cfg-if 1.0.1",
+ "clap",
+ "cometbft",
+ "cometbft-light-client",
+ "cometbft-light-client-verifier",
+ "cometbft-proto",
+ "confy",
+ "derive_more 2.0.1",
+ "displaydoc",
+ "ethabi",
+ "eyre",
+ "frost-secp256k1-tr",
+ "futures",
+ "futures-util",
+ "hex 0.4.3",
+ "jsonrpsee",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "lazy_static",
+ "libc",
+ "once_cell",
+ "parity-bytes",
+ "parking_lot 0.12.4",
+ "phf",
+ "prost 0.12.6",
+ "rand 0.8.5",
+ "reth",
+ "reth-basic-payload-builder",
+ "reth-chain-state",
+ "reth-chainspec",
+ "reth-cli",
+ "reth-cli-commands",
+ "reth-cli-runner",
+ "reth-cli-util",
+ "reth-config",
+ "reth-consensus",
+ "reth-consensus-common",
+ "reth-db",
+ "reth-db-common",
+ "reth-discv4",
+ "reth-engine-local",
+ "reth-engine-primitives",
+ "reth-eth-wire",
+ "reth-eth-wire-types",
+ "reth-ethereum",
+ "reth-ethereum-consensus",
+ "reth-ethereum-forks",
+ "reth-ethereum-payload-builder",
+ "reth-ethereum-primitives",
+ "reth-evm",
+ "reth-evm-ethereum",
+ "reth-execution-errors",
+ "reth-execution-types",
+ "reth-network",
+ "reth-network-api",
+ "reth-network-p2p",
+ "reth-network-peers",
+ "reth-node-builder",
+ "reth-node-core",
+ "reth-node-ethereum",
+ "reth-node-metrics",
+ "reth-node-types",
+ "reth-payload-builder",
+ "reth-payload-primitives",
+ "reth-primitives",
+ "reth-primitives-traits",
+ "reth-provider",
+ "reth-prune-types",
+ "reth-revm",
+ "reth-rpc-engine-api",
+ "reth-rpc-eth-api",
+ "reth-stages",
+ "reth-storage-api",
+ "reth-tasks",
+ "reth-tracing",
+ "reth-transaction-pool",
+ "reth-trie",
+ "reth-trie-common",
+ "reth-trie-db",
+ "revm",
+ "schnellru",
+ "secp256k1 0.30.0",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tendermint 0.17.0",
+ "tendermint-abci",
+ "tendermint-proto 0.40.4",
+ "tendermint-rpc",
+ "thiserror 2.0.12",
+ "tikv-jemalloc-ctl",
+ "tikv-jemallocator",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "uuid 1.17.0",
+]
+
+[[package]]
 name = "botanix-rpc-client"
 version = "0.1.0"
 dependencies = [
@@ -2823,9 +3165,9 @@ dependencies = [
  "bitcoin 0.32.7",
  "bitcoincore-rpc",
  "botanix-authority-edh",
+ "botanix-btc-server",
  "botanix-btc-wallet",
  "botanix-rpc-config",
- "btc-server",
  "frost-secp256k1-tr",
  "futures",
  "hex 0.4.3",
@@ -2852,8 +3194,8 @@ dependencies = [
  "bitcoin 0.32.7",
  "bitcoincore-rpc",
  "botanix-authority-edh",
+ "botanix-btc-server",
  "botanix-btc-wallet",
- "btc-server",
  "frost-secp256k1-tr",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -2926,6 +3268,78 @@ dependencies = [
 ]
 
 [[package]]
+name = "botanix-test-suite"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "ansi_term",
+ "anyhow",
+ "argh",
+ "askama",
+ "assert_matches",
+ "async-trait",
+ "base64 0.22.1",
+ "bitcoin 0.32.7",
+ "bitcoin_hashes 0.16.0",
+ "bitcoincore-rpc",
+ "botanix-authority-edh",
+ "botanix-authority-peg",
+ "botanix-btc-server",
+ "botanix-btc-server-client",
+ "botanix-btc-wallet",
+ "botanix-chainspec",
+ "botanix-cli-args",
+ "botanix-comet-bft-rpc",
+ "botanix-configs",
+ "botanix-consensus-common",
+ "botanix-data-parser",
+ "botanix-pegin-recovery",
+ "botanix-pegin-recovery-client",
+ "botanix-reth",
+ "botanix-storage",
+ "bytes 1.10.1",
+ "ciborium",
+ "clap",
+ "displaydoc",
+ "dotenv",
+ "ethers",
+ "eyre",
+ "frost-secp256k1-tr",
+ "futures",
+ "hex 0.4.3",
+ "port-killer",
+ "pretty_assertions",
+ "rand 0.8.5",
+ "regex",
+ "reth",
+ "reth-chainspec",
+ "reth-cli-commands",
+ "reth-cli-runner",
+ "reth-consensus",
+ "reth-db",
+ "reth-network-peers",
+ "reth-node-core",
+ "reth-primitives",
+ "reth-provider",
+ "reth-prune-types",
+ "reth-tracing",
+ "secp256k1 0.30.0",
+ "serde",
+ "serde_json",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
+ "tempfile",
+ "tendermint-rpc",
+ "thiserror 2.0.12",
+ "tokio",
+ "toml 0.8.23",
+ "tonic",
+ "tracing",
+ "url",
+ "uuid 1.17.0",
+]
+
+[[package]]
 name = "botanix-utils"
 version = "0.1.0"
 dependencies = [
@@ -2981,73 +3395,6 @@ dependencies = [
  "lazy_static",
  "memchr",
  "regex-automata 0.1.10",
-]
-
-[[package]]
-name = "btc-server"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-server",
- "actix-web",
- "alloy-primitives",
- "anyhow",
- "assert_matches",
- "async-stream",
- "async-trait",
- "base64 0.22.1",
- "bdk_wallet",
- "bitcoin 0.32.7",
- "bitcoin_hashes 0.14.0",
- "bitcoincore-rpc",
- "botanix-btc-server-client",
- "botanix-fs-util",
- "chacha20poly1305",
- "ciborium",
- "clap",
- "confy",
- "const_format",
- "derive_more 1.0.0",
- "displaydoc",
- "dotenvy",
- "env_logger",
- "frost-secp256k1-tr",
- "futures",
- "futures-util",
- "hex 0.4.3",
- "jsonwebtoken 9.3.1",
- "lazy_static",
- "log",
- "merlin",
- "miniscript 12.3.5",
- "once_cell",
- "parking_lot 0.12.4",
- "prometheus",
- "prost 0.13.5",
- "prost-build",
- "prost-types 0.13.5",
- "rand 0.8.5",
- "rpassword",
- "rust_decimal",
- "serde",
- "serde_json",
- "serde_prometheus",
- "sled",
- "sysinfo 0.29.11",
- "tempfile",
- "test-log",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "toml 0.8.23",
- "tonic",
- "tonic-build",
- "tonic-health",
- "tonic-reflection",
- "tracing-actix-web",
- "url",
- "vergen 8.3.2",
- "zeroize",
 ]
 
 [[package]]
@@ -3435,7 +3782,7 @@ version = "4.5.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef4f52386a59ca4c860f7393bcf8abd8dfd91ecccc0f774635ff68e92eeef491"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -4503,6 +4850,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4725,7 +5078,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -5093,6 +5446,7 @@ dependencies = [
  "const-hex",
  "enr 0.10.0",
  "ethers-core",
+ "futures-channel",
  "futures-core",
  "futures-timer",
  "futures-util",
@@ -5914,6 +6268,12 @@ dependencies = [
 
 [[package]]
 name = "heck"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
+
+[[package]]
+name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
@@ -5950,6 +6310,15 @@ name = "hex-conservative"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5313b072ce3c597065a808dbf612c4c8e8590bdbf8b579508bf7a762c5eae6cd"
+dependencies = [
+ "arrayvec",
+]
+
+[[package]]
+name = "hex-conservative"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2b9348ee0d8d4e3a894946c1ab104d08a2e44ca13656613afada8905ea609b6"
 dependencies = [
  "arrayvec",
 ]
@@ -7001,7 +7370,7 @@ version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fa4f5daed39f982a1bb9d15449a28347490ad42b212f8eaa2a2a344a0dce9e9"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
@@ -8487,62 +8856,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "132dca9b868d927b35b5dd728167b2dee150eb1ad686008fc71ccb298b776fca"
 
 [[package]]
-name = "pegin-recovery"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitcoin 0.32.7",
- "bitcoincore-rpc",
- "btc-server",
- "chacha20poly1305",
- "ciborium",
- "clap",
- "env_logger",
- "frost-secp256k1-tr",
- "hex 0.4.3",
- "log",
- "merlin",
- "miniscript 12.3.5",
- "pegin-recovery-client",
- "prost 0.13.5",
- "prost-build",
- "prost-types 0.13.5",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sled",
- "tempfile",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "tonic-health",
- "tonic-reflection",
- "zeroize",
-]
-
-[[package]]
-name = "pegin-recovery-client"
-version = "0.1.0"
-dependencies = [
- "alloy-primitives",
- "assert_matches",
- "bitcoin 0.32.7",
- "displaydoc",
- "futures-util",
- "hex 0.4.3",
- "prost 0.13.5",
- "prost-types 0.13.5",
- "rand 0.8.5",
- "serde",
- "tempfile",
- "thiserror 2.0.12",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
 name = "pem"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8736,6 +9049,12 @@ dependencies = [
  "opaque-debug 0.3.1",
  "universal-hash",
 ]
+
+[[package]]
+name = "port-killer"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f8f8abaf06419461fc718f5a0929c18d06dd825f26c066e376f365f2d8c2ec2"
 
 [[package]]
 name = "portable-atomic"
@@ -9047,8 +9366,8 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck",
- "itertools 0.11.0",
+ "heck 0.5.0",
+ "itertools 0.14.0",
  "log",
  "multimap",
  "once_cell",
@@ -9094,7 +9413,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -12447,158 +12766,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reth_botanix"
-version = "0.1.0"
-dependencies = [
- "alloy-chains",
- "alloy-consensus",
- "alloy-dyn-abi",
- "alloy-eip2124",
- "alloy-eips",
- "alloy-evm",
- "alloy-genesis",
- "alloy-json-abi",
- "alloy-network",
- "alloy-primitives",
- "alloy-rlp",
- "alloy-rpc-types",
- "alloy-rpc-types-engine",
- "alloy-rpc-types-eth",
- "alloy-signer",
- "alloy-sol-macro",
- "alloy-sol-types",
- "async-trait",
- "auto_impl",
- "bitcoin 0.32.7",
- "bitcoincore-rpc",
- "bitcoincore-zmq",
- "bls_on_arkworks",
- "botanix-activation-manager",
- "botanix-authority-edh",
- "botanix-authority-metrics",
- "botanix-authority-peg",
- "botanix-authority-rsp",
- "botanix-bitcoin-checkpoint",
- "botanix-btc-server-client",
- "botanix-btc-wallet",
- "botanix-chainspec",
- "botanix-cli-args",
- "botanix-cli-parsers",
- "botanix-comet-bft-rpc",
- "botanix-configs",
- "botanix-consensus-common",
- "botanix-data-parser",
- "botanix-evm",
- "botanix-fs-util",
- "botanix-primitives",
- "botanix-rpc-client",
- "botanix-rpc-config",
- "botanix-rpc-types",
- "botanix-storage",
- "botanix-storage-migrate",
- "botanix-utils",
- "btc-server",
- "bytes 1.10.1",
- "cfg-if 1.0.1",
- "clap",
- "cometbft",
- "cometbft-light-client",
- "cometbft-light-client-verifier",
- "cometbft-proto",
- "confy",
- "derive_more 2.0.1",
- "displaydoc",
- "ethabi",
- "eyre",
- "frost-secp256k1-tr",
- "futures",
- "futures-util",
- "hex 0.4.3",
- "jsonrpsee",
- "jsonrpsee-core",
- "jsonrpsee-types",
- "lazy_static",
- "libc",
- "once_cell",
- "parity-bytes",
- "parking_lot 0.12.4",
- "phf",
- "prost 0.12.6",
- "rand 0.8.5",
- "reth",
- "reth-basic-payload-builder",
- "reth-chain-state",
- "reth-chainspec",
- "reth-cli",
- "reth-cli-commands",
- "reth-cli-runner",
- "reth-cli-util",
- "reth-config",
- "reth-consensus",
- "reth-consensus-common",
- "reth-db",
- "reth-db-common",
- "reth-discv4",
- "reth-engine-local",
- "reth-engine-primitives",
- "reth-eth-wire",
- "reth-eth-wire-types",
- "reth-ethereum",
- "reth-ethereum-consensus",
- "reth-ethereum-forks",
- "reth-ethereum-payload-builder",
- "reth-ethereum-primitives",
- "reth-evm",
- "reth-evm-ethereum",
- "reth-execution-errors",
- "reth-execution-types",
- "reth-network",
- "reth-network-api",
- "reth-network-p2p",
- "reth-network-peers",
- "reth-node-builder",
- "reth-node-core",
- "reth-node-ethereum",
- "reth-node-metrics",
- "reth-node-types",
- "reth-payload-builder",
- "reth-payload-primitives",
- "reth-primitives",
- "reth-primitives-traits",
- "reth-provider",
- "reth-prune-types",
- "reth-revm",
- "reth-rpc-engine-api",
- "reth-rpc-eth-api",
- "reth-stages",
- "reth-storage-api",
- "reth-tasks",
- "reth-tracing",
- "reth-transaction-pool",
- "reth-trie",
- "reth-trie-common",
- "reth-trie-db",
- "revm",
- "schnellru",
- "secp256k1 0.30.0",
- "serde",
- "serde_json",
- "tempfile",
- "tendermint 0.17.0",
- "tendermint-abci",
- "tendermint-proto 0.40.4",
- "tendermint-rpc",
- "thiserror 2.0.12",
- "tikv-jemalloc-ctl",
- "tikv-jemallocator",
- "tokio",
- "tokio-stream",
- "tonic",
- "tracing",
- "uuid 1.17.0",
-]
-
-[[package]]
 name = "revm"
 version = "28.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13096,6 +13263,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
+name = "rust-fuzzy-search"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a157657054ffe556d8858504af8a672a054a6e0bd9e8ee531059100c0fa11bb2"
+
+[[package]]
 name = "rust_decimal"
 version = "1.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13480,6 +13653,7 @@ dependencies = [
  "bitcoin_hashes 0.13.0",
  "rand 0.8.5",
  "secp256k1-sys 0.9.2",
+ "serde",
 ]
 
 [[package]]
@@ -13488,7 +13662,7 @@ version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9465315bc9d4566e1724f0fffcbcc446268cb522e60f9a27bcded6b19c108113"
 dependencies = [
- "bitcoin_hashes 0.13.0",
+ "bitcoin_hashes 0.14.0",
  "rand 0.8.5",
  "secp256k1-sys 0.10.1",
  "serde",
@@ -14114,6 +14288,15 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "strum"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
+dependencies = [
+ "strum_macros 0.25.3",
+]
+
+[[package]]
+name = "strum"
 version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
@@ -14132,11 +14315,24 @@ dependencies = [
 
 [[package]]
 name = "strum_macros"
+version = "0.25.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23dc1fa9ac9c169a78ba62f0b841814b7abae11bdd047b9c58f893439e309ea0"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "strum_macros"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -14149,7 +14345,7 @@ version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
 dependencies = [
- "heck",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -14324,7 +14520,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3e535eb8dded36d55ec13eddacd30dec501792ff23a0b1682c38601b8cf2349"
 dependencies = [
  "cfg-expr",
- "heck",
+ "heck 0.5.0",
  "pkg-config",
  "toml 0.8.23",
  "version-compare",
@@ -14622,7 +14818,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8893e583c5af79a67761a9285535d26612cb1617fcbf388c3abc0c1d35a0b89"
 dependencies = [
  "darling 0.21.3",
- "heck",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "prettyplease",
  "proc-macro2",
@@ -15577,6 +15773,7 @@ checksum = "3cf4199d1e5d15ddd86a694e4d0dffa9c323ce759fea589f00fef9d81cc1931d"
 dependencies = [
  "getrandom 0.3.3",
  "js-sys",
+ "serde",
  "wasm-bindgen",
 ]
 
