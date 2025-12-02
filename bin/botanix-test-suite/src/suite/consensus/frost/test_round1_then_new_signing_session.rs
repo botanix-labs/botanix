@@ -3,14 +3,14 @@ use std::str::FromStr;
 use crate::{
     suite::consensus::frost::test_signing::{do_signing, Pegin},
     utils::{
-        get_checkpoint_block_hash, send_pegin_notification, send_pegout_notification,
-        MIN_BLOCKS_COINBASE_MATURE,
+        get_checkpoint_block_hash, send_pegin_notification,
+        send_pegout_notification, MIN_BLOCKS_COINBASE_MATURE,
     },
 };
 use bitcoin::{consensus::Encodable, Address};
 use bitcoincore_rpc::RpcApi;
-use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_btc_server_client::{BtcServerClient, SigningPackage};
+use botanix_chainspec::constants::BOTANIX_TESTNET;
 use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
@@ -34,7 +34,8 @@ pub async fn do_signing_round1(
     bitcoind: &bitcoincore_rpc::Client,
     signing_session_id: &[u8; 32],
 ) -> anyhow::Result<(), anyhow::Error> {
-    let pegin_conf_depth = BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
+    let pegin_conf_depth =
+        BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
 
     // Currently we support a static coordinator
     // this is always the first client
@@ -50,10 +51,12 @@ pub async fn do_signing_round1(
     };
 
     let psbt = coordinator
-        .get_psbt(tonic::Request::new(botanix_btc_server_client::MakeTxRequest {
-            signing_session_id: signing_session_id.to_vec(),
-            checkpoint_block_hash: checkpoint[..].to_vec(),
-        }))
+        .get_psbt(tonic::Request::new(
+            botanix_btc_server_client::MakeTxRequest {
+                signing_session_id: signing_session_id.to_vec(),
+                checkpoint_block_hash: checkpoint[..].to_vec(),
+            },
+        ))
         .await
         .map_err(Error::Request)?
         .into_inner()
@@ -105,7 +108,8 @@ pub async fn test_round1_then_new_signing_session(
         let _ = bitcoind.unload_wallet(Some(&wallet))?;
     }
     let wallet_name = get_unique_wallet_name();
-    let create_res = bitcoind.create_wallet(&wallet_name, None, None, None, None);
+    let create_res =
+        bitcoind.create_wallet(&wallet_name, None, None, None, None);
     if create_res.is_err() {
         tracing::info!("Wallet already exists, loading wallet ...");
         // wallet already exists, load wallet
@@ -130,16 +134,21 @@ pub async fn test_round1_then_new_signing_session(
     for _ in 0..NUM_PEGINS {
         let eth_address = ethers::core::types::Address::random();
         // Lets get the gateway address for this eth address
-        let mut client =
-            clients.get(0).cloned().ok_or_else(|| anyhow::anyhow!("client not found"))?;
+        let mut client = clients
+            .get(0)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("client not found"))?;
         let res = client
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address = Address::from_str(&res.gateway_address)?.assume_checked();
+        let btc_address =
+            Address::from_str(&res.gateway_address)?.assume_checked();
         let txid = bitcoind.send_to_address(
             &btc_address,
             amount_to_send,
@@ -191,7 +200,9 @@ pub async fn test_round1_then_new_signing_session(
                 checkpoint_block_hash.clone(),
                 pegin.btc_address.clone(),
                 hex_encode(pegin.eth_address),
-                txid_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid txid"))?,
+                txid_bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("invalid txid"))?,
                 ot.vout,
                 pegin.amount.to_sat(),
             )
@@ -203,8 +214,8 @@ pub async fn test_round1_then_new_signing_session(
     let mut rand = StdRng::from_entropy();
     let mut pegout_id_bytes = [0u8; 36];
     rand.fill_bytes(&mut pegout_id_bytes);
-    let pegout_id =
-        PegoutId::from_bytes(&pegout_id_bytes).map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
+    let pegout_id = PegoutId::from_bytes(&pegout_id_bytes)
+        .map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
 
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let sk = bitcoin::PrivateKey::generate(bitcoin::Network::Regtest);
@@ -232,16 +243,20 @@ pub async fn test_round1_then_new_signing_session(
 
     // remove round 1 nonces so we can start a new signing session
     for c in clients.iter_mut() {
-        c.abort_signing(tonic::Request::new(botanix_btc_server_client::Empty {}))
-            .await
-            .map_err(Error::Request)?;
+        c.abort_signing(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
+        .await
+        .map_err(Error::Request)?;
     }
 
     // Start a new signing session. The previous signing session completed round 1 signing only so
     // the psbt was never broadcast.
     // Complete all signing rounds, finalize and broadcast the psbt. The signers should not be
     // enforcing a conflicting input in the psbt.
-    do_signing(&mut clients, &bitcoind, &[2u8; 32]).await.map_err(|e| anyhow::anyhow!(e))?;
+    do_signing(&mut clients, &bitcoind, &[2u8; 32])
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
 
     Ok(())
 }

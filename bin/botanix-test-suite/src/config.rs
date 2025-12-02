@@ -42,10 +42,13 @@ impl FromStr for Config {
     }
 }
 
-async fn read_to_string(path: impl AsRef<Path> + Send) -> Result<String, Error> {
+async fn read_to_string(
+    path: impl AsRef<Path> + Send,
+) -> Result<String, Error> {
     let mut file = File::open(path).await.map_err(Error::OpenConfig)?;
     let meta = file.metadata().await.map_err(Error::ReadMeta)?;
-    let mut contents = Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0));
+    let mut contents =
+        Vec::with_capacity(usize::try_from(meta.len()).unwrap_or(0));
     file.read_to_end(&mut contents).await.map_err(Error::ReadConfig)?;
     Ok(String::from_utf8(contents).map_err(Error::ParseUtf8)?)
 }
@@ -60,7 +63,12 @@ pub struct CliArgs {
     #[argh(option, short = 'c')]
     pub config: String,
     /// suite of tests to run: Consensus|all (default: all)
-    #[argh(option, short = 'r', from_str_fn(parse_suite), default = "RunSuite::Consensus")]
+    #[argh(
+        option,
+        short = 'r',
+        from_str_fn(parse_suite),
+        default = "RunSuite::Consensus"
+    )]
     pub run_suite: RunSuite,
     /// individual test timeout in milliseconds (default: 20000)
     #[argh(option, short = 't', default = "20_000")]

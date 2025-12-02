@@ -1,9 +1,9 @@
 use crate::{context::GlobalContext, suite::consensus::common::is_port_free};
+use alloy_primitives::Address;
 use anyhow::Context;
+use botanix_consensus_common::utils::unix_timestamp;
 use btcserverlib::federation_args::{FedMemberPubKey, FederationTomlConfig};
-use reth::consensus_common::utils::unix_timestamp;
 use reth_network_peers::PeerId;
-use reth_primitives::Address;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -31,7 +31,11 @@ impl SpawnedBtcServerProcess {
         kill_process_at_port(self.btc_server_port);
         // delete the created db
         if let Err(e) = std::fs::remove_dir_all(&self.db_path) {
-            warn!("Couldn't remove btc server db dir at {}: {}", self.db_path.display(), e);
+            warn!(
+                "Couldn't remove btc server db dir at {}: {}",
+                self.db_path.display(),
+                e
+            );
         }
     }
 
@@ -46,14 +50,23 @@ impl SpawnedBtcServerProcess {
         kill_process_at_port(self.btc_server_port);
         // delete the created db
         if let Err(e) = std::fs::remove_dir_all(&self.db_path) {
-            warn!("Couldn't remove btc server db dir at {}: {}", self.db_path.display(), e);
+            warn!(
+                "Couldn't remove btc server db dir at {}: {}",
+                self.db_path.display(),
+                e
+            );
         }
     }
 }
 
 fn spawn_btc_server_process(
     global_context: Arc<GlobalContext>,
-    members_keypairs: &Vec<(secp256k1::SecretKey, secp256k1::PublicKey, PeerId, Address)>,
+    members_keypairs: &Vec<(
+        secp256k1::SecretKey,
+        secp256k1::PublicKey,
+        PeerId,
+        Address,
+    )>,
     id: u16,
     btc_server_port: u16,
     db_path: PathBuf,
@@ -82,8 +95,11 @@ fn spawn_btc_server_process(
     // Create federation members
     let mut fed_members = vec![];
     for i in 0..global_context.fed_instances {
-        let public_key =
-            members_keypairs.get(i as usize).cloned().expect("To have keypair information").1;
+        let public_key = members_keypairs
+            .get(i as usize)
+            .cloned()
+            .expect("To have keypair information")
+            .1;
 
         fed_members.push(FedMemberPubKey {
             key: public_key.to_string(),
@@ -107,8 +123,11 @@ fn spawn_btc_server_process(
     )?;
 
     // Write the secret key to a tempfile
-    let my_secret_key =
-        members_keypairs.get(id as usize).cloned().expect("To have keypair information").0;
+    let my_secret_key = members_keypairs
+        .get(id as usize)
+        .cloned()
+        .expect("To have keypair information")
+        .0;
 
     let mut temp_secret_key = tempfile::NamedTempFile::new().unwrap();
     std::io::Write::write_all(
@@ -157,7 +176,12 @@ fn spawn_btc_server_process(
     std::mem::forget(temp_secret_key);
 
     Ok(SpawnedBtcServerProcess {
-        child_process: spawn_child_process(Scope::BtcServer(id), command, args, working_directory)?,
+        child_process: spawn_child_process(
+            Scope::BtcServer(id),
+            command,
+            args,
+            working_directory,
+        )?,
         db_path,
         btc_server_port,
     })
@@ -165,7 +189,12 @@ fn spawn_btc_server_process(
 
 pub fn spawn_n_btc_server_processes(
     global_context: Arc<GlobalContext>,
-    members_keypairs: &Vec<(secp256k1::SecretKey, secp256k1::PublicKey, PeerId, Address)>,
+    members_keypairs: &Vec<(
+        secp256k1::SecretKey,
+        secp256k1::PublicKey,
+        PeerId,
+        Address,
+    )>,
 ) -> anyhow::Result<Vec<SpawnedBtcServerProcess>> {
     let mut processes = vec![];
     for i in 0..global_context.fed_instances {
@@ -176,7 +205,8 @@ pub fn spawn_n_btc_server_processes(
         std::fs::create_dir_all(&temp_db_path)
             .context("failed to create tempdir with db subdir")?;
         let db_path = Path::new(&temp_db_path).join(format!("db{}", i));
-        std::fs::create_dir_all(&db_path).context("failed to create tempdir with db subdir")?;
+        std::fs::create_dir_all(&db_path)
+            .context("failed to create tempdir with db subdir")?;
         let btc_server_port = BTC_SERVER_START_PORT + i;
 
         if !is_port_free(btc_server_port) {

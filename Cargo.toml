@@ -175,7 +175,6 @@ botanix-authority-rsp = { path = "crates/botanix-authority-rsp" }
 botanix-bitcoin-checkpoint = { path = "crates/botanix-bitcoin-checkpoint" }
 botanix-btc-server = { path = "bin/botanix-btc-server" }
 botanix-btc-server-client = { path = "bin/botanix-btc-server/client" }
-botanix-test-suite = { path = "bin/botanix-test-suite" }
 botanix-btc-wallet = { path = "crates/botanix-btc-wallet" }
 botanix-chainspec = { path = "crates/botanix-chainspec" }
 botanix-cli = { path = "bin/botanix-cli" }
@@ -191,13 +190,14 @@ botanix-fs-util = { path = "crates/botanix-fs-util" }
 botanix-pegin-recovery = { path = "bin/botanix-pegin-recovery" }
 botanix-pegin-recovery-client = { path = "bin/botanix-pegin-recovery/client" }
 botanix-primitives = { path = "crates/botanix-primitives" }
+botanix-reth = { path = "bin/botanix-reth" }
 botanix-rpc-client = { path = "crates/botanix-rpc-client" }
 botanix-rpc-config = { path = "crates/botanix-rpc-config" }
 botanix-rpc-types = { path = "crates/botanix-rpc-types" }
 botanix-storage = { path = "crates/botanix-storage" }
 botanix-storage-migrate = { path = "crates/botanix-storage-migrate" }
+botanix-test-suite = { path = "bin/botanix-test-suite" }
 botanix-utils = { path = "crates/botanix-utils" }
-botanix-reth = { path = "bin/botanix-reth" }
 bytes = "1.5"
 cfg-if = { version = "1.0", default-features = false }
 clap = { version = "4.4", features = ["derive"] }

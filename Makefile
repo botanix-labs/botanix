@@ -621,7 +621,7 @@ start-non-fed-server-1:
 	--sync.enable_state_sync \
 	--sync.enable_historical_sync \
   --txpool.minimum-priority-fee 2500000 \
-  --txpool.minimal-protocol-fee 5000000 
+  --txpool.minimal-protocol-fee 5000000
 
 start-cometbft-1:
 	cometbft node \

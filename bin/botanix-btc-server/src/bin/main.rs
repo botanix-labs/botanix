@@ -1794,8 +1794,11 @@ where
         let secp_pk = pk_package.verifying_key().to_secp_pk().map_err(|e| {
             internal!("Failed to generate tweaked public key: {}", e)
         })?;
+        let secp_pk_serialized = secp_pk.serialize();
         let change_script =
-            wallet::address::generate_taproot_change_scriptpubkey(&secp_pk);
+            wallet::address::generate_taproot_change_scriptpubkey(
+                secp_pk_serialized,
+            );
 
         info!("make_tx: creating psbt with {} outputs", outputs.len());
         let psbt = match coordinator::make_tx(
@@ -2576,9 +2579,10 @@ where
                             e
                         )
                     })?;
+                let secp_pk_serialized = secp_pk.serialize();
                 expected_script_pubkey =
                     wallet::address::generate_taproot_change_scriptpubkey(
-                        &secp_pk,
+                        secp_pk_serialized,
                     );
             }
 
@@ -3783,7 +3787,8 @@ mod tests {
             generate_taproot_scriptpubkey(&tweaked_key)
         } else {
             let secp_pk = agg_key.to_secp_pk().expect("valid secp key");
-            generate_taproot_change_scriptpubkey(&secp_pk)
+            let secp_pk_serialized = secp_pk.serialize();
+            generate_taproot_change_scriptpubkey(secp_pk_serialized)
         };
         let outpoint = create_random_outpoint(rng);
 

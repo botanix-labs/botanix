@@ -2,8 +2,10 @@ use std::str::FromStr;
 
 use bitcoin::{consensus::Encodable, hashes::Hash, Address};
 use bitcoincore_rpc::RpcApi;
+use botanix_btc_server_client::{
+    BtcServerClient, SigningPackage, SigningPackageRequest,
+};
 use botanix_chainspec::constants::BOTANIX_TESTNET;
-use botanix_btc_server_client::{BtcServerClient, SigningPackage, SigningPackageRequest};
 use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
@@ -37,7 +39,8 @@ pub async fn do_signing(
     bitcoind: &bitcoincore_rpc::Client,
     signing_session_id: &[u8; 32],
 ) -> anyhow::Result<bitcoin::Transaction, anyhow::Error> {
-    let pegin_conf_depth = BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
+    let pegin_conf_depth =
+        BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
 
     // Currently we support a static coordinator
     // this is always the first client
@@ -53,10 +56,12 @@ pub async fn do_signing(
     };
 
     let original_psbt = coordinator
-        .get_psbt(tonic::Request::new(botanix_btc_server_client::MakeTxRequest {
-            signing_session_id: signing_session_id.to_vec(),
-            checkpoint_block_hash: checkpoint[..].to_vec(),
-        }))
+        .get_psbt(tonic::Request::new(
+            botanix_btc_server_client::MakeTxRequest {
+                signing_session_id: signing_session_id.to_vec(),
+                checkpoint_block_hash: checkpoint[..].to_vec(),
+            },
+        ))
         .await
         .map_err(Error::Request)?
         .into_inner()
@@ -90,9 +95,11 @@ pub async fn do_signing(
     // Signing Round 2
     // Get signing package
     let to_sign_package = coordinator
-        .get_to_sign_package(tonic::Request::new(botanix_btc_server_client::ToSignRequest {
-            signing_session_id: signing_session_id.to_vec(),
-        }))
+        .get_to_sign_package(tonic::Request::new(
+            botanix_btc_server_client::ToSignRequest {
+                signing_session_id: signing_session_id.to_vec(),
+            },
+        ))
         .await
         .map_err(Error::Request)?
         .into_inner();
@@ -101,10 +108,12 @@ pub async fn do_signing(
     let mut round2_signing_commitments: Vec<SigningPackage> = vec![];
     for (_index, client) in clients.iter_mut().enumerate() {
         let c_signing2 = client
-            .get_round2_signing_package(tonic::Request::new(SigningPackageRequest {
-                psbt: to_sign_package.clone().psbt,
-                signing_session_id: signing_session_id.to_vec(),
-            }))
+            .get_round2_signing_package(tonic::Request::new(
+                SigningPackageRequest {
+                    psbt: to_sign_package.clone().psbt,
+                    signing_session_id: signing_session_id.to_vec(),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
@@ -120,9 +129,11 @@ pub async fn do_signing(
     }
 
     let finalized = coordinator
-        .finalize_signing(tonic::Request::new(botanix_btc_server_client::FinalizeSigningRequest {
-            signing_session_id: signing_session_id.to_vec(),
-        }))
+        .finalize_signing(tonic::Request::new(
+            botanix_btc_server_client::FinalizeSigningRequest {
+                signing_session_id: signing_session_id.to_vec(),
+            },
+        ))
         .await?
         .into_inner();
 
@@ -172,9 +183,14 @@ pub async fn test_many_inputs_signing(
 
     // Getting public key should fail for all clients
     for client in &mut clients {
-        let pk = client.get_public_key(tonic::Request::new(botanix_btc_server_client::Empty {})).await;
+        let pk = client
+            .get_public_key(tonic::Request::new(
+                botanix_btc_server_client::Empty {},
+            ))
+            .await;
         assert!(pk.is_err());
-        let err = pk.err().ok_or_else(|| anyhow::anyhow!("missing key package"))?;
+        let err =
+            pk.err().ok_or_else(|| anyhow::anyhow!("missing key package"))?;
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
         assert!(err.message().contains("Missing key package"));
     }
@@ -186,16 +202,21 @@ pub async fn test_many_inputs_signing(
     for _ in 0..NUM_PEGINS {
         let eth_address = ethers::core::types::Address::random();
         // Lets get the gateway address for this eth address
-        let mut client =
-            clients.get(0).cloned().ok_or_else(|| anyhow::anyhow!("client not found"))?;
+        let mut client = clients
+            .get(0)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("client not found"))?;
         let res = client
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address = Address::from_str(&res.gateway_address)?.assume_checked();
+        let btc_address =
+            Address::from_str(&res.gateway_address)?.assume_checked();
         let txid = bitcoind.send_to_address(
             &btc_address,
             amount_to_send,
@@ -247,7 +268,9 @@ pub async fn test_many_inputs_signing(
                 checkpoint_block_hash.clone(),
                 pegin.btc_address.clone(),
                 hex_encode(pegin.eth_address),
-                txid_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid txid"))?,
+                txid_bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("invalid txid"))?,
                 ot.vout,
                 pegin.amount.to_sat(),
             )
@@ -259,8 +282,8 @@ pub async fn test_many_inputs_signing(
     let mut rand = StdRng::from_entropy();
     let mut pegout_id_bytes = [0u8; 36];
     rand.fill_bytes(&mut pegout_id_bytes);
-    let pegout_id =
-        PegoutId::from_bytes(&pegout_id_bytes).map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
+    let pegout_id = PegoutId::from_bytes(&pegout_id_bytes)
+        .map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
 
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let sk = bitcoin::PrivateKey::generate(bitcoin::Network::Regtest);
@@ -295,7 +318,9 @@ pub async fn test_many_inputs_signing(
     bitcoind.generate_to_address(1, &address).expect("generate regtest block");
 
     // Lets make sure it was broadcasted
-    let tx_res = bitcoind.get_raw_transaction(&final_tx.compute_txid(), None).expect("valid tx");
+    let tx_res = bitcoind
+        .get_raw_transaction(&final_tx.compute_txid(), None)
+        .expect("valid tx");
     it_info_print!("final tx_res: ", tx_res);
     assert_eq!(tx_res.compute_txid(), final_tx.compute_txid());
 
@@ -342,17 +367,24 @@ pub async fn test_many_inputs_signing(
 
     let final_tx = do_signing(&mut clients, &bitcoind, &[2u8; 32]).await?;
     bitcoind.generate_to_address(1, &address).expect("generate regtest block");
-    let tx_res = bitcoind.get_raw_transaction(&final_tx.compute_txid(), None).expect("valid tx");
+    let tx_res = bitcoind
+        .get_raw_transaction(&final_tx.compute_txid(), None)
+        .expect("valid tx");
 
     assert_eq!(tx_res.compute_txid(), final_tx.compute_txid());
     assert!(final_tx.input.len() > 1);
     // 5 pegout outputs + 1 change output
     assert_eq!(final_tx.output.len(), 6);
     // last output is the change output
-    let change_address =
-        bitcoin::Address::from_script(&final_tx.output[5].script_pubkey, bitcoin::Network::Regtest)
-            .unwrap();
-    assert_eq!(change_address.address_type().unwrap(), bitcoin::AddressType::P2tr);
+    let change_address = bitcoin::Address::from_script(
+        &final_tx.output[5].script_pubkey,
+        bitcoin::Network::Regtest,
+    )
+    .unwrap();
+    assert_eq!(
+        change_address.address_type().unwrap(),
+        bitcoin::AddressType::P2tr
+    );
 
     let utxos = clients[coordinator_index]
         .get_all_utxos(tonic::Request::new(botanix_btc_server_client::Empty {}))
@@ -371,11 +403,13 @@ pub async fn test_many_inputs_signing(
     // sync tx index to checkpoint block hash
     for c in clients.iter_mut() {
         match c
-            .new_consensus_checkpoint(botanix_btc_server_client::ConsensusCheckpointRequest {
-                checkpoint_block_hash: checkpoint_block_hash.clone(),
-                pegins: vec![],
-                pending_pegouts: vec![],
-            })
+            .new_consensus_checkpoint(
+                botanix_btc_server_client::ConsensusCheckpointRequest {
+                    checkpoint_block_hash: checkpoint_block_hash.clone(),
+                    pegins: vec![],
+                    pending_pegouts: vec![],
+                },
+            )
             .await
         {
             Ok(_) => {}
@@ -402,7 +436,10 @@ pub async fn test_many_inputs_signing(
     let change_ots = no_eth_address_tweak_utxos
         .iter()
         .map(|u| {
-            let outpoint = u.outpoint.clone().ok_or_else(|| anyhow::anyhow!("invalid outpoint"))?;
+            let outpoint = u
+                .outpoint
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("invalid outpoint"))?;
             let ot = bitcoin::OutPoint {
                 txid: bitcoin::Txid::from_slice(&outpoint.txid)
                     .map_err(|_| anyhow::anyhow!("invalid txid"))?,
@@ -448,12 +485,15 @@ pub async fn test_many_inputs_signing(
     bitcoind.generate_to_address(1, &address).expect("generate regtest block");
     it_info_print!("final_tx: {:?}", final_tx);
 
-    let tx_res = bitcoind.get_raw_transaction(&final_tx.compute_txid(), None)?;
-    let tx_ots = final_tx.input.iter().map(|i| i.previous_output).collect::<Vec<_>>();
+    let tx_res =
+        bitcoind.get_raw_transaction(&final_tx.compute_txid(), None)?;
+    let tx_ots =
+        final_tx.input.iter().map(|i| i.previous_output).collect::<Vec<_>>();
     assert_eq!(tx_res.compute_txid(), final_tx.compute_txid());
 
     // Should contain at least one of the change utxos
-    let found_match = change_ots.iter().any(|change_ot| tx_ots.contains(change_ot));
+    let found_match =
+        change_ots.iter().any(|change_ot| tx_ots.contains(change_ot));
     assert!(found_match);
 
     Ok(())

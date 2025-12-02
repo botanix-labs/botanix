@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use alloy_primitives::Address;
 use bitcoin::{hashes::Hash, merkle_tree::PartialMerkleTree, Amount};
 use bitcoincore_rpc::RpcApi;
 use botanix_authority_peg::{
@@ -11,15 +12,16 @@ use botanix_authority_peg::{
     peg_contract::{PeginData, PeginMeta, PeginMetaV0, PegoutData},
     utils::AmountExt,
 };
+use botanix_btc_server_client::{
+    BtcServerClient, GetFinalizedPegoutIdsRequest,
+};
 use botanix_chainspec::constants::BOTANIX_TESTNET;
-use botanix_btc_server_client::{BtcServerClient, GetFinalizedPegoutIdsRequest};
 use ethers::{
     prelude::Provider,
     providers::{Http, Middleware},
     types::NameOrAddress,
 };
 use futures::StreamExt;
-use reth_primitives::Address;
 use tonic::transport::Channel;
 
 use crate::{
@@ -37,25 +39,26 @@ use crate::{
 pub async fn get_finalized_pegout_ids_from_peers(
     mut btc_servers: Vec<BtcServerClient<Channel>>,
 ) -> HashMap<usize, HashSet<Vec<u8>>> {
-    let mut peers_finalized_pegout_ids: HashMap<usize, HashSet<Vec<u8>>> = HashMap::new();
+    let mut peers_finalized_pegout_ids: HashMap<usize, HashSet<Vec<u8>>> =
+        HashMap::new();
     for (index, db_provider) in btc_servers.iter_mut().enumerate() {
         let mut pegout_ids_stream = db_provider
-            .get_finalized_pegout_ids(GetFinalizedPegoutIdsRequest { chunk_size: 10 })
+            .get_finalized_pegout_ids(GetFinalizedPegoutIdsRequest {
+                chunk_size: 10,
+            })
             .await
             .unwrap()
             .into_inner();
         while let Some(pegout_ids_chunk) = pegout_ids_stream.next().await {
             match pegout_ids_chunk {
                 Ok(pegout_ids_chunk) => {
-                    let _ = peers_finalized_pegout_ids
-                        .entry(index)
-                        .or_insert_with(HashSet::new)
-                        .extend(
-                            pegout_ids_chunk
-                                .data
-                                .into_iter()
-                                .map(|finalized_pegout_id| finalized_pegout_id.id),
-                        );
+                    let _ =
+                        peers_finalized_pegout_ids
+                            .entry(index)
+                            .or_insert_with(HashSet::new)
+                            .extend(pegout_ids_chunk.data.into_iter().map(
+                                |finalized_pegout_id| finalized_pegout_id.id,
+                            ));
                 }
                 Err(_) => {
                     continue;
@@ -83,7 +86,8 @@ pub async fn test_wallet_sync_dynamic(
     // Get finalized pegouts list from all peers again
     // Confirm the finalized pegouts list is the same as before
 
-    let pegin_conf_depth = BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
+    let pegin_conf_depth =
+        BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
     it_info_print!("Pegin Confirmation Depth", pegin_conf_depth);
 
     // Set up regtest connection
@@ -97,13 +101,22 @@ pub async fn test_wallet_sync_dynamic(
         .as_ref()
         .expect("test federation member configurations")
         .clone();
-    let mut rx = suite.local_context.poa_notification.as_ref().expect("poa notifs").subscribe();
+    let mut rx = suite
+        .local_context
+        .poa_notification
+        .as_ref()
+        .expect("poa notifs")
+        .subscribe();
 
     // generate mint contract test instances
     let mut mint_contract_instances = Vec::new();
     for (index, _) in test_fed_members.iter() {
-        let botanix_eth_client =
-            test_fed_members.get(index).cloned().unwrap().botanix_eth_client.clone();
+        let botanix_eth_client = test_fed_members
+            .get(index)
+            .cloned()
+            .unwrap()
+            .botanix_eth_client
+            .clone();
         mint_contract_instances.push(botanix_eth_client);
     }
 
@@ -118,8 +131,12 @@ pub async fn test_wallet_sync_dynamic(
     .expect("could not instantiate HTTP Provider");
 
     // get gateway address
-    let gateway_address_response =
-        get_gateway_address_with_retry(provider.clone(), eth_destination.0.into(), 3).await?;
+    let gateway_address_response = get_gateway_address_with_retry(
+        provider.clone(),
+        eth_destination.0.into(),
+        3,
+    )
+    .await?;
     it_info_print!("Gateway Address Response", gateway_address_response);
 
     // print balance
@@ -127,23 +144,38 @@ pub async fn test_wallet_sync_dynamic(
     it_info_print!("Bitcoin balance", balance);
 
     // Send some bitcoin to that gateway address
-    let btc_address = bitcoin::Address::from_str(gateway_address_response.gateway_address.as_str())
-        .expect("valid btc_address")
-        .assume_checked();
+    let btc_address = bitcoin::Address::from_str(
+        gateway_address_response.gateway_address.as_str(),
+    )
+    .expect("valid btc_address")
+    .assume_checked();
     let pegin_txid = bitcoind_rpc
-        .send_to_address(&btc_address, Amount::ONE_BTC, None, None, Some(true), None, Some(1), None)
+        .send_to_address(
+            &btc_address,
+            Amount::ONE_BTC,
+            None,
+            None,
+            Some(true),
+            None,
+            Some(1),
+            None,
+        )
         .expect("valid send");
     // Generate some block to confirm it
     generate_blocks(&bitcoind_rpc, 1 + pegin_conf_depth).await;
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // retrieve the transaction
-    let tx_res = bitcoind_rpc.get_transaction(&pegin_txid, None).expect("valid tx");
+    let tx_res =
+        bitcoind_rpc.get_transaction(&pegin_txid, None).expect("valid tx");
     assert!(tx_res.info.confirmations > 1);
     let pegin_tx = tx_res.transaction().expect("valid tx");
     it_info_print!("Bitcoin pegin Tx", pegin_tx);
     it_info_print!("Gateway Data", gateway_address_response);
-    it_info_print!("Gateway Data Pub key", gateway_address_response.aggregate_public_key);
+    it_info_print!(
+        "Gateway Data Pub key",
+        gateway_address_response.aggregate_public_key
+    );
 
     let eth_account = Address::from_slice(eth_destination.as_bytes());
     let (vout, pegin_output) = pegin_tx
@@ -160,7 +192,8 @@ pub async fn test_wallet_sync_dynamic(
     let conf_hash = tx_res.info.blockhash.expect("pegin confirmed");
     let tip = bitcoind_rpc.get_best_block_hash().unwrap();
     it_info_print!("Bitcoin Chain Tip", tip);
-    let tip_header = bitcoind_rpc.get_block_header(&tip).expect("valid block header");
+    let tip_header =
+        bitcoind_rpc.get_block_header(&tip).expect("valid block header");
     // We will collect all the headers all the way up to the tip which is not needed, but allowed.
     // In theory, we only need to collect headers from the block our pegin is in, to the finalized
     // block (the one in the mainchain commitment).
@@ -169,7 +202,9 @@ pub async fn test_wallet_sync_dynamic(
     let mut stopgap = 200; // just to make sure we don't infinite loop until genesis
     loop {
         stopgap -= 1;
-        if stopgap == 0 || cursor.prev_blockhash == bitcoin::BlockHash::all_zeros() {
+        if stopgap == 0
+            || cursor.prev_blockhash == bitcoin::BlockHash::all_zeros()
+        {
             panic!("confirmation block not found...");
         }
 
@@ -182,9 +217,11 @@ pub async fn test_wallet_sync_dynamic(
     headers.reverse();
     it_info_print!("Number of pegin_headers:", headers.len());
 
-    let conf_block_info = bitcoind_rpc.get_block_info(&conf_hash).expect("valid txids");
+    let conf_block_info =
+        bitcoind_rpc.get_block_info(&conf_hash).expect("valid txids");
     it_info_print!("Block info", conf_block_info);
-    let pmt = PartialMerkleTree::from_txids(&conf_block_info.tx, &[false, true]);
+    let pmt =
+        PartialMerkleTree::from_txids(&conf_block_info.tx, &[false, true]);
 
     // create pegin meta
     let bitcoin_block_height = conf_block_info.height;
@@ -217,8 +254,10 @@ pub async fn test_wallet_sync_dynamic(
     pegin_data
         .validate(
             &checkpoint,
-            &secp256k1::PublicKey::from_str(gateway_address_response.aggregate_public_key.as_str())
-                .unwrap(),
+            &secp256k1::PublicKey::from_str(
+                gateway_address_response.aggregate_public_key.as_str(),
+            )
+            .unwrap(),
         )
         .expect("pegin data should be valid!");
     it_info_print!("Pegindata successfully validated");
@@ -229,13 +268,17 @@ pub async fn test_wallet_sync_dynamic(
         meta.block_headers().iter().map(|h| h.block_hash()).collect::<Vec<_>>()
     );
     let serialized_pegin_meta = meta.serialize().unwrap();
-    it_info_print!("Serialized pegin meta: ", hex::encode(serialized_pegin_meta.clone()));
+    it_info_print!(
+        "Serialized pegin meta: ",
+        hex::encode(serialized_pegin_meta.clone())
+    );
     let mint_contract = mint_contract_instances
         .first()
         .cloned()
         .unwrap()
         .expect("Botanix Client must be initialized");
-    let metadata = ethers::core::types::Bytes::from(serialized_pegin_meta.clone());
+    let metadata =
+        ethers::core::types::Bytes::from(serialized_pegin_meta.clone());
     let tx_receipt = mint_contract
         .mint(
             eth_destination.clone(),
@@ -254,19 +297,27 @@ pub async fn test_wallet_sync_dynamic(
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // make sure we have received the botanix btc on botanix
-    let eth_address = NameOrAddress::from_str(&eth_account.to_string()).unwrap();
-    let eth_address_balance = provider.get_balance(eth_address, None).await.unwrap();
+    let eth_address =
+        NameOrAddress::from_str(&eth_account.to_string()).unwrap();
+    let eth_address_balance =
+        provider.get_balance(eth_address, None).await.unwrap();
     assert!(!eth_address_balance.is_zero());
 
     // Generate and send pegout tx
     // bitcoin address
-    let pegout_destination =
-        ethers::core::types::Bytes::from(btc_address.to_string().as_bytes().to_vec());
+    let pegout_destination = ethers::core::types::Bytes::from(
+        btc_address.to_string().as_bytes().to_vec(),
+    );
     // set pegout version
-    let pegout_data = ethers::core::types::Bytes::from(vec![PegoutData::version()]);
+    let pegout_data =
+        ethers::core::types::Bytes::from(vec![PegoutData::version()]);
     let pegout_amount = Amount::from_btc(0.4).unwrap();
     let tx_receipt = mint_contract
-        .burn(pegout_destination.clone(), pegout_data.clone(), pegout_amount.to_wei())
+        .burn(
+            pegout_destination.clone(),
+            pegout_data.clone(),
+            pegout_amount.to_wei(),
+        )
         .await
         .unwrap();
     it_info_print!("Pegout Tx Receipt: ", tx_receipt);
@@ -303,23 +354,33 @@ pub async fn test_wallet_sync_dynamic(
     // bring signer back up
     let test_fed_members = suite.local_context.poa_nodes.as_ref().unwrap();
     // now reconnect the peers of fed member 1
-    test_fed_members.get(&1).cloned().unwrap().send_test_signal(TestSignal::ReconnectAll());
+    test_fed_members
+        .get(&1)
+        .cloned()
+        .unwrap()
+        .send_test_signal(TestSignal::ReconnectAll());
 
     // wait for an epoch since this is when the pegout scheduler
     // determines if tracked txs are finalized
     await_epoch_block(&mut rx, BOTANIX_TESTNET.epoch_length).await;
 
     // get all finalized pegout ids before the poa epoch (before wallets sync)
-    let peers_finalized_pegout_ids_before = get_finalized_pegout_ids_from_peers(
-        suite.local_context.btc_server_clients.clone().unwrap(),
-    )
-    .await;
+    let peers_finalized_pegout_ids_before =
+        get_finalized_pegout_ids_from_peers(
+            suite.local_context.btc_server_clients.clone().unwrap(),
+        )
+        .await;
 
     // make sure we have all equal pegout ids before
     let first_peer_finalized_pegout_ids =
         peers_finalized_pegout_ids_before.get(&0).cloned().unwrap_or_default();
-    for (_peer_id, peer_finalized_pegout_ids) in peers_finalized_pegout_ids_before {
-        assert!(first_peer_finalized_pegout_ids.len() == peer_finalized_pegout_ids.len());
+    for (_peer_id, peer_finalized_pegout_ids) in
+        peers_finalized_pegout_ids_before
+    {
+        assert!(
+            first_peer_finalized_pegout_ids.len()
+                == peer_finalized_pegout_ids.len()
+        );
         assert!(first_peer_finalized_pegout_ids == peer_finalized_pegout_ids);
     }
 
@@ -328,13 +389,16 @@ pub async fn test_wallet_sync_dynamic(
     it_info_print!("Waiting for wallets to sync");
     loop {
         // get all finalized pegout ids after the poa epoch
-        let peers_finalized_pegout_ids_after = get_finalized_pegout_ids_from_peers(
-            suite.local_context.btc_server_clients.clone().unwrap(),
-        )
-        .await;
+        let peers_finalized_pegout_ids_after =
+            get_finalized_pegout_ids_from_peers(
+                suite.local_context.btc_server_clients.clone().unwrap(),
+            )
+            .await;
 
-        let first_peer_finalized_pegout_ids =
-            peers_finalized_pegout_ids_after.get(&0).cloned().unwrap_or_default();
+        let first_peer_finalized_pegout_ids = peers_finalized_pegout_ids_after
+            .get(&0)
+            .cloned()
+            .unwrap_or_default();
         // wait until wallets synced and finalized pegouts list is not empty
         if first_peer_finalized_pegout_ids.is_empty() {
             it_info_print!("finalized pegout ids empty");
@@ -343,11 +407,21 @@ pub async fn test_wallet_sync_dynamic(
             tokio::time::sleep(Duration::from_secs(10)).await;
             continue;
         }
-        it_info_print!("First peer finalized pegout ids", first_peer_finalized_pegout_ids);
+        it_info_print!(
+            "First peer finalized pegout ids",
+            first_peer_finalized_pegout_ids
+        );
         // assert that all peers have the same list
-        for (_peer_id, peer_finalized_pegout_ids) in peers_finalized_pegout_ids_after {
-            assert!(first_peer_finalized_pegout_ids.len() == peer_finalized_pegout_ids.len());
-            assert!(first_peer_finalized_pegout_ids == peer_finalized_pegout_ids);
+        for (_peer_id, peer_finalized_pegout_ids) in
+            peers_finalized_pegout_ids_after
+        {
+            assert!(
+                first_peer_finalized_pegout_ids.len()
+                    == peer_finalized_pegout_ids.len()
+            );
+            assert!(
+                first_peer_finalized_pegout_ids == peer_finalized_pegout_ids
+            );
         }
 
         break;

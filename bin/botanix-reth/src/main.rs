@@ -15,13 +15,6 @@ use botanix_cli_args::{
     chain::{get_chain_from_federation_config, BotanixNetwork},
     BotanixArgs,
 };
-use botanix_storage::BotanixProviderFactory;
-use botanix_utils::panic_hook::set_panic_hook;
-use clap::Parser;
-use eyre::Ok;
-use reth::cli::{Cli, Commands};
-use reth::providers::CanonStateSubscriptions;
-use reth::providers::DatabaseProviderFactory;
 use botanix_reth::{
     consensus::{
         comet_bft::abci::ABCIDriver,
@@ -51,6 +44,13 @@ use botanix_reth::{
         rpc::rpc::setup_and_run_rpc,
     },
 };
+use botanix_storage::BotanixProviderFactory;
+use botanix_utils::panic_hook::set_panic_hook;
+use clap::Parser;
+use eyre::Ok;
+use reth::cli::{Cli, Commands};
+use reth::providers::CanonStateSubscriptions;
+use reth::providers::DatabaseProviderFactory;
 use reth_db::DatabaseEnv;
 use reth_node_builder::RethTransactionPoolConfig;
 use reth_node_core::version::version_metadata;

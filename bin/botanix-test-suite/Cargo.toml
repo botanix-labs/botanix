@@ -16,6 +16,8 @@ ansi_term = "0.12.1"
 anyhow = "1.0.71"
 argh = "0.1.10"
 
+alloy-primitives = { workspace = true }
+
 # crates.io dependencies
 askama = { workspace = true }
 
@@ -34,18 +36,19 @@ botanix-authority-peg = { workspace = true, features = ["secp256k1"] }
 ciborium = "0.2.1"
 
 # Botanix
+botanix-btc-server = { workspace = true }
+botanix-btc-server-client = { workspace = true }
 botanix-btc-wallet = { workspace = true }
 botanix-chainspec = { workspace = true }
 botanix-cli-args = { workspace = true }
-botanix-reth = { workspace = true }
 botanix-comet-bft-rpc = { workspace = true }
 botanix-configs = { workspace = true }
+botanix-consensus-common = { workspace = true }
 botanix-data-parser = { workspace = true }
-botanix-storage = { workspace = true }
-botanix-btc-server = { workspace = true }
-botanix-btc-server-client = { workspace = true }
 botanix-pegin-recovery = { workspace = true }
 botanix-pegin-recovery-client = { workspace = true }
+botanix-reth = { workspace = true }
+botanix-storage = { workspace = true }
 
 # other dependencies
 bytes = "1.4.0"
@@ -76,13 +79,11 @@ reth-network-peers = { workspace = true }
 reth-node-core = { workspace = true }
 reth-primitives = { workspace = true, features = ["secp256k1"] }
 reth-provider = { workspace = true }
+reth-prune-types = { workspace = true }
 reth-tracing = { workspace = true }
 
 ## Crypto
-secp256k1 = { workspace = true, features = [
-    "global-context",
-    "recovery",
-] }
+secp256k1 = { workspace = true, features = ["global-context", "recovery"] }
 serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.96"
 strum = { version = "0.25.0", features = ["derive"] }

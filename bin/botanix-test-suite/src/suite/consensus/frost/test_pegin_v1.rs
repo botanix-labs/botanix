@@ -1,5 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
+use alloy_primitives::{Address, FixedBytes};
 use bitcoin::{merkle_tree::PartialMerkleTree, Amount};
 use bitcoincore_rpc::RpcApi;
 use botanix_authority_peg::{
@@ -13,7 +14,6 @@ use ethers::{
     providers::{Http, Middleware},
     types::NameOrAddress,
 };
-use reth_primitives::{revm_primitives::FixedBytes, Address};
 use serde_json::json;
 
 use crate::{
@@ -28,7 +28,8 @@ use crate::{
 pub async fn test_pegin_v1(
     suite: &ConsensusIntegrationTestSuite,
 ) -> anyhow::Result<(), super::error::Error> {
-    let pegin_conf_depth = BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
+    let pegin_conf_depth =
+        BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
     it_info_print!("Pegin Confirmation Depth", pegin_conf_depth);
 
     // Set up regtest connection
@@ -42,13 +43,22 @@ pub async fn test_pegin_v1(
         .as_ref()
         .expect("test federation member configurations")
         .clone();
-    let mut rx = suite.local_context.poa_notification.as_ref().expect("poa notifs").subscribe();
+    let mut rx = suite
+        .local_context
+        .poa_notification
+        .as_ref()
+        .expect("poa notifs")
+        .subscribe();
 
     // generate mint contract test instances
     let mut clients = Vec::new();
     for (index, _) in test_fed_members.iter() {
-        let botanix_eth_client =
-            test_fed_members.get(index).cloned().unwrap().botanix_eth_client.clone();
+        let botanix_eth_client = test_fed_members
+            .get(index)
+            .cloned()
+            .unwrap()
+            .botanix_eth_client
+            .clone();
         clients.push(botanix_eth_client);
     }
 
@@ -63,8 +73,12 @@ pub async fn test_pegin_v1(
     .expect("could not instantiate HTTP Provider");
 
     // get gateway address
-    let gateway_address_response =
-        get_gateway_address_with_retry(provider.clone(), eth_destination.0.into(), 3).await?;
+    let gateway_address_response = get_gateway_address_with_retry(
+        provider.clone(),
+        eth_destination.0.into(),
+        3,
+    )
+    .await?;
     it_info_print!("Gateway Address Response", gateway_address_response);
 
     // print balance
@@ -72,23 +86,38 @@ pub async fn test_pegin_v1(
     it_info_print!("Bitcoin balance", balance);
 
     // Send some bitcoin to that gateway address
-    let btc_address = bitcoin::Address::from_str(gateway_address_response.gateway_address.as_str())
-        .expect("valid btc_address")
-        .assume_checked();
+    let btc_address = bitcoin::Address::from_str(
+        gateway_address_response.gateway_address.as_str(),
+    )
+    .expect("valid btc_address")
+    .assume_checked();
     let pegin_txid = bitcoind_rpc
-        .send_to_address(&btc_address, Amount::ONE_BTC, None, None, Some(true), None, Some(1), None)
+        .send_to_address(
+            &btc_address,
+            Amount::ONE_BTC,
+            None,
+            None,
+            Some(true),
+            None,
+            Some(1),
+            None,
+        )
         .expect("valid send");
     // Generate some blocks to confirm it
     generate_blocks(&bitcoind_rpc, 1 + pegin_conf_depth).await;
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // retrieve the transaction
-    let tx_res = bitcoind_rpc.get_transaction(&pegin_txid, None).expect("valid tx");
+    let tx_res =
+        bitcoind_rpc.get_transaction(&pegin_txid, None).expect("valid tx");
     assert!(tx_res.info.confirmations > 1);
     let pegin_tx = tx_res.transaction().expect("valid tx");
     it_info_print!("Bitcoin pegin Tx", pegin_tx);
     it_info_print!("Gateway Data", gateway_address_response);
-    it_info_print!("Gateway Data Pub key", gateway_address_response.aggregate_public_key);
+    it_info_print!(
+        "Gateway Data Pub key",
+        gateway_address_response.aggregate_public_key
+    );
 
     let eth_account = Address::from_slice(eth_destination.as_bytes());
     let (vout, pegin_output) = pegin_tx
@@ -106,7 +135,8 @@ pub async fn test_pegin_v1(
     let mut btc_checkpoint_hash;
     let mut checkpoint_block_height;
     let conf_hash = tx_res.info.blockhash.expect("pegin confirmed");
-    let conf_block_info = bitcoind_rpc.get_block_info(&conf_hash).expect("valid block info");
+    let conf_block_info =
+        bitcoind_rpc.get_block_info(&conf_hash).expect("valid block info");
     let bitcoin_block_height = conf_block_info.height;
     it_info_print!("Pegin confirmed at Bitcoin height", bitcoin_block_height);
 
@@ -119,12 +149,17 @@ pub async fn test_pegin_v1(
                 vec![json!("latest"), json!(false), json!(true)],
             )
             .await;
-        latest_block_with_edh = latest_block_result.expect("valid block with edh");
-        let btc_checkpoint = latest_block_with_edh.extra_data_header.bitcoin_block_hash;
+        latest_block_with_edh =
+            latest_block_result.expect("valid block with edh");
+        let btc_checkpoint =
+            latest_block_with_edh.extra_data_header.bitcoin_block_hash;
         btc_checkpoint_hash =
-            bitcoin::BlockHash::from_str(btc_checkpoint.as_str()).expect("valid hash");
-        checkpoint_block_height =
-            bitcoind_rpc.get_block_info(&btc_checkpoint_hash).expect("valid block info").height;
+            bitcoin::BlockHash::from_str(btc_checkpoint.as_str())
+                .expect("valid hash");
+        checkpoint_block_height = bitcoind_rpc
+            .get_block_info(&btc_checkpoint_hash)
+            .expect("valid block info")
+            .height;
 
         it_info_print!("L2 checkpoint height", checkpoint_block_height);
 
@@ -148,12 +183,14 @@ pub async fn test_pegin_v1(
     it_info_print!("L2 ref_block_hash:", latest_block_hash);
 
     // get the block hash of the block with the confirmed pegin tx
-    let checkpoint_header =
-        bitcoind_rpc.get_block_header(&btc_checkpoint_hash).expect("valid header");
+    let checkpoint_header = bitcoind_rpc
+        .get_block_header(&btc_checkpoint_hash)
+        .expect("valid header");
 
     it_info_print!("Block info", conf_block_info);
 
-    let pmt = PartialMerkleTree::from_txids(&conf_block_info.tx, &[false, true]);
+    let pmt =
+        PartialMerkleTree::from_txids(&conf_block_info.tx, &[false, true]);
 
     // create pegin meta
     // Ensure the pegin confirmation block is not newer than the BTC checkpoint.
@@ -176,8 +213,9 @@ pub async fn test_pegin_v1(
         let log_msg_fetch = format!("Fetching header for block hash (current_block_iter_hash): {} (iteration {} - effective height {})", current_block_iter_hash, i, effective_height);
         it_info_print!(&log_msg_fetch);
 
-        let header_to_add =
-            bitcoind_rpc.get_block_header(&current_block_iter_hash).expect(&format!(
+        let header_to_add = bitcoind_rpc
+            .get_block_header(&current_block_iter_hash)
+            .expect(&format!(
                 "Failed to get block header for hash {} at effective height {}",
                 current_block_iter_hash, effective_height
             ));
@@ -191,8 +229,9 @@ pub async fn test_pegin_v1(
 
         // Verify hash-chain continuity starting from the second iteration
         if i > 0 {
-            let last_header =
-                bitcoin_headers_chain.last().expect("bitcoin_headers_chain should not be empty");
+            let last_header = bitcoin_headers_chain
+                .last()
+                .expect("bitcoin_headers_chain should not be empty");
             assert_eq!(
                 header_to_add.prev_blockhash,
                 last_header.block_hash(),
@@ -210,7 +249,10 @@ pub async fn test_pegin_v1(
             let next_block_height = effective_height + 1;
             current_block_iter_hash = bitcoind_rpc
                 .get_block_hash(next_block_height as u64)
-                .expect(&format!("Failed to get block hash for height {}", next_block_height));
+                .expect(&format!(
+                    "Failed to get block hash for height {}",
+                    next_block_height
+                ));
         } else {
             // This was the last header fetched, it should correspond to the checkpoint block
             assert_eq!(
@@ -221,8 +263,13 @@ pub async fn test_pegin_v1(
         }
     }
 
-    let final_chain_hashes_str =
-        format!("{:?}", bitcoin_headers_chain.iter().map(|h| h.block_hash()).collect::<Vec<_>>());
+    let final_chain_hashes_str = format!(
+        "{:?}",
+        bitcoin_headers_chain
+            .iter()
+            .map(|h| h.block_hash())
+            .collect::<Vec<_>>()
+    );
     let log_msg_final = format!(
         "Final bitcoin_headers_chain ({} headers): {}",
         bitcoin_headers_chain.len(),
@@ -233,7 +280,10 @@ pub async fn test_pegin_v1(
     let meta = PeginMeta::V1(PeginMetaV1 {
         inner: PeginMetaV0 {
             version: 1,
-            outpoint: bitcoin::OutPoint::new(pegin_tx.compute_txid(), vout as u32),
+            outpoint: bitcoin::OutPoint::new(
+                pegin_tx.compute_txid(),
+                vout as u32,
+            ),
             address: eth_account,
             aggregate_publickey: secp256k1::PublicKey::from_str(
                 gateway_address_response.aggregate_public_key.as_str(),
@@ -258,8 +308,10 @@ pub async fn test_pegin_v1(
     pegin_data
         .validate(
             &checkpoint,
-            &secp256k1::PublicKey::from_str(gateway_address_response.aggregate_public_key.as_str())
-                .unwrap(),
+            &secp256k1::PublicKey::from_str(
+                gateway_address_response.aggregate_public_key.as_str(),
+            )
+            .unwrap(),
         )
         .expect("pegin data should be valid!");
     it_info_print!("Pegindata successfully validated");
@@ -270,9 +322,17 @@ pub async fn test_pegin_v1(
         meta.block_headers().iter().map(|h| h.block_hash()).collect::<Vec<_>>()
     );
     let serialized_pegin_meta = meta.serialize().unwrap();
-    it_info_print!("Serialized pegin meta: ", hex::encode(serialized_pegin_meta.clone()));
-    let metadata = ethers::core::types::Bytes::from(serialized_pegin_meta.clone());
-    let client = clients.first().cloned().unwrap().expect("Botanix Client must be initialized");
+    it_info_print!(
+        "Serialized pegin meta: ",
+        hex::encode(serialized_pegin_meta.clone())
+    );
+    let metadata =
+        ethers::core::types::Bytes::from(serialized_pegin_meta.clone());
+    let client = clients
+        .first()
+        .cloned()
+        .unwrap()
+        .expect("Botanix Client must be initialized");
     let tx_receipt = client
         .mint(
             eth_destination.clone(),
@@ -291,8 +351,10 @@ pub async fn test_pegin_v1(
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // make sure we have received the botanix btc on botanix
-    let eth_address = NameOrAddress::from_str(&eth_account.to_string()).unwrap();
-    let eth_address_balance = provider.get_balance(eth_address, None).await.unwrap();
+    let eth_address =
+        NameOrAddress::from_str(&eth_account.to_string()).unwrap();
+    let eth_address_balance =
+        provider.get_balance(eth_address, None).await.unwrap();
     assert!(!eth_address_balance.is_zero());
 
     Ok(())

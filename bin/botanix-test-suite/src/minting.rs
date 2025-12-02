@@ -239,8 +239,13 @@ pub mod minting {
         }
     }
     impl<M> ::core::fmt::Debug for Minting<M> {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            f.debug_tuple(::core::stringify!(Minting)).field(&self.address()).finish()
+        fn fmt(
+            &self,
+            f: &mut ::core::fmt::Formatter<'_>,
+        ) -> ::core::fmt::Result {
+            f.debug_tuple(::core::stringify!(Minting))
+                .field(&self.address())
+                .finish()
         }
     }
     impl<M: ::ethers::providers::Middleware> Minting<M> {
@@ -250,7 +255,11 @@ pub mod minting {
             address: T,
             client: ::std::sync::Arc<M>,
         ) -> Self {
-            Self(::ethers::contract::Contract::new(address.into(), MINTING_ABI.clone(), client))
+            Self(::ethers::contract::Contract::new(
+                address.into(),
+                MINTING_ABI.clone(),
+                client,
+            ))
         }
         /// Constructs the general purpose `Deployer` instance based on the provided constructor
         /// arguments and sends it. Returns a new instance of a deployer that returns an
@@ -295,7 +304,10 @@ pub mod minting {
         ///Calls the contract's `SATS_TO_WEI` (0xa8de6d8c) function
         pub fn sats_to_wei(
             &self,
-        ) -> ::ethers::contract::builders::ContractCall<M, ::ethers::core::types::U256> {
+        ) -> ::ethers::contract::builders::ContractCall<
+            M,
+            ::ethers::core::types::U256,
+        > {
             self.0
                 .method_hash([168, 222, 109, 140], ())
                 .expect("method not found (this should never happen)")
@@ -322,7 +334,13 @@ pub mod minting {
             self.0
                 .method_hash(
                     [95, 224, 63, 69],
-                    (destination, amount, bitcoin_block_height, metadata, refund_address),
+                    (
+                        destination,
+                        amount,
+                        bitcoin_block_height,
+                        metadata,
+                        refund_address,
+                    ),
                 )
                 .expect("method not found (this should never happen)")
         }
@@ -338,29 +356,47 @@ pub mod minting {
         ///Gets the contract's `Burn` event
         pub fn burn_filter(
             &self,
-        ) -> ::ethers::contract::builders::Event<::std::sync::Arc<M>, M, BurnFilter> {
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            BurnFilter,
+        > {
             self.0.event()
         }
         ///Gets the contract's `Mint` event
         pub fn mint_filter(
             &self,
-        ) -> ::ethers::contract::builders::Event<::std::sync::Arc<M>, M, MintFilter> {
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            MintFilter,
+        > {
             self.0.event()
         }
         ///Gets the contract's `MintAmount` event
         pub fn mint_amount_filter(
             &self,
-        ) -> ::ethers::contract::builders::Event<::std::sync::Arc<M>, M, MintAmountFilter> {
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            MintAmountFilter,
+        > {
             self.0.event()
         }
         /// Returns an `Event` builder for all the events of this contract.
         pub fn events(
             &self,
-        ) -> ::ethers::contract::builders::Event<::std::sync::Arc<M>, M, MintingEvents> {
+        ) -> ::ethers::contract::builders::Event<
+            ::std::sync::Arc<M>,
+            M,
+            MintingEvents,
+        > {
             self.0.event_with_filter(::core::default::Default::default())
         }
     }
-    impl<M: ::ethers::providers::Middleware> From<::ethers::contract::Contract<M>> for Minting<M> {
+    impl<M: ::ethers::providers::Middleware>
+        From<::ethers::contract::Contract<M>> for Minting<M>
+    {
         fn from(contract: ::ethers::contract::Contract<M>) -> Self {
             Self::new(contract.address(), contract.client())
         }
@@ -455,11 +491,20 @@ pub mod minting {
         }
     }
     impl ::core::fmt::Display for MintingEvents {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        fn fmt(
+            &self,
+            f: &mut ::core::fmt::Formatter<'_>,
+        ) -> ::core::fmt::Result {
             match self {
-                Self::BurnFilter(element) => ::core::fmt::Display::fmt(element, f),
-                Self::MintFilter(element) => ::core::fmt::Display::fmt(element, f),
-                Self::MintAmountFilter(element) => ::core::fmt::Display::fmt(element, f),
+                Self::BurnFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::MintFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
+                Self::MintAmountFilter(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
             }
         }
     }
@@ -527,7 +572,10 @@ pub mod minting {
         Eq,
         Hash,
     )]
-    #[ethcall(name = "mint", abi = "mint(address,uint256,uint32,bytes,address)")]
+    #[ethcall(
+        name = "mint",
+        abi = "mint(address,uint256,uint32,bytes,address)"
+    )]
     pub struct MintCall {
         pub destination: ::ethers::core::types::Address,
         pub amount: ::ethers::core::types::U256,
@@ -549,7 +597,10 @@ pub mod minting {
         Eq,
         Hash,
     )]
-    #[ethcall(name = "peginBitcoinBlockHeight", abi = "peginBitcoinBlockHeight(address)")]
+    #[ethcall(
+        name = "peginBitcoinBlockHeight",
+        abi = "peginBitcoinBlockHeight(address)"
+    )]
     pub struct PeginBitcoinBlockHeightCall(pub ::ethers::core::types::Address);
     ///Container type for all of the contract's call
     #[derive(
@@ -571,15 +622,22 @@ pub mod minting {
     impl ::ethers::core::abi::AbiDecode for MintingCalls {
         fn decode(
             data: impl AsRef<[u8]>,
-        ) -> ::core::result::Result<Self, ::ethers::core::abi::AbiError> {
+        ) -> ::core::result::Result<Self, ::ethers::core::abi::AbiError>
+        {
             let data = data.as_ref();
-            if let Ok(decoded) = <SatsToWeiCall as ::ethers::core::abi::AbiDecode>::decode(data) {
+            if let Ok(decoded) =
+                <SatsToWeiCall as ::ethers::core::abi::AbiDecode>::decode(data)
+            {
                 return Ok(Self::SatsToWei(decoded));
             }
-            if let Ok(decoded) = <BurnCall as ::ethers::core::abi::AbiDecode>::decode(data) {
+            if let Ok(decoded) =
+                <BurnCall as ::ethers::core::abi::AbiDecode>::decode(data)
+            {
                 return Ok(Self::Burn(decoded));
             }
-            if let Ok(decoded) = <MintCall as ::ethers::core::abi::AbiDecode>::decode(data) {
+            if let Ok(decoded) =
+                <MintCall as ::ethers::core::abi::AbiDecode>::decode(data)
+            {
                 return Ok(Self::Mint(decoded));
             }
             if let Ok(decoded) =
@@ -593,9 +651,15 @@ pub mod minting {
     impl ::ethers::core::abi::AbiEncode for MintingCalls {
         fn encode(self) -> Vec<u8> {
             match self {
-                Self::SatsToWei(element) => ::ethers::core::abi::AbiEncode::encode(element),
-                Self::Burn(element) => ::ethers::core::abi::AbiEncode::encode(element),
-                Self::Mint(element) => ::ethers::core::abi::AbiEncode::encode(element),
+                Self::SatsToWei(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::Burn(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
+                Self::Mint(element) => {
+                    ::ethers::core::abi::AbiEncode::encode(element)
+                }
                 Self::PeginBitcoinBlockHeight(element) => {
                     ::ethers::core::abi::AbiEncode::encode(element)
                 }
@@ -603,12 +667,19 @@ pub mod minting {
         }
     }
     impl ::core::fmt::Display for MintingCalls {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        fn fmt(
+            &self,
+            f: &mut ::core::fmt::Formatter<'_>,
+        ) -> ::core::fmt::Result {
             match self {
-                Self::SatsToWei(element) => ::core::fmt::Display::fmt(element, f),
+                Self::SatsToWei(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
                 Self::Burn(element) => ::core::fmt::Display::fmt(element, f),
                 Self::Mint(element) => ::core::fmt::Display::fmt(element, f),
-                Self::PeginBitcoinBlockHeight(element) => ::core::fmt::Display::fmt(element, f),
+                Self::PeginBitcoinBlockHeight(element) => {
+                    ::core::fmt::Display::fmt(element, f)
+                }
             }
         }
     }

@@ -1,20 +1,22 @@
 use crate::{
     it_info_print,
     suite::consensus::{
-        common::{botanix_client::BotanixEthClient, events::GatewayAddressResponse},
+        common::{
+            botanix_client::BotanixEthClient, events::GatewayAddressResponse,
+        },
         frost::error::Error,
     },
 };
+use alloy_primitives::{Address as EthAddress, B256};
 use bitcoin::{consensus::Encodable, hash_types::BlockHash, Address, Amount};
 use bitcoincore_rpc::RpcApi;
 use botanix_chainspec::constants::BOTANIX_TESTNET;
+use botanix_consensus_common::utils::unix_timestamp;
 use btcserverlib::pegout_id::PegoutId;
 use ethers::{
     providers::{JsonRpcClient, Provider, ProviderError},
     types::H256,
 };
-use reth::consensus_common::utils::unix_timestamp;
-use reth_primitives::{Address as EthAddress, B256};
 use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -23,8 +25,12 @@ use tonic::transport::Channel;
 pub const MIN_BLOCKS_COINBASE_MATURE: u32 = 101;
 
 /// Generate `num_blocks` blocks on the given bitcoind instance
-pub async fn generate_blocks(bitcoind: &impl RpcApi, num_blocks: u32) -> Vec<BlockHash> {
-    let address = bitcoind.get_new_address(None, None).unwrap().assume_checked();
+pub async fn generate_blocks(
+    bitcoind: &impl RpcApi,
+    num_blocks: u32,
+) -> Vec<BlockHash> {
+    let address =
+        bitcoind.get_new_address(None, None).unwrap().assume_checked();
     let mut block_hashes = vec![];
     for _ in 0..num_blocks {
         // You could generate many blocks at once here but occasionally
@@ -61,11 +67,13 @@ pub async fn send_pegout_notification(
     }];
 
     client
-        .new_consensus_checkpoint(botanix_btc_server_client::ConsensusCheckpointRequest {
-            checkpoint_block_hash,
-            pegins: vec![],
-            pending_pegouts,
-        })
+        .new_consensus_checkpoint(
+            botanix_btc_server_client::ConsensusCheckpointRequest {
+                checkpoint_block_hash,
+                pegins: vec![],
+                pending_pegouts,
+            },
+        )
         .await
         .map_err(|e| {
             it_info_print!("Error: {:?}", e);
@@ -88,19 +96,26 @@ pub async fn send_pegin_notification(
     let utxos = [botanix_btc_server_client::Utxo {
         output: Some(botanix_btc_server_client::TxOut {
             value: Amount::from_sat(amount).to_sat(),
-            script_pubkey: Some(botanix_btc_server_client::ScriptBuf { script: script_bytes }),
+            script_pubkey: Some(botanix_btc_server_client::ScriptBuf {
+                script: script_bytes,
+            }),
         }),
-        outpoint: Some(botanix_btc_server_client::OutPoint { txid: txid.to_vec(), vout }),
+        outpoint: Some(botanix_btc_server_client::OutPoint {
+            txid: txid.to_vec(),
+            vout,
+        }),
         eth_address,
     }]
     .to_vec();
 
     client
-        .new_consensus_checkpoint(botanix_btc_server_client::ConsensusCheckpointRequest {
-            checkpoint_block_hash,
-            pegins: utxos,
-            pending_pegouts: vec![],
-        })
+        .new_consensus_checkpoint(
+            botanix_btc_server_client::ConsensusCheckpointRequest {
+                checkpoint_block_hash,
+                pegins: utxos,
+                pending_pegouts: vec![],
+            },
+        )
         .await
         .map_err(|e| {
             it_info_print!("Error: {:?}", e);
@@ -132,19 +147,26 @@ pub async fn send_pegins_notifications(
         utxos.push(botanix_btc_server_client::Utxo {
             output: Some(botanix_btc_server_client::TxOut {
                 value: Amount::from_sat(amount).to_sat(),
-                script_pubkey: Some(botanix_btc_server_client::ScriptBuf { script: script_bytes }),
+                script_pubkey: Some(botanix_btc_server_client::ScriptBuf {
+                    script: script_bytes,
+                }),
             }),
-            outpoint: Some(botanix_btc_server_client::OutPoint { txid: txid.to_vec(), vout: 1 }),
+            outpoint: Some(botanix_btc_server_client::OutPoint {
+                txid: txid.to_vec(),
+                vout: 1,
+            }),
             eth_address,
         });
     }
 
     client
-        .new_consensus_checkpoint(botanix_btc_server_client::ConsensusCheckpointRequest {
-            checkpoint_block_hash,
-            pegins: utxos,
-            pending_pegouts: vec![],
-        })
+        .new_consensus_checkpoint(
+            botanix_btc_server_client::ConsensusCheckpointRequest {
+                checkpoint_block_hash,
+                pegins: utxos,
+                pending_pegouts: vec![],
+            },
+        )
         .await
         .map_err(|e| {
             it_info_print!("Error: {:?}", e);
@@ -161,12 +183,18 @@ pub struct BlockChainInfoRes {
     pub blocks: u64,
 }
 
-pub fn get_checkpoint_block_hash(bitcoind: &impl RpcApi) -> Result<Vec<u8>, Error> {
-    let deep_tip = bitcoind.call::<BlockChainInfoRes>("getblockchaininfo", &[]).unwrap().blocks -
-        (BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth as u64);
+pub fn get_checkpoint_block_hash(
+    bitcoind: &impl RpcApi,
+) -> Result<Vec<u8>, Error> {
+    let deep_tip = bitcoind
+        .call::<BlockChainInfoRes>("getblockchaininfo", &[])
+        .unwrap()
+        .blocks
+        - (BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth as u64);
     let deep_block_hash = bitcoind.get_block_hash(deep_tip).unwrap();
     let mut checkpoint_block_hash = vec![];
-    if let Err(e) = deep_block_hash.consensus_encode(&mut checkpoint_block_hash) {
+    if let Err(e) = deep_block_hash.consensus_encode(&mut checkpoint_block_hash)
+    {
         it_info_print!("Error: {:?}", e);
         return Err(Error::ConsensusEncode);
     };
@@ -183,8 +211,10 @@ pub async fn get_gateway_address_with_retry<P>(
 where
     P: JsonRpcClient,
 {
-    let mut gateway_address_response: Result<GatewayAddressResponse, ProviderError> =
-        Err(ProviderError::UnsupportedRPC);
+    let mut gateway_address_response: Result<
+        GatewayAddressResponse,
+        ProviderError,
+    > = Err(ProviderError::UnsupportedRPC);
     for attempt in 0..max_retries {
         gateway_address_response = provider
             .request::<Vec<String>, GatewayAddressResponse>(
@@ -201,7 +231,8 @@ where
                 it_info_print!("gatewayaddress call failed: {:?}", e);
 
                 if attempt < max_retries - 1 {
-                    sleep(Duration::from_millis((500 * (attempt + 1)).into())).await;
+                    sleep(Duration::from_millis((500 * (attempt + 1)).into()))
+                        .await;
                 }
             }
         }
@@ -211,14 +242,16 @@ where
 }
 
 /// Waits until the genesis block exists.
-pub async fn wait_until_genesis_block_exists(client: &BotanixEthClient) -> Result<(), Error> {
+pub async fn wait_until_genesis_block_exists(
+    client: &BotanixEthClient,
+) -> Result<(), Error> {
     while client
         .get_latest_block()
         .await
         .map_err(|_| Error::LatestBlockDoesNotExist)?
         .number
-        .ok_or(Error::LatestBlockDoesNotExist)? ==
-        0.into()
+        .ok_or(Error::LatestBlockDoesNotExist)?
+        == 0.into()
     {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }

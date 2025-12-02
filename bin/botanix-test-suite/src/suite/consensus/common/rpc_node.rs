@@ -2,8 +2,8 @@ use crate::{
     it_error_print, it_info_print,
     suite::consensus::{
         common::{
-            is_port_free, poa_node::FederationMemberTestConfig, spawn_child_process, Scope,
-            MINTING_CONTRACT_BYTECODE,
+            is_port_free, poa_node::FederationMemberTestConfig,
+            spawn_child_process, Scope, MINTING_CONTRACT_BYTECODE,
         },
         GlobalContext,
     },
@@ -11,7 +11,7 @@ use crate::{
 use anyhow::Context;
 use botanix_configs::federation::{FedMemberPubKey, FederationTomlConfig};
 use reth_network_peers::pk2id;
-use reth_rpc_types::PeerId;
+use reth_network_peers::PeerId;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use std::{
     collections::BTreeMap,
@@ -26,7 +26,9 @@ use url::Url;
 use super::{
     botanix_client::BotanixEthClient,
     create_temp_working_directory, kill_process_at_port,
-    poa_node::{ABCI_PORT_BASE, DISCOVERY_PORT_BASE, RPC_PORT_BASE, WS_PORT_BASE},
+    poa_node::{
+        ABCI_PORT_BASE, DISCOVERY_PORT_BASE, RPC_PORT_BASE, WS_PORT_BASE,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -120,7 +122,10 @@ impl NonFederationMemberTestConfig {
         })
     }
 
-    pub fn insert_peers_list(&mut self, peers: Vec<FederationMemberTestConfig>) {
+    pub fn insert_peers_list(
+        &mut self,
+        peers: Vec<FederationMemberTestConfig>,
+    ) {
         self.peers_list = peers;
     }
 
@@ -130,11 +135,18 @@ impl NonFederationMemberTestConfig {
         edh_authorities_list: Arc<Vec<PublicKey>>,
         poa_nodes: Vec<FederationMemberTestConfig>,
     ) -> anyhow::Result<SpawnedRpcServerProcess> {
-        it_info_print!(format!("RPC Engine {} secret key = {:?}", self.index, &self.secret_key));
+        it_info_print!(format!(
+            "RPC Engine {} secret key = {:?}",
+            self.index, &self.secret_key
+        ));
         self.insert_peers_list(poa_nodes.clone());
 
-        let datadir = self.temp_path.to_str().context("created temp path is unparsable")?;
-        let discovery_secret_path = Path::new(&self.temp_path).join("discovery-secret");
+        let datadir = self
+            .temp_path
+            .to_str()
+            .context("created temp path is unparsable")?;
+        let discovery_secret_path =
+            Path::new(&self.temp_path).join("discovery-secret");
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -179,13 +191,14 @@ impl NonFederationMemberTestConfig {
             .context("Error writing federation config to path")?;
 
         // point to the relevant working directory
-        let mut working_directory =
-            std::env::current_dir().context("Error obtaining current directory")?;
+        let mut working_directory = std::env::current_dir()
+            .context("Error obtaining current directory")?;
         for _ in 0..2 {
             working_directory.pop();
         }
 
-        let federation_config_path = federation_config_path.display().to_string();
+        let federation_config_path =
+            federation_config_path.display().to_string();
         let rpc_port = self.rpc_port.to_string();
         let ws_port = self.ws_port.to_string();
         let bitcoind_url = self.bitcoind_url.to_string();
@@ -195,7 +208,7 @@ impl NonFederationMemberTestConfig {
         let abci_port = self.abci_port.to_string();
 
         // prepare run arguments
-        let command = "./target/debug/reth";
+        let command = "./target/debug/botanix-reth";
         let binary_abs_path = working_directory.join(Path::new(command));
         if !std::fs::exists(&binary_abs_path)? {
             return Err(anyhow::anyhow!(
@@ -204,7 +217,7 @@ impl NonFederationMemberTestConfig {
             ));
         }
         let args = vec![
-            "poa",
+            "botanix-reth",
             "-vvv",
             "--disable-discovery",
             "--is-testnet",
@@ -243,7 +256,9 @@ impl NonFederationMemberTestConfig {
             "--port",
             discovery_port.as_str(),
             "--p2p-secret-key",
-            discovery_secret_path.to_str().context("discovery secret path to exist")?,
+            discovery_secret_path
+                .to_str()
+                .context("discovery secret path to exist")?,
             "--abci-port",
             abci_port.as_str(),
             "--sync.enable_state_sync",
@@ -264,14 +279,17 @@ impl NonFederationMemberTestConfig {
     }
 
     pub fn await_initialization(&self) -> anyhow::Result<()> {
-        it_info_print!("Engine started non federation task with index: ", self.index);
+        it_info_print!(
+            "Engine started non federation task with index: ",
+            self.index
+        );
         let engine_index = self.index;
         let peers_list = self.peers_list.clone();
         it_info_print!("RPC Engine peers list", peers_list.len());
-        let botanix_eth_client = self
-            .botanix_eth_client
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Uninitialized botanix eth client"))?;
+        let botanix_eth_client =
+            self.botanix_eth_client.clone().ok_or_else(|| {
+                anyhow::anyhow!("Uninitialized botanix eth client")
+            })?;
 
         tokio::spawn(Box::pin(async move {
             // add the peers
@@ -281,19 +299,34 @@ impl NonFederationMemberTestConfig {
                         IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                         peer.discovery_port,
                     );
-                    let enode_url =
-                        format!("enode://{}@{}", peer.peer_id.to_string(), peer_socket.to_string());
-                    if let Err(_) = botanix_eth_client.add_trusted_peer(&enode_url).await {
-                        it_error_print!("RPC failed to add a peer", peer.peer_id);
+                    let enode_url = format!(
+                        "enode://{}@{}",
+                        peer.peer_id.to_string(),
+                        peer_socket.to_string()
+                    );
+                    if let Err(_) =
+                        botanix_eth_client.add_trusted_peer(&enode_url).await
+                    {
+                        it_error_print!(
+                            "RPC failed to add a peer",
+                            peer.peer_id
+                        );
                     } else {
                         it_info_print!("RPC added peer", peer.peer_id);
                     }
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                let all_peers = botanix_eth_client.get_peers_counts().await.unwrap_or_default();
+                let all_peers = botanix_eth_client
+                    .get_peers_counts()
+                    .await
+                    .unwrap_or_default();
                 it_info_print!(
                     "RPC Engine connected with peers",
-                    format!("index={}: peers_count={}", engine_index, all_peers.len())
+                    format!(
+                        "index={}: peers_count={}",
+                        engine_index,
+                        all_peers.len()
+                    )
                 );
                 if all_peers.len() == peers_list.len() {
                     break 'inner;
@@ -314,7 +347,8 @@ pub async fn create_rpc_nodes(
 )> {
     let secp = secp256k1::Secp256k1::new();
     let (tx, _rx) = tokio::sync::broadcast::channel::<Notifications>(100);
-    let mut rpc_members: BTreeMap<u16, NonFederationMemberTestConfig> = BTreeMap::new();
+    let mut rpc_members: BTreeMap<u16, NonFederationMemberTestConfig> =
+        BTreeMap::new();
 
     // create all rpc instances
     for member_index in 0..global_context.rpc_instances {
@@ -323,10 +357,14 @@ pub async fn create_rpc_nodes(
         let rpc_peer_id = pk2id(&pk);
 
         // Note: make sure we start port assigning after poa servers
-        let rpc_port = RPC_PORT_BASE + global_context.fed_instances + member_index;
-        let ws_port = WS_PORT_BASE + global_context.fed_instances + member_index;
-        let discovery_port = DISCOVERY_PORT_BASE + global_context.fed_instances + member_index;
-        let abci_port = ABCI_PORT_BASE + 1000 * (global_context.fed_instances + member_index);
+        let rpc_port =
+            RPC_PORT_BASE + global_context.fed_instances + member_index;
+        let ws_port =
+            WS_PORT_BASE + global_context.fed_instances + member_index;
+        let discovery_port =
+            DISCOVERY_PORT_BASE + global_context.fed_instances + member_index;
+        let abci_port = ABCI_PORT_BASE
+            + 1000 * (global_context.fed_instances + member_index);
 
         for port in [rpc_port, ws_port, discovery_port, abci_port] {
             if !is_port_free(port) {

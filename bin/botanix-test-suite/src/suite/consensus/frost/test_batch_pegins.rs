@@ -1,5 +1,7 @@
 use std::{str::FromStr, time::Duration};
 
+use alloy_primitives::Address;
+use alloy_primitives::B256;
 use bitcoin::{hashes::Hash, merkle_tree::PartialMerkleTree, Amount};
 use bitcoincore_rpc::RpcApi;
 use botanix_authority_peg::{
@@ -15,7 +17,6 @@ use ethers::{
     prelude::Provider,
     providers::{Http, PendingTransaction},
 };
-use reth_primitives::{Address, B256};
 
 use crate::{
     it_info_print,
@@ -42,7 +43,10 @@ fn create_pegin_meta(
     match version {
         PEGIN_META_VERSION_V0 => PeginMeta::V0(PeginMetaV0 {
             version: PEGIN_META_VERSION_V0,
-            outpoint: bitcoin::OutPoint::new(pegin_tx.compute_txid(), vout as u32),
+            outpoint: bitcoin::OutPoint::new(
+                pegin_tx.compute_txid(),
+                vout as u32,
+            ),
             address: eth_account,
             aggregate_publickey: agg_pk,
             tx: pegin_tx.clone(),
@@ -52,7 +56,10 @@ fn create_pegin_meta(
         PEGIN_META_VERSION_V1 => PeginMeta::V1(PeginMetaV1 {
             inner: PeginMetaV0 {
                 version: PEGIN_META_VERSION_V1,
-                outpoint: bitcoin::OutPoint::new(pegin_tx.compute_txid(), vout as u32),
+                outpoint: bitcoin::OutPoint::new(
+                    pegin_tx.compute_txid(),
+                    vout as u32,
+                ),
                 address: eth_account,
                 aggregate_publickey: agg_pk,
                 tx: pegin_tx.clone(),
@@ -70,7 +77,8 @@ fn create_pegin_meta(
 pub async fn batch_pegins(
     suite: &ConsensusIntegrationTestSuite,
 ) -> anyhow::Result<(), super::error::Error> {
-    let pegin_conf_depth = BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
+    let pegin_conf_depth =
+        BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
     it_info_print!("Pegin Confirmation Depth", pegin_conf_depth);
     let bitcoind_rpc = suite.global_context.bitcoind_rpc();
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -81,13 +89,22 @@ pub async fn batch_pegins(
         .as_ref()
         .expect("test federation member configurations")
         .clone();
-    let mut rx = suite.local_context.poa_notification.as_ref().expect("poa notifs").subscribe();
+    let mut rx = suite
+        .local_context
+        .poa_notification
+        .as_ref()
+        .expect("poa notifs")
+        .subscribe();
 
     // generate mint contract test instances
     let mut mint_contract_instances = Vec::new();
     for (index, _) in test_fed_members.iter() {
-        let botanix_eth_client =
-            test_fed_members.get(index).cloned().unwrap().botanix_eth_client.clone();
+        let botanix_eth_client = test_fed_members
+            .get(index)
+            .cloned()
+            .unwrap()
+            .botanix_eth_client
+            .clone();
         mint_contract_instances.push(botanix_eth_client);
     }
 
@@ -112,10 +129,11 @@ pub async fn batch_pegins(
             .expect("should get gateway address");
 
         // Send some bitcoin to that gateway address
-        let btc_address =
-            bitcoin::Address::from_str(gateway_address_response.gateway_address.as_str())
-                .expect("valid btc_address")
-                .assume_checked();
+        let btc_address = bitcoin::Address::from_str(
+            gateway_address_response.gateway_address.as_str(),
+        )
+        .expect("valid btc_address")
+        .assume_checked();
         let pegin_txid = bitcoind_rpc
             .send_to_address(
                 &btc_address,
@@ -128,9 +146,10 @@ pub async fn batch_pegins(
                 None,
             )
             .expect("valid send");
-        let agg_pk =
-            secp256k1::PublicKey::from_str(gateway_address_response.aggregate_public_key.as_str())
-                .expect("valid agg pk");
+        let agg_pk = secp256k1::PublicKey::from_str(
+            gateway_address_response.aggregate_public_key.as_str(),
+        )
+        .expect("valid agg pk");
 
         pegin_txsids.push((pegin_txid, eth_destination, btc_address, agg_pk));
     }
@@ -144,7 +163,8 @@ pub async fn batch_pegins(
     // let conf_block_hash =  TODO
     let tip = bitcoind_rpc.get_best_block_hash().unwrap();
     it_info_print!("Bitcoin Chain Tip", tip);
-    let tip_header = bitcoind_rpc.get_block_header(&tip).expect("valid block header");
+    let tip_header =
+        bitcoind_rpc.get_block_header(&tip).expect("valid block header");
 
     // Again assuming all pegin txs are in the same block
     let conf_hash = bitcoind_rpc
@@ -159,7 +179,9 @@ pub async fn batch_pegins(
     let mut stopgap = 200; // just to make sure we don't infinite loop until genesis
     loop {
         stopgap -= 1;
-        if stopgap == 0 || cursor.prev_blockhash == bitcoin::BlockHash::all_zeros() {
+        if stopgap == 0
+            || cursor.prev_blockhash == bitcoin::BlockHash::all_zeros()
+        {
             panic!("confirmation block not found...");
         }
 
@@ -185,7 +207,8 @@ pub async fn batch_pegins(
     let mut pegins = vec![];
     for (txid, eth_address, btc_address, agg_pk) in pegin_txsids {
         // retrieve the transaction
-        let tx_res = bitcoind_rpc.get_transaction(&txid, None).expect("valid tx");
+        let tx_res =
+            bitcoind_rpc.get_transaction(&txid, None).expect("valid tx");
         assert!(tx_res.info.confirmations > 1);
         let pegin_tx = tx_res.transaction().expect("valid tx");
         let eth_account = Address::from_slice(eth_address.as_bytes());
@@ -200,7 +223,8 @@ pub async fn batch_pegins(
 
         // first we need the block hash of the block with the conf'd pegin tx
         let conf_hash = tx_res.info.blockhash.expect("pegin confirmed");
-        let conf_block_info = bitcoind_rpc.get_block_info(&conf_hash).expect("valid txids");
+        let conf_block_info =
+            bitcoind_rpc.get_block_info(&conf_hash).expect("valid txids");
         it_info_print!("Block info", conf_block_info);
         let txids = conf_block_info.tx;
         it_info_print!("Txids", txids);
@@ -211,7 +235,8 @@ pub async fn batch_pegins(
 
         // create pegin meta
         let bitcoin_block_height = conf_block_info.height;
-        let version = if pegins.len() < NUM_PEGINS_PER_VERSION as usize { 0 } else { 1 };
+        let version =
+            if pegins.len() < NUM_PEGINS_PER_VERSION as usize { 0 } else { 1 };
         let reference_hash = if version == PEGIN_META_VERSION_V1 {
             Some(B256::from_slice(&checkpoint.0.block_hash().to_byte_array()))
         } else {
@@ -237,7 +262,9 @@ pub async fn batch_pegins(
             meta: vec![meta.clone()],
         };
 
-        pegin_data.validate(&checkpoint, &agg_pk).expect("pegin data should be valid!");
+        pegin_data
+            .validate(&checkpoint, &agg_pk)
+            .expect("pegin data should be valid!");
         pegins.push(pegin_data);
     }
 
@@ -254,10 +281,13 @@ pub async fn batch_pegins(
     for (_, pegin) in pegins.iter().enumerate() {
         // There is only one pegin that needs to be serialized
         let serialized_pegin_meta = pegin.meta[0].serialize().unwrap();
-        let metadata = ethers::core::types::Bytes::from(serialized_pegin_meta.clone());
+        let metadata =
+            ethers::core::types::Bytes::from(serialized_pegin_meta.clone());
         let tx_hash = provider
             .non_confirmed_mint(
-                ethers::core::types::Address::from_slice(pegin.account.as_slice()),
+                ethers::core::types::Address::from_slice(
+                    pegin.account.as_slice(),
+                ),
                 pegin.amount,
                 pegin.bitcoin_block_height,
                 metadata,
@@ -274,8 +304,10 @@ pub async fn batch_pegins(
     it_info_print!("Waiting for all Pegins to be mined!");
     let http_provider = provider.http_provider().clone();
     for tx_hash in tx_hashes {
-        let pending_tx =
-            PendingTransaction::new(ethers::core::types::H256::from(&tx_hash), &http_provider);
+        let pending_tx = PendingTransaction::new(
+            ethers::core::types::H256::from(&tx_hash),
+            &http_provider,
+        );
 
         pending_tx.await.expect("tx should be mined");
         it_info_print!("Pegin mined!", tx_hash);
@@ -290,7 +322,8 @@ pub async fn batch_pegins(
     tokio::time::sleep(Duration::from_secs(5)).await;
     // Ensure each eth address has a non zero balance
     for (_, pegin) in pegins.iter().enumerate() {
-        let eth_address_balance = provider.get_botanix_balance(pegin.account).await;
+        let eth_address_balance =
+            provider.get_botanix_balance(pegin.account).await;
         assert!(!eth_address_balance.expect("get balance").is_zero());
     }
 
@@ -298,7 +331,11 @@ pub async fn batch_pegins(
     let refund_address_balance = provider.get_balance(refund_address).await;
     assert!(!refund_address_balance.expect("get balance").is_zero());
 
-    let utxos = suite.local_context.btc_server_clients.clone().expect("btc server clients")[0]
+    let utxos = suite
+        .local_context
+        .btc_server_clients
+        .clone()
+        .expect("btc server clients")[0]
         .get_all_utxos(botanix_btc_server_client::Empty {})
         .await
         .unwrap()
@@ -308,9 +345,11 @@ pub async fn batch_pegins(
 
     for pegin in pegins.iter() {
         let utxo = utxos.iter().find(|utxo| {
-            bitcoin::Txid::from_slice(utxo.outpoint.as_ref().unwrap().txid.as_slice())
-                .expect("valid txid") ==
-                pegin.meta[0].tx().compute_txid()
+            bitcoin::Txid::from_slice(
+                utxo.outpoint.as_ref().unwrap().txid.as_slice(),
+            )
+            .expect("valid txid")
+                == pegin.meta[0].tx().compute_txid()
         });
         assert!(utxo.is_some());
     }

@@ -62,7 +62,10 @@ impl TestServer {
     fn create_consensus_test_suite(&self) -> Box<dyn Suite> {
         info!(">>>> Starting censensus integration test suite...");
         let tests_timeout = Duration::from_millis(self.context.timeout);
-        let test_suite = ConsensusIntegrationTestSuite::new(tests_timeout, self.context.clone());
+        let test_suite = ConsensusIntegrationTestSuite::new(
+            tests_timeout,
+            self.context.clone(),
+        );
         Box::new(test_suite)
     }
 }

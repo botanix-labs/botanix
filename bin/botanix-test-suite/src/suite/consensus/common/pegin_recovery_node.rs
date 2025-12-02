@@ -1,7 +1,7 @@
 use super::{kill_process_at_port, Scope};
 use crate::{it_info_print, suite::consensus::common::spawn_child_process};
 use anyhow::Context;
-use reth::consensus_common::utils::unix_timestamp;
+use botanix_consensus_common::utils::unix_timestamp;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use tokio::process::Child;
@@ -102,7 +102,8 @@ pub fn create_pegin_recovery_node(
         .context("error creating tempdir")?
         .keep()
         .join(format!("pegin_recovery_{}", unix_timestamp().to_string()));
-    std::fs::create_dir_all(&temp_db_path).context("failed to create tempdir with db subdir")?;
+    std::fs::create_dir_all(&temp_db_path)
+        .context("failed to create tempdir with db subdir")?;
 
     Ok(PeginRecoveryNodeConfig {
         working_directory: temp_db_path,

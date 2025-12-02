@@ -6,6 +6,7 @@ use botanix_btc_server_client::BtcServerClient;
 use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
+use serde::Deserialize;
 use tonic::transport::Channel;
 
 use crate::{
@@ -72,16 +73,21 @@ pub async fn test_utxo_recovery(
     for _ in 0..(NUM_CLAIMED_PEGINS + NUM_UNCLAIMED_PEGINS) {
         let eth_address = ethers::core::types::Address::random();
         // Lets get the gateway address for this eth address
-        let mut client =
-            clients.get(0).cloned().ok_or_else(|| anyhow::anyhow!("client not found"))?;
+        let mut client = clients
+            .get(0)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("client not found"))?;
         let res = client
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address = Address::from_str(&res.gateway_address)?.assume_checked();
+        let btc_address =
+            Address::from_str(&res.gateway_address)?.assume_checked();
         let txid = bitcoind.send_to_address(
             &btc_address,
             amount_to_send,
@@ -161,7 +167,9 @@ pub async fn test_utxo_recovery(
                 checkpoint_block_hash.clone(),
                 pegin.btc_address.clone(),
                 hex_encode(pegin.eth_address),
-                txid_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid txid"))?,
+                txid_bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("invalid txid"))?,
                 ot.vout,
                 pegin.amount.to_sat(),
             )
@@ -191,9 +199,11 @@ pub async fn test_utxo_recovery(
         .collect::<Vec<_>>();
 
     let res = clients[COORDINATOR_INDEX]
-        .recover_missing_utxos(botanix_btc_server_client::RecoverMissingUtxosRequest {
-            utxos: utxos_to_recover.clone(),
-        })
+        .recover_missing_utxos(
+            botanix_btc_server_client::RecoverMissingUtxosRequest {
+                utxos: utxos_to_recover.clone(),
+            },
+        )
         .await?;
     let res = res.into_inner();
     assert_eq!(res.total_requested, NUM_CLAIMED_PEGINS as u64);
@@ -207,7 +217,11 @@ pub async fn test_utxo_recovery(
             outpoint: Some(botanix_btc_server_client::OutPoint {
                 txid: {
                     let mut txid_bytes = Vec::new();
-                    pegin.outpoint.txid.consensus_encode(&mut txid_bytes).unwrap();
+                    pegin
+                        .outpoint
+                        .txid
+                        .consensus_encode(&mut txid_bytes)
+                        .unwrap();
                     txid_bytes
                 },
                 vout: pegin.outpoint.vout,
@@ -217,9 +231,11 @@ pub async fn test_utxo_recovery(
         .collect::<Vec<_>>();
 
     let res = clients[COORDINATOR_INDEX]
-        .recover_missing_utxos(botanix_btc_server_client::RecoverMissingUtxosRequest {
-            utxos: unclaimed_utxos.clone(),
-        })
+        .recover_missing_utxos(
+            botanix_btc_server_client::RecoverMissingUtxosRequest {
+                utxos: unclaimed_utxos.clone(),
+            },
+        )
         .await?;
     let res = res.into_inner();
     assert_eq!(res.total_requested, NUM_UNCLAIMED_PEGINS as u64);
@@ -239,9 +255,11 @@ pub async fn test_utxo_recovery(
     }];
 
     let res = clients[COORDINATOR_INDEX]
-        .recover_missing_utxos(botanix_btc_server_client::RecoverMissingUtxosRequest {
-            utxos: change_utxos.clone(),
-        })
+        .recover_missing_utxos(
+            botanix_btc_server_client::RecoverMissingUtxosRequest {
+                utxos: change_utxos.clone(),
+            },
+        )
         .await?;
     let res = res.into_inner();
     assert_eq!(res.total_requested, NUM_UNCLAIMED_CHANGE_UTXOS as u64);
@@ -249,7 +267,10 @@ pub async fn test_utxo_recovery(
 
     // check that the utxo set is correct.
     let total_utxos = get_utxo_count(&mut clients).await?;
-    assert_eq!(total_utxos, NUM_CLAIMED_PEGINS + NUM_UNCLAIMED_PEGINS + NUM_UNCLAIMED_CHANGE_UTXOS);
+    assert_eq!(
+        total_utxos,
+        NUM_CLAIMED_PEGINS + NUM_UNCLAIMED_PEGINS + NUM_UNCLAIMED_CHANGE_UTXOS
+    );
 
     // create a pegout that spends from every utxo in the utxo set
     let mut original_pending_pegouts = vec![];
@@ -265,7 +286,12 @@ pub async fn test_utxo_recovery(
         let pk = sk.public_key(&secp);
         let spk = pk.p2wpkh_script_code().expect("valid pk");
 
-        original_pending_pegouts.push((pegout_id, amount, spk.clone(), pegout_id));
+        original_pending_pegouts.push((
+            pegout_id,
+            amount,
+            spk.clone(),
+            pegout_id,
+        ));
     }
 
     let checkpoint_block_hash = get_checkpoint_block_hash(&bitcoind)?;
@@ -288,14 +314,18 @@ pub async fn test_utxo_recovery(
     it_info_print!(format!("pegout txid: {}", pegout_tx.compute_txid()));
 
     generate_blocks(&bitcoind, 2).await;
-    let pegout_tx_res =
-        bitcoind.get_raw_transaction(&pegout_tx.compute_txid(), None).expect("valid tx");
+    let pegout_tx_res = bitcoind
+        .get_raw_transaction(&pegout_tx.compute_txid(), None)
+        .expect("valid tx");
     it_info_print!(format!("pegout tx: {:?}", pegout_tx_res));
 
     sync_checkpoint(&mut clients, checkpoint_block_hash.clone()).await?;
 
     // assert that the pegout successfully spent from all the recoveredutxos
-    it_info_print!(format!("pegout tx input len: {}", pegout_tx_res.input.len()));
+    it_info_print!(format!(
+        "pegout tx input len: {}",
+        pegout_tx_res.input.len()
+    ));
     assert_eq!(pegout_tx_res.input.len(), total_utxos);
 
     Ok(())
@@ -305,13 +335,22 @@ async fn get_change_address(
     clients: &mut Vec<BtcServerClient<Channel>>,
 ) -> anyhow::Result<bitcoin::Address> {
     let public_key_response = clients[COORDINATOR_INDEX]
-        .get_public_key(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_public_key(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await?;
-    let public_key_bytes = hex::decode(&public_key_response.into_inner().publickey)?;
+    let public_key_bytes =
+        hex::decode(&public_key_response.into_inner().publickey)?;
     let public_key = secp256k1::PublicKey::from_slice(&public_key_bytes)?;
+    let public_key_serialized = public_key.serialize();
     let change_script =
-        btcserverlib::wallet::address::generate_taproot_change_scriptpubkey(&public_key);
-    let change_address = bitcoin::Address::from_script(&change_script, bitcoin::Network::Regtest)?;
+        btcserverlib::wallet::address::generate_taproot_change_scriptpubkey(
+            public_key_serialized,
+        );
+    let change_address = bitcoin::Address::from_script(
+        &change_script,
+        bitcoin::Network::Regtest,
+    )?;
     Ok(change_address)
 }
 
@@ -321,18 +360,22 @@ async fn sync_checkpoint(
 ) -> Result<(), Error> {
     for client in clients.iter_mut() {
         client
-            .new_consensus_checkpoint(botanix_btc_server_client::ConsensusCheckpointRequest {
-                checkpoint_block_hash: checkpoint_block_hash.clone(),
-                pegins: vec![],
-                pending_pegouts: vec![],
-            })
+            .new_consensus_checkpoint(
+                botanix_btc_server_client::ConsensusCheckpointRequest {
+                    checkpoint_block_hash: checkpoint_block_hash.clone(),
+                    pegins: vec![],
+                    pending_pegouts: vec![],
+                },
+            )
             .await
             .map_err(|_| Error::ConsensusCheckpoint)?;
     }
     Ok(())
 }
 
-pub async fn get_utxo_count(clients: &mut Vec<BtcServerClient<Channel>>) -> anyhow::Result<usize> {
+pub async fn get_utxo_count(
+    clients: &mut Vec<BtcServerClient<Channel>>,
+) -> anyhow::Result<usize> {
     let utxos = clients[COORDINATOR_INDEX]
         .get_all_utxos(tonic::Request::new(botanix_btc_server_client::Empty {}))
         .await?

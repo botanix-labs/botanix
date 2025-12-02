@@ -113,10 +113,10 @@ botanix-rpc-config.workspace = true
 botanix-rpc-types.workspace = true
 
 # Botanix dependencies
+botanix-btc-server.workspace = true
 botanix-storage.workspace = true
 botanix-storage-migrate.workspace = true
 botanix-utils.workspace = true
-botanix-btc-server.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 clap.workspace = true

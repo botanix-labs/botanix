@@ -14,7 +14,12 @@ pub async fn test_mempool_gossip(
     suite: &ConsensusIntegrationTestSuite,
 ) -> anyhow::Result<(), super::error::Error> {
     let test_fed_members = suite.local_context.poa_nodes.as_ref().unwrap();
-    let mut rx = suite.local_context.poa_notification.as_ref().expect("poa notifs").subscribe();
+    let mut rx = suite
+        .local_context
+        .poa_notification
+        .as_ref()
+        .expect("poa notifs")
+        .subscribe();
 
     let selected_member_index = 0;
     it_info_print!("Selected member index", selected_member_index);
@@ -24,20 +29,28 @@ pub async fn test_mempool_gossip(
         test_fed_members.get(&(selected_member_index as u16)).cloned().unwrap();
 
     // create eth client
-    let botanix_eth_client =
-        targeted_fed_member.botanix_eth_client.clone().expect("Botanix Client must be initialized");
+    let botanix_eth_client = targeted_fed_member
+        .botanix_eth_client
+        .clone()
+        .expect("Botanix Client must be initialized");
 
     // send eoa messages to the node at selected index
     it_info_print!("Sending eoa transaction...");
     let eoa_receiver = ethers::core::types::Address::random();
     it_info_print!("Eoa receiver: {:?}", eoa_receiver.to_string());
-    let tx_receipt = botanix_eth_client.send_eoa(eoa_receiver, SEND_AMOUNT).await.unwrap().unwrap();
+    let tx_receipt = botanix_eth_client
+        .send_eoa(eoa_receiver, SEND_AMOUNT)
+        .await
+        .unwrap()
+        .unwrap();
     it_info_print!("Eoa tx receipt hash: {:?}", tx_receipt.transaction_hash);
 
     let mut tx_hashes_set: HashSet<u16> = HashSet::new();
     // wait for canonical chain updates reported by the node, then send new tx
     while let Ok(notification) = rx.recv().await {
-        if let Notifications::CanonState(canon_state_notification) = notification {
+        if let Notifications::CanonState(canon_state_notification) =
+            notification
+        {
             it_info_print!(
                 "Received payload from engine index",
                 canon_state_notification.engine_index
@@ -58,8 +71,11 @@ pub async fn test_mempool_gossip(
             if block_receipt_hashes.contains(&tx_receipt.transaction_hash) {
                 tx_hashes_set.insert(canon_state_notification.engine_index);
             }
-            let syncing_instances = suite.global_context.syncing_instances as usize;
-            if tx_hashes_set.len() == (test_fed_members.len() - syncing_instances) {
+            let syncing_instances =
+                suite.global_context.syncing_instances as usize;
+            if tx_hashes_set.len()
+                == (test_fed_members.len() - syncing_instances)
+            {
                 return Ok(());
             }
         }

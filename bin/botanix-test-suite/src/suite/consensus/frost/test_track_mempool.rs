@@ -2,7 +2,10 @@ use std::str::FromStr;
 
 use crate::{
     suite::consensus::frost::test_signing::{do_signing, Pegin},
-    utils::{get_checkpoint_block_hash, send_pegin_notification, send_pegout_notification},
+    utils::{
+        get_checkpoint_block_hash, send_pegin_notification,
+        send_pegout_notification,
+    },
 };
 use bitcoin::{consensus::Encodable, Address};
 use bitcoincore_rpc::RpcApi;
@@ -48,16 +51,21 @@ pub async fn test_track_mempool(
     for _ in 0..NUM_PEGINS {
         let eth_address = ethers::core::types::Address::random();
         // Lets get the gateway address for this eth address
-        let mut client =
-            clients.get(0).cloned().ok_or_else(|| anyhow::anyhow!("client not found"))?;
+        let mut client = clients
+            .get(0)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("client not found"))?;
         let res = client
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address = Address::from_str(&res.gateway_address)?.assume_checked();
+        let btc_address =
+            Address::from_str(&res.gateway_address)?.assume_checked();
         let txid = bitcoind.send_to_address(
             &btc_address,
             amount_to_send,
@@ -105,7 +113,9 @@ pub async fn test_track_mempool(
                 checkpoint_block_hash.clone(),
                 pegin.btc_address.clone(),
                 hex_encode(pegin.eth_address),
-                txid_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid txid"))?,
+                txid_bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("invalid txid"))?,
                 ot.vout,
                 pegin.amount.to_sat(),
             )
@@ -116,8 +126,8 @@ pub async fn test_track_mempool(
     let mut rand = StdRng::from_entropy();
     let mut pegout_id_bytes = [0u8; 36];
     rand.fill_bytes(&mut pegout_id_bytes);
-    let pegout_id =
-        PegoutId::from_bytes(&pegout_id_bytes).map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
+    let pegout_id = PegoutId::from_bytes(&pegout_id_bytes)
+        .map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
 
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let sk = bitcoin::PrivateKey::generate(bitcoin::Network::Regtest);
@@ -144,12 +154,17 @@ pub async fn test_track_mempool(
 
     // assert the pegout is not in the pending pegout list
     let pending_pegouts = clients[0]
-        .get_pending_pegouts(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_pending_pegouts(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await
         .expect("get pending pegouts")
         .into_inner();
-    let pending_pegout_ids =
-        pending_pegouts.pending_pegouts.iter().map(|p| p.pegout_id.clone()).collect::<Vec<_>>();
+    let pending_pegout_ids = pending_pegouts
+        .pending_pegouts
+        .iter()
+        .map(|p| p.pegout_id.clone())
+        .collect::<Vec<_>>();
     assert!(!pending_pegout_ids.contains(&pegout_id_bytes.to_vec()));
 
     // we need to restart bitcoind so it drops it's mempool (drops the tracked tx)
@@ -181,20 +196,28 @@ pub async fn test_track_mempool(
     it_info_print!("Bitcoind stopped");
 
     // restart bitcoind
-    let mut bitcoind_node =
-        suite.local_context.bitcoind_node.take().expect("bitcoind node to exist");
+    let mut bitcoind_node = suite
+        .local_context
+        .bitcoind_node
+        .take()
+        .expect("bitcoind node to exist");
     bitcoind_node.re_start(suite).await;
     suite.local_context.bitcoind_node = Some(bitcoind_node);
     it_info_print!("Bitcoind restarted");
 
     // check the tx does not exist in the mempool
     let tx_ids = bitcoind.get_raw_mempool().expect("mempool should exist");
-    it_info_print!("tx_ids: {:?}", tx_ids.iter().map(|txid| hex::encode(txid)).collect::<Vec<_>>());
+    it_info_print!(
+        "tx_ids: {:?}",
+        tx_ids.iter().map(|txid| hex::encode(txid)).collect::<Vec<_>>()
+    );
     assert!(!tx_ids.contains(&tracked_tx.compute_txid()));
 
     // assert there is still a tracked tx
     let tracked_txs = clients[0]
-        .get_tracked_txs(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_tracked_txs(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await
         .expect("get tracked txs")
         .into_inner()
@@ -211,11 +234,13 @@ pub async fn test_track_mempool(
     let checkpoint_block_hash = get_checkpoint_block_hash(&bitcoind)?;
     for c in clients.iter_mut() {
         match c
-            .new_consensus_checkpoint(botanix_btc_server_client::ConsensusCheckpointRequest {
-                checkpoint_block_hash: checkpoint_block_hash.clone(),
-                pegins: vec![],
-                pending_pegouts: vec![],
-            })
+            .new_consensus_checkpoint(
+                botanix_btc_server_client::ConsensusCheckpointRequest {
+                    checkpoint_block_hash: checkpoint_block_hash.clone(),
+                    pegins: vec![],
+                    pending_pegouts: vec![],
+                },
+            )
             .await
         {
             Ok(_) => {}
@@ -228,7 +253,9 @@ pub async fn test_track_mempool(
 
     // assert there are no tracked txs
     let tracked_txs = clients[0]
-        .get_tracked_txs(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_tracked_txs(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await
         .expect("get tracked txs")
         .into_inner()
@@ -237,12 +264,17 @@ pub async fn test_track_mempool(
 
     // assert the pegout is in the pending pegout list
     let pending_pegouts = clients[0]
-        .get_pending_pegouts(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_pending_pegouts(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await
         .expect("get pending pegouts")
         .into_inner();
-    let pending_pegout_ids =
-        pending_pegouts.pending_pegouts.iter().map(|p| p.pegout_id.clone()).collect::<Vec<_>>();
+    let pending_pegout_ids = pending_pegouts
+        .pending_pegouts
+        .iter()
+        .map(|p| p.pegout_id.clone())
+        .collect::<Vec<_>>();
     assert!(pending_pegout_ids.contains(&pegout_id_bytes.to_vec()));
 
     Ok(())

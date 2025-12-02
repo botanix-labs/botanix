@@ -46,16 +46,15 @@ pub fn generate_taproot_address(
     Address::from_script(&p2tr_script, network).expect("valid address")
 }
 
-pub fn generate_taproot_change_scriptpubkey(
-    public_key: &PublicKey,
-) -> ScriptBuf {
+pub fn generate_taproot_change_scriptpubkey(public_key: [u8; 33]) -> ScriptBuf {
     // This is commented out for now b/c the frost library only supports empty merkel root
     // let taproot_spend_info =
     //     generate_taproot_spend_info(secp, public_key).expect("Valid spend info");
 
     // TODO: secp context should be a global variable or passed down
     let secp = bitcoin::secp256k1::Secp256k1::new();
-
+    let public_key = bitcoin::secp256k1::PublicKey::from_slice(&public_key)
+        .expect("legitimate public key");
     bitcoin::ScriptBuf::new_p2tr(&secp, public_key.x_only_public_key().0, None)
 }
 

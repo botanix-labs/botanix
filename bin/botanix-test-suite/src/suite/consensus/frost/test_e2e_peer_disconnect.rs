@@ -16,7 +16,12 @@ pub async fn e2e_peer_disconnect(
     suite: &ConsensusIntegrationTestSuite,
 ) -> anyhow::Result<(), super::error::Error> {
     let test_fed_members = suite.local_context.poa_nodes.as_ref().unwrap();
-    let mut rx = suite.local_context.poa_notification.as_ref().expect("poa notifs").subscribe();
+    let mut rx = suite
+        .local_context
+        .poa_notification
+        .as_ref()
+        .expect("poa notifs")
+        .subscribe();
 
     // now disconnect the peers of all federation members
     for (_, fed_member) in test_fed_members.iter() {
@@ -30,21 +35,28 @@ pub async fn e2e_peer_disconnect(
     let targeted_fed_member = test_fed_members.get(&(0u16)).cloned().unwrap();
 
     // create eth client
-    let botanix_eth_client =
-        targeted_fed_member.botanix_eth_client.clone().expect("Botanix Client must be initialized");
+    let botanix_eth_client = targeted_fed_member
+        .botanix_eth_client
+        .clone()
+        .expect("Botanix Client must be initialized");
 
     // send eoa messages to the node at selected index
     it_info_print!("Sending eoa transaction...");
     let eoa_receiver = ethers::core::types::Address::random();
     it_info_print!("Eoa receiver: {:?}", eoa_receiver.to_string());
-    let last_tx_hash =
-        botanix_eth_client.send_eoa(eoa_receiver, SEND_AMOUNT).await.unwrap().unwrap();
+    let last_tx_hash = botanix_eth_client
+        .send_eoa(eoa_receiver, SEND_AMOUNT)
+        .await
+        .unwrap()
+        .unwrap();
     it_info_print!("Eoa tx: {:?}", last_tx_hash);
 
     // wait for canonical chain updates reported by the node, then send new tx
     let mut received_notifications_engine_indexes: Vec<u16> = vec![];
     while let Ok(notification) = rx.recv().await {
-        if let Notifications::CanonState(canon_state_notification) = notification {
+        if let Notifications::CanonState(canon_state_notification) =
+            notification
+        {
             it_info_print!(
                 "Received payload from engine index",
                 canon_state_notification.engine_index
@@ -56,10 +68,13 @@ pub async fn e2e_peer_disconnect(
             assert_eq!(block_receipts.len(), 1);
 
             // add the engine index
-            received_notifications_engine_indexes.push(canon_state_notification.engine_index);
+            received_notifications_engine_indexes
+                .push(canon_state_notification.engine_index);
             received_notifications_engine_indexes.dedup();
 
-            if received_notifications_engine_indexes.len() == test_fed_members.len() {
+            if received_notifications_engine_indexes.len()
+                == test_fed_members.len()
+            {
                 return Ok(());
             }
         }

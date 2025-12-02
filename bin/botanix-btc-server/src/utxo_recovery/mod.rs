@@ -1,10 +1,10 @@
+use bitcoin_hashes::Hash;
 use botanix_btc_server_client::{OutPoint, UtxoToRecover};
 use botanix_fs_util::read_json_file;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
-use bitcoin_hashes::Hash;
 
 #[derive(Debug, Error)]
 pub enum UtxoRecoveryError {

@@ -9,31 +9,36 @@ use crate::{
         is_port_free, spawn_child_process, Scope, MINTING_CONTRACT_BYTECODE,
     },
 };
+use alloy_primitives::Address;
 use anyhow::Context;
 use askama::Template;
 use bitcoin::hashes::Hash;
 use botanix_authority_edh::extra_data_header::{
     ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION,
 };
-use botanix_chainspec::constants::BOTANIX_TESTNET;
-use botanix_configs::federation::{FedMemberPubKey, FederationTomlConfig};
-use botanix_storage::BotanixProviderFactory;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetSessionIdsRequest,
     GetSigningStatusRequest, SigningStatus,
 };
+use botanix_chainspec::constants::BOTANIX_TESTNET;
+use botanix_configs::federation::{FedMemberPubKey, FederationTomlConfig};
+use botanix_reth::node::{storage::BotanixStorage, BotanixNode};
+use botanix_storage::BotanixProviderFactory;
 use ethers::{
     providers::{Middleware, PeerInfo, StreamExt},
     types::{BlockId, BlockNumber, H256},
 };
+use reth::api::NodeTypesWithDBAdapter;
 use reth_db::{
     mdbx::{DatabaseArguments, MaxReadTransactionDuration},
     models::ClientVersion,
     open_db_read_only, DatabaseEnv,
 };
-use reth_primitives::Address;
-use reth_provider::{errors::db::LogLevel, providers::StaticFileProvider, ProviderFactory};
-use reth_rpc_types::PeerId;
+use reth_network_peers::PeerId;
+use reth_provider::{
+    errors::db::LogLevel, providers::StaticFileProvider, ProviderFactory,
+};
+use reth_prune_types::PruneModes;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use std::{
     collections::BTreeMap,
@@ -80,8 +85,10 @@ pub struct SpawnedPoaServerProcess {
     pub ws_port: u16,
     pub discovery_port: u16,
     pub child_process: Child,
-    pub reth_provider_factory: ProviderFactory<Arc<DatabaseEnv>>,
-    pub botanix_provider_factory: BotanixProviderFactory<Arc<DatabaseEnv>>,
+    pub reth_provider_factory:
+        ProviderFactory<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>,
+    pub botanix_provider_factory:
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
 }
 
 impl SpawnedPoaServerProcess {
@@ -207,7 +214,10 @@ impl FederationMemberTestConfig {
         })
     }
 
-    pub fn insert_peers_list(&mut self, peers: Vec<FederationMemberTestConfig>) {
+    pub fn insert_peers_list(
+        &mut self,
+        peers: Vec<FederationMemberTestConfig>,
+    ) {
         self.peers_list = peers;
     }
 
@@ -235,11 +245,19 @@ impl FederationMemberTestConfig {
     ) -> anyhow::Result<SpawnedPoaServerProcess> {
         // print secret key
         it_info_print!(format!("sk: {:?}", self.secret_key));
-        it_info_print!(format!("Building federation member index: {}", self.index));
+        it_info_print!(format!(
+            "Building federation member index: {}",
+            self.index
+        ));
 
-        let datadir = self.temp_path.to_str().context("created temp path is unparsable")?;
-        let discovery_secret_path = Path::new(&self.temp_path).join("discovery-secret");
-        let block_fee_recipient_address = "0x43C8bDCb9AFeBB1D834A7de18CC214a6FD1632d9";
+        let datadir = self
+            .temp_path
+            .to_str()
+            .context("created temp path is unparsable")?;
+        let discovery_secret_path =
+            Path::new(&self.temp_path).join("discovery-secret");
+        let block_fee_recipient_address =
+            "0x43C8bDCb9AFeBB1D834A7de18CC214a6FD1632d9";
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -292,13 +310,14 @@ impl FederationMemberTestConfig {
             .context("Error writing federation config to path")?;
 
         // point to the relevant working directory
-        let mut working_directory =
-            std::env::current_dir().context("Error obtaining current directory")?;
+        let mut working_directory = std::env::current_dir()
+            .context("Error obtaining current directory")?;
         for _ in 0..2 {
             working_directory.pop();
         }
 
-        let federation_config_path = federation_config_path.display().to_string();
+        let federation_config_path =
+            federation_config_path.display().to_string();
         let rpc_port = self.rpc_port.to_string();
         let ws_port = self.ws_port.to_string();
         let bitcoin_server_url = self.bitcoin_server_url.clone();
@@ -312,7 +331,7 @@ impl FederationMemberTestConfig {
         let abci_port = self.abci_port.to_string();
 
         // prepare run arguments
-        let command = "./target/debug/reth";
+        let command = "./target/debug/botanix-reth";
         let binary_abs_path = working_directory.join(Path::new(command));
         if !std::fs::exists(&binary_abs_path)? {
             return Err(anyhow::anyhow!(
@@ -321,7 +340,7 @@ impl FederationMemberTestConfig {
             ));
         }
         let args = vec![
-            "poa",
+            "botanix-reth",
             "-vvv",
             "--disable-discovery",
             "--is-testnet",
@@ -371,7 +390,9 @@ impl FederationMemberTestConfig {
             "--port",
             discovery_port.as_str(),
             "--p2p-secret-key",
-            discovery_secret_path.to_str().context("discovery secret path to exist")?,
+            discovery_secret_path
+                .to_str()
+                .context("discovery secret path to exist")?,
             "--abci-port",
             abci_port.as_str(),
             "--sync.enable_state_sync",
@@ -380,17 +401,24 @@ impl FederationMemberTestConfig {
             block_fee_recipient_address,
         ];
 
-        let child_process =
-            spawn_child_process(Scope::PoaNode(self.index), command, args, working_directory)?;
+        let child_process = spawn_child_process(
+            Scope::PoaNode(self.index),
+            command,
+            args,
+            working_directory,
+        )?;
 
         // Reth database provider
         let db_args = DatabaseArguments::new(ClientVersion::default())
             .with_exclusive(Some(false))
             .with_log_level(Some(LogLevel::Debug))
-            .with_max_read_transaction_duration(Some(MaxReadTransactionDuration::Unbounded));
+            .with_max_read_transaction_duration(Some(
+                MaxReadTransactionDuration::Unbounded,
+            ));
         let node_config = BOTANIX_TESTNET.clone();
         let reth_db_dir = Path::new(&self.temp_path).join("db");
-        let reth_static_files_dir = Path::new(&self.temp_path).join("static_files");
+        let reth_static_files_dir =
+            Path::new(&self.temp_path).join("static_files");
 
         let reth_db = loop {
             match open_db_read_only(&reth_db_dir, db_args.clone()) {
@@ -403,10 +431,13 @@ impl FederationMemberTestConfig {
             }
         };
 
-        let reth_static_file_provider = StaticFileProvider::read_only(reth_static_files_dir)?;
-        let reth_provider_factory = ProviderFactory::<Arc<DatabaseEnv>>::new(
+        let reth_static_file_provider =
+            StaticFileProvider::read_only(reth_static_files_dir, true)?;
+        let reth_provider_factory = ProviderFactory::<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >::new(
             reth_db,
-            node_config.inner_arc(),
+            node_config.clone(),
             reth_static_file_provider.clone(),
         );
 
@@ -424,7 +455,15 @@ impl FederationMemberTestConfig {
             }
         };
 
-        let botanix_provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>>::new(botanix_db);
+        let storage = Arc::new(BotanixStorage::default());
+        let botanix_provider_factory =
+            BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(
+                botanix_db,
+                node_config.clone(),
+                reth_static_file_provider.clone(),
+                PruneModes::none(),
+                storage,
+            );
 
         Ok(SpawnedPoaServerProcess {
             child_process,
@@ -442,10 +481,10 @@ impl FederationMemberTestConfig {
         let rx_sender = self.sender.clone();
         let bitcoin_server_url = self.bitcoin_server_url.clone();
         let peers_list = self.peers_list.clone();
-        let botanix_eth_client = self
-            .botanix_eth_client
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Uninitialized botanix eth client"))?;
+        let botanix_eth_client =
+            self.botanix_eth_client.clone().ok_or_else(|| {
+                anyhow::anyhow!("Uninitialized botanix eth client")
+            })?;
 
         // ~~~~~~~~~~ spawn initial task that adds peers and awaits dkg to finish ~~~~~~~~~~~
         tokio::spawn(Box::pin(async move {
@@ -456,19 +495,34 @@ impl FederationMemberTestConfig {
                         IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                         peer.discovery_port,
                     );
-                    let enode_url =
-                        format!("enode://{}@{}", peer.peer_id.to_string(), peer_socket.to_string());
-                    if let Err(_) = botanix_eth_client.add_trusted_peer(&enode_url).await {
-                        it_error_print!("RPC failed to add a peer", peer.peer_id);
+                    let enode_url = format!(
+                        "enode://{}@{}",
+                        peer.peer_id.to_string(),
+                        peer_socket.to_string()
+                    );
+                    if let Err(_) =
+                        botanix_eth_client.add_trusted_peer(&enode_url).await
+                    {
+                        it_error_print!(
+                            "RPC failed to add a peer",
+                            peer.peer_id
+                        );
                     } else {
                         it_info_print!("RPC added peer", peer.peer_id);
                     }
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                let all_peers = botanix_eth_client.get_peers_counts().await.unwrap_or_default();
+                let all_peers = botanix_eth_client
+                    .get_peers_counts()
+                    .await
+                    .unwrap_or_default();
                 it_info_print!(
                     "Engine connected with peers",
-                    format!("index={}: peers_count={}", engine_index, all_peers.len())
+                    format!(
+                        "index={}: peers_count={}",
+                        engine_index,
+                        all_peers.len()
+                    )
                 );
                 if all_peers.len() == peers_list.len() {
                     break 'inner;
@@ -476,10 +530,12 @@ impl FederationMemberTestConfig {
             }
 
             // create a btc client
-            let mut btc_server_client =
-                BtcServerExtendedClient::new(format!("http://{}", bitcoin_server_url), None)
-                    .await
-                    .unwrap();
+            let mut btc_server_client = BtcServerExtendedClient::new(
+                format!("http://{}", bitcoin_server_url),
+                None,
+            )
+            .await
+            .unwrap();
 
             // wait for the dkg to finish
             let pub_key = loop {
@@ -489,7 +545,10 @@ impl FederationMemberTestConfig {
                         break pub_key;
                     }
                     Err(_) => {
-                        it_warn_print!("Dkg Pending for engine index", engine_index);
+                        it_warn_print!(
+                            "Dkg Pending for engine index",
+                            engine_index
+                        );
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
@@ -508,10 +567,10 @@ impl FederationMemberTestConfig {
 
         // ~~~~~~~~~~~ spawn a task awaiting canon state notifications ~~~~~~~~~~~
         let rx_sender = self.sender.clone();
-        let botanix_eth_client = self
-            .botanix_eth_client
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Uninitialized botanix eth client"))?;
+        let botanix_eth_client =
+            self.botanix_eth_client.clone().ok_or_else(|| {
+                anyhow::anyhow!("Uninitialized botanix eth client")
+            })?;
         tokio::spawn(Box::pin(async move {
             // get a ws stream
             let mut stream = botanix_eth_client
@@ -523,7 +582,9 @@ impl FederationMemberTestConfig {
             while let Some(block) = stream.next().await {
                 if let Some(block_number) = block.number {
                     let tx_receipts = botanix_eth_client
-                        .get_tx_receipts(BlockId::Number(BlockNumber::Number(block_number)))
+                        .get_tx_receipts(BlockId::Number(BlockNumber::Number(
+                            block_number,
+                        )))
                         .await
                         .ok();
                     if let Some(tx_receipts) = tx_receipts {
@@ -540,7 +601,8 @@ impl FederationMemberTestConfig {
                             // all receivers have been dropped temporarily here. Just sleep
                             // and await new ones to be created
                             Err(_) => {
-                                tokio::time::sleep(Duration::from_secs(1)).await;
+                                tokio::time::sleep(Duration::from_secs(1))
+                                    .await;
                                 continue;
                             }
                         }
@@ -552,10 +614,10 @@ impl FederationMemberTestConfig {
         // ~~~~~~~~~~~ spawn a task awaiting test signals from the test suite ~~~~~~~~~~~
         let mut receiver = self.test_signal_tx.subscribe();
         let peers_list = self.peers_list.clone();
-        let botanix_eth_client = self
-            .botanix_eth_client
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Uninitialized botanix eth client"))?;
+        let botanix_eth_client =
+            self.botanix_eth_client.clone().ok_or_else(|| {
+                anyhow::anyhow!("Uninitialized botanix eth client")
+            })?;
         tokio::spawn(Box::pin(async move {
             while let Ok(test_signal) = receiver.recv().await {
                 match test_signal {
@@ -572,20 +634,36 @@ impl FederationMemberTestConfig {
                                     peer.peer_id.to_string(),
                                     peer_socket.to_string()
                                 );
-                                if let Err(_) =
-                                    botanix_eth_client.remove_trusted_peer(&enode_url).await
+                                if let Err(_) = botanix_eth_client
+                                    .remove_trusted_peer(&enode_url)
+                                    .await
                                 {
-                                    it_error_print!("RPC failed to remove a peer", peer.peer_id);
+                                    it_error_print!(
+                                        "RPC failed to remove a peer",
+                                        peer.peer_id
+                                    );
                                 } else {
-                                    it_info_print!("RPC removed peer", peer.peer_id);
+                                    it_info_print!(
+                                        "RPC removed peer",
+                                        peer.peer_id
+                                    );
                                 }
-                                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                                tokio::time::sleep(
+                                    std::time::Duration::from_secs(2),
+                                )
+                                .await;
                             }
-                            let all_peers =
-                                botanix_eth_client.get_peers_counts().await.unwrap_or_default();
+                            let all_peers = botanix_eth_client
+                                .get_peers_counts()
+                                .await
+                                .unwrap_or_default();
                             it_info_print!(
                                 "Engine disconnected from peers",
-                                format!("index={}: peers_count={}", engine_index, all_peers.len())
+                                format!(
+                                    "index={}: peers_count={}",
+                                    engine_index,
+                                    all_peers.len()
+                                )
                             );
                             if all_peers.len() == 0 {
                                 break 'inner;
@@ -605,20 +683,36 @@ impl FederationMemberTestConfig {
                                     peer.peer_id.to_string(),
                                     peer_socket.to_string()
                                 );
-                                if let Err(_) =
-                                    botanix_eth_client.add_trusted_peer(&enode_url).await
+                                if let Err(_) = botanix_eth_client
+                                    .add_trusted_peer(&enode_url)
+                                    .await
                                 {
-                                    it_error_print!("RPC failed to re-add a peer", peer.peer_id);
+                                    it_error_print!(
+                                        "RPC failed to re-add a peer",
+                                        peer.peer_id
+                                    );
                                 } else {
-                                    it_info_print!("RPC re-added peer", peer.peer_id);
+                                    it_info_print!(
+                                        "RPC re-added peer",
+                                        peer.peer_id
+                                    );
                                 }
                             }
-                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                            let all_peers =
-                                botanix_eth_client.get_peers_counts().await.unwrap_or_default();
+                            tokio::time::sleep(std::time::Duration::from_secs(
+                                2,
+                            ))
+                            .await;
+                            let all_peers = botanix_eth_client
+                                .get_peers_counts()
+                                .await
+                                .unwrap_or_default();
                             it_info_print!(
                                 "Engine (re)connected with peers",
-                                format!("index={}: peers_count={}", engine_index, all_peers.len())
+                                format!(
+                                    "index={}: peers_count={}",
+                                    engine_index,
+                                    all_peers.len()
+                                )
                             );
                             if all_peers.len() == peers_list.len() {
                                 break 'inner;
@@ -638,7 +732,10 @@ impl FederationMemberTestConfig {
                                     )
                                 );
                                 if let Err(e) = sender.send(all_peers) {
-                                    it_error_print!("Failed to send test signal: {:?}", e);
+                                    it_error_print!(
+                                        "Failed to send test signal: {:?}",
+                                        e
+                                    );
                                 }
                             }
                             Err(e) => {
@@ -656,10 +753,12 @@ impl FederationMemberTestConfig {
         let rx_sender = self.sender.clone();
         tokio::spawn(Box::pin(async move {
             // create a btc client
-            let mut btc_server_client =
-                BtcServerExtendedClient::new(format!("http://{}", bitcoin_server_url), None)
-                    .await
-                    .unwrap();
+            let mut btc_server_client = BtcServerExtendedClient::new(
+                format!("http://{}", bitcoin_server_url),
+                None,
+            )
+            .await
+            .unwrap();
             loop {
                 // get all session ids
                 let session_ids = btc_server_client
@@ -685,16 +784,21 @@ impl FederationMemberTestConfig {
                             );
                             let s = SigningStatus::try_from(status.status).ok();
                             if let Some(status) = s {
-                                match rx_sender.send(Notifications::SigningStatusReport((
-                                    engine_index,
-                                    session_id,
-                                    status,
-                                ))) {
+                                match rx_sender.send(
+                                    Notifications::SigningStatusReport((
+                                        engine_index,
+                                        session_id,
+                                        status,
+                                    )),
+                                ) {
                                     Ok(_) => {}
                                     // all receivers have been dropped temporarily here. Just sleep
                                     // and await new ones to be created
                                     Err(_) => {
-                                        tokio::time::sleep(Duration::from_secs(1)).await;
+                                        tokio::time::sleep(
+                                            Duration::from_secs(1),
+                                        )
+                                        .await;
                                         continue;
                                     }
                                 }
@@ -719,7 +823,9 @@ impl FederationMemberTestConfig {
     }
 }
 
-pub fn is_dkg_ready(federation_memebers: &BTreeMap<u16, FederationMemberTestConfig>) -> bool {
+pub fn is_dkg_ready(
+    federation_memebers: &BTreeMap<u16, FederationMemberTestConfig>,
+) -> bool {
     !federation_memebers.iter().any(|(_, member)| !member.is_dkg_ready())
 }
 
@@ -734,14 +840,22 @@ pub async fn create_poa_nodes(
 )> {
     let (tx, _rx) = tokio::sync::broadcast::channel::<Notifications>(100);
 
-    let mut poa_nodes: BTreeMap<u16, FederationMemberTestConfig> = BTreeMap::new();
-    let authorities = members_keypairs.iter().map(|(_, pk, _, _)| pk.clone()).collect::<Vec<_>>();
-    let poa_instances = global_context.fed_instances - global_context.syncing_instances;
+    let mut poa_nodes: BTreeMap<u16, FederationMemberTestConfig> =
+        BTreeMap::new();
+    let authorities = members_keypairs
+        .iter()
+        .map(|(_, pk, _, _)| pk.clone())
+        .collect::<Vec<_>>();
+    let poa_instances =
+        global_context.fed_instances - global_context.syncing_instances;
 
     for member_index in 0..global_context.fed_instances {
         let btc_server_port = btc_server_processes
             .and_then(|processes| {
-                processes.iter().nth(member_index as usize).map(|val| val.btc_server_port)
+                processes
+                    .iter()
+                    .nth(member_index as usize)
+                    .map(|val| val.btc_server_port)
             })
             .context("Btc server process port must already exist")?;
 
@@ -806,15 +920,13 @@ pub async fn create_poa_nodes(
     for member_index in 0..global_context.fed_instances {
         let peer_members = poa_nodes
             .iter()
-            .filter_map(
-                |(index, &ref fed_mem)| {
-                    if *index != member_index {
-                        Some(fed_mem.clone())
-                    } else {
-                        None
-                    }
-                },
-            )
+            .filter_map(|(index, &ref fed_mem)| {
+                if *index != member_index {
+                    Some(fed_mem.clone())
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<_>>();
 
         if let Some(fed_member) = poa_nodes.get_mut(&member_index) {
@@ -836,7 +948,8 @@ mod tests {
     fn test_edh_template() {
         let extra_data_header = ExtraDataHeader::default();
         let edh = hex::encode(extra_data_header.serialize());
-        let botanix_testnet_config_genesis = BotanixTestnetGenesisConfig { edh: &edh };
+        let botanix_testnet_config_genesis =
+            BotanixTestnetGenesisConfig { edh: &edh };
         let rendered_json = botanix_testnet_config_genesis.render().unwrap();
         let json = serde_json::to_string_pretty(&rendered_json).unwrap();
         assert!(json.len() > 0);

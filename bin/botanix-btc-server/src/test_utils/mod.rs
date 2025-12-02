@@ -326,8 +326,9 @@ pub fn eth_vector_to_fixed_bytes(eth: Vec<u8>) -> [u8; 20] {
 
 pub fn random_p2tr_keyspend_script() -> ScriptBuf {
     let secp = bitcoin::secp256k1::Secp256k1::new();
-    let key_pair = secp.generate_keypair(&mut OsRng);
-    generate_taproot_change_scriptpubkey(&key_pair.1)
+    let (_key_pair_priv, key_pair_pub) = secp.generate_keypair(&mut OsRng);
+    let serialized_pkey = key_pair_pub.serialize();
+    generate_taproot_change_scriptpubkey(serialized_pkey)
 }
 
 // FIXME: This creates P2WPKH script code (for spending), not scriptpubkey (for outputs).
@@ -471,8 +472,11 @@ pub fn get_change(db: &database::Db) -> TxOut {
         .verifying_key()
         .to_secp_pk()
         .expect("valid secp pk");
+    let serialized_pkey = secp_pk.serialize();
     let change_script =
-        crate::wallet::address::generate_taproot_change_scriptpubkey(&secp_pk);
+        crate::wallet::address::generate_taproot_change_scriptpubkey(
+            serialized_pkey,
+        );
     TxOut { value: Amount::from_sat(500), script_pubkey: change_script }
 }
 

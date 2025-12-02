@@ -1,13 +1,18 @@
 use crate::{
     it_info_print,
-    suite::consensus::common::poa_node::{is_dkg_ready, FederationMemberTestConfig, Notifications},
+    suite::consensus::common::poa_node::{
+        is_dkg_ready, FederationMemberTestConfig, Notifications,
+    },
 };
+use alloy_primitives::B256;
 use botanix_btc_server_client::SigningStatus;
-use reth_primitives::B256;
 use std::collections::BTreeMap;
 
 pub fn get_unique_wallet_name() -> String {
-    format!("botanix_test_wallet_{}", uuid::Uuid::new_v4().to_string().replace("-", ""))
+    format!(
+        "botanix_test_wallet_{}",
+        uuid::Uuid::new_v4().to_string().replace("-", "")
+    )
 }
 pub const SEND_AMOUNT: u64 = 1; // = 1 ether
 
@@ -19,7 +24,9 @@ pub async fn await_dkg(
     it_info_print!("Awaiting DKG");
     while let Ok(notification) = rx.recv().await {
         if let Notifications::DkgFinished(dkg_notification) = notification {
-            if let Some(fed_member) = fed_members.get_mut(&dkg_notification.engine_index) {
+            if let Some(fed_member) =
+                fed_members.get_mut(&dkg_notification.engine_index)
+            {
                 fed_member.is_dkg_ready = true;
                 pub_keys.push(dkg_notification.public_key)
             }
@@ -40,10 +47,15 @@ pub async fn await_signing_completion(
     rx: &mut tokio::sync::broadcast::Receiver<Notifications>,
 ) {
     while let Ok(notification) = rx.recv().await {
-        if let Notifications::SigningStatusReport((member_index, _session_id, status)) =
-            notification
+        if let Notifications::SigningStatusReport((
+            member_index,
+            _session_id,
+            status,
+        )) = notification
         {
-            if in_turn_member_index == member_index && status.eq(&SigningStatus::Finalized) {
+            if in_turn_member_index == member_index
+                && status.eq(&SigningStatus::Finalized)
+            {
                 break;
             }
         }
@@ -56,7 +68,9 @@ pub async fn await_botanix_event(
 ) {
     // wait for a few blocks to make sure the tx got included and mined
     while let Ok(notification) = rx.recv().await {
-        if let Notifications::CanonState(canon_state_notification) = notification {
+        if let Notifications::CanonState(canon_state_notification) =
+            notification
+        {
             it_info_print!(
                 "Canon state notification for engine index =",
                 canon_state_notification.engine_index
@@ -83,15 +97,21 @@ pub async fn await_epoch_block(
 ) {
     // wait for a few blocks to make sure the tx got included and mined
     while let Ok(notification) = rx.recv().await {
-        if let Notifications::CanonState(canon_state_notification) = notification {
+        if let Notifications::CanonState(canon_state_notification) =
+            notification
+        {
             it_info_print!(
                 "Canon state notification for engine index =",
                 canon_state_notification.engine_index
             );
 
-            if canon_state_notification.block.number.map(|b| b.as_u64()).unwrap_or_default() %
-                epoch_length ==
-                0
+            if canon_state_notification
+                .block
+                .number
+                .map(|b| b.as_u64())
+                .unwrap_or_default()
+                % epoch_length
+                == 0
             {
                 break;
             }

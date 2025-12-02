@@ -29,11 +29,17 @@ struct Pegins {
 
 impl Pegins {
     fn new() -> Self {
-        Pegins { eth_addresses: Vec::new(), btc_addresses: Vec::new(), txids: Vec::new() }
+        Pegins {
+            eth_addresses: Vec::new(),
+            btc_addresses: Vec::new(),
+            txids: Vec::new(),
+        }
     }
 }
 
-pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Result<(), Error> {
+pub async fn test_pending_pegouts(
+    suite: &ConsensusIntegrationTestSuite,
+) -> Result<(), Error> {
     let bitcoind = suite.global_context.bitcoind_rpc();
     // Load up the bitcoin wallet and generate some blocks
     for wallet in bitcoind.list_wallets().unwrap() {
@@ -41,7 +47,8 @@ pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Resu
         let _ = bitcoind.unload_wallet(Some(&wallet));
     }
     let wallet_name = get_unique_wallet_name();
-    let create_res = bitcoind.create_wallet(&wallet_name, None, None, None, None);
+    let create_res =
+        bitcoind.create_wallet(&wallet_name, None, None, None, None);
     if create_res.is_err() {
         // wallet already exists, load wallet
         let _ = bitcoind.load_wallet(&wallet_name);
@@ -69,7 +76,11 @@ pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Resu
 
     // Getting public key should fail for all clients
     for client in &mut clients {
-        let pk = client.get_public_key(tonic::Request::new(botanix_btc_server_client::Empty {})).await;
+        let pk = client
+            .get_public_key(tonic::Request::new(
+                botanix_btc_server_client::Empty {},
+            ))
+            .await;
         assert!(pk.is_err());
         let err = pk.err().unwrap();
         assert_eq!(err.code(), tonic::Code::Internal);
@@ -88,14 +99,17 @@ pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Resu
     for input in 0..INPUTS_TO_SPEND {
         let eth_address = pegins.eth_addresses.get(input).copied().unwrap();
         let pk = coordinator
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address =
-            Address::from_str(&pk.gateway_address).expect("valid address").assume_checked();
+        let btc_address = Address::from_str(&pk.gateway_address)
+            .expect("valid address")
+            .assume_checked();
         pegins.btc_addresses.push(btc_address);
     }
 
@@ -123,7 +137,12 @@ pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Resu
         }
     }
 
-    let mut pending_pegouts_sent: Vec<(bitcoin::ScriptBuf, PegoutId, u64, u64)> = vec![];
+    let mut pending_pegouts_sent: Vec<(
+        bitcoin::ScriptBuf,
+        PegoutId,
+        u64,
+        u64,
+    )> = vec![];
     let secp = bitcoin::secp256k1::Secp256k1::new();
     // Send 50 pegout notifications
     for _ in 0..50 {
@@ -136,7 +155,8 @@ pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Resu
         rand.fill_bytes(&mut pegout_id_bytes);
         let pegout_id = PegoutId::from_bytes(&pegout_id_bytes).unwrap();
 
-        let pk = bitcoin::PrivateKey::generate(bitcoin::Network::Regtest).public_key(&secp);
+        let pk = bitcoin::PrivateKey::generate(bitcoin::Network::Regtest)
+            .public_key(&secp);
         let wpk = pk.wpubkey_hash().expect("valid wpubkey hash");
         let spk = bitcoin::ScriptBuf::new_p2wpkh(&wpk);
 
@@ -153,7 +173,9 @@ pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Resu
     }
 
     let pending_pegouts = clients[0]
-        .get_pending_pegouts(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_pending_pegouts(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await
         .expect("get pending pegouts")
         .into_inner();
@@ -168,7 +190,9 @@ pub async fn test_pending_pegouts(suite: &ConsensusIntegrationTestSuite) -> Resu
         let spk = bitcoin::ScriptBuf::from_bytes(pegout.spk);
         let amount = pegout.amount;
         let height = pegout.height;
-        assert!(pending_pegouts_sent.contains(&(spk, pegout_id, amount, height)));
+        assert!(
+            pending_pegouts_sent.contains(&(spk, pegout_id, amount, height))
+        );
     }
     // TODO here we can spend some of the pending pegouts and ensure they are removed from the
     // pending pegouts list

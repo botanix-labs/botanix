@@ -73,16 +73,21 @@ pub async fn test_tx_weight_limit(
     for _ in 0..NUM_PEGINS {
         let eth_address = ethers::core::types::Address::random();
         // Lets get the gateway address for this eth address
-        let mut client =
-            clients.get(0).cloned().ok_or_else(|| anyhow::anyhow!("client not found"))?;
+        let mut client = clients
+            .get(0)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("client not found"))?;
         let res = client
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address = Address::from_str(&res.gateway_address)?.assume_checked();
+        let btc_address =
+            Address::from_str(&res.gateway_address)?.assume_checked();
         let txid = bitcoind.send_to_address(
             &btc_address,
             amount_to_send,
@@ -131,7 +136,9 @@ pub async fn test_tx_weight_limit(
                 checkpoint_block_hash.clone(),
                 pegin.btc_address.clone(),
                 hex_encode(pegin.eth_address),
-                txid_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid txid"))?,
+                txid_bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("invalid txid"))?,
                 ot.vout,
                 pegin.amount.to_sat(),
             )
@@ -153,7 +160,12 @@ pub async fn test_tx_weight_limit(
         let pk = sk.public_key(&secp);
         let spk = pk.p2wpkh_script_code().expect("valid pk");
 
-        original_pending_pegouts.push((pegout_id, amount, spk.clone(), pegout_id));
+        original_pending_pegouts.push((
+            pegout_id,
+            amount,
+            spk.clone(),
+            pegout_id,
+        ));
     }
 
     // Notify pending pegouts to all nodes
@@ -173,11 +185,13 @@ pub async fn test_tx_weight_limit(
 
     // this pegout should only contain a subset of the pending pegouts so as to stay within the
     // weight limit.
-    let max_weight_pegout = do_signing(&mut clients, &bitcoind, &[2u8; 32]).await?;
+    let max_weight_pegout =
+        do_signing(&mut clients, &bitcoind, &[2u8; 32]).await?;
 
     bitcoind.generate_to_address(10, &address).expect("generate regtest block");
-    let first_tx_res =
-        bitcoind.get_raw_transaction(&max_weight_pegout.compute_txid(), None).expect("valid tx");
+    let first_tx_res = bitcoind
+        .get_raw_transaction(&max_weight_pegout.compute_txid(), None)
+        .expect("valid tx");
 
     // update the checkpoint blockhash
     let checkpoint_block_hash = get_checkpoint_block_hash(&bitcoind)?;
@@ -185,7 +199,10 @@ pub async fn test_tx_weight_limit(
     sync_checkpoint(&mut clients, checkpoint_block_hash.clone()).await?;
 
     assert_eq!(first_tx_res.compute_txid(), max_weight_pegout.compute_txid());
-    assert!(max_weight_pegout.weight().to_wu() < btcserverlib::wallet::MAX_PEGOUT_TX_WEIGHT);
+    assert!(
+        max_weight_pegout.weight().to_wu()
+            < btcserverlib::wallet::MAX_PEGOUT_TX_WEIGHT
+    );
     it_info_print!(
         "First pegout tx weight: {} weight units (limit: {} weight units)",
         max_weight_pegout.weight().to_wu(),
@@ -232,11 +249,16 @@ pub async fn test_tx_weight_limit(
 
     // check that we have the right number of outputs remaining in the pending pegouts list
     let pending_pegouts_list = clients[COORDINATOR_INDEX]
-        .get_pending_pegouts(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_pending_pegouts(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await?
         .into_inner()
         .pending_pegouts;
-    assert_eq!(pending_pegouts_list.len(), original_pending_pegouts.len() - pegged_out_spks.len());
+    assert_eq!(
+        pending_pegouts_list.len(),
+        original_pending_pegouts.len() - pegged_out_spks.len()
+    );
 
     // update the checkpoint blockhash
     let checkpoint_block_hash = get_checkpoint_block_hash(&bitcoind)?;
@@ -266,11 +288,13 @@ pub async fn test_tx_weight_limit(
         .await?;
     }
 
-    let second_pegout_tx = do_signing(&mut clients, &bitcoind, &[3u8; 32]).await?;
+    let second_pegout_tx =
+        do_signing(&mut clients, &bitcoind, &[3u8; 32]).await?;
     bitcoind.generate_to_address(1, &address).expect("generate regtest block");
 
-    let second_tx_res =
-        bitcoind.get_raw_transaction(&second_pegout_tx.compute_txid(), None).expect("valid tx");
+    let second_tx_res = bitcoind
+        .get_raw_transaction(&second_pegout_tx.compute_txid(), None)
+        .expect("valid tx");
 
     // check that this second pegout contains the rest of the pending pegouts, as well as the one
     // just added above
@@ -287,10 +311,14 @@ pub async fn test_tx_weight_limit(
     );
 
     // check that no pegout was included in both transactions
-    assert_eq!(pegged_out_spks.intersection(&second_pegged_out_spks).count(), 0);
+    assert_eq!(
+        pegged_out_spks.intersection(&second_pegged_out_spks).count(),
+        0
+    );
 
     // check that the last pegout was included
-    let last_pegout_included = second_tx_res.output.iter().any(|o| o.script_pubkey == spk); // spk from the newly created pegout
+    let last_pegout_included =
+        second_tx_res.output.iter().any(|o| o.script_pubkey == spk); // spk from the newly created pegout
     assert!(last_pegout_included);
 
     // check that the last output is the change output
@@ -301,7 +329,9 @@ pub async fn test_tx_weight_limit(
 
     // check that the pending pegout list is empty
     let pending_pegouts_list = clients[COORDINATOR_INDEX]
-        .get_pending_pegouts(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_pending_pegouts(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await?
         .into_inner()
         .pending_pegouts;
@@ -318,13 +348,22 @@ async fn get_change_address(
     clients: &mut Vec<BtcServerClient<Channel>>,
 ) -> anyhow::Result<bitcoin::Address> {
     let public_key_response = clients[COORDINATOR_INDEX]
-        .get_public_key(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_public_key(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await?;
-    let public_key_bytes = hex::decode(&public_key_response.into_inner().publickey)?;
+    let public_key_bytes =
+        hex::decode(&public_key_response.into_inner().publickey)?;
     let public_key = secp256k1::PublicKey::from_slice(&public_key_bytes)?;
+    let public_key_serialized = public_key.serialize();
     let change_script =
-        btcserverlib::wallet::address::generate_taproot_change_scriptpubkey(&public_key);
-    let change_address = bitcoin::Address::from_script(&change_script, bitcoin::Network::Regtest)?;
+        btcserverlib::wallet::address::generate_taproot_change_scriptpubkey(
+            public_key_serialized,
+        );
+    let change_address = bitcoin::Address::from_script(
+        &change_script,
+        bitcoin::Network::Regtest,
+    )?;
     Ok(change_address)
 }
 
@@ -334,11 +373,13 @@ async fn sync_checkpoint(
 ) -> Result<(), Error> {
     for client in clients.iter_mut() {
         client
-            .new_consensus_checkpoint(botanix_btc_server_client::ConsensusCheckpointRequest {
-                checkpoint_block_hash: checkpoint_block_hash.clone(),
-                pegins: vec![],
-                pending_pegouts: vec![],
-            })
+            .new_consensus_checkpoint(
+                botanix_btc_server_client::ConsensusCheckpointRequest {
+                    checkpoint_block_hash: checkpoint_block_hash.clone(),
+                    pegins: vec![],
+                    pending_pegouts: vec![],
+                },
+            )
             .await
             .map_err(|_| Error::ConsensusCheckpoint)?;
     }

@@ -51,15 +51,27 @@ macro_rules! run_test {
 #[macro_export]
 macro_rules! it_info_print {
     ($string_message:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
         tracing::info!("({}) {:?}", label, $string_message);
     }};
     ($string_message:expr, $info1:expr, $info2:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
-        tracing::info!("({}) {} {:?} {:?}", label, $string_message, $info1, $info2);
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        tracing::info!(
+            "({}) {} {:?} {:?}",
+            label,
+            $string_message,
+            $info1,
+            $info2
+        );
     }};
     ($string_message:expr, $info:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
         tracing::info!("({}) {} {:?}", label, $string_message, $info);
     }};
 }
@@ -67,15 +79,27 @@ macro_rules! it_info_print {
 #[macro_export]
 macro_rules! it_error_print {
     ($string_message:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
         tracing::error!("({}) {:?}", label, $string_message);
     }};
     ($string_message:expr, $info1:expr, $info2:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
-        tracing::error!("({}) {} {:?} {:?}", label, $string_message, $info1, $info2);
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        tracing::error!(
+            "({}) {} {:?} {:?}",
+            label,
+            $string_message,
+            $info1,
+            $info2
+        );
     }};
     ($string_message:expr, $info:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
         tracing::error!("({}) {} {:?}", label, $string_message, $info);
     }};
 }
@@ -83,15 +107,27 @@ macro_rules! it_error_print {
 #[macro_export]
 macro_rules! it_warn_print {
     ($string_message:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
         tracing::warn!("({}) {:?}", label, $string_message);
     }};
     ($string_message:expr, $info1:expr, $info2:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
-        tracing::warn!("({}) {} {:?} {:?}", label, $string_message, $info1, $info2);
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        tracing::warn!(
+            "({}) {} {:?} {:?}",
+            label,
+            $string_message,
+            $info1,
+            $info2
+        );
     }};
     ($string_message:expr, $info:expr) => {{
-        let label = ansi_term::Color::Purple.bold().paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
+        let label = ansi_term::Color::Purple
+            .bold()
+            .paint(">>>>>>>>>>> IT_SUITE <<<<<<<<<<<<");
         tracing::warn!("({}) {} {:?}", label, $string_message, $info);
     }};
 }

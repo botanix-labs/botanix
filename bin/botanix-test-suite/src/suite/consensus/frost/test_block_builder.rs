@@ -1,3 +1,4 @@
+use alloy_primitives::Address;
 use botanix_authority_edh::extra_data_header::ExtraDataHeader;
 use ethers::types::H256;
 use std::{collections::HashSet, str::FromStr};
@@ -21,19 +22,27 @@ pub async fn block_builder(
         .as_ref()
         .expect("test federation member configurations")
         .clone();
-    let mut rx = suite.local_context.poa_notification.as_ref().expect("poa notifs").subscribe();
+    let mut rx = suite
+        .local_context
+        .poa_notification
+        .as_ref()
+        .expect("poa notifs")
+        .subscribe();
 
     // take the first member as the target member
     let target_member_index = 0;
 
     // assign targeted fed member
-    let targeted_fed_member = test_fed_members.get(&(target_member_index as u16)).cloned().unwrap();
+    let targeted_fed_member =
+        test_fed_members.get(&(target_member_index as u16)).cloned().unwrap();
 
     // create a minting contract instance
-    let botanix_eth_client =
-        targeted_fed_member.botanix_eth_client.clone().expect("Botanix Client must be initialized");
+    let botanix_eth_client = targeted_fed_member
+        .botanix_eth_client
+        .clone()
+        .expect("Botanix Client must be initialized");
 
-    let addr = reth_primitives::Address::from_str(&suite.global_context.botanix_fee_recipient)
+    let addr = Address::from_str(&suite.global_context.botanix_fee_recipient)
         .expect("valid eth address");
     let botanix_block_reward_address_balance_before =
         botanix_eth_client.get_botanix_balance(addr).await.unwrap();
@@ -42,11 +51,14 @@ pub async fn block_builder(
         botanix_block_reward_address_balance_before
     );
 
-    let addr = reth_primitives::Address::from_str(&suite.global_context.lst_fee_receiver)
+    let addr = Address::from_str(&suite.global_context.lst_fee_receiver)
         .expect("valid eth address");
     let lst_fee_receiver_address_balance_before =
         botanix_eth_client.get_botanix_balance(addr).await.unwrap();
-    it_info_print!("LST FeeReceiver balance before", lst_fee_receiver_address_balance_before);
+    it_info_print!(
+        "LST FeeReceiver balance before",
+        lst_fee_receiver_address_balance_before
+    );
 
     // create a hashmap to store tx hashes
     let mut tx_hashes_set = HashSet::new();
@@ -55,15 +67,21 @@ pub async fn block_builder(
     it_info_print!("Sending eoa transaction...");
     let eoa_receiver = ethers::core::types::Address::random();
     it_info_print!("Eoa receiver: {:?}", eoa_receiver.to_string());
-    let tx_receipt = botanix_eth_client.send_eoa(eoa_receiver, SEND_AMOUNT).await.unwrap().unwrap();
+    let tx_receipt = botanix_eth_client
+        .send_eoa(eoa_receiver, SEND_AMOUNT)
+        .await
+        .unwrap()
+        .unwrap();
     it_info_print!("Eoa tx receipt hash: {:?}", tx_receipt.transaction_hash);
     tx_hashes_set.insert(tx_receipt.transaction_hash);
 
     // wait for canonical chain updates reported by the node, then send new tx
     let mut tx_hashes_set: HashSet<u16> = HashSet::new();
-    let mut block_fee_recipient_address: Option<reth_primitives::Address> = None;
+    let mut block_fee_recipient_address: Option<Address> = None;
     while let Ok(notification) = rx.recv().await {
-        if let Notifications::CanonState(canon_state_notification) = notification {
+        if let Notifications::CanonState(canon_state_notification) =
+            notification
+        {
             it_info_print!(
                 "Received payload from engine index",
                 canon_state_notification.engine_index
@@ -82,9 +100,13 @@ pub async fn block_builder(
             it_info_print!("Block receipts hashes ?", block_receipt_hashes);
 
             if block_fee_recipient_address.is_none() {
-                let extra_data = canon_state_notification.block.extra_data.0.to_vec();
-                let edh = ExtraDataHeader::deserialize(&mut extra_data.as_slice()).unwrap();
-                block_fee_recipient_address = Some(edh.block_fee_recipient_address);
+                let extra_data =
+                    canon_state_notification.block.extra_data.0.to_vec();
+                let edh =
+                    ExtraDataHeader::deserialize(&mut extra_data.as_slice())
+                        .unwrap();
+                block_fee_recipient_address =
+                    Some(edh.block_fee_recipient_address);
             }
 
             // if the received tx hash is not the one we are interested in, skip
@@ -104,8 +126,10 @@ pub async fn block_builder(
     // Check that all members accepted the block
     for (_index, _fed_member_config) in test_fed_members.iter() {
         // verify 80/20 block reward split is correct
-        let addr = reth_primitives::Address::from_str(&suite.global_context.botanix_fee_recipient)
-            .expect("valid eth address");
+        let addr = alloy_primitives::Address::from_str(
+            &suite.global_context.botanix_fee_recipient,
+        )
+        .expect("valid eth address");
         let botanix_block_reward_address_balance_after =
             botanix_eth_client.get_botanix_balance(addr).await.unwrap();
         it_info_print!(
@@ -113,33 +137,47 @@ pub async fn block_builder(
             botanix_block_reward_address_balance_after
         );
 
-        let addr = reth_primitives::Address::from_str(&suite.global_context.lst_fee_receiver)
-            .expect("valid eth address");
+        let addr = alloy_primitives::Address::from_str(
+            &suite.global_context.lst_fee_receiver,
+        )
+        .expect("valid eth address");
         let lst_fee_receiver_address_balance_after =
             botanix_eth_client.get_botanix_balance(addr).await.unwrap();
-        it_info_print!("LST FeeReceiver  balance after", lst_fee_receiver_address_balance_after);
+        it_info_print!(
+            "LST FeeReceiver  balance after",
+            lst_fee_receiver_address_balance_after
+        );
 
         let block_fee_recipient_address = block_fee_recipient_address.unwrap();
         // Since the fed member has never produced a block until now,
         // the entire balance should be the block fee reward.
-        let fed_member_balance =
-            botanix_eth_client.get_botanix_balance(block_fee_recipient_address).await.unwrap();
+        let fed_member_balance = botanix_eth_client
+            .get_botanix_balance(block_fee_recipient_address)
+            .await
+            .unwrap();
         it_info_print!("Fed member balance", fed_member_balance);
 
-        let botanix_block_reward = botanix_block_reward_address_balance_after -
-            botanix_block_reward_address_balance_before;
+        let botanix_block_reward = botanix_block_reward_address_balance_after
+            - botanix_block_reward_address_balance_before;
 
         let lst_fee_receiver_block_reward =
-            lst_fee_receiver_address_balance_after - lst_fee_receiver_address_balance_before;
+            lst_fee_receiver_address_balance_after
+                - lst_fee_receiver_address_balance_before;
 
-        let total_block_reward =
-            fed_member_balance + botanix_block_reward + lst_fee_receiver_block_reward;
+        let total_block_reward = fed_member_balance
+            + botanix_block_reward
+            + lst_fee_receiver_block_reward;
 
-        assert_eq!(lst_fee_receiver_block_reward, (total_block_reward * 50) / 100); // 50%
+        assert_eq!(
+            lst_fee_receiver_block_reward,
+            (total_block_reward * 50) / 100
+        ); // 50%
         assert_eq!(botanix_block_reward, (total_block_reward * 40) / 100); // 40%
         assert_eq!(
             fed_member_balance,
-            (total_block_reward - lst_fee_receiver_block_reward - botanix_block_reward)
+            (total_block_reward
+                - lst_fee_receiver_block_reward
+                - botanix_block_reward)
         ); // 10%
     }
 

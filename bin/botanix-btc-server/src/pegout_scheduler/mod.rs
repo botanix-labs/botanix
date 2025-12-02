@@ -288,7 +288,9 @@ impl PegoutScheduler {
             .expect("pk key package should exist")
             .verifying_key()
             .to_secp_pk()?;
-        let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
         Ok(change_spk)
     }
 
@@ -1452,7 +1454,9 @@ mod tests {
             .verifying_key()
             .to_secp_pk()
             .unwrap();
-        let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
         let change_output =
             TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
         let tx = create_tx(3, 3, Some(change_output.clone()));
@@ -1592,7 +1596,9 @@ mod tests {
             .verifying_key()
             .to_secp_pk()
             .unwrap();
-        let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
         let change_output =
             TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
 
@@ -1654,7 +1660,9 @@ mod tests {
             .verifying_key()
             .to_secp_pk()
             .unwrap();
-        let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
         let change_output =
             TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
 
@@ -1843,7 +1851,9 @@ mod tests {
             .verifying_key()
             .to_secp_pk()
             .unwrap();
-        let change_spk = generate_taproot_change_scriptpubkey(&agg_pk);
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
         let change_output =
             TxOut { value: Amount::from_sat(1000), script_pubkey: change_spk };
 

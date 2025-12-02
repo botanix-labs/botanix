@@ -27,8 +27,10 @@ impl StopHandle {
     pub fn spawn_signal_listener(&self) -> JoinHandle<()> {
         let sender = self.sender.clone();
         let thread_handle = tokio::spawn(async move {
-            let mut sigint = signal(SignalKind::interrupt()).expect("shutdown_listener");
-            let mut sigterm = signal(SignalKind::terminate()).expect("shutdown_listener");
+            let mut sigint =
+                signal(SignalKind::interrupt()).expect("shutdown_listener");
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("shutdown_listener");
 
             tokio::select! {
                 _ = sigint.recv() => {
@@ -104,9 +106,14 @@ mod tests {
         stop_handle.spawn_signal_listener();
 
         // We will wait for a signal that is never sent
-        let result = timeout(Duration::from_millis(100), stop_handle.wait_for_signal()).await;
+        let result =
+            timeout(Duration::from_millis(100), stop_handle.wait_for_signal())
+                .await;
 
         // Assert that the timeout occurred because no signal was sent
-        assert!(result.is_err(), "No signal was sent, so wait_for_signal should timeout");
+        assert!(
+            result.is_err(),
+            "No signal was sent, so wait_for_signal should timeout"
+        );
     }
 }

@@ -4,7 +4,10 @@ use super::{error::Error, test_dkg::do_dkg};
 use crate::{
     it_info_print,
     suite::consensus::ConsensusIntegrationTestSuite,
-    utils::{get_checkpoint_block_hash, send_pegin_notification, send_pegins_notifications},
+    utils::{
+        get_checkpoint_block_hash, send_pegin_notification,
+        send_pegins_notifications,
+    },
 };
 use bitcoin::{hashes::Hash, Address};
 use hex::{self, encode as hex_encode};
@@ -19,7 +22,11 @@ pub struct Pegins {
 
 impl Pegins {
     pub fn new() -> Self {
-        Pegins { eth_addresses: Vec::new(), btc_addresses: Vec::new(), txids: Vec::new() }
+        Pegins {
+            eth_addresses: Vec::new(),
+            btc_addresses: Vec::new(),
+            txids: Vec::new(),
+        }
     }
 }
 
@@ -37,8 +44,12 @@ pub async fn test_utxo_commitment(
     }
 
     // create btc server clients
-    let mut clients =
-        suite.local_context.btc_server_clients.as_ref().expect("btc servers not found").clone();
+    let mut clients = suite
+        .local_context
+        .btc_server_clients
+        .as_ref()
+        .expect("btc servers not found")
+        .clone();
     // run the dkg
     let _ = do_dkg(&mut clients).await?;
 
@@ -47,14 +58,17 @@ pub async fn test_utxo_commitment(
     for input in 0..NUM_UTXOS {
         let eth_address = pegins.eth_addresses.get(input).cloned().unwrap();
         let pk = clients[0]
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address =
-            Address::from_str(&pk.gateway_address).expect("valid address").assume_checked();
+        let btc_address = Address::from_str(&pk.gateway_address)
+            .expect("valid address")
+            .assume_checked();
         pegins.btc_addresses.push(btc_address);
     }
 
@@ -69,7 +83,8 @@ pub async fn test_utxo_commitment(
         for input in 0..NUM_UTXOS {
             let txid = pegins.txids.get(input).cloned().unwrap();
             let eth_address = pegins.eth_addresses.get(input).cloned().unwrap();
-            let btc_address: Address = pegins.btc_addresses.get(input).cloned().unwrap();
+            let btc_address: Address =
+                pegins.btc_addresses.get(input).cloned().unwrap();
             send_pegin_notification(
                 c,
                 checkpoint_block_hash.clone(),
@@ -85,7 +100,9 @@ pub async fn test_utxo_commitment(
     let mut hashset = HashSet::new();
     for c in clients.iter_mut() {
         let wallet_state = c
-            .get_wallet_state(tonic::Request::new(botanix_btc_server_client::Empty {}))
+            .get_wallet_state(tonic::Request::new(
+                botanix_btc_server_client::Empty {},
+            ))
             .await
             .unwrap()
             .into_inner();
@@ -98,7 +115,9 @@ pub async fn test_utxo_commitment(
     let mut all_utxos = vec![];
     for c in clients.iter_mut() {
         let utxos = c
-            .get_all_utxos(tonic::Request::new(botanix_btc_server_client::Empty {}))
+            .get_all_utxos(tonic::Request::new(
+                botanix_btc_server_client::Empty {},
+            ))
             .await
             .unwrap()
             .into_inner()
@@ -127,9 +146,10 @@ pub async fn test_utxo_commitment(
         .map(|txid| bitcoin::Txid::from_slice(txid).unwrap())
         .collect::<Vec<bitcoin::Txid>>();
     for utxo in utxos.iter() {
-        let txid =
-            bitcoin::Txid::from_slice(utxo.clone().outpoint.expect("outpoint").txid.as_slice())
-                .expect("valid txid");
+        let txid = bitcoin::Txid::from_slice(
+            utxo.clone().outpoint.expect("outpoint").txid.as_slice(),
+        )
+        .expect("valid txid");
         assert!(txids.contains(&txid));
     }
 
@@ -146,14 +166,17 @@ pub async fn test_utxo_commitment(
     for input in 0..NUM_UTXOS {
         let eth_address = pegins.eth_addresses.get(input).cloned().unwrap();
         let pk = clients[0]
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address =
-            Address::from_str(&pk.gateway_address).expect("valid address").assume_checked();
+        let btc_address = Address::from_str(&pk.gateway_address)
+            .expect("valid address")
+            .assume_checked();
         pegins.btc_addresses.push(btc_address);
     }
     // only notify one of the clients
@@ -174,7 +197,9 @@ pub async fn test_utxo_commitment(
     }
 
     let first_wallet_state = clients[0]
-        .get_wallet_state(tonic::Request::new(botanix_btc_server_client::Empty {}))
+        .get_wallet_state(tonic::Request::new(
+            botanix_btc_server_client::Empty {},
+        ))
         .await
         .unwrap()
         .into_inner()
@@ -183,7 +208,9 @@ pub async fn test_utxo_commitment(
     let mut hashset = HashSet::new();
     for c in clients[1..].iter_mut() {
         let wallet_state = c
-            .get_wallet_state(tonic::Request::new(botanix_btc_server_client::Empty {}))
+            .get_wallet_state(tonic::Request::new(
+                botanix_btc_server_client::Empty {},
+            ))
             .await
             .unwrap()
             .into_inner();
@@ -201,14 +228,17 @@ pub async fn test_utxo_commitment(
         pegins.eth_addresses.push(eth_address);
         pegins.txids.push(rand::random::<[u8; 32]>());
         let pk = clients[0]
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address =
-            Address::from_str(&pk.gateway_address).expect("valid address").assume_checked();
+        let btc_address = Address::from_str(&pk.gateway_address)
+            .expect("valid address")
+            .assume_checked();
         pegins.btc_addresses.push(btc_address);
     }
 

@@ -541,8 +541,9 @@ pub(crate) fn validate_outputs(
             .verifying_key()
             .to_secp_pk()
             .expect("valid secp pk");
+        let serialized_agg_pkey = agg_pk.serialize();
         let expected_script_pubkey =
-            generate_taproot_change_scriptpubkey(&agg_pk);
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
 
         let change_output = psbt
             .unsigned_tx

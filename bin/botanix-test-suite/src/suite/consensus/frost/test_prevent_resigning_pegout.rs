@@ -3,8 +3,8 @@ use std::str::FromStr;
 use crate::{
     suite::consensus::frost::test_signing::{do_signing, Pegin},
     utils::{
-        get_checkpoint_block_hash, send_pegin_notification, send_pegout_notification,
-        MIN_BLOCKS_COINBASE_MATURE,
+        get_checkpoint_block_hash, send_pegin_notification,
+        send_pegout_notification, MIN_BLOCKS_COINBASE_MATURE,
     },
 };
 use bitcoin::{consensus::Encodable, Address};
@@ -22,7 +22,7 @@ use crate::{
     },
     utils::generate_blocks,
 };
-use btc_server_client as client;
+use botanix_btc_server_client as client;
 
 const NUM_PEGINS: usize = 5;
 
@@ -36,7 +36,8 @@ pub async fn test_prevent_resigning_pegout(
         let _ = bitcoind.unload_wallet(Some(&wallet))?;
     }
     let wallet_name = get_unique_wallet_name();
-    let create_res = bitcoind.create_wallet(&wallet_name, None, None, None, None);
+    let create_res =
+        bitcoind.create_wallet(&wallet_name, None, None, None, None);
     if create_res.is_err() {
         tracing::info!("Wallet already exists, loading wallet ...");
         // wallet already exists, load wallet
@@ -61,16 +62,21 @@ pub async fn test_prevent_resigning_pegout(
     for _ in 0..NUM_PEGINS {
         let eth_address = ethers::core::types::Address::random();
         // Lets get the gateway address for this eth address
-        let mut client =
-            clients.get(0).cloned().ok_or_else(|| anyhow::anyhow!("client not found"))?;
+        let mut client = clients
+            .get(0)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("client not found"))?;
         let res = client
-            .get_gateway_address(tonic::Request::new(botanix_btc_server_client::GetGatewayAddressRequest {
-                eth_address: hex_encode(eth_address),
-            }))
+            .get_gateway_address(tonic::Request::new(
+                botanix_btc_server_client::GetGatewayAddressRequest {
+                    eth_address: hex_encode(eth_address),
+                },
+            ))
             .await
             .map_err(Error::Request)?
             .into_inner();
-        let btc_address = Address::from_str(&res.gateway_address)?.assume_checked();
+        let btc_address =
+            Address::from_str(&res.gateway_address)?.assume_checked();
         let txid = bitcoind.send_to_address(
             &btc_address,
             amount_to_send,
@@ -122,7 +128,9 @@ pub async fn test_prevent_resigning_pegout(
                 checkpoint_block_hash.clone(),
                 pegin.btc_address.clone(),
                 hex_encode(pegin.eth_address),
-                txid_bytes.try_into().map_err(|_| anyhow::anyhow!("invalid txid"))?,
+                txid_bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("invalid txid"))?,
                 ot.vout,
                 pegin.amount.to_sat(),
             )
@@ -134,8 +142,8 @@ pub async fn test_prevent_resigning_pegout(
     let mut rand = StdRng::from_entropy();
     let mut pegout_id_bytes = [0u8; 36];
     rand.fill_bytes(&mut pegout_id_bytes);
-    let pegout_id =
-        PegoutId::from_bytes(&pegout_id_bytes).map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
+    let pegout_id = PegoutId::from_bytes(&pegout_id_bytes)
+        .map_err(|_| anyhow::anyhow!("invalid pegout id"))?;
 
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let sk = bitcoin::PrivateKey::generate(bitcoin::Network::Regtest);

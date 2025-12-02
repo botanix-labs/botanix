@@ -2,13 +2,18 @@ use super::{create_temp_working_directory, kill_process_at_port, Scope};
 use crate::{
     context::GlobalContext,
     suite::consensus::{
-        common::{events::get_unique_wallet_name, spawn_child_process},
+        common::{
+            bitcoind::{
+                BitcoindClientFactory, BitcoindConfig, BitcoindFactory,
+            },
+            events::get_unique_wallet_name,
+            spawn_child_process,
+        },
         ConsensusIntegrationTestSuite,
     },
     utils::{generate_blocks, MIN_BLOCKS_COINBASE_MATURE},
 };
 use bitcoincore_rpc::RpcApi;
-use botanix_btc_wallet::bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory};
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     process::{Child, Command},
@@ -39,7 +44,11 @@ impl SpawnedBitcoindProcess {
         kill_process_at_port(self.port);
 
         if let Err(e) = std::fs::remove_dir_all(&self.working_directory) {
-            warn!("Couldn't remove bitcoind db dir at {}: {}", self.working_directory.display(), e);
+            warn!(
+                "Couldn't remove bitcoind db dir at {}: {}",
+                self.working_directory.display(),
+                e
+            );
         }
     }
 
@@ -101,8 +110,10 @@ impl BitcoindNodeConfig {
     pub fn spawn_service(&self) -> anyhow::Result<SpawnedBitcoindProcess> {
         // prepare run arguments
         let command = "bitcoind";
-        let datadir =
-            format!("-datadir={}", self.working_directory.join("data").display().to_string());
+        let datadir = format!(
+            "-datadir={}",
+            self.working_directory.join("data").display().to_string()
+        );
         let bitcoind_user = format!("-rpcuser={}", self.bitcoind_user);
         let bitcoind_pwd = format!("-rpcpassword={}", self.bitcoind_password);
         let args = vec![
@@ -132,19 +143,26 @@ impl BitcoindNodeConfig {
     }
 
     // this re-starts an existing stopped bitcoind instance and updates the local context
-    pub async fn re_start(&mut self, suite: &mut ConsensusIntegrationTestSuite) {
+    pub async fn re_start(
+        &mut self,
+        suite: &mut ConsensusIntegrationTestSuite,
+    ) {
         match self.spawn_service() {
             Ok(bitcoind_process) => {
                 tokio::time::sleep(Duration::from_secs(6)).await;
 
-                let bitcoind_factory = BitcoindClientFactory::new(BitcoindConfig::new(
-                    suite.global_context.bitcoind_url.clone(),
-                    suite.global_context.bitcoind_user.clone(),
-                    suite.global_context.bitcoind_pass.clone(),
-                ));
-                let bitcoind_client =
-                    bitcoind_factory.build_and_connect().expect("to build and connect client");
-                bitcoind_client.load_wallet(&self.wallet_name).expect("wallet exists");
+                let bitcoind_factory =
+                    BitcoindClientFactory::new(BitcoindConfig::new(
+                        suite.global_context.bitcoind_url.clone(),
+                        suite.global_context.bitcoind_user.clone(),
+                        suite.global_context.bitcoind_pass.clone(),
+                    ));
+                let bitcoind_client = bitcoind_factory
+                    .build_and_connect()
+                    .expect("to build and connect client");
+                bitcoind_client
+                    .load_wallet(&self.wallet_name)
+                    .expect("wallet exists");
 
                 // update local context
                 suite.local_context.bitcoind_process = Some(bitcoind_process);
@@ -161,21 +179,38 @@ impl BitcoindNodeConfig {
 }
 
 impl BitcoindNodeConfig {
-    pub async fn setup_wallet(&self, bitcoin_client: &impl RpcApi) -> anyhow::Result<()> {
-        match bitcoin_client.create_wallet(&self.wallet_name, None, None, None, None) {
+    pub async fn setup_wallet(
+        &self,
+        bitcoin_client: &impl RpcApi,
+    ) -> anyhow::Result<()> {
+        match bitcoin_client.create_wallet(
+            &self.wallet_name,
+            None,
+            None,
+            None,
+            None,
+        ) {
             Ok(res) => {
-                tracing::info!("Created wallet: {} with result {res:?}", &self.wallet_name);
+                tracing::info!(
+                    "Created wallet: {} with result {res:?}",
+                    &self.wallet_name
+                );
             }
             Err(e) => {
                 let err_msg = e.to_string();
                 // Load the wallet if it already exists
-                if err_msg.contains("already exists") || err_msg.contains("already loaded") {
-                    tracing::info!("Wallet {} already loaded or existing", &self.wallet_name);
+                if err_msg.contains("already exists")
+                    || err_msg.contains("already loaded")
+                {
+                    tracing::info!(
+                        "Wallet {} already loaded or existing",
+                        &self.wallet_name
+                    );
                 } else {
                     tracing::info!("Loading wallet {} ...", &self.wallet_name);
-                    bitcoin_client
-                        .load_wallet(&self.wallet_name)
-                        .map_err(|e| anyhow::anyhow!("Failed to create wallet: {}", e))?;
+                    bitcoin_client.load_wallet(&self.wallet_name).map_err(
+                        |e| anyhow::anyhow!("Failed to create wallet: {}", e),
+                    )?;
                 }
             }
         }
@@ -187,7 +222,10 @@ impl BitcoindNodeConfig {
 
 pub async fn create_bitcoind_node(
     global_context: Arc<GlobalContext>,
-) -> anyhow::Result<(BitcoindNodeConfig, tokio::sync::broadcast::Sender<Notifications>)> {
+) -> anyhow::Result<(
+    BitcoindNodeConfig,
+    tokio::sync::broadcast::Sender<Notifications>,
+)> {
     let (tx, _rx) = tokio::sync::broadcast::channel::<Notifications>(100);
     let (test_signal_tx, _test_signal_rx) = channel::<TestSignal>(10);
     let bitcoind_node = BitcoindNodeConfig::new(

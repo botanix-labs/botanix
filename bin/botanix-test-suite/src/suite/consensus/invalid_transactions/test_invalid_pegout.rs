@@ -9,10 +9,16 @@ pub const SEND_AMOUNT: u64 = 1; // = 1 ether
 pub async fn invalid_pegout(
     suite: &ConsensusIntegrationTestSuite,
 ) -> anyhow::Result<(), super::error::InvalidTransactionError> {
-    let test_fed_members = suite.local_context.poa_nodes.as_ref().unwrap().clone();
+    let test_fed_members =
+        suite.local_context.poa_nodes.as_ref().unwrap().clone();
 
     // subscribe to notifications so channel stays open
-    let _rx = suite.local_context.poa_notification.as_ref().expect("poa notifs").subscribe();
+    let _rx = suite
+        .local_context
+        .poa_notification
+        .as_ref()
+        .expect("poa notifs")
+        .subscribe();
 
     // Generate and send pegout tx
     // invalid bitcoin address
@@ -25,8 +31,9 @@ pub async fn invalid_pegout(
         .expect("Botanix Client must be initialized");
 
     // create contract deployer to avoid any nonce issues during contract deployment
-    let contract_deployer =
-        botanix_eth_client.get_contract_deployer().expect("To get contract deployer");
+    let contract_deployer = botanix_eth_client
+        .get_contract_deployer()
+        .expect("To get contract deployer");
 
     // Fund the contract deployer
     let _tx_receipt = botanix_eth_client
@@ -49,16 +56,21 @@ pub async fn invalid_pegout(
     let sender_address = botanix_eth_client.get_sender_address();
     // sender address balance before pegout
     let mut sender_address_initial_balance = botanix_eth_client
-        .get_botanix_balance(reth_primitives::Address(
+        .get_botanix_balance(alloy_primitives::Address(
             botanix_eth_client.get_sender_address().0.into(),
         ))
         .await
         .unwrap();
-    it_info_print!("Sender address initial balance: ", sender_address_initial_balance);
+    it_info_print!(
+        "Sender address initial balance: ",
+        sender_address_initial_balance
+    );
 
     // nonce before pegout
-    let nonce_before =
-        botanix_eth_client.get_nonce(botanix_eth_client.get_sender_address()).await.unwrap();
+    let nonce_before = botanix_eth_client
+        .get_nonce(botanix_eth_client.get_sender_address())
+        .await
+        .unwrap();
     it_info_print!("Nonce before pegout: ", nonce_before);
 
     // use empty pegout data
@@ -69,29 +81,38 @@ pub async fn invalid_pegout(
     // send to attack contract which halves the pegout amount
     // 0.5 BTC -> 0.25 BTC: trying to get refunded 0.5 instead of 0.25 that is burned
     let tx_receipt = botanix_eth_client
-        .burn_attack(invalid_pegout_destination, pegout_data, pegout_amount.to_wei())
+        .burn_attack(
+            invalid_pegout_destination,
+            pegout_data,
+            pegout_amount.to_wei(),
+        )
         .await
         .unwrap()
         .unwrap();
 
     // sender address balance after pegout
     let sender_address_final_balance = botanix_eth_client
-        .get_botanix_balance(reth_primitives::Address(
+        .get_botanix_balance(alloy_primitives::Address(
             botanix_eth_client.get_sender_address().0.into(),
         ))
         .await
         .unwrap();
-    it_info_print!("Sender address final balance: ", sender_address_final_balance);
+    it_info_print!(
+        "Sender address final balance: ",
+        sender_address_final_balance
+    );
 
     // subtract tx costs from initial balance
-    let tx_cost = tx_receipt.gas_used.unwrap() * tx_receipt.effective_gas_price.unwrap();
+    let tx_cost =
+        tx_receipt.gas_used.unwrap() * tx_receipt.effective_gas_price.unwrap();
     it_info_print!("Tx cost: ", tx_cost);
     sender_address_initial_balance -= tx_cost;
 
     assert_eq!(sender_address_initial_balance, sender_address_final_balance);
 
     // nonce after pegout
-    let nonce_after = botanix_eth_client.get_nonce(sender_address.clone()).await.unwrap();
+    let nonce_after =
+        botanix_eth_client.get_nonce(sender_address.clone()).await.unwrap();
     it_info_print!("Nonce after pegout: ", nonce_after);
 
     assert!(nonce_after > nonce_before);

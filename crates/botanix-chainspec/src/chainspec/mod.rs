@@ -17,9 +17,11 @@ use reth_network_peers::NodeRecord;
 use std::{ops::Deref, sync::Arc};
 
 use crate::{
-    BotanixHardfork, BotanixHardforks, constants::{
-        BOTANIX_INITIAL_BASE_FEE, BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID, botanix_mainnet_head, botanix_testnet_head
-    }
+    constants::{
+        botanix_mainnet_head, botanix_testnet_head, BOTANIX_INITIAL_BASE_FEE,
+        BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID,
+    },
+    BotanixHardfork, BotanixHardforks,
 };
 pub mod constants;
 pub mod parser;
