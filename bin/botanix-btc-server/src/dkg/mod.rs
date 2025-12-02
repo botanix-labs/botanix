@@ -649,6 +649,10 @@ impl DkgStateMachine {
     pub fn frost_id(&self) -> frost::Identifier {
         self.my_frost_id
     }
+    /// Returns the multisig identifier for this DKG session.
+    pub fn multisig_id(&self) -> u32 {
+        self.multisig_id
+    }
     /// Checks if this participant is the coordinator of the DKG process.
     pub fn is_coordinator(&self) -> bool {
         self.my_frost_id == self.coordinator

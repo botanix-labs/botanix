@@ -2404,10 +2404,11 @@ where
         }
 
         if let Some((sec_key, pub_key)) = dkg.machine.aggregate_key_packages() {
-            if self.db.get_key_package().to_status()?.is_none() {
-                info!("DKG completed successfully, saving key packages...");
+            let multisig_id = dkg.machine.multisig_id();
+            if self.db.get_key_package_by_id(multisig_id).to_status()?.is_none() {
+                info!("DKG completed successfully for multisig_id {}, saving key packages...", multisig_id);
                 if let Err(e) =
-                    self.db.set_key_package(sec_key.clone()).to_status()
+                    self.db.set_key_package_by_id(multisig_id, sec_key.clone()).to_status()
                 {
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
@@ -2420,7 +2421,7 @@ where
                 }
 
                 if let Err(e) =
-                    self.db.set_pubkey_package(pub_key.clone()).to_status()
+                    self.db.set_pubkey_package_by_id(multisig_id, pub_key.clone()).to_status()
                 {
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
