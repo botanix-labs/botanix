@@ -2,7 +2,7 @@ use alloy_primitives::Address;
 use serde::{Deserialize, Serialize};
 
 /// Information about the Botanix Pegin Gateway Address
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq,)]
 pub struct GatewayAddress {
     /// Bitcoin Pegin Address
     pub gateway_address: String,

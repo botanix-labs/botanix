@@ -2,6 +2,7 @@
 
 mod cli;
 use anyhow::Result as AnyResult;
+use botanix_reth::node::{BotanixNode, storage::BotanixStorage};
 use botanix_storage::BotanixProviderFactory;
 use clap::Parser;
 use cli::Cli;
@@ -54,9 +55,9 @@ async fn main() -> AnyResult<()> {
     };
     tracing::info!(target: "db_cleaner::cli", path = ?db_path, "Database successfully opened!");
     let database = Arc::new(db);
-
-    let provider_factory =
-        BotanixProviderFactory::<Arc<DatabaseEnv>>::new(database);
+    let storage = Arc::new(BotanixStorage::default());
+    let chain_spec_arc = Arc::new(chain_spec.clone());
+    let provider_factory = BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(database, chain_spec_arc, static_files_provider.clone(), PruneModes::none(), storage);
 
     match cli.entity {
         cli::Entity::Snapshots => {

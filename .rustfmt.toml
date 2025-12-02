@@ -31,6 +31,6 @@ use_field_init_shorthand = true
 use_try_shorthand = true
 
 ignore = [
-  "bin/btc-server/client/src/**",
-  "bin/btc-server/src/rpc/btc_server.rs",
+  "bin/botanix-btc-server/client/src/**",
+  "bin/botanix-btc-server/src/rpc/btc_server.rs",
 ]

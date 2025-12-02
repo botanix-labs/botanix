@@ -84,7 +84,7 @@ bin/test-suite/*.txt
 cobertura.xml
 
 # btc-server rpc binary
-bin/btc-server/src/rpc/btc_server.bin
+bin/botanix-btc-server/src/rpc/btc_server.bin
 
 tmp
 

@@ -42,29 +42,28 @@ help: ## Display this help.
 
 .PHONY: install
 install: ## Build and install the reth binary under `~/.cargo/bin`.
-	cargo install --path bin/botanix-reth --bin reth-botanix --force --locked \
+	cargo install --path bin/botanix-reth --bin botanix-reth --force --locked \
 		--features "$(FEATURES)" \
 		--profile "$(PROFILE)" \
 		$(CARGO_INSTALL_EXTRA_FLAGS)
 
 .PHONY: install-btc-server
 install-btc-server: ## Build and install the btc-server binary under `~/.cargo/bin`.
-	cargo install --path bin/btc-server --bin btc-server --force --locked \
+	cargo install --path bin/botanix-btc-server --bin botanix-btc-server --force --locked \
 		--features "$(FEATURES)" \
 		--profile "$(PROFILE)" \
 		$(CARGO_INSTALL_EXTRA_FLAGS)
 
 .PHONY: build
 build: ## Build the reth binary into `target` directory.
-	cargo build --bin reth-botanix --features "$(FEATURES)" --profile "$(PROFILE)"
+	cargo build --bin botanix-reth --features "$(FEATURES)" --profile "$(PROFILE)"
 
 .PHONY: build-debug
 build-debug: ## Build the reth binary into `target/debug` directory.
-	cargo build --bin reth-botanix --features "$(FEATURES)"
-
+	cargo build --bin botanix-reth --features "$(FEATURES)"
 # Builds the reth binary natively.
 build-native-%:
-	cargo build --bin reth-botanix --target $* --features "$(FEATURES)" --profile "$(PROFILE)"
+	cargo build --bin botanix-reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)"
 
 # The following commands use `cross` to build a cross-compile.
 #
@@ -94,7 +93,7 @@ build-%:
 
 
 build-btc-server-%:
-	cross build --package btc-server --bin btc-server --target $* --release
+	cross build --package botanix-btc-server --bin botanix-btc-server --target $* --release
 
 ##@ Test
 
@@ -377,8 +376,8 @@ clean-unused-deps:
 # ------------------------------------------------------------
 
 start-test-suite-runners:
-	cd ./bin/test-suite && \
-	/usr/local/bin/test-suite \
+	cd ./bin/botanix-test-suite && \
+	/usr/local/bin/botanix-test-suite \
 	--test-to-run "${TEST_TO_RUN}" \
 	--config "./config.toml" \
 	--run-suite all \
@@ -390,8 +389,8 @@ start-test-suite-runners:
 	--syncing-nodes 1
 
 start-test-suite:
-	cd ./bin/test-suite && \
-	cargo run --bin test-suite -- \
+	cd ./bin/botanix-test-suite && \
+	cargo run --bin botanix-test-suite -- \
 	--test-to-run "${TEST_TO_RUN}" \
 	--config "./config.toml" \
 	--run-suite all \
@@ -403,10 +402,10 @@ start-test-suite:
 	--syncing-nodes 1
 
 start-test-suite-build:
-	cargo build -p btc-server --bin btc-server && \
-	cargo build -p reth --bin reth && \
-	cd ./bin/test-suite && \
-	cargo run --bin test-suite -- \
+	cargo build -p botanix-btc-server --bin botanix-btc-server && \
+	cargo build -p botanix-reth --bin botanix-reth && \
+	cd ./bin/botanix-test-suite && \
+	cargo run --bin botanix-test-suite -- \
 	--test-to-run "${TEST_TO_RUN}" \
 	--config "./config.toml" \
 	--run-suite all \
@@ -418,8 +417,8 @@ start-test-suite-build:
 	--syncing-nodes 1
 
 start-btc-server-1:
-	cd ./bin/btc-server && \
-	cargo run --bin btc-server -- \
+	cd ./bin/botanix-btc-server && \
+	cargo run --bin botanix-btc-server -- \
 	--identifier 0 \
 	--coordinator 0 \
 	--federation-config-path "${NODE_1_DIR}/federation.toml" \
@@ -438,8 +437,8 @@ start-btc-server-1:
 	--fall-back-fee-rate-sat-per-vbyte 5
 
 start-btc-server-2:
-	cd ./bin/btc-server && \
-	cargo run --bin btc-server -- \
+	cd ./bin/botanix-btc-server && \
+	cargo run --bin botanix-btc-server -- \
 	--identifier 1 \
 	--coordinator 0 \
 	--federation-config-path "${NODE_2_DIR}/federation.toml" \
@@ -458,8 +457,8 @@ start-btc-server-2:
 	--fall-back-fee-rate-sat-per-vbyte 5
 
 start-btc-server-3:
-	cd ./bin/btc-server && \
-	cargo run --bin btc-server -- \
+	cd ./bin/botanix-btc-server && \
+	cargo run --bin botanix-btc-server -- \
 	--identifier 2 \
 	--coordinator 0 \
 	--federation-config-path "${NODE_3_DIR}/federation.toml" \
@@ -479,7 +478,7 @@ start-btc-server-3:
 
 start-poa-server-1:
 	cd ./bin/botanix-reth && \
-	cargo run --bin reth-botanix -- node \
+	cargo run --bin botanix-reth -- node \
 	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NODE_1_DIR}/federation.toml" \
@@ -518,7 +517,7 @@ start-poa-server-1:
 
 start-poa-server-2:
 	cd ./bin/botanix-reth && \
-	cargo run --bin reth-botanix -- node \
+	cargo run --bin botanix-reth -- node \
 	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NODE_2_DIR}/federation.toml" \
@@ -557,7 +556,7 @@ start-poa-server-2:
 
 start-poa-server-3:
 	cd ./bin/botanix-reth && \
-	cargo run --bin reth-botanix -- node \
+	cargo run --bin botanix-reth -- node \
 	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NODE_3_DIR}/federation.toml" \
@@ -596,7 +595,7 @@ start-poa-server-3:
 
 start-non-fed-server-1:
 	cd ./bin/botanix-reth && \
-	cargo run --bin reth-botanix -- node \
+	cargo run --bin botanix-reth -- node \
 	--chain=botanix-testnet \
 	--is-testnet \
 	--federation-config-path "${NON_FED_1_DIR}/federation.toml" \
@@ -651,8 +650,6 @@ start-cometbft-3:
 	--rpc.laddr=tcp://0.0.0.0:46657 \
 	--p2p.persistent_peers ${PERSISTENT_PEERS} \
 
-
-
 clean-poa-3:
 	cd ${NODE_3_DIR} && \
 	rm -rf "${NODE_3_DIR}/db" && \
@@ -675,15 +672,15 @@ clean-rpc:
 
 
 clean-btc-server-1:
-	cd bin/btc-server && \
+	cd bin/botanix-btc-server && \
 	rm -rf "db1"
 
 clean-btc-server-2:
-	cd bin/btc-server && \
+	cd bin/botanix-btc-server && \
 	rm -rf "db2"
 
 clean-btc-server-3:
-	cd bin/btc-server && \
+	cd bin/botanix-btc-server && \
 	rm -rf "db3"
 
 make clean-all:
@@ -872,7 +869,7 @@ PROFILE_BTC_SERVER_ARGS := \
 	--db ${PROFILER_DB_DIR} \
 	--min-signers ${PROFILER_FROST_MIN_SIGNERS} \
 	--max-signers ${PROFILER_FROST_MAX_SIGNERS} \
-	--toml ./bin/btc-server/config.toml \
+	--toml ./bin/botanix-btc-server/config.toml \
 	--fee-rate-diff-percentage 30 \
 	--btc-network ${BITCOIND_NETWORK} \
 	--bitcoind-url ${BITCOIND_URL} \
@@ -882,8 +879,8 @@ PROFILE_BTC_SERVER_ARGS := \
 	--fall-back-fee-rate-sat-per-vbyte 5
 
 profile-btc:
-	cargo build --profile profiling --package btc-server && \
-	samply record ./target/profiling/btc-server $(PROFILE_BTC_SERVER_ARGS)
+	cargo build --profile profiling --package botanix-btc-server && \
+	samply record ./target/profiling/botanix-btc-server $(PROFILE_BTC_SERVER_ARGS)
 
 # ------------------------------------------------------------
 # Poa Server Profiling

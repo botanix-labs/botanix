@@ -9,8 +9,8 @@ services:
       args:
         # This compose file meant to be used only for local development and testing
         PROFILE: dev
-        PACKAGE: btc-server
-        BIN: btc-server
+        PACKAGE: botanix-btc-server
+        BIN: botanix-btc-server
     command:
       - --identifier=${BTC_SERVER_ID:?err}
       - --coordinator=0

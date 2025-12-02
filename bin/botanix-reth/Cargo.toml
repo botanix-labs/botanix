@@ -1,5 +1,5 @@
 [package]
-name = "reth_botanix"
+name = "botanix-reth"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,11 @@ homepage.workspace = true
 repository.workspace = true
 
 [lib]
-name = "reth_botanix"
+name = "botanix_reth"
 path = "src/lib.rs"
 
 [[bin]]
-name = "reth-botanix"
+name = "botanix-reth"
 path = "src/main.rs"
 
 [features]
@@ -116,7 +116,7 @@ botanix-rpc-types.workspace = true
 botanix-storage.workspace = true
 botanix-storage-migrate.workspace = true
 botanix-utils.workspace = true
-btc-server.workspace = true
+botanix-btc-server.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 clap.workspace = true

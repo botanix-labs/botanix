@@ -847,9 +847,9 @@ pub fn seal_slow(header: &Header) -> SealedHeader {
 // 32]>()).unwrap().to_byte_array().to_vec();             let script_pubkey = rng.gen::<[u8;
 // 32]>().to_vec();             let vout = rng.gen_range(0..u32::MAX);
 //             let utxo = Utxo {
-//                 outpoint: Some(botanix_btc_server_client::OutPoint { txid: txid.clone(), vout }),
+//                 outpoint: Some(botanix_botanix_btc_server_client::OutPoint { txid: txid.clone(), vout }),
 //                 output: Some(TxOut {
-//                     script_pubkey: Some(botanix_btc_server_client::ScriptBuf { script:
+//                     script_pubkey: Some(botanix_botanix_btc_server_client::ScriptBuf { script:
 // script_pubkey }),                     value: rng.gen::<u64>(),
 //                 }),
 //                 eth_address: "0x0".to_string(),
