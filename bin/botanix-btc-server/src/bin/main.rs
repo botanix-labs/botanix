@@ -2212,6 +2212,8 @@ where
             return Err(tonic::Status::internal("dkg not initialized"));
         };
 
+        let multisig_id = dkg.machine.multisig_id();
+
         // Generate responses on potential timeout events; if no timers expired,
         // then this is simply a no-op call.
         dkg.machine.on_timeout(Instant::now());
@@ -2231,6 +2233,7 @@ where
                 sender: p.sender.serialize(),
                 recipient: p.recipient.serialize(),
                 payload: bytes.clone(),
+                multisig_id,
             });
         }
 
@@ -2257,6 +2260,8 @@ where
         // have not received our acknowledgment yet.
 
         let req = req.into_inner();
+        let multisig_id = req.multisig_id;
+
         let sender =
             match deserialize_frost_peer_id(req.sender.clone()).to_status() {
                 Ok(sender) => sender,
@@ -2362,7 +2367,7 @@ where
 
         // Acquire the lock on the dkg machine.
         let mut sessions = self.dkg_sessions.lock().await;
-        let Some(dkg) = sessions.get_mut(&LEGACY_MULTISIG_ID) else {
+        let Some(dkg) = sessions.get_mut(&multisig_id) else {
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_dkg_error_metrics(
                     self.btc_network,
@@ -2370,7 +2375,9 @@ where
                     "dkg not initialized",
                 );
             }
-            return Err(tonic::Status::internal("dkg not initialized"));
+            return Err(tonic::Status::internal(format!(
+                "dkg not initialized for multisig_id {}", multisig_id
+            )));
         };
 
         // Process the payload.
@@ -2400,6 +2407,7 @@ where
                 sender: p.sender.serialize(),
                 recipient: p.recipient.serialize(),
                 payload: bytes.clone(),
+                multisig_id,
             });
         }
 
@@ -3240,6 +3248,7 @@ mod tests {
                 sender: frost_id!(1).serialize().to_vec(),
                 recipient: frost_id!(0).serialize().to_vec(),
                 payload,
+                multisig_id: LEGACY_MULTISIG_ID,
             });
 
             let resp = app.new_dkg_payload(req).await.unwrap();

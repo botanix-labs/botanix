@@ -226,6 +226,7 @@ message DkgPayload {
     bytes sender = 1;
     bytes recipient = 2;
     bytes payload = 3;
+    uint32 multisig_id = 4;
 }
 
 message SigningPackageRequest {
