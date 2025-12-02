@@ -15,7 +15,7 @@ secp256k1 = [
   "dep:frost-secp256k1-tr",
   "dep:lazy_static",
   "dep:botanix-btc-wallet",
-  "dep:btc-server",
+  "dep:botanix-btc-server",
   "dep:bitcoin",
   "dep:tracing",
 ]
@@ -28,8 +28,8 @@ bitcoin = { workspace = true, optional = true }
 bitcoincore-rpc = { workspace = true, optional = true }
 
 #botanix deps
+botanix-btc-server = { workspace = true, optional = true }
 botanix-btc-wallet = { workspace = true, optional = true }
-btc-server = { path = "../../bin/btc-server", optional = true }
 ethabi = { version = "18.0.0", optional = true }
 ethers = { version = "2.0.9", optional = true }
 frost-secp256k1-tr = { workspace = true, optional = true }

@@ -24,7 +24,7 @@ impl BlockAssembler<BotanixBlockExecutorFactory> for BotanixEvmConfig {
                 // HACK: we're setting sidecars to `None` here but ideally we should somehow get
                 // them from the payload builder.
                 //
-                // Payload building is out of scope of reth-botanix for now, so this is not critical
+                // Payload building is out of scope of botanix-reth for now, so this is not critical
                 sidecars: None,
             },
         })

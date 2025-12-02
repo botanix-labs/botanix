@@ -5,9 +5,10 @@ members = [
   "bin/botanix-cli",
   "bin/botanix-db-cleaner",
   "bin/botanix-reth",
-  "bin/btc-server",
-  "bin/pegin-recovery",
-  "bin/btc-server/client",
+  "bin/botanix-test-suite",
+  "bin/botanix-btc-server",
+  "bin/botanix-btc-server/client",
+  "bin/botanix-pegin-recovery",
   "crates/botanix-activation-manager",
   "crates/botanix-authority-edh",
   "crates/botanix-authority-metrics",
@@ -172,7 +173,8 @@ botanix-authority-metrics = { path = "crates/botanix-authority-metrics" }
 botanix-authority-peg = { path = "crates/botanix-authority-peg" }
 botanix-authority-rsp = { path = "crates/botanix-authority-rsp" }
 botanix-bitcoin-checkpoint = { path = "crates/botanix-bitcoin-checkpoint" }
-botanix-btc-server-client = { path = "bin/btc-server/client" }
+botanix-btc-server = { path = "bin/botanix-btc-server" }
+botanix-btc-server-client = { path = "bin/botanix-btc-server/client" }
 botanix-btc-wallet = { path = "crates/botanix-btc-wallet" }
 botanix-chainspec = { path = "crates/botanix-chainspec" }
 botanix-cli = { path = "bin/botanix-cli" }
@@ -185,15 +187,17 @@ botanix-data-parser = { path = "crates/botanix-data-parser" }
 botanix-db-cleaner = { path = "bin/botanix-db-cleaner" }
 botanix-evm = { path = "crates/botanix-evm" }
 botanix-fs-util = { path = "crates/botanix-fs-util" }
-botanix-pegin-recovery = { path = "bin/pegin-recovery" }
+botanix-pegin-recovery = { path = "bin/botanix-pegin-recovery" }
+botanix-pegin-recovery-client = { path = "bin/botanix-pegin-recovery/client" }
 botanix-primitives = { path = "crates/botanix-primitives" }
+botanix-reth = { path = "bin/botanix-reth" }
 botanix-rpc-client = { path = "crates/botanix-rpc-client" }
 botanix-rpc-config = { path = "crates/botanix-rpc-config" }
 botanix-rpc-types = { path = "crates/botanix-rpc-types" }
 botanix-storage = { path = "crates/botanix-storage" }
 botanix-storage-migrate = { path = "crates/botanix-storage-migrate" }
+botanix-test-suite = { path = "bin/botanix-test-suite" }
 botanix-utils = { path = "crates/botanix-utils" }
-btc-server = { path = "bin/btc-server" }
 bytes = "1.5"
 cfg-if = { version = "1.0", default-features = false }
 clap = { version = "4.4", features = ["derive"] }
@@ -333,7 +337,6 @@ reth-transaction-pool = { git = "https://github.com/botanix-labs/reth", branch =
 reth-trie = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-trie-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
 reth-trie-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth_botanix = { path = "bin/botanix-reth" }
 
 # revm - exact version to match fork
 revm = "=28.0.1"

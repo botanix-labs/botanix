@@ -1,0 +1,62 @@
+[package]
+name = "botanix-pegin-recovery"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "peginrecoverylib"
+
+[[bin]]
+name = "botanix-pegin-recovery"
+path = "src/bin/main.rs"
+
+[dependencies]
+anyhow = "1.0.75"
+env_logger = "0.11.3"
+log = "0.4.18"
+
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Bitcoin related dependencies
+bitcoin = { version = "0.32.5", features = ["base64", "rand", "serde"] }
+bitcoincore-rpc = "0.19.0"
+botanix-btc-server = { path = "../botanix-btc-server" }
+botanix-pegin-recovery-client = { path = "./client" }
+frost-secp256k1-tr = { git = "https://github.com/botanix-labs/frost", rev = "b4c5ab017bb0d182f3c56fd80b95d6375a4bfeea", features = [
+  "serde",
+  "serialization",
+] }
+hex = "0.4.3"
+miniscript = "12.3.0"
+rand = "0.8.5"
+serde = "1.0.171"
+serde_json = "1.0"
+
+# Database dependencies
+chacha20poly1305 = "0.10.1"
+ciborium = "0.2.1"
+merlin = "3.0.0"
+sled = "0.34.7"
+thiserror = "2.0.11"
+zeroize = "1.8.1"
+
+# gRPC/protobuf
+prost = "0.13.3"
+prost-types = "0.13.5"
+tokio = { version = "1.45.0", features = ["full"] }
+tokio-stream = "0.1"
+tonic = { version = "0.12.3", features = ["gzip"] }
+tonic-health = { version = "0.12.3" }
+tonic-reflection = { version = "0.12.3" }
+
+[build-dependencies]
+prost-build = "0.13.3"
+tonic-build = "0.12.3"
+
+[dev-dependencies]
+tempfile = "3.6.0"

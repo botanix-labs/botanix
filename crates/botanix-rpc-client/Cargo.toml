@@ -14,9 +14,9 @@ bitcoincore-rpc = { workspace = true }
 
 # botanix deps
 botanix-authority-edh = { workspace = true }
+botanix-btc-server = { workspace = true }
 botanix-btc-wallet = { workspace = true }
 botanix-rpc-config = { workspace = true }
-btc-server = { path = "../../bin/btc-server" }
 frost-secp256k1-tr = { workspace = true }
 futures = { workspace = true }
 hex = "0.4.3"

@@ -1,4 +1,5 @@
 use alloy_primitives::BlockNumber;
+use botanix_reth::node::BotanixNode;
 use botanix_storage::{
     models::ChunkId, BotanixProviderFactory, DatabaseProviderFactoryRW,
     SnapshotReader, SnapshotWriter,
@@ -10,7 +11,7 @@ use std::{ops::RangeInclusive, sync::Arc};
 /// This includes removing all chunks and blocks associated with the snapshots.
 /// It also removes the snapshots themselves.
 pub fn truncate(
-    provider_factory: &BotanixProviderFactory<Arc<DatabaseEnv>>,
+    provider_factory: &BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
 ) -> anyhow::Result<()> {
     let provider_rw = provider_factory.provider_rw()?;
 
