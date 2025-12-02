@@ -425,6 +425,7 @@ pub struct DkgStateMachine {
     config: Config,
     my_frost_id: frost::Identifier,
     my_static_sec: secp256k1::SecretKey,
+    multisig_id: u32,
     coordinator: frost::Identifier,
     members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
     queue: Queue,
@@ -464,6 +465,7 @@ impl DkgStateMachine {
     pub fn new(
         my_frost_id: frost::Identifier,
         my_static_sec: secp256k1::SecretKey,
+        multisig_id: u32,
         coordinator: frost::Identifier,
         members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         config: Config,
@@ -506,6 +508,7 @@ impl DkgStateMachine {
             config,
             my_frost_id,
             my_static_sec,
+            multisig_id,
             coordinator,
             members,
             queue,

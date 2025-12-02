@@ -2,7 +2,7 @@
 extern crate log;
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::Path,
@@ -24,7 +24,7 @@ use btcserverlib::{
     badarg,
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
-    database::{self},
+    database::{self, LEGACY_MULTISIG_ID},
     dkg,
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -268,7 +268,8 @@ struct App<BitcoinRpcApi> {
     #[cfg(test)]
     max_signers: u16,
     min_signers: u16,
-    dkg: Mutex<Option<DkgState>>,
+    /// Map of multisig_id to DKG state machines
+    dkg_sessions: Arc<Mutex<HashMap<u32, DkgState>>>,
     /// The signing nonces for the current signing session
     /// We will replace this value in the case of a new signing session
     frost_round1_nonces: SigningNoncesCommitmentsMap,
@@ -398,6 +399,85 @@ where
         } else {
             JwtSecret::try_create_random(path)
         }
+    }
+
+    /// Creates a new DKG state machine for the given multisig_id.
+    fn init_dkg_session(
+        frost_identifier: frost::Identifier,
+        secret_key: secp256k1::SecretKey,
+        multisig_id: u32,
+        coordinator: frost::Identifier,
+        federation: &FederationTomlConfig,
+        max_signers: u16,
+        min_signers: u16,
+        is_coordinator: bool,
+    ) -> Result<DkgState, Error> {
+        let dkg_config = dkg::Config {
+            max_signers,
+            min_signers,
+            // NOTE: We set a very conservative timeout for the DKG process
+            // to resend messages. For direct connections this could be set
+            // to a lower millisecond range, technically.
+            round1_package_timeout: Duration::from_secs(3),
+            round2_package_timeout: Duration::from_secs(3),
+            round3_package_timeout: Duration::from_secs(3),
+            // Start a new DKG session if not completed in 5 minutes.
+            pending_session_timeout: Some(Duration::from_secs(60 * 5)),
+        };
+
+        let mut members = BTreeMap::new();
+        for (pos, fed_pubkey) in
+            federation.federation_member_public_key.iter().enumerate()
+        {
+            let id = frost_id!(pos as u16);
+            let pubkey = secp256k1::PublicKey::from_str(&fed_pubkey.key)
+                .map_err(|_| {
+                    dkg::Error::BadConfig(
+                        "invalid federation member public key".to_string(),
+                    )
+                })?;
+
+            members.insert(id, pubkey);
+        }
+
+        // As the coordinator, we simply use the system time as the session
+        // nonce. This value doesn't need to be precisely synchronized - it
+        // simply ensures that each server restart produces a higher nonce
+        // than previous sessions, removing the need to persist this value
+        // in the database.
+        //
+        // Non-coordinators automatically discard this value and use `None`,
+        // and let the coordinator dictate the nonce.
+        let session_nonce = if is_coordinator {
+            #[cfg(not(test))]
+            let nonce = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("bad system time")
+                .as_secs();
+
+            #[cfg(test)]
+            let nonce = 0;
+
+            Some(nonce)
+        } else {
+            None
+        };
+
+        let machine = dkg::DkgStateMachine::new(
+            frost_identifier,
+            secret_key,
+            multisig_id,
+            coordinator,
+            members,
+            dkg_config,
+            session_nonce,
+        )?;
+
+        Ok(DkgState {
+            machine,
+            stage: None,
+            session_nonce: None,
+        })
     }
 
     pub fn new(
@@ -566,72 +646,31 @@ where
         // key is found in the db. In the future, when we're dealing with
         // dynamic Fed members, multiple multisigs and rotations, we'll need a
         // mechanism to start/stop the DKG process arbitrarily.
-        let dkg = if db
-            .get_key_package()
-            .expect("failed to interact with db")
-            .is_none()
-        {
-            warn!("No key package found, starting DKG process...");
-
-            let dkg_config = dkg::Config {
-                max_signers,
-                min_signers,
-                // NOTE: We set a very conservative timeout for the DKG process
-                // to resend messages. For direct connections this could be set
-                // to a lower millisecond range, technically.
-                round1_package_timeout: Duration::from_secs(3),
-                round2_package_timeout: Duration::from_secs(3),
-                round3_package_timeout: Duration::from_secs(3),
-                // Start a new DKG session if not completed in 5 minutes.
-                pending_session_timeout: Some(Duration::from_secs(60 * 5)),
-            };
-
-            let mut members = BTreeMap::new();
-            for (pos, fed_pubkey) in
-                federation.federation_member_public_key.iter().enumerate()
+        let dkg_sessions = {
+            let mut sessions = HashMap::new();
+            
+            if db
+                .get_key_package()
+                .expect("failed to interact with db")
+                .is_none()
             {
-                let id = frost_id!(pos as u16);
-                let pubkey = secp256k1::PublicKey::from_str(&fed_pubkey.key)
-                    .map_err(|_| {
-                        dkg::Error::BadConfig(
-                            "invalid federation member public key".to_string(),
-                        )
-                    })?;
+                warn!("No key package found, starting DKG process for multisig_id {}...", LEGACY_MULTISIG_ID);
 
-                members.insert(id, pubkey);
+                let state = Self::init_dkg_session(
+                    frost_identifier,
+                    secret_key,
+                    LEGACY_MULTISIG_ID,
+                    coordinator,
+                    &federation,
+                    max_signers,
+                    min_signers,
+                    frost_identifier == coordinator,
+                )?;
+
+                sessions.insert(LEGACY_MULTISIG_ID, state);
             }
-
-            // As the coordinator, we simply use the system time as the session
-            // nonce. This value doesn't need to be precisely synchronized - it
-            // simply ensures that each server restart produces a higher nonce
-            // than previous sessions, removing the need to persist this value
-            // in the database.
-            //
-            // Non-coordinators automatically discard this value and use `None`,
-            // and let the coordinator dictate the nonce.
-            #[cfg(not(test))]
-            let session_nonce = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .expect("bad system time")
-                .as_secs();
-
-            #[cfg(test)]
-            let session_nonce = 0;
-
-            let machine = dkg::DkgStateMachine::new(
-                frost_identifier,
-                secret_key,
-                coordinator,
-                members,
-                dkg_config,
-                Some(session_nonce),
-            )?;
-
-            let state = DkgState { machine, stage: None, session_nonce: None };
-
-            Mutex::new(Some(state))
-        } else {
-            Mutex::new(None)
+            
+            Arc::new(Mutex::new(sessions))
         };
 
         Ok(Self {
@@ -641,7 +680,7 @@ where
             pegout_scheduler: pegout_manager,
             tx_lock: Arc::new(Mutex::new(())),
             identifier: frost_identifier,
-            dkg,
+            dkg_sessions,
             frost_round1_nonces: Arc::new(Mutex::new(None)),
             config,
             btc_signing_server_jwt_secret,
@@ -2168,8 +2207,8 @@ where
             return Err(already_exists!("already have key package"));
         }
 
-        let mut l = self.dkg.lock().await;
-        let Some(dkg) = l.as_mut() else {
+        let mut sessions = self.dkg_sessions.lock().await;
+        let Some(dkg) = sessions.get_mut(&LEGACY_MULTISIG_ID) else {
             return Err(tonic::Status::internal("dkg not initialized"));
         };
 
@@ -2322,8 +2361,8 @@ where
         }
 
         // Acquire the lock on the dkg machine.
-        let mut l = self.dkg.lock().await;
-        let Some(dkg) = l.as_mut() else {
+        let mut sessions = self.dkg_sessions.lock().await;
+        let Some(dkg) = sessions.get_mut(&LEGACY_MULTISIG_ID) else {
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_dkg_error_metrics(
                     self.btc_network,
