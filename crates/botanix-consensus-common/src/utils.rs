@@ -56,21 +56,22 @@ pub fn fixed_bytes_32_to_u256(value: FixedBytes<32>) -> U256 {
 
 /// Returns true if the authority is in turn
 pub fn is_inturn(
-    authorities_len: u64,
+    _authorities_len: u64,
     signer_index: u64,
-    time_range: u64,
-    random_source: FixedBytes<32>,
+    _time_range: u64,
+    _random_source: FixedBytes<32>,
 ) -> bool {
     // convert types to U256 since random_source is 32 bytes and do arithmetic
-    let authorities_len_u256 = U256::from(authorities_len);
-    let _signer_index_u256 = U256::from(signer_index);
-    let time_range_u256 = U256::from(time_range);
-    let random_source_u256 = fixed_bytes_32_to_u256(random_source);
+    // let authorities_len_u256 = U256::from(authorities_len);
+    // let _signer_index_u256 = U256::from(signer_index);
+    // let time_range_u256 = U256::from(time_range);
+    // let random_source_u256 = fixed_bytes_32_to_u256(random_source);
 
-    let cycle_length = authorities_len_u256 * time_range_u256; // Full cycle length in seconds
+    // let cycle_length = authorities_len_u256 * time_range_u256; // Full cycle
+    // length in seconds
 
     // Calculate the position in the current cycle
-    let _position_in_cycle = random_source_u256 % cycle_length;
+    // let _position_in_cycle = random_source_u256 % cycle_length;
 
     // Determine the current signer index based on the position in the cycle
     // Each signer's turn lasts for `block_time` seconds
