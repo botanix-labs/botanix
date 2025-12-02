@@ -1,6 +1,6 @@
 use super::*;
-use crate::dkg::Stage;
 use crate::database::LEGACY_MULTISIG_ID;
+use crate::dkg::Stage;
 use bitcoin::secp256k1;
 use frost::keys::PublicKeyPackage;
 use rand::{rngs::SmallRng, Rng, SeedableRng};

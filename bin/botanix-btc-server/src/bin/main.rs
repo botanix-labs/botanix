@@ -473,11 +473,7 @@ where
             session_nonce,
         )?;
 
-        Ok(DkgState {
-            machine,
-            stage: None,
-            session_nonce: None,
-        })
+        Ok(DkgState { machine, stage: None, session_nonce: None })
     }
 
     pub fn new(
@@ -648,7 +644,7 @@ where
         // mechanism to start/stop the DKG process arbitrarily.
         let dkg_sessions = {
             let mut sessions = HashMap::new();
-            
+
             if db
                 .get_key_package()
                 .expect("failed to interact with db")
@@ -669,7 +665,7 @@ where
 
                 sessions.insert(LEGACY_MULTISIG_ID, state);
             }
-            
+
             Arc::new(Mutex::new(sessions))
         };
 
@@ -2376,7 +2372,8 @@ where
                 );
             }
             return Err(tonic::Status::internal(format!(
-                "dkg not initialized for multisig_id {}", multisig_id
+                "dkg not initialized for multisig_id {}",
+                multisig_id
             )));
         };
 
@@ -2413,10 +2410,13 @@ where
 
         if let Some((sec_key, pub_key)) = dkg.machine.aggregate_key_packages() {
             let multisig_id = dkg.machine.multisig_id();
-            if self.db.get_key_package_by_id(multisig_id).to_status()?.is_none() {
+            if self.db.get_key_package_by_id(multisig_id).to_status()?.is_none()
+            {
                 info!("DKG completed successfully for multisig_id {}, saving key packages...", multisig_id);
-                if let Err(e) =
-                    self.db.set_key_package_by_id(multisig_id, sec_key.clone()).to_status()
+                if let Err(e) = self
+                    .db
+                    .set_key_package_by_id(multisig_id, sec_key.clone())
+                    .to_status()
                 {
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
@@ -2428,8 +2428,10 @@ where
                     return Err(e);
                 }
 
-                if let Err(e) =
-                    self.db.set_pubkey_package_by_id(multisig_id, pub_key.clone()).to_status()
+                if let Err(e) = self
+                    .db
+                    .set_pubkey_package_by_id(multisig_id, pub_key.clone())
+                    .to_status()
                 {
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(

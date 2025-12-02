@@ -1,4 +1,7 @@
-use crate::{database::LEGACY_MULTISIG_ID, dkg::{Config, DkgMessage, DkgPayload, DkgStateMachine}};
+use crate::{
+    database::LEGACY_MULTISIG_ID,
+    dkg::{Config, DkgMessage, DkgPayload, DkgStateMachine},
+};
 use bitcoin::secp256k1;
 use frost_secp256k1_tr as frost;
 use std::{
