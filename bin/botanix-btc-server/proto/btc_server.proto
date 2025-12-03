@@ -17,7 +17,7 @@ service BtcServer {
 
     rpc GetPublicKey(Empty) returns(GetPublicKeyResponse) {}
 
-    rpc GetDkgPayloads(Empty) returns(DkgPayloads) {}
+    rpc GetDkgPayloads(GetDkgPayloadsRequest) returns(DkgPayloads) {}
 
     rpc NewDkgPayload(DkgPayload) returns(DkgPayloads) {}
 
@@ -217,6 +217,10 @@ message GetTrackedTxsResponse {
 message Empty {}
 
 // Frost things
+message GetDkgPayloadsRequest {
+    uint32 multisig_id = 1;
+}
+
 message DkgPayloads {
     uint64 timeout = 1;
     repeated DkgPayload payloads = 2;

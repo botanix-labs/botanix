@@ -211,6 +211,11 @@ pub struct GetTrackedTxsResponse {
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Empty {}
 /// Frost things
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetDkgPayloadsRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
     #[prost(uint64, tag = "1")]
@@ -555,7 +560,7 @@ pub mod btc_server_client {
         }
         pub async fn get_dkg_payloads(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<super::GetDkgPayloadsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DkgPayloads>,
             tonic::Status,

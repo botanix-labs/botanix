@@ -3,15 +3,15 @@ use crate::{
     btc_server::{
         ConsensusCheckpointRequest, DkgPayload, DkgPayloads, Empty,
         FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
-        GetAllUtxosResponse, GetFinalizedPegoutIdsRequest,
-        GetFinalizedPegoutIdsResponse, GetGatewayAddressRequest,
-        GetGatewayAddressResponse, GetPendingPegoutsResponse,
-        GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
-        GetSigningStatusRequest, GetSigningStatusResponse,
-        GetTrackedTxsResponse, MakeTxRequest, RecoverMissingUtxosRequest,
-        RecoverMissingUtxosResponse, ResetAllUtxosRequest,
-        ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
-        ToSignRequest, WalletStateResponse,
+        GetAllUtxosResponse, GetDkgPayloadsRequest,
+        GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
+        GetGatewayAddressRequest, GetGatewayAddressResponse,
+        GetPendingPegoutsResponse, GetPublicKeyResponse, GetSessionIdsRequest,
+        GetSessionIdsResponse, GetSigningStatusRequest,
+        GetSigningStatusResponse, GetTrackedTxsResponse, MakeTxRequest,
+        RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
+        ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
+        SigningPackageRequest, ToSignRequest, WalletStateResponse,
     },
     jwt::{Claims, JwtSecret},
     BtcServerClient,
@@ -70,7 +70,7 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
     ) -> BoxFuture<'_, Result<GetPublicKeyResponse, GrpcClientError>>;
     fn get_dkg_payloads(
         &mut self,
-        request: Empty,
+        request: GetDkgPayloadsRequest,
     ) -> BoxFuture<'_, Result<DkgPayloads, GrpcClientError>>;
     fn new_dkg_payload(
         &mut self,
@@ -287,7 +287,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
         GetGatewayAddressResponse
     );
     generate_method!(get_public_key, Empty, GetPublicKeyResponse);
-    generate_method!(get_dkg_payloads, Empty, DkgPayloads);
+    generate_method!(get_dkg_payloads, GetDkgPayloadsRequest, DkgPayloads);
     generate_method!(new_dkg_payload, DkgPayload, DkgPayloads);
     generate_method!(
         get_round1_signing_package,

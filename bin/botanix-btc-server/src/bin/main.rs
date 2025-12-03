@@ -2195,20 +2195,23 @@ where
 
     async fn get_dkg_payloads(
         &self,
-        req: tonic::Request<rpc::Empty>,
+        req: tonic::Request<rpc::GetDkgPayloadsRequest>,
     ) -> Result<tonic::Response<rpc::DkgPayloads>, tonic::Status> {
         self.validate_jwt(&req)?;
 
-        if self.db.get_key_package().to_status()?.is_some() {
+        let multisig_id = req.into_inner().multisig_id;
+
+        if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
             return Err(already_exists!("already have key package"));
         }
 
         let mut sessions = self.dkg_sessions.lock().await;
-        let Some(dkg) = sessions.get_mut(&LEGACY_MULTISIG_ID) else {
-            return Err(tonic::Status::internal("dkg not initialized"));
+        let Some(dkg) = sessions.get_mut(&multisig_id) else {
+            return Err(tonic::Status::internal(format!(
+                "dkg not initialized for multisig_id {}",
+                multisig_id
+            )));
         };
-
-        let multisig_id = dkg.machine.multisig_id();
 
         // Generate responses on potential timeout events; if no timers expired,
         // then this is simply a no-op call.
@@ -3090,7 +3093,9 @@ mod tests {
     #[tokio::test]
     async fn dkg_should_work_if_missing_key_package() {
         let app = setup().await;
-        let req = tonic::Request::new(rpc::Empty {});
+        let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
+            multisig_id: LEGACY_MULTISIG_ID,
+        });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
 
@@ -3113,13 +3118,17 @@ mod tests {
         let app = setup().await;
 
         // Two payloads to be sent.
-        let req = tonic::Request::new(rpc::Empty {});
+        let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
+            multisig_id: LEGACY_MULTISIG_ID,
+        });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
         assert_eq!(inner.payloads.len(), 2);
 
         // No payloads to be sent right now.
-        let req = tonic::Request::new(rpc::Empty {});
+        let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
+            multisig_id: LEGACY_MULTISIG_ID,
+        });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
         assert!(inner.payloads.is_empty());
@@ -3130,7 +3139,9 @@ mod tests {
         tokio::time::sleep(timeout).await;
 
         // Two payloads to be (re-)sent.
-        let req = tonic::Request::new(rpc::Empty {});
+        let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
+            multisig_id: LEGACY_MULTISIG_ID,
+        });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
         assert_eq!(inner.payloads.len(), 2);
@@ -3186,7 +3197,9 @@ mod tests {
 
         // Alice generates two packages, one for Bob and one for Eve.
         {
-            let req = tonic::Request::new(rpc::Empty {});
+            let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
+                multisig_id: LEGACY_MULTISIG_ID,
+            });
             let payloads = app.get_dkg_payloads(req).await.unwrap();
             let inner = payloads.into_inner();
             assert_eq!(inner.payloads.len(), 2);
