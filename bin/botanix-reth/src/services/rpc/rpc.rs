@@ -12,7 +12,7 @@ use crate::{
 use botanix_chainspec::BotanixChainSpec;
 use botanix_rpc_config::botanix_config::Botanix;
 use futures::TryFutureExt;
-use reth::{args::RpcServerArgs, tasks::TaskExecutor};
+use reth::{args::RpcServerArgs, rpc::builder::config::RethRpcServerConfig, tasks::TaskExecutor};
 use reth_consensus::{Consensus, ConsensusError, FullConsensus};
 use reth_ethereum::{
     network::api::noop::NoopNetwork,
@@ -77,25 +77,28 @@ where
     server.merge_configured(custom_rpc.into_rpc())?;
 
     // Start the server & keep it alive
-    let mut server_config = RpcServerConfig::default();
+    // let mut server_config = RpcServerConfig::default();
+    let mut server_config = rpc_server_args.rpc_server_config();
 
-    // Configure HTTP if enabled
-    if rpc_server_args.http {
-        let http_socket_addr = SocketAddr::new(
-            rpc_server_args.http_addr,
-            rpc_server_args.http_port,
-        );
-        server_config = server_config.with_http_address(http_socket_addr);
-    }
+    // // Configure HTTP if enabled
+    // if rpc_server_args.http {
+    //     let http_socket_addr = SocketAddr::new(
+    //         rpc_server_args.http_addr,
+    //         rpc_server_args.http_port,
+    //     );
+    //     server_config = server_config.with_http_address(http_socket_addr);
+    // }
 
-    if rpc_server_args.ws {
-        let ws_socket_addr =
-            SocketAddr::new(rpc_server_args.ws_addr, rpc_server_args.ws_port);
-        server_config = server_config.with_ws_address(ws_socket_addr);
-    }
+    // if rpc_server_args.ws {
+    //     let ws_socket_addr =
+    //         SocketAddr::new(rpc_server_args.ws_addr, rpc_server_args.ws_port);
+    //     server_config = server_config.with_ws_address(ws_socket_addr);
+    // }
 
-    server_config =
-        server_config.with_ipc_endpoint(rpc_server_args.ipcpath.clone());
+    // Only configure IPC if a path is specified
+    // if let Some(ipc_path) = &rpc_server_args.ipcpath {
+    //     server_config = server_config.with_ipc_endpoint(ipc_path.clone());
+    // }
 
     let launch_rpc = server_config.start(&server).map_ok(|handle| {
         if let Some(path) = handle.ipc_endpoint() {
