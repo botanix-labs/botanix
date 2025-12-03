@@ -2,7 +2,10 @@ use crate::{context::GlobalContext, suite::consensus::common::is_port_free};
 use alloy_primitives::Address;
 use anyhow::Context;
 use botanix_consensus_common::utils::unix_timestamp;
-use btcserverlib::federation_args::{FedMemberPubKey, FederationTomlConfig};
+use bitcoin_hashes::sha256;
+use btcserverlib::federation_args::{
+    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+};
 use reth_network_peers::PeerId;
 use std::{
     path::{Path, PathBuf},
@@ -105,22 +108,28 @@ fn spawn_btc_server_process(
             key: public_key.to_string(),
             // Not needed
             socket_addr: String::new(),
+            role: FederationRole::Continuing,
         });
     }
 
     // Write federation config to tempfile
-    let federation_config = FederationTomlConfig::new(
+    let multisig = MultisigConfig::new(
+        "m1",
+        global_context.min_signers,
+        global_context.max_signers,
         fed_members,
+    );
+    let federation_config = FederationTomlConfig::new(
+        vec![multisig],
         String::new(), // Not needed
         String::new(), // Not needed
         String::new(), // Not needed
     );
 
     let mut temp_federation = tempfile::NamedTempFile::new().unwrap();
-    std::io::Write::write_all(
-        &mut temp_federation,
-        toml::to_string(&federation_config)?.as_bytes(),
-    )?;
+    let federation_toml = toml::to_string(&federation_config)?;
+    let config_hash = sha256::Hash::hash(federation_toml.as_bytes()).to_string();
+    std::io::Write::write_all(&mut temp_federation, federation_toml.as_bytes())?;
 
     // Write the secret key to a tempfile
     let my_secret_key = members_keypairs
@@ -149,6 +158,10 @@ fn spawn_btc_server_process(
         coordinator.as_str(),
         "--federation-config-path",
         federation_path.as_str(),
+        "--multisig-version",
+        "m1",
+        "--config-hash",
+        config_hash.as_str(),
         "--p2p-secret-key",
         secret_key_path.as_str(),
         "--address",

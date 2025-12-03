@@ -12,7 +12,7 @@ use crate::{
 use alloy_primitives::Address;
 use anyhow::Context;
 use askama::Template;
-use bitcoin::hashes::Hash;
+use bitcoin::hashes::sha256;
 use botanix_authority_edh::extra_data_header::{
     ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION,
 };
@@ -21,7 +21,9 @@ use botanix_btc_server_client::{
     GetSigningStatusRequest, SigningStatus,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
-use botanix_configs::federation::{FedMemberPubKey, FederationTomlConfig};
+use botanix_configs::federation::{
+    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+};
 use botanix_reth::node::{storage::BotanixStorage, BotanixNode};
 use botanix_storage::BotanixProviderFactory;
 use ethers::{
@@ -273,6 +275,7 @@ impl FederationMemberTestConfig {
             let pk = FedMemberPubKey {
                 key: peer.secret_key.public_key(SECP256K1).to_string(),
                 socket_addr: format!("127.0.0.1:{}", peer.discovery_port),
+                role: FederationRole::Continuing,
             };
             fed_member_pks.push(pk);
         }
@@ -280,6 +283,7 @@ impl FederationMemberTestConfig {
         let my_pk = FedMemberPubKey {
             key: self.secret_key.public_key(SECP256K1).to_string(),
             socket_addr: format!("127.0.0.1:{}", self.discovery_port),
+            role: FederationRole::Continuing,
         };
         fed_member_pks.push(my_pk);
 
@@ -297,8 +301,14 @@ impl FederationMemberTestConfig {
         }
 
         // Need to create a federation.toml in the data dir
-        let federation_config = FederationTomlConfig::new(
+        let multisig = MultisigConfig::new(
+            "m1",
+            self.frost_min_signers,
+            self.frost_max_signers,
             edh_authorities,
+        );
+        let federation_config = FederationTomlConfig::new(
+            vec![multisig],
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
@@ -308,6 +318,10 @@ impl FederationMemberTestConfig {
         federation_config
             .write_to_path(&federation_config_path)
             .context("Error writing federation config to path")?;
+        let federation_config_contents = std::fs::read_to_string(&federation_config_path)
+            .context("failed to read federation config for hashing")?;
+        let federation_config_hash =
+            sha256::Hash::hash(federation_config_contents.as_bytes()).to_string();
 
         // point to the relevant working directory
         let mut working_directory = std::env::current_dir()
@@ -346,6 +360,8 @@ impl FederationMemberTestConfig {
             "--is-testnet",
             "--federation-config-path",
             federation_config_path.as_str(),
+            "--config-hash",
+            federation_config_hash.as_str(),
             "--federation-mode",
             "--ipcdisable",
             "--datadir",

@@ -176,6 +176,12 @@ pub struct CliConfig {
     /// The path to the configuration file for the federation setup.
     #[arg(long, value_name = "FEDERATION_CONFIG_FILE", verbatim_doc_comment)]
     federation_config_path: PathBuf,
+    /// Multisig version (e.g. m1, m2) to operate on.
+    #[arg(long, default_value = "m1")]
+    multisig_version: String,
+    /// Expected SHA256 hash of the federation config as hex
+    #[arg(long, value_name = "CONFIG_HASH")]
+    config_hash: String,
     /// Secret key to use for this node.
     #[arg(long)]
     p2p_secret_key: PathBuf,
@@ -231,6 +237,10 @@ pub struct Config {
     pub coordinator: Option<u16>,
     /// The path to the configuration file for the federation setup.
     pub federation_config_path: PathBuf,
+    /// Multisig version (e.g. m1, m2) to operate on.
+    pub multisig_version: String,
+    /// Expected SHA256 hash of the federation config contents.
+    pub config_hash: String,
     /// Secret key to use for this node.
     pub p2p_secret_key: PathBuf,
     /// Address to bind to.
@@ -271,6 +281,8 @@ pub fn load_config() -> Result<Config, Error> {
         identifier: cli_config.identifier,
         coordinator: cli_config.coordinator,
         federation_config_path: cli_config.federation_config_path,
+        multisig_version: cli_config.multisig_version,
+        config_hash: cli_config.config_hash,
         p2p_secret_key: cli_config.p2p_secret_key,
         address: cli_config.address,
         max_signers: cli_config.max_signers,

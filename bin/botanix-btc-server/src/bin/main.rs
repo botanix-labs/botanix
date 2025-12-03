@@ -16,7 +16,7 @@ use bitcoin::{
     consensus::Decodable, secp256k1, Amount, BlockHash, Psbt, ScriptBuf,
     Transaction, TxOut,
 };
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
 use btc_server::btc_server_server::{BtcServer, BtcServerServer};
@@ -246,6 +246,29 @@ type SigningNoncesCommitmentsMap = Arc<
     >,
 >;
 
+fn verify_federation_config_hash(raw: &str, expected_hash: &str) {
+    let normalized_expected = normalize_hash(expected_hash);
+    if normalized_expected.is_empty() {
+        panic!("provided federation config hash must not be empty");
+    }
+
+    let computed = compute_config_hash(raw);
+    if normalized_expected != computed {
+        panic!(
+            "federation config hash mismatch: expected {}, found {}",
+            normalized_expected, computed
+        );
+    }
+}
+
+fn compute_config_hash(raw: &str) -> String {
+    sha256::Hash::hash(raw.as_bytes()).to_string()
+}
+
+fn normalize_hash(value: &str) -> String {
+    value.trim().trim_start_matches("0x").to_ascii_lowercase()
+}
+
 /// The DKG state machine is responsible for managing the DKG process.
 struct DkgState {
     // The DKG state machine
@@ -442,12 +465,49 @@ where
         // Prepare the federation config.
         // TODO: Handle error
         let raw = std::fs::read_to_string(&config.federation_config_path)?;
-        let federation =
-            FederationTomlConfig::from_str(&raw).map_err(|_| {
-                dkg::Error::BadConfig(
-                    "invalid federation Toml config".to_string(),
-                )
+        verify_federation_config_hash(&raw, &config.config_hash);
+        let federation = FederationTomlConfig::from_str(&raw).map_err(|e| {
+            dkg::Error::BadConfig(format!(
+                "invalid federation Toml config: {}",
+                e
+            ))
+        })?;
+        let active_multisig = federation
+            .get_multisig_by_version(&config.multisig_version)
+            .ok_or_else(|| {
+                dkg::Error::BadConfig(format!(
+                    "missing multisig version '{}'",
+                    config.multisig_version
+                ))
             })?;
+
+        if let Some(max_signers) = active_multisig.max_signers {
+            if config.max_signers != max_signers {
+                panic!(
+                    "max signers mismatch between CLI ({}) and multisig '{}' ({})",
+                    config.max_signers, config.multisig_version, max_signers
+                );
+            }
+        }
+        if let Some(min_signers) = active_multisig.min_signers {
+            if config.min_signers != min_signers {
+                panic!(
+                    "min signers mismatch between CLI ({}) and multisig '{}' ({})",
+                    config.min_signers, config.multisig_version, min_signers
+                );
+            }
+        } else {
+            info!(
+                "Multisig '{}' does not specify a threshold; using CLI-provided min_signers ({})",
+                config.multisig_version, config.min_signers
+            );
+        }
+
+        info!(
+            "Using multisig '{}' with {} members",
+            config.multisig_version,
+            active_multisig.federation_member_public_key.len()
+        );
 
         // Prepare our secret key.
         let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
@@ -588,7 +648,7 @@ where
 
             let mut members = BTreeMap::new();
             for (pos, fed_pubkey) in
-                federation.federation_member_public_key.iter().enumerate()
+                active_multisig.federation_member_public_key.iter().enumerate()
             {
                 let id = frost_id!(pos as u16);
                 let pubkey = secp256k1::PublicKey::from_str(&fed_pubkey.key)
@@ -2897,20 +2957,29 @@ mod tests {
         minting-contract-bytecode = ""
         lst-fee-receiver = ""
 
-        [[federation-member-public-key]]
+        [[multisig]]
+        version = "m1"
+        min-signers = 2
+        max-signers = 3
+
+        [[multisig.federation-member-public-key]]
         key = "03185b1f0226d6d5949b902f083dd6e5b04ecdccdedd4cf48080de60b0bfe3b606"
         # Private key: 46de0f5cdbf2619ba8155964f951661ef89126aaddfcbbab56b7422e37572ff8
         socket-addr = "127.0.0.1:30303"
+        role = "continuing"
 
-        [[federation-member-public-key]]
+        [[multisig.federation-member-public-key]]
         key = "038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140"
         # Private key: 27eeb2264674f15f2bac84d84b5e8f0c40722f8327fe7354bf14c84e248f8838
         socket-addr = "127.0.0.1:30304"
+        role = "continuing"
 
-        [[federation-member-public-key]]
+        [[multisig.federation-member-public-key]]
         key = "02a7a1a9c37cd072f9752ef6b154876fe51f1ad2f7a6a627ef26e5075631af9f29"
         socket-addr = "127.0.0.1:30305"
+        role = "continuing"
         "#;
+        let config_hash = compute_config_hash(federation_content);
 
         let mut temp_federation = tempfile::NamedTempFile::new().unwrap();
         std::io::Write::write_all(
@@ -2936,6 +3005,8 @@ mod tests {
             identifier: 0,
             coordinator: Some(0),
             federation_config_path: temp_federation.path().to_owned(),
+            multisig_version: "m1".to_string(),
+            config_hash,
             p2p_secret_key: temp_secret_key.path().to_owned(),
             address: "0.0.0.0:8080".to_string(),
             max_signers: 3,
