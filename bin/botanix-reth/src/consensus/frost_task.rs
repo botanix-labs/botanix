@@ -31,7 +31,7 @@ use botanix_data_parser::{
     DataParser, Error as DataParserError,
 };
 use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
-use btcserverlib::wallet::psbt::frost_id_from_bytes;
+use btcserverlib::{database::LEGACY_MULTISIG_ID, wallet::psbt::frost_id_from_bytes};
 use futures::{pin_mut, StreamExt};
 use reth_network::{
     frost::{
@@ -999,6 +999,7 @@ where
                         sender: dkg.sender,
                         recipient: dkg.recipient,
                         payload: dkg.data,
+                        multisig_id: LEGACY_MULTISIG_ID,
                     };
 
                     let resp = match self.btc_server.new_dkg_payload(req).await
