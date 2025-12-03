@@ -68,7 +68,8 @@ where
     // Pick which namespaces to expose.
     let module_config = TransportRpcModuleConfig::default()
         .with_http(RethRpcModule::all_variants())
-        .with_ws(RethRpcModule::all_variants());
+        .with_ws(RethRpcModule::all_variants())
+        .with_ipc(RethRpcModule::all_variants());
 
     let mut server = rpc_builder.build(module_config, eth_api);
 
@@ -78,7 +79,7 @@ where
 
     // Start the server & keep it alive
     // let mut server_config = RpcServerConfig::default();
-    let mut server_config = rpc_server_args.rpc_server_config();
+    let server_config = rpc_server_args.rpc_server_config();
 
     // // Configure HTTP if enabled
     // if rpc_server_args.http {
