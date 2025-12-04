@@ -64,10 +64,6 @@ pub enum FederationRole {
     Outgoing,
 }
 
-fn default_role() -> FederationRole {
-    FederationRole::Continuing
-}
-
 impl Default for FederationRole {
     fn default() -> Self {
         Self::Continuing
@@ -83,7 +79,7 @@ pub struct FedMemberPubKey {
     /// The socket address of the member
     pub socket_addr: String,
     /// The role of the federation member
-    #[serde(default = "default_role")]
+    #[serde(default)]
     pub role: FederationRole,
 }
 
@@ -100,7 +96,6 @@ pub struct MultisigConfig {
     #[serde(default)]
     pub max_signers: Option<u16>,
     /// Federation members taking part in this multisig
-    #[serde(rename = "federation-member-public-key")]
     pub federation_member_public_key: Vec<FedMemberPubKey>,
 }
 
