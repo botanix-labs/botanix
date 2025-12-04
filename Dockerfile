@@ -62,7 +62,7 @@ ENV RUSTFLAGS="$RUSTFLAGS"
 ARG FEATURES=""
 
 # Package to build (reth or btc-server)
-ARG BIN=reth
+ARG BIN=botanix-reth
 ARG PACKAGE=""
 
 # Builds dependencies

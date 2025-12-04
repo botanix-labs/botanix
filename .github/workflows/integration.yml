@@ -44,7 +44,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, cargo
+          components: rustfmt, clippy
           toolchain: stable
 
       - name: Install dependencies
@@ -104,41 +104,42 @@ jobs:
       - name: Compile btc-server
         run: |
           set -eo pipefail
-          cd ./bin/btc-server 
-          cargo build --bin btc-server 
+          cd ./bin/botanix-btc-server 
+          cargo build --bin botanix-btc-server 
           echo "Bitcoin server compiled successfully!"
           sccache --show-stats
 
       - name: Compile btc-utils
         run: |
           set -eo pipefail
-          cd ./bin/btc-server 
-          cargo build --bin btc-utils
+          cd ./bin/botanix-btc-server 
+          cargo build --bin botanix-btc-utils
           echo "BTC utils compiled successfully!"
           sccache --show-stats
 
       - name: Compile poa-node
         run: |
           set -eo pipefail
-          cargo build --bin reth-botanix 
+          cd ./bin/botanix-reth
+          cargo build --bin botanix-reth 
           echo "Reth botanix node compiled successfully!"
           sccache --show-stats
 
       - name: Compile test-suite
         run: | 
           set -eo pipefail
-          cd ./bin/test-suite
-          cargo build --bin test-suite
+          cd ./bin/botanix-test-suite
+          cargo build --bin botanix-test-suite
           echo "Test suite compiled successfully!"
           sccache --show-stats
 
       - name: Prepare binaries for upload
         run: |
           mkdir -p /tmp/binaries
-          cp target/debug/btc-server /tmp/binaries/ || true
-          cp target/debug/btc-utils /tmp/binaries/ || true
-          cp target/debug/reth-botanix /tmp/binaries/ || true
-          cp target/debug/test-suite /tmp/binaries/ || true
+          cp target/debug/botanix-btc-server /tmp/binaries/ || true
+          cp target/debug/botanix-btc-utils /tmp/binaries/ || true
+          cp target/debug/botanix-reth /tmp/binaries/ || true
+          cp target/debug/botanix-test-suite /tmp/binaries/ || true
 
       - name: Upload compiled binaries
         uses: actions/upload-artifact@v5
@@ -230,25 +231,24 @@ jobs:
           mkdir -p target/debug
           mkdir -p ./bin/test-suite
           
-          if [ -f "/tmp/binaries/btc-server" ]; then
-            cp /tmp/binaries/btc-server target/debug/ 
-            chmod +x target/debug/btc-server
+          if [ -f "/tmp/binaries/botanix-btc-server" ]; then
+            cp /tmp/binaries/botanix-btc-server target/debug/ 
+            chmod +x target/debug/botanix-btc-server
           fi
-          if [ -f "/tmp/binaries/btc-utils" ]; then
-            cp /tmp/binaries/btc-utils target/debug/
-            chmod +x target/debug/btc-utils
+          if [ -f "/tmp/binaries/botanix-btc-utils" ]; then
+            cp /tmp/binaries/botanix-btc-utils target/debug/
+            chmod +x target/debug/botanix-btc-utils
           fi
-          
-          if [ -f "/tmp/binaries/reth-botanix" ]; then
-            cp /tmp/binaries/reth-botanix target/debug/
-            chmod +x target/debug/reth-botanix
+          if [ -f "/tmp/binaries/botanix-reth" ]; then
+            cp /tmp/binaries/botanix-reth target/debug/
+            chmod +x target/debug/botanix-reth
           fi
-          if [ -f "/tmp/binaries/test-suite" ]; then
-            sudo cp /tmp/binaries/test-suite /usr/local/bin/
-            sudo chmod +x /usr/local/bin/test-suite
+          if [ -f "/tmp/binaries/botanix-test-suite" ]; then
+            sudo cp /tmp/binaries/botanix-test-suite /usr/local/bin/
+            sudo chmod +x /usr/local/bin/botanix-test-suite
           fi
           if [ -d "/tmp/binaries/test-suite-dir" ]; then
-            cp -r /tmp/binaries/test-suite-dir/* ./bin/test-suite/
+            cp -r /tmp/binaries/botanix-test-suite-dir/* ./bin/botanix-test-suite/
           fi
 
       - name: Run ${{ matrix.test }}

@@ -28,8 +28,8 @@ jobs:
             --platform linux/amd64 \
             -t botanix_testnet_btc_server_v1 \
             -f Dockerfile \
-            --build-arg PACKAGE=btc-server \
-            --build-arg BIN=btc-server \
+            --build-arg PACKAGE=botanix-btc-server \
+            --build-arg BIN=botanix-btc-server \
             .
         working-directory: ./
 
@@ -53,7 +53,7 @@ jobs:
             --platform linux/amd64 \
             -t botanix_testnet_reth_node_v1 \
             -f Dockerfile \
-            --build-arg PACKAGE=reth_botanix \
-            --build-arg BIN=reth-botanix \
+            --build-arg PACKAGE=botanix-reth \
+            --build-arg BIN=botanix-reth \
             .
         working-directory: ./
