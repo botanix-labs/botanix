@@ -15,12 +15,11 @@ use futures::TryFutureExt;
 use reth::{args::RpcServerArgs, rpc::builder::config::RethRpcServerConfig, tasks::TaskExecutor};
 use reth_consensus::{Consensus, ConsensusError, FullConsensus};
 use reth_ethereum::{
-    network::api::noop::NoopNetwork,
     node::api::NodeTypesWithDBAdapter,
     provider::{db::DatabaseEnv, providers::BlockchainProvider},
     rpc::{
         builder::{
-            RethRpcModule, RpcModuleBuilder, RpcServerConfig,
+            RethRpcModule, RpcModuleBuilder,
             TransportRpcModuleConfig,
         },
         EthApiBuilder,
@@ -52,7 +51,7 @@ where
     let rpc_builder = RpcModuleBuilder::default()
         .with_provider(provider.clone())
         .with_pool(pool.clone())
-        .with_network(network)
+        .with_network(network.clone())
         .with_executor(Box::new(task_executor.clone()))
         .with_consensus(consensus)
         .with_evm_config(BotanixEvmConfig::new(chain_spec.clone()));
@@ -60,7 +59,7 @@ where
     let eth_api = EthApiBuilder::new(
         provider.clone(),
         pool,
-        NoopNetwork::default(),
+        network,
         BotanixEvmConfig::new(chain_spec),
     )
     .build();
@@ -77,44 +76,29 @@ where
     let custom_rpc = BotanixRpcExt { provider, botanix: botanix_provider };
     server.merge_configured(custom_rpc.into_rpc())?;
 
-    // Start the server & keep it alive
-    // let mut server_config = RpcServerConfig::default();
+    // Start the server 
     let server_config = rpc_server_args.rpc_server_config();
 
-    // // Configure HTTP if enabled
-    // if rpc_server_args.http {
-    //     let http_socket_addr = SocketAddr::new(
-    //         rpc_server_args.http_addr,
-    //         rpc_server_args.http_port,
-    //     );
-    //     server_config = server_config.with_http_address(http_socket_addr);
-    // }
+   let handle = server_config.start(&server).await?;
 
-    // if rpc_server_args.ws {
-    //     let ws_socket_addr =
-    //         SocketAddr::new(rpc_server_args.ws_addr, rpc_server_args.ws_port);
-    //     server_config = server_config.with_ws_address(ws_socket_addr);
-    // }
+    if let Some(path) = handle.ipc_endpoint() {
+        tracing::info!(target: "reth::cli", %path, "RPC IPC server started");
+    }
+    if let Some(addr) = handle.http_local_addr() {
+        tracing::info!(target: "reth::cli", url=%addr, "RPC HTTP server started");
+    }
+    if let Some(addr) = handle.ws_local_addr() {
+        tracing::info!(target: "reth::cli", url=%addr, "RPC WS server started");
+    }
 
-    // Only configure IPC if a path is specified
-    // if let Some(ipc_path) = &rpc_server_args.ipcpath {
-    //     server_config = server_config.with_ipc_endpoint(ipc_path.clone());
-    // }
-
-    let launch_rpc = server_config.start(&server).map_ok(|handle| {
-        if let Some(path) = handle.ipc_endpoint() {
-            tracing::info!(target: "reth::cli", %path, "RPC IPC server started");
-        }
-        if let Some(addr) = handle.http_local_addr() {
-            tracing::info!(target: "reth::cli", url=%addr, "RPC HTTP server started");
-        }
-        if let Some(addr) = handle.ws_local_addr() {
-            tracing::info!(target: "reth::cli", url=%addr, "RPC WS server started");
-        }
-        handle
+    // Spawn a task to keep the RPC server alive
+    // The handle keeps the server running as long as it's held in memory
+    //TODO: Is there a better way to keep the server alive?
+    task_executor.spawn_critical("rpc server", async move {
+        // Hold the handle indefinitely to keep the server running
+        let _handle = handle;
+        std::future::pending::<()>().await
     });
-
-    let _ = launch_rpc.await?;
 
     Ok(())
 }
