@@ -12,10 +12,10 @@ use secp256k1::PublicKey;
 
 use crate::BotanixBlock;
 
-/// trait interface for a custom rpc namespace: `botanixrpcExt`
+/// trait interface for a custom rpc namespace: `eth`
 ///
 /// This defines an additional namespace where all methods are configured as trait functions.
-#[rpc(server, namespace = "botanixrpcExt")]
+#[rpc(server, namespace = "eth")]
 #[async_trait::async_trait]
 pub trait BotanixRpcExtApi {
     /// Returns the frost aggregated public key.
