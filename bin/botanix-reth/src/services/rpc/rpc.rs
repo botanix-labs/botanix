@@ -12,14 +12,17 @@ use crate::{
 use botanix_chainspec::BotanixChainSpec;
 use botanix_rpc_config::botanix_config::Botanix;
 use futures::TryFutureExt;
-use reth::{args::RpcServerArgs, rpc::builder::config::RethRpcServerConfig, tasks::TaskExecutor};
+use reth::{
+    args::RpcServerArgs, rpc::builder::config::RethRpcServerConfig,
+    tasks::TaskExecutor,
+};
 use reth_consensus::{Consensus, ConsensusError, FullConsensus};
 use reth_ethereum::{
     node::api::NodeTypesWithDBAdapter,
     provider::{db::DatabaseEnv, providers::BlockchainProvider},
     rpc::{
         builder::{
-            RethRpcModule, RpcModuleBuilder,
+            RethRpcModule, RpcModuleBuilder, RpcServerHandle,
             TransportRpcModuleConfig,
         },
         EthApiBuilder,
@@ -41,7 +44,7 @@ pub async fn setup_and_run_rpc<C>(
     pool: BotanixPool,
     network: BotanixNetworkHandle,
     consensus: C,
-) -> eyre::Result<()>
+) -> eyre::Result<RpcServerHandle>
 where
     C: Consensus<BotanixBlock, Error = ConsensusError>
         + FullConsensus<BotanixPrimitives>
@@ -76,10 +79,10 @@ where
     let custom_rpc = BotanixRpcExt { provider, botanix: botanix_provider };
     server.merge_configured(custom_rpc.into_rpc())?;
 
-    // Start the server 
+    // Start the server
     let server_config = rpc_server_args.rpc_server_config();
 
-   let handle = server_config.start(&server).await?;
+    let handle = server_config.start(&server).await?;
 
     if let Some(path) = handle.ipc_endpoint() {
         tracing::info!(target: "reth::cli", %path, "RPC IPC server started");
@@ -91,14 +94,5 @@ where
         tracing::info!(target: "reth::cli", url=%addr, "RPC WS server started");
     }
 
-    // Spawn a task to keep the RPC server alive
-    // The handle keeps the server running as long as it's held in memory
-    //TODO: Is there a better way to keep the server alive?
-    task_executor.spawn_critical("rpc server", async move {
-        // Hold the handle indefinitely to keep the server running
-        let _handle = handle;
-        std::future::pending::<()>().await
-    });
-
-    Ok(())
+    Ok(handle)
 }
