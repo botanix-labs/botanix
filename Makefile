@@ -653,21 +653,25 @@ start-cometbft-3:
 clean-poa-3:
 	cd ${NODE_3_DIR} && \
 	rm -rf "${NODE_3_DIR}/db" && \
+	rm -rf "${NODE_3_DIR}/botanix_db" && \
 	rm -rf "${NODE_3_DIR}/static_files"
 
 clean-poa-2:
 	cd ${NODE_2_DIR} && \
 	rm -rf "${NODE_2_DIR}/db" && \
+	rm -rf "${NODE_2_DIR}/botanix_db" && \
 	rm -rf "${NODE_2_DIR}/static_files"
 
 clean-poa-1:
 	cd ${NODE_1_DIR} && \
 	rm -rf "${NODE_1_DIR}/db" && \
+	rm -rf "${NODE_1_DIR}/botanix_db" && \
 	rm -rf "${NODE_1_DIR}/static_files"
 
 clean-rpc:
 	cd ${NON_FED_1_DIR} && \
 	rm -rf "${NON_FED_1_DIR}/db" && \
+	rm -rf "${NON_FED_1_DIR}/botanix_db" && \
 	rm -rf "${NON_FED_1_DIR}/static_files"
 
 
