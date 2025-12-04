@@ -354,7 +354,7 @@ fn main() -> eyre::Result<()> {
                 };
 
                 // Setup and launch RPC server
-                setup_and_run_rpc(
+                let _rpc_handle = setup_and_run_rpc(
                     blockchain_provider.clone(),
                     &original_rpc_server_args,
                     &task_executor,

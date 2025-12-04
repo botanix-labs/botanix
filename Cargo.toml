@@ -5,6 +5,7 @@ members = [
   "bin/botanix-cli",
   "bin/botanix-db-cleaner",
   "bin/botanix-reth",
+  "bin/botanix-up",
   "bin/botanix-test-suite",
   "bin/botanix-btc-server",
   "bin/botanix-btc-server/client",
