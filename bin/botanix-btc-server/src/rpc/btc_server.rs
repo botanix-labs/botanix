@@ -397,7 +397,7 @@ pub mod btc_server_server {
         >;
         async fn get_dkg_payloads(
             &self,
-            request: tonic::Request<super::Empty>,
+            request: tonic::Request<super::GetDkgPayloadsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DkgPayloads>,
             tonic::Status,
@@ -871,8 +871,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetDkgPayloads" => {
                     #[allow(non_camel_case_types)]
                     struct GetDkgPayloadsSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                        for GetDkgPayloadsSvc<T>
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::GetDkgPayloadsRequest,
+                        > for GetDkgPayloadsSvc<T>
                     {
                         type Response = super::DkgPayloads;
                         type Future = BoxFuture<
@@ -881,7 +883,9 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::Empty>,
+                            request: tonic::Request<
+                                super::GetDkgPayloadsRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
