@@ -261,7 +261,7 @@ impl LocalContext {
             .map(|poa_processes| {
                 poa_processes
                     .iter()
-                    .filter_map(|process| process.reth_provider_factory.clone())
+                    .map(|process| process.reth_provider_factory.clone())
                     .collect::<Vec<
                         ProviderFactory<
                             NodeTypesWithDBAdapter<
@@ -284,7 +284,7 @@ impl LocalContext {
             .map(|poa_processes| {
                 poa_processes
                     .iter()
-                    .filter_map(|process| process.botanix_provider_factory.clone())
+                    .map(|process| process.botanix_provider_factory.clone())
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -1071,8 +1071,67 @@ impl Suite for ConsensusIntegrationTestSuite {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
 
+        // =================== COMETBFT NODES ================== //
+        let mut cometbft_rpc_clients = vec![];
+        let mut spawned_cometbft_processes = vec![];
+        if create_test_config.create_cometbft_nodes {
+            it_info_print!("Starting cometbft nodes ...");
+            let (cometbft_nodes, tx) =
+                create_cometbft_nodes(self.global_context.clone()).await?;
+            let poa_instances = self.global_context.fed_instances
+                - self.global_context.syncing_instances;
+            // split cometbft nodes into syncing and non-syncing or rpc nodes
+            // then create 2 separate BTreeMaps:
+            // 1. cometbft_nodes - nodes that are fed members (non-syncing) or rpc nodes
+            // 2. cometbft_nodes_syncing - nodes that are fed members (syncing)
+            // These maps are added to the local context and used later in tests
+            let (mut cometbft_nodes, mut cometbft_nodes_syncing_and_rpcs) =
+                split_members_at(cometbft_nodes, poa_instances as usize);
+            // get cometbft rpc nodes
+            let cometbft_rpc_nodes = cometbft_nodes_syncing_and_rpcs
+                .iter()
+                .filter(|(_, node)| node.is_rpc_node)
+                .collect::<Vec<_>>();
+            // add to cometbft nodes so they will be spawned
+            cometbft_nodes.extend(
+                cometbft_rpc_nodes.iter().map(|(&k, &ref v)| (k, v.clone())),
+            );
+            // remove rpc cometbft nodes
+            cometbft_nodes_syncing_and_rpcs.retain(|_, node| !node.is_rpc_node);
+            let cometbft_nodes_syncing = cometbft_nodes_syncing_and_rpcs;
+
+            for (_, cometbft_node) in cometbft_nodes.iter() {
+                // spawn cometbft node as a process
+                spawned_cometbft_processes.push(cometbft_node.spawn_service()?);
+
+                // create cometbft client
+                let url = format!(
+                    "http://{}:{}",
+                    cometbft_node.rpc_listen_address.ip().to_string(),
+                    cometbft_node.rpc_listen_address.port()
+                );
+                let cometbft_client = HttpCometBFTRpcClientFactory::new(url);
+                cometbft_rpc_clients.push(cometbft_client);
+
+                // await initialization
+                cometbft_node.await_initialization()?;
+
+                // wait for 5 seconds in between processes start
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+
+            // update local context
+            self.local_context.cometbft_processes =
+                Some(spawned_cometbft_processes);
+            self.local_context.cometbft_nodes = Some(cometbft_nodes);
+            self.local_context.cometbft_nodes_syncing =
+                Some(cometbft_nodes_syncing);
+            self.local_context.cometbft_notification = Some(tx);
+            self.local_context.cometbft_rpc_clients =
+                Some(cometbft_rpc_clients);
+        }
+
         // =================== POA NODES ================== //
-        // POA nodes must be started BEFORE CometBFT nodes because CometBFT connects to the ABCI interface provided by POA nodes
         let mut poa_botanix_clients = vec![];
         let mut client: Option<BotanixEthClient> = None;
         if create_test_config.create_poa_nodes {
@@ -1170,67 +1229,6 @@ impl Suite for ConsensusIntegrationTestSuite {
             self.local_context.poa_nodes = Some(poa_nodes);
             self.local_context.poa_notification = Some(tx);
             self.local_context.poa_eth_providers = Some(poa_botanix_clients);
-        }
-
-        // =================== COMETBFT NODES ================== //
-        // CometBFT nodes must be started AFTER POA nodes because they connect to the ABCI interface provided by POA nodes
-        let mut cometbft_rpc_clients = vec![];
-        let mut spawned_cometbft_processes = vec![];
-        if create_test_config.create_cometbft_nodes {
-            it_info_print!("Starting cometbft nodes ...");
-            let (cometbft_nodes, tx) =
-                create_cometbft_nodes(self.global_context.clone()).await?;
-            let poa_instances = self.global_context.fed_instances
-                - self.global_context.syncing_instances;
-            // split cometbft nodes into syncing and non-syncing or rpc nodes
-            // then create 2 separate BTreeMaps:
-            // 1. cometbft_nodes - nodes that are fed members (non-syncing) or rpc nodes
-            // 2. cometbft_nodes_syncing - nodes that are fed members (syncing)
-            // These maps are added to the local context and used later in tests
-            let (mut cometbft_nodes, mut cometbft_nodes_syncing_and_rpcs) =
-                split_members_at(cometbft_nodes, poa_instances as usize);
-            // get cometbft rpc nodes
-            let cometbft_rpc_nodes = cometbft_nodes_syncing_and_rpcs
-                .iter()
-                .filter(|(_, node)| node.is_rpc_node)
-                .collect::<Vec<_>>();
-            // add to cometbft nodes so they will be spawned
-            cometbft_nodes.extend(
-                cometbft_rpc_nodes.iter().map(|(&k, &ref v)| (k, v.clone())),
-            );
-            // remove rpc cometbft nodes
-            cometbft_nodes_syncing_and_rpcs.retain(|_, node| !node.is_rpc_node);
-            let cometbft_nodes_syncing = cometbft_nodes_syncing_and_rpcs;
-
-            for (_, cometbft_node) in cometbft_nodes.iter() {
-                // spawn cometbft node as a process
-                spawned_cometbft_processes.push(cometbft_node.spawn_service()?);
-
-                // create cometbft client
-                let url = format!(
-                    "http://{}:{}",
-                    cometbft_node.rpc_listen_address.ip().to_string(),
-                    cometbft_node.rpc_listen_address.port()
-                );
-                let cometbft_client = HttpCometBFTRpcClientFactory::new(url);
-                cometbft_rpc_clients.push(cometbft_client);
-
-                // await initialization
-                cometbft_node.await_initialization()?;
-
-                // wait for 5 seconds in between processes start
-                tokio::time::sleep(Duration::from_secs(5)).await;
-            }
-
-            // update local context
-            self.local_context.cometbft_processes =
-                Some(spawned_cometbft_processes);
-            self.local_context.cometbft_nodes = Some(cometbft_nodes);
-            self.local_context.cometbft_nodes_syncing =
-                Some(cometbft_nodes_syncing);
-            self.local_context.cometbft_notification = Some(tx);
-            self.local_context.cometbft_rpc_clients =
-                Some(cometbft_rpc_clients);
         }
 
         // // =================== RPC NODES ================== //
