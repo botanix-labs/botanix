@@ -289,7 +289,7 @@ jobs:
 
   build-docker-images:
     name: Build Docker Images
-    runs-on: ubuntu-latest
+    runs-on: k8-runners
     needs: semantic-release
     if: needs.semantic-release.outputs.new_release_published == 'true'
     strategy:
