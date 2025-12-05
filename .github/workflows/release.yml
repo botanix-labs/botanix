@@ -396,6 +396,7 @@ jobs:
             -f Dockerfile \
             --build-arg BIN=botanix-reth \
             --build-arg PACKAGE=botanix-reth \
+            --build-arg FEATURES="default,serde,jemalloc,client" \
             .
 
       - name: Tag Docker Image

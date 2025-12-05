@@ -50,7 +50,7 @@ update_cargo_version() {
         log_error "Failed to update version in $CARGO_TOML"
     fi
 
-    #cargo generate-lockfile
+    cargo generate-lockfile
 
     log_info "Successfully updated version to $VERSION in $CARGO_TOML"
 }
