@@ -2479,6 +2479,29 @@ where
         Ok(tonic::Response::new(resp))
     }
 
+    async fn start_new_dkg(
+        &self,
+        req: tonic::Request<rpc::StartNewDkgRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let multisig_id = req.into_inner().multisig_id;
+
+        // TODO: pre-checks for starting a new DKG session
+        // 1. Check if key package already exists for this multisig_id
+        // 2. Check if DKG session already running for this multisig_id
+        // 3. Create new DKG session using init_dkg_session()
+        // 4. Insert into dkg_sessions HashMap
+
+        // TODO: send a msg over the new or existing grpc stream to 
+        // the reth node to start a new DKG session.
+
+        Err(tonic::Status::unimplemented(format!(
+            "start_new_dkg not yet implemented for multisig_id {}",
+            multisig_id
+        )))
+    }
+
     // Currently not used
     async fn signer_finalize(
         &self,

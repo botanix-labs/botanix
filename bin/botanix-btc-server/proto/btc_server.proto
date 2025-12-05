@@ -21,6 +21,8 @@ service BtcServer {
 
     rpc NewDkgPayload(DkgPayload) returns(DkgPayloads) {}
 
+    rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
+
     // Signing Endpoints
 
     rpc GetRound1SigningPackage(SigningPackageRequest) returns (SigningPackage) {}
@@ -218,6 +220,10 @@ message Empty {}
 
 // Frost things
 message GetDkgPayloadsRequest {
+    uint32 multisig_id = 1;
+}
+
+message StartNewDkgRequest {
     uint32 multisig_id = 1;
 }
 
