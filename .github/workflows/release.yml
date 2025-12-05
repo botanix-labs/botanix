@@ -117,7 +117,7 @@ jobs:
 
       - name: Update Cargo.toml version
         if: steps.semantic.outputs.new_release_published == 'true'
-        run: ./.github/scripts/release.sh update_cargo_version "${{ steps.semantic.outputs.new_release_version}}"
+        run: bash ./.github/scripts/release.sh update_cargo_version "${{ steps.semantic.outputs.new_release_version}}"
 
       - name: Upload Cargo.toml and Cargo.lock to artifacts
         if: steps.semantic.outputs.new_release_published == 'true'
@@ -472,7 +472,7 @@ jobs:
           path: .
 
       - name: Commit Cargo files
-        run: ./.github/scripts/release.sh commit_cargo_files "${{ needs.semantic-release.outputs.new_release_version }}"
+        run: bash ./.github/scripts/release.sh commit_cargo_files "${{ needs.semantic-release.outputs.new_release_version }}"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -507,6 +507,6 @@ jobs:
 
       - name: Back-merge to other branches
         run: |
-          ./.github/scripts/release.sh back_merge main develop "${{ secrets.PAT_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
-          ./.github/scripts/release.sh back_merge main rc "${{ secrets.PAT_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
+          bash ./.github/scripts/release.sh back_merge main develop "${{ secrets.PAT_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
+          bash ./.github/scripts/release.sh back_merge main rc "${{ secrets.PAT_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
         
