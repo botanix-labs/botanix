@@ -11,7 +11,7 @@ use btcserverlib::wallet::address::{
     generate_taproot_address, generate_tweaked_public_key,
 };
 use frost_secp256k1_tr::{self as frost};
-use reth_storage_api::BlockReaderIdExt;
+use reth_storage_api::{BlockReaderIdExt, HeaderProvider};
 use std::{fmt, str::FromStr, sync::Arc};
 use thiserror::Error;
 use tracing::error;
@@ -160,10 +160,14 @@ impl Botanix {
     }
 
     /// Function calls "`get_aggregate_public_key`"
-    pub async fn get_aggregate_public_key(
+    pub async fn get_aggregate_public_key<P>(
         &self,
-        provider: &impl BlockReaderIdExt,
-    ) -> std::result::Result<secp256k1::PublicKey, GatewayAddressRPCError> {
+        provider: &P,
+    ) -> std::result::Result<secp256k1::PublicKey, GatewayAddressRPCError>
+    where
+        P: BlockReaderIdExt,
+        <P as HeaderProvider>::Header: HeaderExt,
+    {
         let latest_header = provider
             .latest_header()
             .map_err(|_| GatewayAddressRPCError::FailedToGetLatestHeader)?
@@ -173,27 +177,29 @@ impl Botanix {
             return Err(GatewayAddressRPCError::GenesisBlock);
         }
 
-        // TODO: FIXME
-        // let agg_pk = latest_header
-        //     .deserialize_extra_data_header()
-        //     .map_err(|_| GatewayAddressRPCError::FailedToGetLatestHeader)?
-        //     .aggregated_public_key;
-        let agg_pk = secp256k1::PublicKey::from_str("02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5")
-             .map_err(|_| GatewayAddressRPCError::FailedToGetLatestHeader)?;
+        let agg_pk = latest_header
+            .header()
+            .deserialize_extra_data_header()
+            .map_err(|_| GatewayAddressRPCError::FailedToGetLatestHeader)?
+            .aggregated_public_key;
 
         Ok(agg_pk)
     }
 
     /// Function calls `btc_server` to get "aggregated public key" and generated taproot gateway
     /// address
-    pub async fn get_gateway_address(
+    pub async fn get_gateway_address<P>(
         &self,
         eth_address: alloy_primitives::Address,
-        provider: &impl BlockReaderIdExt,
+        provider: &P,
     ) -> std::result::Result<
         (bitcoin::Address, secp256k1::PublicKey),
         GatewayAddressRPCError,
-    > {
+    >
+    where
+        P: BlockReaderIdExt,
+        <P as HeaderProvider>::Header: HeaderExt,
+    {
         let eth_address_bytes = eth_address.0 .0;
         let latest_header = provider
             .latest_header()
@@ -205,13 +211,11 @@ impl Botanix {
         }
 
         // We need to tweak the aggregated public key with the eth address
-        // TODO: FIXME
-        // let agg_pk = latest_header
-        //     .deserialize_extra_data_header()
-        //     .map_err(|_| GatewayAddressRPCError::FailedToGetLatestHeader)?
-        //     .aggregated_public_key;
-        let agg_pk = secp256k1::PublicKey::from_str("02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5")
-             .map_err(|_| GatewayAddressRPCError::FailedToGetLatestHeader)?;
+        let agg_pk = latest_header
+            .header()
+            .deserialize_extra_data_header()
+            .map_err(|_| GatewayAddressRPCError::FailedToGetLatestHeader)?
+            .aggregated_public_key;
 
         let vpk = frost::VerifyingKey::deserialize(&agg_pk.serialize())?;
         let tweaked_pk = generate_tweaked_public_key(&vpk, &eth_address_bytes)

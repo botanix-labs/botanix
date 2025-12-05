@@ -340,7 +340,7 @@ impl FederationMemberTestConfig {
             ));
         }
         let args = vec![
-            "botanix-reth",
+            "node",
             "-vvv",
             "--disable-discovery",
             "--is-testnet",
@@ -373,11 +373,11 @@ impl FederationMemberTestConfig {
             "regtest",
             "--btc-server",
             bitcoin_server_url.as_str(),
-            "--bitcoind.url",
+            "--bitcoind.primary_url",
             bitcoind_url.as_str(),
-            "--bitcoind.username",
+            "--bitcoind.primary_username",
             bitcoind_username.as_str(),
-            "--bitcoind.password",
+            "--bitcoind.primary_password",
             bitcoind_password.as_str(),
             "--frost.min_signers",
             frost_min_signers.as_str(),

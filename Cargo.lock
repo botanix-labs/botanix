@@ -2492,7 +2492,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-activation-manager"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "botanix-storage",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-edh"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "bitcoin 0.32.7",
@@ -2519,7 +2519,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-metrics"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "botanix-activation-manager",
  "botanix-storage",
@@ -2531,7 +2531,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-peg"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "assert_matches",
@@ -2555,14 +2555,14 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-rsp"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "reth-revm",
 ]
 
 [[package]]
 name = "botanix-bitcoin-checkpoint"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -2581,7 +2581,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-btc-server"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "actix-cors",
  "actix-server",
@@ -2648,7 +2648,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-btc-server-client"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "assert_matches",
@@ -2669,7 +2669,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-btc-wallet"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2692,7 +2692,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-chainspec"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -2720,7 +2720,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-cli"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2731,7 +2731,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-cli-args"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "askama",
@@ -2761,7 +2761,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-cli-parsers"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-genesis",
  "alloy-primitives",
@@ -2786,7 +2786,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-comet-bft-rpc"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "bitcoin 0.32.7",
  "hex 0.4.3",
@@ -2802,7 +2802,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-configs"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "askama",
@@ -2824,7 +2824,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-consensus-common"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -2842,7 +2842,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-data-parser"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -2866,7 +2866,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-db-cleaner"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -2886,7 +2886,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-evm"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -2922,7 +2922,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-fs-util"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -2931,7 +2931,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-pegin-recovery"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.7",
@@ -2967,7 +2967,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-pegin-recovery-client"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "assert_matches",
@@ -2987,7 +2987,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-primitives"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3007,7 +3007,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-reth"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -3159,7 +3159,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-rpc-client"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "bitcoin 0.32.7",
@@ -3186,7 +3186,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-rpc-config"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -3210,7 +3210,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-rpc-types"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -3218,7 +3218,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-storage"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -3254,7 +3254,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-storage-migrate"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "botanix-storage",
@@ -3269,7 +3269,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-test-suite"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "ansi_term",
@@ -3341,7 +3341,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-up"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -3364,7 +3364,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-utils"
-version = "0.1.0"
+version = "1.5.3"
 dependencies = [
  "tracing",
 ]
