@@ -268,6 +268,10 @@ struct App<BitcoinRpcApi> {
     #[cfg(test)]
     max_signers: u16,
     min_signers: u16,
+    /// Secret key for P2P communication during DKG
+    p2p_secret_key: secp256k1::SecretKey,
+    /// Federation config for DKG
+    federation: FederationTomlConfig,
     /// Map of multisig_id to DKG state machines
     dkg_sessions: Arc<Mutex<HashMap<u32, DkgState>>>,
     /// The signing nonces for the current signing session
@@ -404,7 +408,7 @@ where
     /// Creates a new DKG state machine for the given multisig_id.
     fn init_dkg_session(
         frost_identifier: frost::Identifier,
-        secret_key: secp256k1::SecretKey,
+        p2p_secret_key: secp256k1::SecretKey,
         multisig_id: u32,
         coordinator: frost::Identifier,
         federation: &FederationTomlConfig,
@@ -465,7 +469,7 @@ where
 
         let machine = dkg::DkgStateMachine::new(
             frost_identifier,
-            secret_key,
+            p2p_secret_key,
             multisig_id,
             coordinator,
             members,
@@ -529,7 +533,7 @@ where
         let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
         let sanitzed_key =
             raw.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>();
-        let secret_key =
+        let p2p_secret_key =
             sanitzed_key.as_str().parse::<secp256k1::SecretKey>().map_err(
                 |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
             )?;
@@ -654,7 +658,7 @@ where
 
                 let state = Self::init_dkg_session(
                     frost_identifier,
-                    secret_key,
+                    p2p_secret_key,
                     LEGACY_MULTISIG_ID,
                     coordinator,
                     &federation,
@@ -676,6 +680,8 @@ where
             pegout_scheduler: pegout_manager,
             tx_lock: Arc::new(Mutex::new(())),
             identifier: frost_identifier,
+            p2p_secret_key,
+            federation,
             dkg_sessions,
             frost_round1_nonces: Arc::new(Mutex::new(None)),
             config,
@@ -2501,17 +2507,26 @@ where
             ));
         }
 
-        // TODO: 
-        // 1. Create new DKG session using init_dkg_session()
-        // 2. Insert into dkg_sessions HashMap
+        let coordinator = frost_id!(self.config.coordinator.unwrap_or(DEFAULT_COORDINATOR_ID));
+        let state = Self::init_dkg_session(
+            self.identifier,
+            self.p2p_secret_key,
+            multisig_id,
+            coordinator,
+            &self.federation,
+            self.config.max_signers,
+            self.min_signers,
+            self.is_coordinator(),
+        )
+        .map_err(|e| tonic::Status::internal(format!("failed to init DKG session: {}", e)))?;
+
+        self.dkg_sessions.lock().await.insert(multisig_id, state);
+        info!("Started new DKG session for multisig_id {}", multisig_id);
 
         // TODO: send a msg over the new or existing grpc stream to 
         // the reth node to start a new DKG session.
 
-        Err(tonic::Status::unimplemented(format!(
-            "start_new_dkg not yet implemented for multisig_id {}",
-            multisig_id
-        )))
+        Ok(tonic::Response::new(rpc::Empty {}))
     }
 
     // Currently not used
