@@ -3,6 +3,9 @@
 # Build deps
 FROM rust:1.91 AS base
 
+RUN rustup toolchain install nightly
+RUN rustup default nightly
+
 ARG TARGETARCH
 
 # Download and install cargo-binstall
