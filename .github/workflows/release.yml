@@ -382,7 +382,6 @@ jobs:
             -f Dockerfile \
             --build-arg BIN=botanix-btc-server \
             --build-arg PACKAGE=botanix-btc-server \
-            --build-arg PROFILE=release \
             .
 
       - name: Build Reth Docker Image
@@ -394,7 +393,6 @@ jobs:
             -f Dockerfile \
             --build-arg BIN=botanix-reth \
             --build-arg PACKAGE=botanix-reth \
-            --build-arg PROFILE=release \
             .
 
       - name: Tag Docker Image
