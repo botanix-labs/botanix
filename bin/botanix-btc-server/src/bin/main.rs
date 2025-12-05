@@ -2487,11 +2487,23 @@ where
 
         let multisig_id = req.into_inner().multisig_id;
 
-        // TODO: pre-checks for starting a new DKG session
-        // 1. Check if key package already exists for this multisig_id
-        // 2. Check if DKG session already running for this multisig_id
-        // 3. Create new DKG session using init_dkg_session()
-        // 4. Insert into dkg_sessions HashMap
+        if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
+            return Err(already_exists!(
+                "key package already exists for multisig_id {}",
+                multisig_id
+            ));
+        }
+
+        if self.dkg_sessions.lock().await.contains_key(&multisig_id) {
+            return Err(already_exists!(
+                "DKG session already running for multisig_id {}",
+                multisig_id
+            ));
+        }
+
+        // TODO: 
+        // 1. Create new DKG session using init_dkg_session()
+        // 2. Insert into dkg_sessions HashMap
 
         // TODO: send a msg over the new or existing grpc stream to 
         // the reth node to start a new DKG session.
