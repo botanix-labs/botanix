@@ -50,7 +50,8 @@ update_cargo_version() {
         log_error "Failed to update version in $CARGO_TOML"
     fi
 
-    cargo generate-lockfile
+    # Use cargo update instead of generate-lockfile to preserve dependency versions
+    cargo update --workspace
 
     log_info "Successfully updated version to $VERSION in $CARGO_TOML"
 }
