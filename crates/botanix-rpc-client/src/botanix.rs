@@ -3,9 +3,10 @@
 
 use crate::error::BotanixEthApiError;
 use alloy_primitives::U256;
+use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_rpc_config::botanix_config::Botanix;
 use futures::Future;
-use reth_provider::BlockReaderIdExt;
+use reth_provider::{BlockReaderIdExt, HeaderProvider};
 use revm_primitives::Address;
 
 /// Botanix Rpc endpoints
@@ -21,12 +22,16 @@ pub trait EthBotanixApi: Send + Sync + 'static {
     fn botanix_provider(&self) -> &Botanix;
 
     /// Returns an aggregate public key from Frost
-    fn get_aggregate_public_key(
+    fn get_aggregate_public_key<P>(
         &self,
-        provider: &impl BlockReaderIdExt,
+        provider: &P,
     ) -> impl Future<Output = Result<secp256k1::PublicKey, BotanixEthApiError>>
            + Send
-           + Sync {
+           + Sync
+    where
+        P: BlockReaderIdExt,
+        <P as HeaderProvider>::Header: HeaderExt,
+    {
         async move {
             let aggregate_public_key = self
                 .botanix_provider()
@@ -38,16 +43,20 @@ pub trait EthBotanixApi: Send + Sync + 'static {
     }
 
     /// Retrieves the gateway address for deposits
-    fn get_gateway_address(
+    fn get_gateway_address<P>(
         &self,
         eth_address: Address,
-        provider: &impl BlockReaderIdExt,
+        provider: &P,
     ) -> impl Future<
         Output = Result<
             Option<(bitcoin::Address, secp256k1::PublicKey)>,
             BotanixEthApiError,
         >,
-    > + Send {
+    > + Send
+    where
+        P: BlockReaderIdExt,
+        <P as HeaderProvider>::Header: HeaderExt,
+    {
         async move {
             let pegin_info = self
                 .botanix_provider()
