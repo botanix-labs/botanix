@@ -1,8 +1,8 @@
 //! # Database Table Definitions
 //!
-//! This module defines all the database tables used by the Botanix storage system.
-//! Each table represents a specific data domain and defines the key-value mapping
-//! for efficient storage and retrieval.
+//! This module defines all the database tables used by the Botanix storage
+//! system. Each table represents a specific data domain and defines the
+//! key-value mapping for efficient storage and retrieval.
 //!
 //! ## Table Overview
 //!
@@ -24,13 +24,14 @@
 //! ## Usage with Reth
 //!
 //! These tables integrate with the Reth database infrastructure, providing
-//! type-safe access to the underlying MDBX database with automatic serialization
-//! and deserialization of complex data structures.
+//! type-safe access to the underlying MDBX database with automatic
+//! serialization and deserialization of complex data structures.
 
 use super::models::*;
 use alloy_primitives::{BlockNumber, B256};
-use reth_db::TableSet;
-use reth_db::{tables, TableType, TableViewer};
+use reth_db::{
+    tables, DatabaseEnv, DatabaseError, TableSet, TableType, TableViewer,
+};
 use reth_db_api::table::TableInfo;
 use std::fmt;
 
@@ -109,4 +110,14 @@ tables! {
         type Key = SnapshotSyncId;
         type Value = SnapshotSync;
     }
+}
+
+/// Creates all the Botanix-specific tables as defined in [`Tables`], if
+/// necessary.
+///
+/// This function uses [`reth_db::DatabaseEnv::create_tables_for`] underneath.
+pub fn create_botanix_tables(
+    db: &mut DatabaseEnv,
+) -> Result<(), DatabaseError> {
+    db.create_tables_for::<Tables>()
 }
