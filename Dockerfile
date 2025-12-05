@@ -1,7 +1,7 @@
 #syntax=docker/dockerfile:1.7-labs
 
 # Build deps
-FROM rust:1.93 AS base
+FROM rust:1.91 AS base
 
 RUN rustup toolchain install stable
 RUN rustup default stable
