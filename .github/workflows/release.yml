@@ -377,7 +377,6 @@ jobs:
         if: matrix.configs.bin == 'botanix-btc-server'
         run: |
           docker build \
-            --platform linux/amd64 \
             -t botanix_btc:latest \
             -f Dockerfile \
             --build-arg BIN=botanix-btc-server \
@@ -388,7 +387,6 @@ jobs:
         if: matrix.configs.bin == 'botanix-reth'
         run: |
           docker build \
-            --platform linux/amd64 \
             -t botanix_reth:latest \
             -f Dockerfile \
             --build-arg BIN=botanix-reth \
