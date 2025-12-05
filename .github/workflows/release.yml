@@ -53,7 +53,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -104,7 +104,7 @@ jobs:
         id: semantic
         uses: cycjimmy/semantic-release-action@v6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
           branches: ${{ steps.branches_config.outputs.branches }}
           dry_run: true
@@ -323,7 +323,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.PAT_TOKEN }}
 
       - name: Generate Docker tags
         id: generate-tags
@@ -443,7 +443,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
       - name: Download Release Artifacts
@@ -484,7 +484,7 @@ jobs:
         id: semantic
         uses: cycjimmy/semantic-release-action@v6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
           branches: ${{ needs.semantic-release.outputs.branches_config }}
 
@@ -502,11 +502,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
       - name: Back-merge to other branches
         run: |
-          ./.github/scripts/release.sh back_merge main develop "${{ secrets.GITHUB_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
-          ./.github/scripts/release.sh back_merge main rc "${{ secrets.GITHUB_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
-          ./.github/scripts/release.sh back_merge main hotfix "${{ secrets.GITHUB_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
+          ./.github/scripts/release.sh back_merge main develop "${{ secrets.PAT_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
+          ./.github/scripts/release.sh back_merge main rc "${{ secrets.PAT_TOKEN }}" "${{ needs.semantic-release.outputs.new_release_version }}"
+        
