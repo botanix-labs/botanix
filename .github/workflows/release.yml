@@ -133,7 +133,7 @@ jobs:
     name: Build Binaries
     needs: semantic-release
     if: needs.semantic-release.outputs.new_release_published == 'true'
-    runs-on: binary-builder
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
@@ -165,8 +165,13 @@ jobs:
       - uses: rui314/setup-mold@v1
       - uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           target: ${{ matrix.configs.target }}
           toolchain: stable
+
+      - name: Install dependencies
+        run: |
+          bash .github/scripts/deps.sh
 
       - name: gcloud auth
         uses: google-github-actions/auth@v3
@@ -377,24 +382,20 @@ jobs:
         if: matrix.configs.bin == 'botanix-btc-server'
         run: |
           docker build \
-            --platform linux/amd64 \
             -t botanix_btc:latest \
             -f Dockerfile \
             --build-arg BIN=botanix-btc-server \
             --build-arg PACKAGE=botanix-btc-server \
-            --build-arg PROFILE=release \
             .
 
       - name: Build Reth Docker Image
         if: matrix.configs.bin == 'botanix-reth'
         run: |
           docker build \
-            --platform linux/amd64 \
             -t botanix_reth:latest \
             -f Dockerfile \
             --build-arg BIN=botanix-reth \
             --build-arg PACKAGE=botanix-reth \
-            --build-arg PROFILE=release \
             .
 
       - name: Tag Docker Image
