@@ -133,7 +133,7 @@ jobs:
     name: Build Binaries
     needs: semantic-release
     if: needs.semantic-release.outputs.new_release_published == 'true'
-    runs-on: binary-builder
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
@@ -165,8 +165,13 @@ jobs:
       - uses: rui314/setup-mold@v1
       - uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           target: ${{ matrix.configs.target }}
           toolchain: stable
+
+      - name: Install dependencies
+        run: |
+          bash .github/scripts/deps.sh
 
       - name: gcloud auth
         uses: google-github-actions/auth@v3
@@ -289,7 +294,7 @@ jobs:
 
   build-docker-images:
     name: Build Docker Images
-    runs-on: k8-runners
+    runs-on: ubuntu-latest
     needs: semantic-release
     if: needs.semantic-release.outputs.new_release_published == 'true'
     strategy:

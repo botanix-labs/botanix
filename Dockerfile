@@ -59,7 +59,7 @@ ARG RUSTFLAGS=""
 ENV RUSTFLAGS="$RUSTFLAGS"
 
 # Features to enable
-ARG FEATURES=""
+ARG FEATURES="default"
 
 # Package to build (reth or btc-server)
 ARG BIN=botanix-reth
