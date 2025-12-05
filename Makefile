@@ -6,10 +6,14 @@ SHELL := /usr/bin/env bash
 # Heavily inspired by Lighthouse: https://github.com/sigp/lighthouse/blob/693886b94176faa4cb450f024696cb69cda2fe58/Makefile
 .DEFAULT_GOAL := help
 
-GIT_TAG ?= $(shell git describe --tags --abbrev=0)
+# Get the latest git tag, or use 'dev' as fallback if no tags exist
+GIT_TAG ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 
-# Features for builds
-FEATURES=all
+# Features for builds (empty = use default features)
+FEATURES ?=
+
+# Conditional features flag - only add --features if FEATURES is not empty
+FEATURES_FLAG := $(if $(FEATURES),--features "$(FEATURES)",)
 
 # Cargo profile for builds. Default is for local builds, CI uses an override.
 PROFILE ?= release
@@ -18,7 +22,7 @@ PROFILE ?= release
 CARGO_INSTALL_EXTRA_FLAGS ?=
 
 # The docker image name
-DOCKER_IMAGE_NAME ?= ghcr.io/paradigmxyz/botanix-reth
+DOCKER_IMAGE_NAME ?= ghcr.io/botanix-labs/$(BUILD_PACKAGE)
 
 # Botanix local network configuration
 NODES_DIR ?= .botanix-local
@@ -32,38 +36,56 @@ FROST_MIN_SIGNERS ?= 2
 # Number of max signers
 FROST_MAX_SIGNERS ?= 2
 
+# Package to build (reth or btc-server)
+BUILD_PACKAGE ?= botanix-reth
+# Binary to build (reth or btc-server)
+BUILD_BIN ?= botanix-reth
+
+# Build output directory (Cargo target directory)
+BUILD_PATH ?= target
+# Directory for staging binaries before Docker build
+BIN_DIR ?= bin
+
 ##@ Help
 
 .PHONY: help
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+.PHONY: list-features
+list-features: ## List available features for BUILD_PACKAGE (default: botanix-reth).
+	@echo "Available features for $(BUILD_PACKAGE):"
+	@cargo metadata --format-version 1 --no-deps 2>/dev/null | \
+		jq -r '.packages[] | select(.name == "$(BUILD_PACKAGE)") | .features | keys[]' 2>/dev/null || \
+		{ echo "Note: Install 'jq' for better output, or check Cargo.toml directly:"; \
+		  echo "  grep -A 50 '^\[features\]' bin/$(BUILD_PACKAGE)/Cargo.toml"; }
+
 ##@ Build
 
 .PHONY: install
 install: ## Build and install the reth binary under `~/.cargo/bin`.
 	cargo install --path bin/botanix-reth --bin botanix-reth --force --locked \
-		--features "$(FEATURES)" \
+		$(FEATURES_FLAG) \
 		--profile "$(PROFILE)" \
 		$(CARGO_INSTALL_EXTRA_FLAGS)
 
 .PHONY: install-btc-server
 install-btc-server: ## Build and install the btc-server binary under `~/.cargo/bin`.
 	cargo install --path bin/botanix-btc-server --bin botanix-btc-server --force --locked \
-		--features "$(FEATURES)" \
+		$(FEATURES_FLAG) \
 		--profile "$(PROFILE)" \
 		$(CARGO_INSTALL_EXTRA_FLAGS)
 
 .PHONY: build
 build: ## Build the reth binary into `target` directory.
-	cargo build --bin botanix-reth --features "$(FEATURES)" --profile "$(PROFILE)"
+	cargo build --bin botanix-reth $(FEATURES_FLAG) --profile "$(PROFILE)"
 
 .PHONY: build-debug
 build-debug: ## Build the reth binary into `target/debug` directory.
-	cargo build --bin botanix-reth --features "$(FEATURES)"
+	cargo build --bin botanix-reth $(FEATURES_FLAG)
 # Builds the reth binary natively.
 build-native-%:
-	cargo build --bin botanix-reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)"
+	cargo build --bin botanix-reth --target $* $(FEATURES_FLAG) --profile "$(PROFILE)"
 
 # The following commands use `cross` to build a cross-compile.
 #
@@ -89,7 +111,7 @@ build-x86_64-pc-windows-gnu: FEATURES := $(filter-out jemalloc jemalloc-prof,$(F
 # See: https://github.com/cross-rs/cross/wiki/FAQ#undefined-reference-with-build-std
 build-%:
 	RUSTFLAGS="-C link-arg=-lgcc -Clink-arg=-static-libgcc" \
-		cross build --bin reth --target $* --features "$(FEATURES)" --profile "$(PROFILE)"
+		cross build --package $(BUILD_PACKAGE) --bin $(BUILD_BIN) --target $* $(FEATURES_FLAG) --profile "$(PROFILE)"
 
 
 build-btc-server-%:
@@ -154,19 +176,20 @@ docker-build-push-nightly: ## Build and push cross-arch Docker image tagged with
 
 # Create a cross-arch Docker image with the given tags and push it
 define docker_build_push
-	$(MAKE) build-x86_64-unknown-linux-gnu
-	mkdir -p $(BIN_DIR)/amd64
-	cp $(BUILD_PATH)/x86_64-unknown-linux-gnu/$(PROFILE)/reth $(BIN_DIR)/amd64/reth
+	@if [ -z "$(1)" ] || [ -z "$(2)" ]; then \
+		echo "Error: Docker tags cannot be empty. GIT_TAG=$(GIT_TAG)"; \
+		echo "Either create a git tag or set GIT_TAG manually: make docker-build-push GIT_TAG=v1.0.0"; \
+		exit 1; \
+	fi
 
-	$(MAKE) build-aarch64-unknown-linux-gnu
-	mkdir -p $(BIN_DIR)/arm64
-	cp $(BUILD_PATH)/aarch64-unknown-linux-gnu/$(PROFILE)/reth $(BIN_DIR)/arm64/reth
-
-	docker buildx build --file ./Dockerfile.cross . \
+	docker buildx build --file ./Dockerfile . \
 		--platform linux/amd64,linux/arm64 \
 		--tag $(DOCKER_IMAGE_NAME):$(1) \
 		--tag $(DOCKER_IMAGE_NAME):$(2) \
 		--provenance=false \
+		--build-arg PACKAGE=$(BUILD_PACKAGE) \
+        --build-arg BIN=$(BUILD_BIN) \
+        --build-arg PROFILE=$(PROFILE) \
 		--push
 endef
 
