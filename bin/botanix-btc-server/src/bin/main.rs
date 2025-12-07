@@ -465,7 +465,9 @@ where
         // Prepare the federation config.
         // TODO: Handle error
         let raw = std::fs::read_to_string(&config.federation_config_path)?;
-        verify_federation_config_hash(&raw, &config.config_hash);
+        if let Some(expected_hash) = config.config_hash.as_deref() {
+            verify_federation_config_hash(&raw, expected_hash);
+        }
         let federation = FederationTomlConfig::from_str(&raw).map_err(|e| {
             dkg::Error::BadConfig(format!(
                 "invalid federation Toml config: {}",
@@ -473,39 +475,39 @@ where
             ))
         })?;
         let active_multisig = federation
-            .get_multisig_by_version(&config.multisig_version)
+            .get_multisig_by_id(config.multisig_id)
             .ok_or_else(|| {
                 dkg::Error::BadConfig(format!(
-                    "missing multisig version '{}'",
-                    config.multisig_version
+                    "missing multisig id {}",
+                    config.multisig_id
                 ))
             })?;
 
         if let Some(max_signers) = active_multisig.max_signers {
             if config.max_signers != max_signers {
                 panic!(
-                    "max signers mismatch between CLI ({}) and multisig '{}' ({})",
-                    config.max_signers, config.multisig_version, max_signers
+                    "max signers mismatch between CLI ({}) and multisig {} ({})",
+                    config.max_signers, config.multisig_id, max_signers
                 );
             }
         }
         if let Some(min_signers) = active_multisig.min_signers {
             if config.min_signers != min_signers {
                 panic!(
-                    "min signers mismatch between CLI ({}) and multisig '{}' ({})",
-                    config.min_signers, config.multisig_version, min_signers
+                    "min signers mismatch between CLI ({}) and multisig {} ({})",
+                    config.min_signers, config.multisig_id, min_signers
                 );
             }
         } else {
             info!(
-                "Multisig '{}' does not specify a threshold; using CLI-provided min_signers ({})",
-                config.multisig_version, config.min_signers
+                "Multisig {} does not specify a threshold; using CLI-provided min_signers ({})",
+                config.multisig_id, config.min_signers
             );
         }
 
         info!(
-            "Using multisig '{}' with {} members",
-            config.multisig_version,
+            "Using multisig {} with {} members",
+            config.multisig_id,
             active_multisig.federation_member_public_key.len()
         );
 
@@ -2958,7 +2960,7 @@ mod tests {
         lst-fee-receiver = ""
 
         [[multisig]]
-        version = "m1"
+        multisig-id = 0
         min-signers = 2
         max-signers = 3
 
@@ -2966,12 +2968,6 @@ mod tests {
         key = "03185b1f0226d6d5949b902f083dd6e5b04ecdccdedd4cf48080de60b0bfe3b606"
         # Private key: 46de0f5cdbf2619ba8155964f951661ef89126aaddfcbbab56b7422e37572ff8
         socket-addr = "127.0.0.1:30303"
-        role = "continuing"
-
-        [[multisig.federation-member-public-key]]
-        key = "038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140"
-        # Private key: 27eeb2264674f15f2bac84d84b5e8f0c40722f8327fe7354bf14c84e248f8838
-        socket-addr = "127.0.0.1:30304"
         role = "continuing"
 
         [[multisig.federation-member-public-key]]
@@ -3005,8 +3001,8 @@ mod tests {
             identifier: 0,
             coordinator: Some(0),
             federation_config_path: temp_federation.path().to_owned(),
-            multisig_version: "m1".to_string(),
-            config_hash,
+            multisig_id: 0,
+            config_hash: Some(config_hash),
             p2p_secret_key: temp_secret_key.path().to_owned(),
             address: "0.0.0.0:8080".to_string(),
             max_signers: 3,

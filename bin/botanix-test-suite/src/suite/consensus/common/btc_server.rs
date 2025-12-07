@@ -113,14 +113,14 @@ fn spawn_btc_server_process(
     }
 
     // Write federation config to tempfile
-    let multisig = MultisigConfig::new(
-        "m1",
+    let multisig_current = MultisigConfig::new(
+        0,
         global_context.min_signers,
         global_context.max_signers,
         fed_members,
     );
     let federation_config = FederationTomlConfig::new(
-        vec![multisig],
+        vec![multisig_current],
         String::new(), // Not needed
         String::new(), // Not needed
         String::new(), // Not needed
@@ -158,8 +158,8 @@ fn spawn_btc_server_process(
         coordinator.as_str(),
         "--federation-config-path",
         federation_path.as_str(),
-        "--multisig-version",
-        "m1",
+        "--multisig-id",
+        "0",
         "--config-hash",
         config_hash.as_str(),
         "--p2p-secret-key",

@@ -188,14 +188,14 @@ impl NonFederationMemberTestConfig {
         }
 
         // Need to create a federation.toml in the data dir
-        let multisig = MultisigConfig::new(
-            "m1",
+        let multisig_current = MultisigConfig::new(
+            0,
             self.frost_min_signers,
             self.frost_max_signers,
             edh_authorities,
         );
         let federation_config = FederationTomlConfig::new(
-            vec![multisig],
+            vec![multisig_current],
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
