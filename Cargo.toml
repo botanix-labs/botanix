@@ -25,6 +25,7 @@ members = [
   "crates/botanix-consensus-common",
   "crates/botanix-data-parser",
   "crates/botanix-fs-util",
+  "crates/botanix-foundation-layer",
   "crates/botanix-primitives",
   "crates/botanix-rpc-client",
   "crates/botanix-rpc-config",

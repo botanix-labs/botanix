@@ -1,0 +1,32 @@
+[package]
+name = "botanix-foundation-layer"
+description = "Interface with the Botanix Foundation Layer"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+botanix-storage = { workspace = true }
+botanix-btc-wallet = { workspace = true }
+reth-db = { workspace = true, features = ["mdbx"] }
+reth-db-api = { workspace = true }
+reth-provider = { workspace = true }
+reth-node-types = { workspace = true }
+reth-storage-errors = { workspace = true }
+
+tokio = { version = "1.45.0", features = ["full"] }
+ciborium = "0.2.1"
+serde = "1.0.171"
+lru = "0.16.2"
+
+# Botanix Trusted Execution Machine
+botanix-tem = { git = "ssh://git@github.com/botanix-labs/tem.git", branch = "reth-integration" }
+
+[dev-dependencies]
+reth-prune ={ workspace = true }
+botanix-reth ={ workspace = true }
+botanix-chainspec = { workspace = true }
+botanix-primitives = { workspace = true }

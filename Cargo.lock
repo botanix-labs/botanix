@@ -62,7 +62,7 @@ dependencies = [
  "derive_more 2.0.1",
  "encoding_rs",
  "flate2",
- "foldhash",
+ "foldhash 0.1.5",
  "futures-core",
  "h2 0.3.27",
  "http 0.2.12",
@@ -176,7 +176,7 @@ dependencies = [
  "cookie",
  "derive_more 2.0.1",
  "encoding_rs",
- "foldhash",
+ "foldhash 0.1.5",
  "futures-core",
  "futures-util",
  "impl-more",
@@ -581,7 +581,7 @@ dependencies = [
  "const-hex",
  "derive_arbitrary",
  "derive_more 2.0.1",
- "foldhash",
+ "foldhash 0.1.5",
  "getrandom 0.3.3",
  "hashbrown 0.15.4",
  "indexmap 2.10.0",
@@ -2921,6 +2921,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "botanix-foundation-layer"
+version = "1.5.4"
+dependencies = [
+ "botanix-btc-wallet",
+ "botanix-chainspec",
+ "botanix-primitives",
+ "botanix-reth",
+ "botanix-storage",
+ "botanix-tem 0.1.0 (git+ssh://git@github.com/botanix-labs/tem.git?branch=reth-integration)",
+ "ciborium",
+ "lru 0.16.2",
+ "reth-db",
+ "reth-db-api",
+ "reth-node-types",
+ "reth-provider",
+ "reth-prune",
+ "reth-storage-errors",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "botanix-fs-util"
 version = "1.5.4"
 dependencies = [
@@ -3224,7 +3246,9 @@ dependencies = [
  "arbitrary",
  "auto_impl",
  "botanix-primitives",
+ "botanix-tem 0.1.0 (git+ssh://git@github.com/lamafab/botanix-tee.git?branch=reth-integration-part2)",
  "bytes 1.10.1",
+ "ciborium",
  "eyre",
  "itertools 0.10.5",
  "modular-bitfield",
@@ -3265,6 +3289,52 @@ dependencies = [
  "reth-primitives",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "botanix-tem"
+version = "0.1.0"
+source = "git+ssh://git@github.com/botanix-labs/tem.git?branch=reth-integration#9f271ef037243fd2c5dfbf1992098844d2ebc480"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-sol-types",
+ "alloy-trie",
+ "bitcoin 0.32.7",
+ "hash-db 0.16.0",
+ "lazy_static",
+ "memory-db",
+ "parity-scale-codec",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tendermint 0.40.4",
+ "tendermint-light-client-verifier",
+ "trie-db",
+]
+
+[[package]]
+name = "botanix-tem"
+version = "0.1.0"
+source = "git+ssh://git@github.com/lamafab/botanix-tee.git?branch=reth-integration-part2#9f271ef037243fd2c5dfbf1992098844d2ebc480"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-sol-types",
+ "alloy-trie",
+ "bitcoin 0.32.7",
+ "hash-db 0.16.0",
+ "lazy_static",
+ "memory-db",
+ "parity-scale-codec",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tendermint 0.40.4",
+ "tendermint-light-client-verifier",
+ "trie-db",
 ]
 
 [[package]]
@@ -5732,6 +5802,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6200,6 +6276,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
 
 [[package]]
+name = "hash-db"
+version = "0.16.0"
+source = "git+https://github.com/paritytech/trie.git?branch=master#69bfa688667dea1d8d35acc79b41082c415b2d20"
+
+[[package]]
 name = "hash32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6253,8 +6334,19 @@ checksum = "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash",
+ "foldhash 0.1.5",
  "serde",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -7917,6 +8009,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96051b46fc183dc9cd4a223960ef37b9af631b55191852a8274bfef064cda20f"
+dependencies = [
+ "hashbrown 0.16.1",
+]
+
+[[package]]
 name = "lru-slab"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8014,6 +8115,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg 1.5.0",
+]
+
+[[package]]
+name = "memory-db"
+version = "0.34.0"
+source = "git+https://github.com/paritytech/trie.git?branch=master#69bfa688667dea1d8d35acc79b41082c415b2d20"
+dependencies = [
+ "foldhash 0.1.5",
+ "hash-db 0.16.0",
+ "hashbrown 0.15.4",
 ]
 
 [[package]]
@@ -12722,7 +12833,7 @@ dependencies = [
  "arbitrary",
  "bytes 1.10.1",
  "derive_more 2.0.1",
- "hash-db",
+ "hash-db 0.15.2",
  "itertools 0.14.0",
  "nybbles",
  "plain_hasher",
@@ -15588,12 +15699,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "trie-db"
+version = "0.31.0"
+source = "git+https://github.com/paritytech/trie.git?branch=master#69bfa688667dea1d8d35acc79b41082c415b2d20"
+dependencies = [
+ "hash-db 0.16.0",
+ "log",
+ "rustc-hex",
+ "smallvec",
+]
+
+[[package]]
 name = "triehash"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2",
  "rlp",
 ]
 

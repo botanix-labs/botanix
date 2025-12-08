@@ -1,19 +1,25 @@
 //! # Botanix Storage
 //!
-//! A storage implementation for the Botanix blockchain that provides persistent storage
-//! for snapshots, staged headers, wallet state synchronization, and activation manager data.
+//! A storage implementation for the Botanix blockchain that provides persistent
+//! storage for snapshots, staged headers, wallet state synchronization, and
+//! activation manager data.
 //!
-//! This crate provides a comprehensive storage layer built on top of the Reth database
-//! infrastructure, specifically designed for the Botanix blockchain's unique requirements
-//! including Bitcoin pegins/pegouts, consensus snapshots, and network upgrade management.
+//! This crate provides a comprehensive storage layer built on top of the Reth
+//! database infrastructure, specifically designed for the Botanix blockchain's
+//! unique requirements including Bitcoin pegins/pegouts, consensus snapshots,
+//! and network upgrade management.
 //!
 //! ## Key Features
 //!
-//! - **Snapshot Management**: Storage for blockchain snapshots with chunked data support
-//! - **Staged Headers**: Persistence of headers with associated pegin/pegout data
-//! - **Wallet State Sync**: Coordination of wallet state synchronization across peers
+//! - **Snapshot Management**: Storage for blockchain snapshots with chunked
+//!   data support
+//! - **Staged Headers**: Persistence of headers with associated pegin/pegout
+//!   data
+//! - **Wallet State Sync**: Coordination of wallet state synchronization across
+//!   peers
 //! - **Activation Manager**: Network upgrade voting and activation tracking
-//! - **Database Abstractions**: Clean provider pattern for read/write operations
+//! - **Database Abstractions**: Clean provider pattern for read/write
+//!   operations
 //!
 //! ## Architecture
 //!
@@ -26,8 +32,8 @@
 //!
 //! ## Usage
 //!
-//! The storage layer follows a provider pattern where operations are performed through
-//! trait-based interfaces:
+//! The storage layer follows a provider pattern where operations are performed
+//! through trait-based interfaces:
 //!
 //! ```rust,ignore
 //! use botanix_storage::{DatabaseProviderFactoryRO, SnapshotReader};
@@ -64,3 +70,89 @@ pub mod tables;
 pub mod test_utils;
 
 pub use provider::*;
+
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+/// Wrapper for any type that implements `Serialize` and `Deserialize` to be
+/// used as a generic MDBX key. This uses regular CBOR encoding without any
+/// special optimization.
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+pub struct UnoptimizedKey<T>(pub T);
+
+impl<T> From<T> for UnoptimizedKey<T> {
+    fn from(value: T) -> Self {
+        UnoptimizedKey(value)
+    }
+}
+
+/// Keys are de/serialized using the `Encode` and `Decode` traits.
+impl<T> reth_db_api::table::Encode for UnoptimizedKey<T>
+where
+    T: Send + Sync + Sized + std::fmt::Debug + Serialize,
+{
+    type Encoded = Vec<u8>;
+
+    fn encode(self) -> Self::Encoded {
+        let mut bytes = vec![];
+        ciborium::into_writer(&self.0, &mut bytes)
+            .expect("writer must not fail");
+
+        bytes
+    }
+}
+
+/// Keys are de/serialized using the `Encode` and `Decode` traits.
+impl<T> reth_db_api::table::Decode for UnoptimizedKey<T>
+where
+    T: Send + Sync + Sized + std::fmt::Debug + DeserializeOwned,
+{
+    fn decode(value: &[u8]) -> Result<Self, reth_db::DatabaseError> {
+        ciborium::from_reader::<T, _>(value)
+            .map(UnoptimizedKey)
+            .map_err(|_| reth_db::DatabaseError::Decode)
+    }
+}
+
+/// Wrapper for any type that implements `Serialize` and `Deserialize` to be
+/// used as a generic MDBX value. This uses regular CBOR encoding without any
+/// special optimization.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnoptimizedValue<T>(pub T);
+
+impl<T> From<T> for UnoptimizedValue<T> {
+    fn from(value: T) -> Self {
+        UnoptimizedValue(value)
+    }
+}
+
+/// Values are de/serialized (“compressed”) using the `Compress` and
+/// `Decompress` traits.
+impl<T> reth_db_api::table::Compress for UnoptimizedValue<T>
+where
+    T: Send + Sync + Sized + std::fmt::Debug + Serialize,
+{
+    type Compressed = Vec<u8>;
+
+    fn compress_to_buf<B: bytes::BufMut + AsMut<[u8]>>(&self, buf: &mut B) {
+        // TODO: Can this be improved?
+        let mut bytes = vec![];
+        ciborium::into_writer(&self.0, &mut bytes)
+            .expect("writer must not fail");
+        buf.put(bytes.as_slice());
+    }
+}
+
+/// Values are de/serialized (“compressed”) using the `Compress` and
+/// `Decompress` traits.
+impl<T> reth_db_api::table::Decompress for UnoptimizedValue<T>
+where
+    T: Send + Sync + Sized + std::fmt::Debug + DeserializeOwned,
+{
+    fn decompress(value: &[u8]) -> Result<Self, reth_db::DatabaseError> {
+        ciborium::from_reader::<T, _>(value)
+            .map(UnoptimizedValue)
+            .map_err(|_| reth_db::DatabaseError::Decode)
+    }
+}

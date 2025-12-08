@@ -27,13 +27,36 @@
 //! type-safe access to the underlying MDBX database with automatic
 //! serialization and deserialization of complex data structures.
 
+use crate::{UnoptimizedKey, UnoptimizedValue};
+
 use super::models::*;
 use alloy_primitives::{BlockNumber, B256};
+use botanix_tem::{
+    foundation::{
+        bitcoin::{BlockHash, OutPoint, Txid},
+        OnchainHeaderEntry, OnchainUtxoEntry, ProposalEntry, UnassignedEntry,
+    },
+    validation::pegout::PegoutId,
+};
 use reth_db::{
     tables, DatabaseEnv, DatabaseError, TableSet, TableType, TableViewer,
 };
 use reth_db_api::table::TableInfo;
 use std::fmt;
+
+// Aliases for better readability
+type UKey<T> = UnoptimizedKey<T>;
+type UVal<T> = UnoptimizedValue<T>;
+
+/// Creates all the Botanix-specific tables as defined in [`Tables`], if
+/// necessary.
+///
+/// This function uses [`reth_db::DatabaseEnv::create_tables_for`] underneath.
+pub fn create_botanix_tables(
+    db: &mut DatabaseEnv,
+) -> Result<(), DatabaseError> {
+    db.create_tables_for::<Tables>()
+}
 
 tables! {
     /// Store snapshot id to snapshot data.
@@ -110,14 +133,41 @@ tables! {
         type Key = SnapshotSyncId;
         type Value = SnapshotSync;
     }
-}
 
-/// Creates all the Botanix-specific tables as defined in [`Tables`], if
-/// necessary.
-///
-/// This function uses [`reth_db::DatabaseEnv::create_tables_for`] underneath.
-pub fn create_botanix_tables(
-    db: &mut DatabaseEnv,
-) -> Result<(), DatabaseError> {
-    db.create_tables_for::<Tables>()
+    /// Table used for unassigned pegouts (foundation layer).
+    table UnassignedPegouts {
+        type Key = UKey<PegoutId>;
+        type Value = UVal<UnassignedEntry>;
+    }
+
+    /// Table used for onchain utxos (foundation layer).
+    table OnchainUtxos {
+        type Key = UKey<OutPoint>;
+        type Value = UVal<OnchainUtxoEntry>;
+    }
+
+    /// Table used for onchain headers (foundation layer).
+    table OnchainHeaders {
+        type Key = UKey<BlockHash>;
+        type Value = UVal<OnchainHeaderEntry>;
+    }
+
+    /// Table used for pegout proposals (foundation layer).
+    table PegoutProposals {
+        type Key = UKey<Txid>;
+        type Value = UVal<ProposalEntry>;
+    }
+
+    /// Table used for trie commitments (foundation layer).
+    // TODO: Maybe the TEM should export `StorageKey` and `StorageValue`?
+    table FoundationCommitments {
+        type Key = UKey<[u8; 32]>;
+        type Value = UVal<Vec<u8>>;
+    }
+
+    /// Table used for the trie commitment root (foundation layer).
+    table FoundationCommitmentRoots {
+        type Key = UKey<()>;
+        type Value = UVal<[u8; 32]>;
+    }
 }

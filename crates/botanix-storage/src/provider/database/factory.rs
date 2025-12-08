@@ -9,25 +9,27 @@ use crate::{
         BotanixDatabaseProviderRW,
     },
     DatabaseProviderFactoryRO, DatabaseProviderFactoryRW,
-    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
-    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
-    WalletStateSyncWriter,
+    FoundationLayerWriter, RuntimeTransitionsReadWrite, SnapshotReader,
+    SnapshotWriter, StagedHeaderReader, StagedHeaderWriter,
+    WalletStateSyncReader, WalletStateSyncWriter,
 };
 use alloy_primitives::{BlockNumber, Bytes, B256};
 use reth_db_api::database::Database;
 use reth_node_types::NodeTypes;
-use reth_provider::providers::NodeTypesForProvider;
-use reth_provider::providers::StaticFileProvider;
-use reth_provider::DatabaseProvider;
+use reth_provider::{
+    providers::{NodeTypesForProvider, StaticFileProvider},
+    DatabaseProvider,
+};
 use reth_prune::PruneModes;
 use reth_storage_errors::provider::ProviderResult;
 use std::{collections::HashSet, ops::RangeInclusive, sync::Arc};
 
 /// A common provider that fetches data from a database or static file.
 ///
-/// This provider factory implements most provider or provider factory traits and serves
-/// as the primary entry point for accessing the Botanix storage system. It manages
-/// database connections and provides both read-only and read-write access to stored data.
+/// This provider factory implements most provider or provider factory traits
+/// and serves as the primary entry point for accessing the Botanix storage
+/// system. It manages database connections and provides both read-only and
+/// read-write access to stored data.
 ///
 /// ## Generic Parameters
 ///
@@ -57,7 +59,7 @@ use std::{collections::HashSet, ops::RangeInclusive, sync::Arc};
 /// let snapshot_id = provider_rw.create_new_snapshot(block_number, block_hash)?;
 /// provider_rw.commit()?;
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BotanixProviderFactory<DB, N: NodeTypes> {
     /// Database instance wrapped in Arc for thread-safe sharing
     db: Arc<DB>,
@@ -73,12 +75,27 @@ pub struct BotanixProviderFactory<DB, N: NodeTypes> {
     _node_types: std::marker::PhantomData<N>,
 }
 
+// Manual Clone implementation so that the type parameters wrapped in Arc do not
+// require the Clone bound as well.
+impl<DB, N: NodeTypes> Clone for BotanixProviderFactory<DB, N> {
+    fn clone(&self) -> Self {
+        Self {
+            db: Arc::clone(&self.db),
+            chain_spec: Arc::clone(&self.chain_spec),
+            static_file_provider: self.static_file_provider.clone(),
+            prune_modes: self.prune_modes.clone(),
+            storage: Arc::clone(&self.storage),
+            _node_types: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<DB, N: NodeTypes> BotanixProviderFactory<DB, N> {
     /// Create new database provider factory.
     ///
-    /// Creates a new factory instance that wraps the provided database and node configuration.
-    /// The database and configuration are stored in `Arc` to allow for efficient cloning
-    /// and sharing across multiple threads.
+    /// Creates a new factory instance that wraps the provided database and node
+    /// configuration. The database and configuration are stored in `Arc` to
+    /// allow for efficient cloning and sharing across multiple threads.
     ///
     /// # Parameters
     ///
@@ -137,8 +154,8 @@ impl<DB, N: NodeTypes> BotanixProviderFactory<DB, N> {
 }
 
 // NOTE: This impl block is currently disabled because it requires additional
-// configuration parameters (chain_spec, static_file_provider, prune_modes, storage)
-// that would need to be provided or constructed separately.
+// configuration parameters (chain_spec, static_file_provider, prune_modes,
+// storage) that would need to be provided or constructed separately.
 //
 // impl<N: NodeTypes> BotanixProviderFactory<DatabaseEnv, N> {
 //     pub fn new_with_database_path<P: AsRef<Path>>(
@@ -470,6 +487,136 @@ impl<DB: Database, N: NodeTypes + NodeTypesForProvider> SnapshotWriter
 
         provider.commit()?;
 
+        Ok(())
+    }
+}
+
+// TODO: Implement `FoundationLayerReader` as well.
+impl<DB: Database, N: NodeTypes + NodeTypesForProvider> FoundationLayerWriter
+    for BotanixProviderFactory<DB, N>
+{
+    fn insert_unassigned_pegout(
+        &self,
+        id: botanix_tem::validation::pegout::PegoutId,
+        entry: botanix_tem::foundation::UnassignedEntry,
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_unassigned_pegout(id, entry)?;
+        provider.commit()?;
+        Ok(())
+    }
+    fn remove_unassigned_pegout(
+        &self,
+        id: botanix_tem::validation::pegout::PegoutId,
+    ) -> ProviderResult<bool> {
+        let provider = self.provider_rw()?;
+        let did_remove = provider.remove_unassigned_pegout(id)?;
+
+        if did_remove {
+            provider.commit()?;
+        }
+
+        Ok(did_remove)
+    }
+    fn insert_onchain_utxo(
+        &self,
+        utxo: botanix_tem::foundation::bitcoin::OutPoint,
+        entry: botanix_tem::foundation::OnchainUtxoEntry,
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_onchain_utxo(utxo, entry)?;
+        provider.commit()?;
+        Ok(())
+    }
+    fn remove_onchain_utxo(
+        &self,
+        utxo: botanix_tem::foundation::bitcoin::OutPoint,
+    ) -> ProviderResult<bool> {
+        let provider = self.provider_rw()?;
+        let did_remove = provider.remove_onchain_utxo(utxo)?;
+
+        if did_remove {
+            provider.commit()?;
+        }
+
+        Ok(did_remove)
+    }
+    fn insert_onchain_header(
+        &self,
+        header: botanix_tem::foundation::bitcoin::BlockHash,
+        entry: botanix_tem::foundation::OnchainHeaderEntry,
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_onchain_header(header, entry)?;
+        provider.commit()?;
+        Ok(())
+    }
+    fn remove_onchain_header(
+        &self,
+        header: botanix_tem::foundation::bitcoin::BlockHash,
+    ) -> ProviderResult<bool> {
+        let provider = self.provider_rw()?;
+        let did_remove = provider.remove_onchain_header(header)?;
+
+        if did_remove {
+            provider.commit()?;
+        }
+
+        Ok(did_remove)
+    }
+    fn insert_pegout_proposal(
+        &self,
+        txid: botanix_tem::foundation::bitcoin::Txid,
+        entry: botanix_tem::foundation::ProposalEntry,
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_pegout_proposal(txid, entry)?;
+        provider.commit()?;
+        Ok(())
+    }
+    fn remove_pegout_proposal(
+        &self,
+        txid: botanix_tem::foundation::bitcoin::Txid,
+    ) -> ProviderResult<bool> {
+        let provider = self.provider_rw()?;
+        let did_remove = provider.remove_pegout_proposal(txid)?;
+
+        if did_remove {
+            provider.commit()?;
+        }
+
+        Ok(did_remove)
+    }
+    fn insert_foundation_commitment(
+        &self,
+        key: [u8; 32],
+        value: Vec<u8>,
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_foundation_commitment(key, value)?;
+        provider.commit()?;
+        Ok(())
+    }
+    fn remove_foundation_commitment(
+        &self,
+        key: [u8; 32],
+    ) -> ProviderResult<bool> {
+        let provider = self.provider_rw()?;
+        let did_remove = provider.remove_foundation_commitment(key)?;
+
+        if did_remove {
+            provider.commit()?;
+        }
+
+        Ok(did_remove)
+    }
+    fn insert_foundation_commitment_root(
+        &self,
+        root: [u8; 32],
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_foundation_commitment_root(root)?;
+        provider.commit()?;
         Ok(())
     }
 }
