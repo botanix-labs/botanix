@@ -11,6 +11,7 @@ use reth_provider::HeaderProvider;
 // Rpc related imports
 use jsonrpsee::proc_macros::rpc;
 use secp256k1::PublicKey;
+use serde_json::Number;
 
 use crate::BotanixBlock;
 
@@ -42,6 +43,14 @@ pub trait BotanixRpcExtApi {
     /// Method to get the btc fee rate
     #[method(name = "getBtcFeeRate")]
     async fn get_btc_fee_rate(&self) -> RpcResult<Option<U256>>;
+
+
+    /// Returns information about a block by number.
+    #[method(name = "getBlockByNumber")]
+    async fn block_by_number( &self,
+        number: Number,
+        full: bool,
+        include_extra_data_header: Option<bool>) -> RpcResult<PublicKey>;
 }
 
 /// The type that implements `botanixrpcExt` rpc namespace trait
@@ -96,6 +105,18 @@ where
     async fn get_btc_fee_rate(&self) -> RpcResult<Option<U256>> {
         self.botanix.get_btc_fee_rate().await.map(Some).to_rpc_result()
     }
+
+    /// Handler for: `eth_getBlockByNumber`
+    async fn block_by_number(&self,
+        number: Number,
+        full: bool,
+        include_extra_data_header: Option<bool>,) -> RpcResult<PublicKey> {
+        self.botanix
+            .get_aggregate_public_key(&self.provider)
+            .await
+            .to_rpc_result()
+    }
+
 }
 
 impl<Provider> EthBotanixApi for BotanixRpcExt<Provider>
