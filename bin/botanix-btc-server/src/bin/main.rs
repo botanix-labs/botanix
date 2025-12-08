@@ -455,7 +455,7 @@ where
             ))
         })?;
         let active_multisig = federation
-            .get_multisig_by_id(config.multisig_id)
+            .get_config_by_multisig_id(config.multisig_id)
             .ok_or_else(|| {
                 dkg::Error::BadConfig(format!(
                     "missing multisig id {}",
@@ -487,7 +487,7 @@ where
 
         info!(
             "Using multisig {} with {} members",
-            config.multisig_id,
+            active_multisig.multisig_id,
             active_multisig.federation_member_public_key.len()
         );
 

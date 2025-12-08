@@ -3,9 +3,9 @@ use alloy_primitives::Address;
 use anyhow::Context;
 use botanix_consensus_common::utils::unix_timestamp;
 use bitcoin_hashes::sha256;
-use btcserverlib::federation_args::{
+use btcserverlib::{database::LEGACY_MULTISIG_ID, federation_args::{
     FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
-};
+}};
 use reth_network_peers::PeerId;
 use std::{
     path::{Path, PathBuf},
@@ -114,7 +114,7 @@ fn spawn_btc_server_process(
 
     // Write federation config to tempfile
     let multisig_current = MultisigConfig::new(
-        0,
+        LEGACY_MULTISIG_ID,
         global_context.min_signers,
         global_context.max_signers,
         fed_members,

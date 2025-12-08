@@ -43,12 +43,6 @@ pub enum Error {
     InvalidConfig(String),
     /// Missing multisig configuration entries
     MissingMultisigs,
-    /// Invalid number of multisig entries: expected 1 or 2, found {0}
-    InvalidMultisigCount(usize),
-    /// Duplicate multisig id: {0}
-    DuplicateMultisigId(u32),
-    /// Missing multisig id: {0}
-    MissingMultisigId(u32),
 }
 
 const LEGACY_MULTISIG_ID: u32 = 0;
@@ -68,19 +62,15 @@ pub struct FedMemberPubKey {
 
 /// Member role (outgoing/continuing/incoming)
 #[derive(
-    Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord,
+    Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq,
+    PartialOrd, Ord,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum FederationRole {
     Incoming,
+    #[default]
     Continuing,
     Outgoing,
-}
-
-impl Default for FederationRole {
-    fn default() -> Self {
-        Self::Continuing
-    }
 }
 
 /// Multisig definition and its members
@@ -274,7 +264,12 @@ impl FederationTomlConfig {
             self.multisig
                 .iter()
                 .find(|m| m.multisig_id == multisig_id)
-                .ok_or(Error::MissingMultisigId(multisig_id))?
+                .ok_or_else(|| {
+                    Error::InvalidConfig(format!(
+                        "missing multisig id {}",
+                        multisig_id
+                    ))
+                })?
         } else {
             self.multisig
                 .iter()
@@ -286,7 +281,7 @@ impl FederationTomlConfig {
         Ok(selected)
     }
 
-    pub fn get_multisig_by_id(
+    pub fn get_config_by_multisig_id(
         &self,
         multisig_id: u32,
     ) -> Option<&MultisigConfig> {
@@ -298,13 +293,19 @@ impl FederationTomlConfig {
             return Err(Error::MissingMultisigs);
         }
         if self.multisig.len() > 2 {
-            return Err(Error::InvalidMultisigCount(self.multisig.len()));
+             return Err(Error::InvalidConfig(format!(
+                "invalid number of multisigs: expected 1 or 2, found {}",
+                self.multisig.len()
+            )));
         }
 
         let mut seen_ids = BTreeSet::new();
         for multisig in &self.multisig {
             if !seen_ids.insert(multisig.multisig_id) {
-                return Err(Error::DuplicateMultisigId(multisig.multisig_id));
+                return Err(Error::InvalidConfig(format!(
+                    "duplicate multisig id {}",
+                    multisig.multisig_id
+                )));
             }
             if let Some(max_signers) = multisig.max_signers {
                 if multisig.federation_member_public_key.len() !=

@@ -26,6 +26,7 @@ use botanix_configs::federation::{
 };
 use botanix_reth::node::{storage::BotanixStorage, BotanixNode};
 use botanix_storage::BotanixProviderFactory;
+use btcserverlib::database::LEGACY_MULTISIG_ID;
 use ethers::{
     providers::{Middleware, PeerInfo, StreamExt},
     types::{BlockId, BlockNumber, H256},
@@ -302,7 +303,7 @@ impl FederationMemberTestConfig {
 
         // Need to create a federation.toml in the data dir
         let multisig_current = MultisigConfig::new(
-            0,
+            LEGACY_MULTISIG_ID,
             self.frost_min_signers,
             self.frost_max_signers,
             edh_authorities,
