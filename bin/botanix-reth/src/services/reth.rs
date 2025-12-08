@@ -1,5 +1,5 @@
-use bitcoin::hashes::{sha256, Hash};
 use botanix_cli_args::poa_node::PoaNodeArgs;
+use botanix_configs::hash::verify_config_hash;
 use eyre::{Context, Ok};
 use reth::args::NetworkArgs;
 use std::{fs, path::PathBuf};
@@ -49,31 +49,9 @@ pub fn verify_federation_config_hash(
                     poa_args.federation_config_path
                 )
             })?;
-        verify_raw_config_hash(&raw, expected_hash);
+        verify_config_hash(&raw, expected_hash)
+            .map_err(|e| eyre::eyre!(e.to_string()))?;
     }
 
     Ok(())
-}
-
-fn verify_raw_config_hash(raw: &str, expected_hash: &str) {
-    let normalized_expected = normalize_hash(expected_hash);
-    if normalized_expected.is_empty() {
-        panic!("provided federation config hash must not be empty");
-    }
-
-    let computed = compute_config_hash(raw);
-    if normalized_expected != computed {
-        panic!(
-            "federation config hash mismatch: expected {}, found {}",
-            normalized_expected, computed
-        );
-    }
-}
-
-fn compute_config_hash(raw: &str) -> String {
-    sha256::Hash::hash(raw.as_bytes()).to_string()
-}
-
-fn normalize_hash(value: &str) -> String {
-    value.trim().trim_start_matches("0x").to_ascii_lowercase()
 }

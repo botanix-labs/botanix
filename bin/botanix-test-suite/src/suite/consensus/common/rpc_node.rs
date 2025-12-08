@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use anyhow::Context;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{sha256, Hash};
 use botanix_configs::federation::{
     FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
 };

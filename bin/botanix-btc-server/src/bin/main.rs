@@ -16,10 +16,10 @@ use bitcoin::{
     consensus::Decodable, secp256k1, Amount, BlockHash, Psbt, ScriptBuf,
     Transaction, TxOut,
 };
-use bitcoin_hashes::{sha256, Hash};
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
 use btc_server::btc_server_server::{BtcServer, BtcServerServer};
+use botanix_configs::hash::{compute_config_hash, verify_config_hash};
 use btcserverlib::{
     badarg,
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
@@ -246,28 +246,6 @@ type SigningNoncesCommitmentsMap = Arc<
     >,
 >;
 
-fn verify_federation_config_hash(raw: &str, expected_hash: &str) {
-    let normalized_expected = normalize_hash(expected_hash);
-    if normalized_expected.is_empty() {
-        panic!("provided federation config hash must not be empty");
-    }
-
-    let computed = compute_config_hash(raw);
-    if normalized_expected != computed {
-        panic!(
-            "federation config hash mismatch: expected {}, found {}",
-            normalized_expected, computed
-        );
-    }
-}
-
-fn compute_config_hash(raw: &str) -> String {
-    sha256::Hash::hash(raw.as_bytes()).to_string()
-}
-
-fn normalize_hash(value: &str) -> String {
-    value.trim().trim_start_matches("0x").to_ascii_lowercase()
-}
 
 /// The DKG state machine is responsible for managing the DKG process.
 struct DkgState {
@@ -466,7 +444,9 @@ where
         // TODO: Handle error
         let raw = std::fs::read_to_string(&config.federation_config_path)?;
         if let Some(expected_hash) = config.config_hash.as_deref() {
-            verify_federation_config_hash(&raw, expected_hash);
+            verify_config_hash(&raw, expected_hash).map_err(|e| {
+                dkg::Error::BadConfig(e.to_string())
+            })?;
         }
         let federation = FederationTomlConfig::from_str(&raw).map_err(|e| {
             dkg::Error::BadConfig(format!(

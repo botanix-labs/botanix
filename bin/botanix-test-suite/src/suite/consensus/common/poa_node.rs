@@ -12,7 +12,7 @@ use crate::{
 use alloy_primitives::Address;
 use anyhow::Context;
 use askama::Template;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{sha256, Hash};
 use botanix_authority_edh::extra_data_header::{
     ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION,
 };
