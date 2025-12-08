@@ -312,7 +312,8 @@ impl FederationMemberTestConfig {
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
-        );
+        )
+        .expect("valid federation config");
         it_info_print!("Federation config", federation_config);
         let federation_config_path = Path::new(datadir).join("federation.toml");
         federation_config

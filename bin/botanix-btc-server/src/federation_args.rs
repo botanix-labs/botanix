@@ -151,19 +151,21 @@ impl FederationTomlConfig {
     }
 
     /// Create a new genesis config
-    pub const fn new(
+    pub fn new(
         multisig: Vec<MultisigConfig>,
         botanix_fee_recipient: String,
         minting_contract_bytecode: String,
         lst_fee_receiver: String,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Error> {
+        let mut config = Self {
             multisig,
             legacy_federation_member_public_key: Vec::new(),
             botanix_fee_recipient,
             minting_contract_bytecode,
             lst_fee_receiver,
-        }
+        };
+        config.finalize()?;
+        Ok(config)
     }
     /// Write the config to a file
     pub fn write_to_path(
@@ -179,6 +181,12 @@ impl FederationTomlConfig {
     /// Convert the config to a string
     pub fn to_string(&self) -> Result<String, Error> {
         toml::to_string(self).map_err(Error::ParseSerializeConfig)
+    }
+
+    fn finalize(&mut self) -> Result<(), Error> {
+        self.upgrade_legacy_entries()?;
+        self.validate()?;
+        Ok(())
     }
 
     fn upgrade_legacy_entries(&mut self) -> Result<(), Error> {
@@ -448,8 +456,7 @@ impl FromStr for FederationTomlConfig {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut config: Self = toml::from_str(s).map_err(Error::ParseConfig)?;
-        config.upgrade_legacy_entries()?;
-        config.validate()?;
+        config.finalize()?;
         Ok(config)
     }
 }

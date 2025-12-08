@@ -124,7 +124,8 @@ fn spawn_btc_server_process(
         String::new(), // Not needed
         String::new(), // Not needed
         String::new(), // Not needed
-    );
+    )
+    .expect("valid federation config");
 
     let mut temp_federation = tempfile::NamedTempFile::new().unwrap();
     let federation_toml = toml::to_string(&federation_config)?;
