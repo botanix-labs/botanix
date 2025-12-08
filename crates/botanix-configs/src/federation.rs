@@ -547,15 +547,44 @@ role = "continuing"
 key = "03649234cdffe9a115d37a31a07c5f09e014539c90001ce8764a5815fd676d404a"
 socket-addr = "172.22.3.1:30303"
 role = "continuing"
+
+[[multisig]]
+multisig-id = 1
+min-signers = 2
+max-signers = 3
+
+[[multisig.federation-member-public-key]]
+key = "0268c9ee781a5f06434eb96ae54569b6354428d3e4f88822333d48f2b0bfd69ba4"
+socket-addr = "172.22.1.1:30303"
+role = "continuing"
+
+[[multisig.federation-member-public-key]]
+key = "0222202b198245e4e30019d2677b05f1b13ed673f961679aa219a379f1cec67913"
+socket-addr = "172.22.2.1:30303"
+role = "continuing"
+
+[[multisig.federation-member-public-key]]
+key = "03649234cdffe9a115d37a31a07c5f09e014539c90001ce8764a5815fd676d404a"
+socket-addr = "172.22.3.1:30303"
+role = "continuing"
 "#;
 
         let config = FederationTomlConfig::from_str(toml)
             .expect("multisig config parses");
-        assert_eq!(config.multisig.len(), 1);
-        let multisig = &config.multisig[0];
-        assert_eq!(multisig.multisig_id, 0);
-        assert_eq!(multisig.min_signers, Some(2));
-        assert_eq!(multisig.max_signers, Some(3));
-        assert_eq!(multisig.federation_member_public_key.len(), 3);
+        assert_eq!(config.multisig.len(), 2);
+        assert_eq!(config.multisig[0].multisig_id, 0);
+        assert_eq!(config.multisig[1].multisig_id, 1);
+        assert_eq!(config.multisig[0].min_signers, Some(2));
+        assert_eq!(config.multisig[1].min_signers, Some(2));
+        assert_eq!(config.multisig[0].max_signers, Some(3));
+        assert_eq!(config.multisig[1].max_signers, Some(3));
+        assert_eq!(
+            config.multisig[0].federation_member_public_key.len(),
+            3
+        );
+        assert_eq!(
+            config.multisig[1].federation_member_public_key.len(),
+            3
+        );
     }
 }
