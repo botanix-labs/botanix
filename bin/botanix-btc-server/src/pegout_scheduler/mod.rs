@@ -532,6 +532,7 @@ impl PegoutScheduler {
                         output: output.clone(),
                         eth_address: None,
                         version: utxo_version,
+                        multisig_id: database::LEGACY_MULTISIG_ID,
                     });
                 }
             } else {

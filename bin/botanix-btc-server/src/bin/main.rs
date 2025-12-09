@@ -2780,6 +2780,7 @@ where
                 },
                 eth_address,
                 version: 0,
+                multisig_id: crate::database::LEGACY_MULTISIG_ID,
             };
 
             // Generate the expected scriptPubKey for the eth address (if present) or the change

@@ -122,6 +122,11 @@ impl std::ops::Deref for MultisigId {
     }
 }
 
+/// Default function for serde to use LEGACY_MULTISIG_ID as the default value.
+const fn default_multisig_id() -> u32 {
+    LEGACY_MULTISIG_ID
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Utxo {
     // This is skipped during serialization because the db key is the outpoint so its redundant.
@@ -133,6 +138,10 @@ pub struct Utxo {
     #[serde(default)]
     /// The version of the UTXO.
     pub version: u32,
+    /// The multisig federation this UTXO belongs to.
+    /// Defaults to LEGACY_MULTISIG_ID for backwards compatibility with existing data.
+    #[serde(default = "default_multisig_id")]
+    pub multisig_id: u32,
 }
 
 impl Utxo {
@@ -147,6 +156,7 @@ impl Utxo {
             output,
             eth_address,
             version: version.unwrap_or(UtxoVersion::V1) as u32,
+            multisig_id: LEGACY_MULTISIG_ID,
         }
     }
 }
