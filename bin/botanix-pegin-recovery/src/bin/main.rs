@@ -542,6 +542,7 @@ impl PeginRecoveryService for PeginRecoveryServiceImpl {
             },
             eth_address: Some(eth_address),
             version: 1,
+            multisig_id: req.multisig_id,
         };
         let utxos = vec![utxo];
 

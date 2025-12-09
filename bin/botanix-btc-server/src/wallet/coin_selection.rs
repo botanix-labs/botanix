@@ -517,7 +517,7 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::{
-        database::Utxo,
+        database::{LEGACY_MULTISIG_ID, Utxo},
         test_utils::{
             add_dummy_signatures_to_psbt, create_random_pegout_id,
             random_compute_txid, random_p2tr_keyspend_script,
@@ -525,7 +525,7 @@ mod tests {
         },
         wallet::{
             coin_selection::{
-                calculate_target_change, CoinSelectionError, MIN_CHANGE_SATS,
+                CoinSelectionError, MIN_CHANGE_SATS, calculate_target_change
             },
             util::calculate_signed_tx_fee_rate,
         },
@@ -627,6 +627,7 @@ mod tests {
             },
             None,
             None,
+            LEGACY_MULTISIG_ID,
         );
         optional_utxos.insert(utxo.outpoint, utxo);
 
@@ -682,6 +683,7 @@ mod tests {
             },
             None,
             None,
+            LEGACY_MULTISIG_ID,
         );
         optional_utxos.insert(utxo.outpoint, utxo);
 
@@ -954,6 +956,7 @@ mod tests {
                     },
                     None,
                     None,
+                    LEGACY_MULTISIG_ID,
                 );
                 (utxo.outpoint, utxo)
             })

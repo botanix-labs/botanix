@@ -128,6 +128,8 @@ pub struct Utxo {
     pub output: ::core::option::Option<TxOut>,
     #[prost(string, tag = "3")]
     pub eth_address: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "4")]
+    pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UtxoToRecover {

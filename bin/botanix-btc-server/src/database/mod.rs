@@ -150,13 +150,14 @@ impl Utxo {
         output: TxOut,
         eth_address: Option<[u8; 20]>,
         version: Option<UtxoVersion>,
+        multisig_id: u32,
     ) -> Self {
         Utxo {
             outpoint,
             output,
             eth_address,
             version: version.unwrap_or(UtxoVersion::V1) as u32,
-            multisig_id: LEGACY_MULTISIG_ID,
+            multisig_id,
         }
     }
 }
@@ -1710,6 +1711,7 @@ impl TryFrom<RpcUtxo> for Utxo {
                 })?)
             },
             Some(UtxoVersion::V1),
+            value.multisig_id,
         ))
     }
 }
@@ -1732,6 +1734,7 @@ impl TryFrom<Utxo> for RpcUtxo {
                 script_pubkey: Some(RpcScriptBuf { script: script_pk }),
             }),
             eth_address: item.eth_address.map_or(String::new(), hex::encode),
+            multisig_id: item.multisig_id,
         })
     }
 }
@@ -1960,6 +1963,7 @@ mod tests {
                 taproot_output,
                 *eth_address,
                 *utxo_version,
+                LEGACY_MULTISIG_ID,
             );
 
             let rpc_utxo = RpcUtxo::try_from(original_db_utxo.clone()).unwrap();
@@ -1999,6 +2003,7 @@ mod tests {
                 }),
             }),
             eth_address: String::new(),
+            multisig_id: LEGACY_MULTISIG_ID,
         };
 
         // Test that conversion from OLD format works successfully
@@ -2039,6 +2044,7 @@ mod tests {
             tx.output.get(0).expect("one output").clone(),
             None,
             None,
+            LEGACY_MULTISIG_ID,
         );
         db.store_utxo(&utxo).unwrap();
         db.flush().unwrap();
@@ -2059,6 +2065,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2093,6 +2100,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2119,6 +2127,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2152,6 +2161,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2186,6 +2196,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2208,6 +2219,7 @@ mod tests {
             tx.output.get(0).expect("one output").clone(),
             None,
             None,
+            LEGACY_MULTISIG_ID,
         );
         db.store_utxo(&utxo).unwrap();
         db.update_utxo_merkle_root().unwrap();

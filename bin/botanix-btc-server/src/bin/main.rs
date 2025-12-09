@@ -3501,6 +3501,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             app.db.store_utxos(&[&utxo]).expect("Failed to store UTXO");
         }
@@ -3536,6 +3537,7 @@ mod tests {
                 dummy_tx.output[0].clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
 
             // create pegins btc client can send
@@ -3557,6 +3559,7 @@ mod tests {
                     value: tx_out.value.to_sat(),
                 }),
                 eth_address: hex::encode(&[0; 20]),
+                multisig_id: LEGACY_MULTISIG_ID,
             };
             pegins.push(utxo);
         }
@@ -3649,6 +3652,7 @@ mod tests {
                 dummy_tx.output[0].clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
 
             // create pegins btc client can send
@@ -3670,6 +3674,7 @@ mod tests {
                     value: tx_out.value.to_sat(),
                 }),
                 eth_address: hex::encode(&[0; 20]),
+                multisig_id: LEGACY_MULTISIG_ID,
             };
             pegins.push(utxo);
         }
@@ -3860,6 +3865,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
             database::Utxo::new(
                 input_2,
@@ -3869,6 +3875,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
             database::Utxo::new(
                 input_3,
@@ -3878,6 +3885,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
         ];
         let utxo_refs: Vec<&database::Utxo> = utxos.iter().collect();
@@ -3964,6 +3972,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
             database::Utxo::new(
                 input_2,
@@ -3973,6 +3982,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
         ];
         let utxo_refs: Vec<&database::Utxo> = utxos.iter().collect();
@@ -4052,6 +4062,7 @@ mod tests {
             },
             eth_address,
             None,
+            LEGACY_MULTISIG_ID,
         );
 
         let utxo_refs: Vec<&database::Utxo> = vec![&utxo];

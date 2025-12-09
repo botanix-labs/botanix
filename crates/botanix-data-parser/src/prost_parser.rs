@@ -108,6 +108,7 @@ mod test {
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
+                multisig_id: 0,
             };
             utxos.push(utxo);
         }
@@ -155,6 +156,7 @@ mod test {
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
+                multisig_id: 0,
             };
             utxos.push(utxo);
         }
