@@ -25,7 +25,7 @@ use btcserverlib::{
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
     database::{self, LEGACY_MULTISIG_ID},
-    dkg,
+    dkg::{self, DkgSubscriptionMessage},
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
     http::{create_web_server, state::ServerState},
@@ -287,6 +287,9 @@ struct App<BitcoinRpcApi> {
     fall_back_fee_rate: bitcoin::FeeRate,
     /// telemetry
     telemetry: Option<Arc<Telemetry>>,
+    /// dkg notifications sender
+    dkg_notifications_tx:
+        Arc<tokio::sync::broadcast::Sender<DkgSubscriptionMessage>>,
 }
 
 impl<BitcoindClient> App<BitcoindClient>
@@ -673,6 +676,9 @@ where
             Arc::new(Mutex::new(sessions))
         };
 
+        let (dkg_notifications_tx, _dkg_notifications_rx) =
+            tokio::sync::broadcast::channel::<DkgSubscriptionMessage>(10000);
+
         Ok(Self {
             start_time: Instant::now(),
             btc_network: config.btc_network,
@@ -692,6 +698,7 @@ where
             bitcoind_client,
             fall_back_fee_rate,
             telemetry,
+            dkg_notifications_tx: Arc::new(dkg_notifications_tx),
         })
     }
 
@@ -837,6 +844,10 @@ where
     // Define the associated type for the stream
     type GetFinalizedPegoutIdsStream = ReceiverStream<
         Result<rpc::GetFinalizedPegoutIdsResponse, tonic::Status>,
+    >;
+
+    type SubscribeToDkgNotificationsStream = ReceiverStream<
+        Result<rpc::SubscribeToDkgNotificationsStream, tonic::Status>,
     >;
 
     /* General Endpoints */
@@ -1169,6 +1180,66 @@ where
                 }
             }
             trace!("get_finalized_pegout_ids stream task: DB stream finished.");
+        });
+
+        Ok(tonic::Response::new(ReceiverStream::new(rx)))
+    }
+
+    /// Subscribe to all DKG notifications
+    async fn subscribe_to_dkg_notifications(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<
+        tonic::Response<Self::SubscribeToDkgNotificationsStream>,
+        tonic::Status,
+    > {
+        self.validate_jwt(&req)?;
+        let _request = req.into_inner();
+
+        let mut dkg_notifications_receiver =
+            self.dkg_notifications_tx.subscribe();
+
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        info!("subscribe_to_dkg_notifications: Starting multisig task...",);
+        tokio::spawn(async move {
+            trace!("subscribe_to_dkg_notifications stream task: Created multisig notifications stream.");
+            while let Ok(dkg_sub_message) =
+                dkg_notifications_receiver.recv().await
+            {
+                trace!(
+                    "subscribe_to_dkg_notifications stream task: Received payload: {:?}",
+                    dkg_sub_message.to_string()
+                );
+                let fut = || async {
+                    let tx = tx.clone();
+                    match dkg_sub_message {
+                        DkgSubscriptionMessage::StartedDkg { multisig_id }
+                        | DkgSubscriptionMessage::RestartedDkg {
+                            multisig_id,
+                        } => {
+                            let payload =
+                                rpc::SubscribeToDkgNotificationsStream {
+                                    multisig_id,
+                                };
+                            tx.send(Ok(payload)).await
+                        }
+                    }
+                };
+                if let Err(e) = retry_exec(
+                    "sending_dkg_notification",
+                    fut,
+                    3,
+                    Duration::from_secs(2),
+                )
+                .await
+                {
+                    error!("subscribe_to_dkg_notifications stream task: Error sending a notification. Error = {:?}", e);
+                    continue;
+                };
+            }
+            trace!(
+                "subscribe_to_dkg_notifications stream task: Stream cancelled."
+            );
         });
 
         Ok(tonic::Response::new(ReceiverStream::new(rx)))
@@ -2499,15 +2570,18 @@ where
                 multisig_id
             ));
         }
-
-        if self.dkg_sessions.lock().await.contains_key(&multisig_id) {
+        let mut sessions = self.dkg_sessions.lock().await;
+        if sessions.contains_key(&multisig_id) {
             return Err(already_exists!(
                 "DKG session already running for multisig_id {}",
                 multisig_id
             ));
         }
 
-        let coordinator = frost_id!(self.config.coordinator.unwrap_or(DEFAULT_COORDINATOR_ID));
+        let coordinator = frost_id!(self
+            .config
+            .coordinator
+            .unwrap_or(DEFAULT_COORDINATOR_ID));
         let state = Self::init_dkg_session(
             self.identifier,
             self.p2p_secret_key,
@@ -2518,13 +2592,27 @@ where
             self.min_signers,
             self.is_coordinator(),
         )
-        .map_err(|e| tonic::Status::internal(format!("failed to init DKG session: {}", e)))?;
+        .map_err(|e| {
+            tonic::Status::internal(format!(
+                "failed to init DKG session: {}",
+                e
+            ))
+        })?;
 
-        self.dkg_sessions.lock().await.insert(multisig_id, state);
+        sessions.insert(multisig_id, state);
         info!("Started new DKG session for multisig_id {}", multisig_id);
 
-        // TODO: send a msg over the new or existing grpc stream to 
-        // the reth node to start a new DKG session.
+        // send the notification async to the subscription method
+        if let Err(e) = self
+            .dkg_notifications_tx
+            .send(DkgSubscriptionMessage::StartedDkg { multisig_id })
+        {
+            // Log but don't fail - no subscribers is a valid scenario
+            warn!(
+                "No subscribers to receive DKG started notification for multisig_id {}: {}",
+                multisig_id, e
+            );
+        }
 
         Ok(tonic::Response::new(rpc::Empty {}))
     }
