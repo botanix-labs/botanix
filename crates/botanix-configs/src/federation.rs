@@ -43,10 +43,6 @@ pub enum Error {
     /// Missing multisig configuration entries
     MissingMultisigs,
 }
-
-/// Primary multisig id (current federation)
-const LEGACY_MULTISIG_ID: u32 = 0;
-
 /// Federation member public key and socket address
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -319,6 +315,7 @@ impl FederationTomlConfig {
         current: &MultisigConfig,
         next: &MultisigConfig,
     ) -> Result<(), Error> {
+        // Current multisig must not have incoming members
         if current
             .federation_member_public_key
             .iter()
@@ -330,6 +327,7 @@ impl FederationTomlConfig {
             )));
         }
 
+        // Next multisig must not have outgoing members
         if next
             .federation_member_public_key
             .iter()
@@ -341,40 +339,25 @@ impl FederationTomlConfig {
             )));
         }
 
+        // Continuing members must be identical across multisigs
         let continuing_current = Self::continuing_member_set(current);
         let continuing_next = Self::continuing_member_set(next);
         if continuing_current != continuing_next {
-            return Err(Error::InvalidConfig(
-                format!(
-                    "continuing members must be identical across multisigs {} and {}",
-                    current.multisig_id, next.multisig_id
-                ),
-            ));
+            return Err(Error::InvalidConfig(format!(
+                "continuing members must be identical across multisigs {} and {}",
+                current.multisig_id, next.multisig_id
+            )));
         }
 
-        let incoming_next =
-            Self::member_key_set_by_role(next, FederationRole::Incoming);
-        let outgoing_current =
+        // Outgoing members cannot rejoin as incoming in the same transition
+        let outgoing_keys =
             Self::member_key_set_by_role(current, FederationRole::Outgoing);
-
-        if incoming_next
-            .iter()
-            .any(|key| Self::member_exists_with_key(current, key))
-        {
-            return Err(Error::InvalidConfig(format!(
-                "incoming members must not appear in multisig {}",
-                current.multisig_id
-            )));
-        }
-
-        if outgoing_current
-            .iter()
-            .any(|key| Self::member_exists_with_key(next, key))
-        {
-            return Err(Error::InvalidConfig(format!(
-                "outgoing members must not appear in multisig {}",
-                next.multisig_id
-            )));
+        let incoming_keys =
+            Self::member_key_set_by_role(next, FederationRole::Incoming);
+        if !outgoing_keys.is_disjoint(&incoming_keys) {
+            return Err(Error::InvalidConfig(
+                "outgoing members cannot rejoin as incoming in the same transition".to_string(),
+            ));
         }
 
         Ok(())
@@ -401,13 +384,6 @@ impl FederationTomlConfig {
             .filter(|member| member.role == role)
             .map(|member| member.key.clone())
             .collect()
-    }
-
-    fn member_exists_with_key(multisig: &MultisigConfig, key: &str) -> bool {
-        multisig
-            .federation_member_public_key
-            .iter()
-            .any(|member| member.key == key)
     }
 }
 impl FromStr for FederationTomlConfig {
@@ -513,5 +489,107 @@ role = "continuing"
         assert_eq!(config.multisig[1].max_signers, Some(3));
         assert_eq!(config.multisig[0].federation_member_public_key.len(), 3);
         assert_eq!(config.multisig[1].federation_member_public_key.len(), 3);
+    }
+
+    fn member(key: &str, role: FederationRole) -> FedMemberPubKey {
+        FedMemberPubKey { key: key.to_string(), socket_addr: "127.0.0.1:1".into(), role }
+    }
+
+    #[test]
+    fn dynafed_roles_pass_with_consistent_continuing() {
+        let current = MultisigConfig {
+            multisig_id: 0,
+            min_signers: 2,
+            max_signers: Some(3),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Continuing),
+                member("03bbb", FederationRole::Continuing),
+                member("04ccc", FederationRole::Outgoing),
+            ],
+        };
+        let next = MultisigConfig {
+            multisig_id: 1,
+            min_signers: 2,
+            max_signers: Some(3),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Continuing),
+                member("03bbb", FederationRole::Continuing),
+                member("05ddd", FederationRole::Incoming),
+            ],
+        };
+
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_ok());
+    }
+
+    #[test]
+    fn dynafed_roles_fail_when_continuing_differs() {
+        let current = MultisigConfig {
+            multisig_id: 0,
+            min_signers: 2,
+            max_signers: Some(2),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Continuing),
+                member("03bbb", FederationRole::Continuing),
+            ],
+        };
+        let next = MultisigConfig {
+            multisig_id: 1,
+            min_signers: 2,
+            max_signers: Some(2),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Continuing),
+                member("06eee", FederationRole::Continuing),
+            ],
+        };
+
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_err());
+    }
+
+    #[test]
+    fn dynafed_roles_fail_when_current_has_incoming() {
+        let current = MultisigConfig {
+            multisig_id: 0,
+            min_signers: 2,
+            max_signers: Some(2),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Incoming),
+                member("03bbb", FederationRole::Continuing),
+            ],
+        };
+        let next = MultisigConfig {
+            multisig_id: 1,
+            min_signers: 2,
+            max_signers: Some(2),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Continuing),
+                member("03bbb", FederationRole::Continuing),
+            ],
+        };
+
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_err());
+    }
+
+    #[test]
+    fn dynafed_roles_fail_when_next_has_outgoing() {
+        let current = MultisigConfig {
+            multisig_id: 0,
+            min_signers: 2,
+            max_signers: Some(2),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Continuing),
+                member("03bbb", FederationRole::Outgoing),
+            ],
+        };
+        let next = MultisigConfig {
+            multisig_id: 1,
+            min_signers: 2,
+            max_signers: Some(2),
+            federation_member_public_key: vec![
+                member("02aaa", FederationRole::Continuing),
+                member("03bbb", FederationRole::Outgoing),
+            ],
+        };
+
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_err());
     }
 }
