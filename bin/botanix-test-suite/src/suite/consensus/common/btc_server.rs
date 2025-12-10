@@ -1,6 +1,7 @@
 use crate::{context::GlobalContext, suite::consensus::common::is_port_free};
 use alloy_primitives::Address;
 use anyhow::Context;
+use botanix_configs::hash::compute_config_hash;
 use botanix_consensus_common::utils::unix_timestamp;
 use btcserverlib::{database::LEGACY_MULTISIG_ID, federation_args::{
     FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
