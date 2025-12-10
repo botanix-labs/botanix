@@ -142,36 +142,21 @@ impl fmt::Display for BtcFeeRateRPCError {
 }
 
 /// Error from rich block by number RPC endpoint
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum RichBlockRPCError {
     /// Failed to get block from EthApi
+    #[error("Failed to get block")]
     FailedToGetBlock,
     /// Failed to serialize block
+    #[error("Failed to serialize block: {0}")]
     FailedToSerializeBlock(serde_json::Error),
     /// Failed to deserialize block
+    #[error("Failed to deserialize block: {0}")]
     FailedToDeserializeBlock(serde_json::Error),
     /// Failed to deserialize extra data header
+    #[error("Failed to deserialize extra data header: {0}")]
     FailedToDeserializeExtraDataHeader(String),
 }
-
-impl fmt::Display for RichBlockRPCError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FailedToGetBlock => write!(f, "Failed to get block"),
-            Self::FailedToSerializeBlock(e) => {
-                write!(f, "Failed to serialize block: {}", e)
-            }
-            Self::FailedToDeserializeBlock(e) => {
-                write!(f, "Failed to deserialize block: {}", e)
-            }
-            Self::FailedToDeserializeExtraDataHeader(e) => {
-                write!(f, "Failed to deserialize extra data header: {}", e)
-            }
-        }
-    }
-}
-
-impl std::error::Error for RichBlockRPCError {}
 
 impl_to_rpc_result!(BtcFeeRateRPCError);
 impl_to_rpc_result!(MerkleProofRPCError);
@@ -362,18 +347,18 @@ impl Botanix {
         .map_err(RichBlockRPCError::FailedToDeserializeBlock)?;
 
         // Create RichBlock with optional extra_data_header
-        let extra_data_header = if include_extra_data_header.is_some_and(|v| v) {
-            // Deserialize the extra data header from the block's header
-            let extra_data_header = ExtraDataHeader::deserialize(
-                &mut block.header.extra_data.to_vec().as_slice(),
-            )
-            .map_err(|e| {
-                RichBlockRPCError::FailedToDeserializeExtraDataHeader(e.to_string())
-            })?;
-
-            Some(extra_data_header)
-        } else {
-            None
+        let extra_data_header = match include_extra_data_header {
+            Some(true) => {
+                // Deserialize the extra data header from the block's header
+                let header = ExtraDataHeader::deserialize(
+                    &mut block.header.extra_data.to_vec().as_slice(),
+                )
+                .map_err(|e| {
+                    RichBlockRPCError::FailedToDeserializeExtraDataHeader(e.to_string())
+                })?;
+                Some(header)
+            }
+            _ => None,
         };
         // construct richblock
         let rich_block = RichBlock {

@@ -8,7 +8,7 @@ use jsonrpsee_core::RpcResult;
 // Reth block related imports
 use reth_ethereum::provider::BlockReaderIdExt;
 use reth_provider::HeaderProvider;
-use reth_rpc_eth_api::helpers::{EthBlocks,EthApiSpec,EthTransactions};
+use reth_rpc_eth_api::helpers::EthBlocks;
 
 // Rpc related imports
 use jsonrpsee::proc_macros::rpc;
@@ -71,12 +71,7 @@ impl<Provider, EthApi> BotanixRpcExtApiServer for BotanixRpcExt<Provider, EthApi
 where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static,
     <Provider as HeaderProvider>::Header: HeaderExt,
-    EthApi: EthApiSpec
-        + EthTransactions
-        + EthBlocks
-        + Send
-        + Sync
-        + 'static,
+    EthApi: EthBlocks + Send + Sync + 'static,
 {
     async fn aggregate_public_key(&self) -> RpcResult<PublicKey> {
         self.botanix
@@ -136,12 +131,7 @@ impl<Provider, Eth> EthBotanixApi for BotanixRpcExt<Provider, Eth>
 where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static,
     <Provider as HeaderProvider>::Header: HeaderExt,
-    Eth: EthApiSpec
-        + EthTransactions
-        + EthBlocks
-        + Send
-        + Sync
-        + 'static,
+    Eth: Send + Sync + 'static,
 {
     fn provider(&self) -> impl BlockReaderIdExt {
         self.provider.clone()
