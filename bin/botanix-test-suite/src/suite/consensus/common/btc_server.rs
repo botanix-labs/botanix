@@ -1,8 +1,8 @@
 use crate::{context::GlobalContext, suite::consensus::common::is_port_free};
 use alloy_primitives::Address;
 use anyhow::Context;
-use botanix_consensus_common::utils::unix_timestamp;
 use bitcoin_hashes::sha256;
+use botanix_consensus_common::utils::unix_timestamp;
 use btcserverlib::{database::LEGACY_MULTISIG_ID, federation_args::{
     FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
 }};
@@ -129,8 +129,12 @@ fn spawn_btc_server_process(
 
     let mut temp_federation = tempfile::NamedTempFile::new().unwrap();
     let federation_toml = toml::to_string(&federation_config)?;
-    let config_hash = sha256::Hash::hash(federation_toml.as_bytes()).to_string();
-    std::io::Write::write_all(&mut temp_federation, federation_toml.as_bytes())?;
+    let config_hash =
+        sha256::Hash::hash(federation_toml.as_bytes()).to_string();
+    std::io::Write::write_all(
+        &mut temp_federation,
+        federation_toml.as_bytes(),
+    )?;
 
     // Write the secret key to a tempfile
     let my_secret_key = members_keypairs
@@ -159,18 +163,12 @@ fn spawn_btc_server_process(
         coordinator.as_str(),
         "--federation-config-path",
         federation_path.as_str(),
-        "--multisig-id",
-        "0",
         "--config-hash",
         config_hash.as_str(),
         "--p2p-secret-key",
         secret_key_path.as_str(),
         "--address",
         address.as_str(),
-        "--min-signers",
-        frost_min_signers.as_str(),
-        "--max-signers",
-        frost_max_signers.as_str(),
         "--toml",
         "./bin/botanix-btc-server/config.toml",
         "--bitcoind-url",

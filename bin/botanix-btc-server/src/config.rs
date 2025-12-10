@@ -176,25 +176,14 @@ pub struct CliConfig {
     /// The path to the configuration file for the federation setup.
     #[arg(long, value_name = "FEDERATION_CONFIG_FILE", verbatim_doc_comment)]
     federation_config_path: PathBuf,
-    /// Multisig id (0 = pre-dynafed) to operate on.
-    #[arg(long, default_value_t = 0)]
-    multisig_id: u32,
     /// Expected SHA256 hash of the federation config as hex.
-    ///
-    /// TODO (umegbewe): Once the multisig creation flow is wired up, make this argument mandatory
     #[arg(long, value_name = "CONFIG_HASH")]
-    config_hash: Option<String>,
+    config_hash: String,
     /// Secret key to use for this node.
     #[arg(long)]
     p2p_secret_key: PathBuf,
     #[arg(long)]
     address: String,
-    /// max signers
-    #[arg(long)]
-    max_signers: u16,
-    /// min signers
-    #[arg(long)]
-    min_signers: u16,
     /// toml configuration path
     #[arg(long)]
     toml: Option<PathBuf>,
@@ -239,20 +228,12 @@ pub struct Config {
     pub coordinator: Option<u16>,
     /// The path to the configuration file for the federation setup.
     pub federation_config_path: PathBuf,
-    /// Multisig id (0 = pre-dynafed) to operate on.
-    pub multisig_id: u32,
     /// Expected SHA256 hash of the federation config contents.
-    ///
-    /// TODO (umegbewe): Once the multisig creation flow is wired up, make this field mandatory
-    pub config_hash: Option<String>,
+    pub config_hash: String,
     /// Secret key to use for this node.
     pub p2p_secret_key: PathBuf,
     /// Address to bind to.
     pub address: String,
-    /// multisig max signers
-    pub max_signers: u16,
-    /// multisig min signers
-    pub min_signers: u16,
     /// toml configuration path. Leave blank to use defaults
     pub toml: Option<PathBuf>,
     /// jwt secret path
@@ -285,12 +266,9 @@ pub fn load_config() -> Result<Config, Error> {
         identifier: cli_config.identifier,
         coordinator: cli_config.coordinator,
         federation_config_path: cli_config.federation_config_path,
-        multisig_id: cli_config.multisig_id,
         config_hash: cli_config.config_hash,
         p2p_secret_key: cli_config.p2p_secret_key,
         address: cli_config.address,
-        max_signers: cli_config.max_signers,
-        min_signers: cli_config.min_signers,
         btc_signing_server_jwt_secret: cli_config.btc_signing_server_jwt_secret,
         bitcoind_url: cli_config.bitcoind_url,
         bitcoind_user: cli_config.bitcoind_user,

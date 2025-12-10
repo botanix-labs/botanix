@@ -4,7 +4,6 @@ use std::{
     collections::BTreeSet,
     fs::{self, File},
     io::{Read, Write},
-    mem,
     net::{SocketAddr, ToSocketAddrs},
     path::{Path, PathBuf},
     str::FromStr,
@@ -45,6 +44,7 @@ pub enum Error {
     MissingMultisigs,
 }
 
+/// Primary multisig id (current federation)
 const LEGACY_MULTISIG_ID: u32 = 0;
 
 /// Federation member public key and socket address
@@ -80,9 +80,8 @@ pub struct MultisigConfig {
     /// Identifier for this multisig (0 = pre-dynafed, 1 = next, ...)
     pub multisig_id: u32,
     /// Threshold for this multisig
-    #[serde(default)]
-    pub min_signers: Option<u16>,
-    /// Total number of signers for this multisig
+    pub min_signers: u16,
+    /// Total number of signers for this multisig (defaults to member count)
     #[serde(default)]
     pub max_signers: Option<u16>,
     /// Members participating in this multisig
@@ -99,7 +98,7 @@ impl MultisigConfig {
     ) -> Self {
         Self {
             multisig_id,
-            min_signers: Some(min_signers),
+            min_signers,
             max_signers: Some(max_signers),
             federation_member_public_key,
         }
@@ -113,13 +112,6 @@ pub struct FederationTomlConfig {
     /// List of multisig definitions
     #[serde(default)]
     pub multisig: Vec<MultisigConfig>,
-    /// Legacy federation entries
-    #[serde(
-        rename = "federation-member-public-key",
-        default,
-        skip_serializing_if = "Vec::is_empty"
-    )]
-    pub legacy_federation_member_public_key: Vec<FedMemberPubKey>,
     /// botanix fee recipient
     pub botanix_fee_recipient: String,
     /// The precompiled Minting contract bytecode
@@ -145,7 +137,6 @@ impl FederationTomlConfig {
     ) -> Result<Self, Error> {
         let mut config = Self {
             multisig,
-            legacy_federation_member_public_key: Vec::new(),
             botanix_fee_recipient,
             minting_contract_bytecode,
             lst_fee_receiver,
@@ -170,30 +161,7 @@ impl FederationTomlConfig {
     }
 
     fn finalize(&mut self) -> Result<(), Error> {
-        self.upgrade_legacy_entries()?;
         self.validate()?;
-        Ok(())
-    }
-
-    fn upgrade_legacy_entries(&mut self) -> Result<(), Error> {
-        if self.multisig.is_empty() &&
-            !self.legacy_federation_member_public_key.is_empty()
-        {
-            let members =
-                mem::take(&mut self.legacy_federation_member_public_key);
-            let max_signers = u16::try_from(members.len()).map_err(|_| {
-                Error::InvalidConfig(
-                    "too many federation members declared in legacy format"
-                        .to_string(),
-                )
-            })?;
-            self.multisig.push(MultisigConfig {
-                multisig_id: LEGACY_MULTISIG_ID,
-                min_signers: None,
-                max_signers: Some(max_signers),
-                federation_member_public_key: members,
-            });
-        }
         Ok(())
     }
 
@@ -293,7 +261,7 @@ impl FederationTomlConfig {
             return Err(Error::MissingMultisigs);
         }
         if self.multisig.len() > 2 {
-             return Err(Error::InvalidConfig(format!(
+            return Err(Error::InvalidConfig(format!(
                 "invalid number of multisigs: expected 1 or 2, found {}",
                 self.multisig.len()
             )));
@@ -307,29 +275,7 @@ impl FederationTomlConfig {
                     multisig.multisig_id
                 )));
             }
-            if let Some(max_signers) = multisig.max_signers {
-                if multisig.federation_member_public_key.len() !=
-                    max_signers as usize
-                {
-                    return Err(Error::InvalidConfig(format!(
-                        "multisig {} max-signers ({}) must equal listed members ({})",
-                        multisig.multisig_id,
-                        max_signers,
-                        multisig.federation_member_public_key.len()
-                    )));
-                }
-            }
-
-            if let (Some(min_signers), Some(max_signers)) =
-                (multisig.min_signers, multisig.max_signers)
-            {
-                if !(1..=max_signers).contains(&min_signers) {
-                    return Err(Error::InvalidConfig(format!(
-                        "multisig {} min-signers ({}) must be within 1..=max-signers ({})",
-                        multisig.multisig_id, min_signers, max_signers
-                    )));
-                }
-            }
+            Self::validate_signer_constraints(multisig)?;
         }
 
         if self.multisig.len() == 2 {
@@ -344,6 +290,38 @@ impl FederationTomlConfig {
         Ok(())
     }
 
+    fn validate_signer_constraints(
+        multisig: &MultisigConfig,
+    ) -> Result<(), Error> {
+        let member_count = multisig.federation_member_public_key.len();
+        if member_count < 2 {
+            return Err(Error::InvalidConfig(format!(
+                "multisig {} must list at least two members",
+                multisig.multisig_id
+            )));
+        }
+
+        let max_signers =
+            multisig.max_signers.unwrap_or(member_count as u16);
+        if max_signers as usize != member_count {
+            return Err(Error::InvalidConfig(format!(
+                "multisig {} max-signers ({}) must equal listed members ({})",
+                multisig.multisig_id, max_signers, member_count
+            )));
+        }
+
+        if multisig.min_signers < 2 ||
+            multisig.min_signers > max_signers
+        {
+            return Err(Error::InvalidConfig(format!(
+                "multisig {} min-signers ({}) must be within 2..={} (member count)",
+                multisig.multisig_id, multisig.min_signers, max_signers
+            )));
+        }
+
+        Ok(())
+    }
+
     fn validate_dynafed_roles(
         current: &MultisigConfig,
         next: &MultisigConfig,
@@ -353,12 +331,10 @@ impl FederationTomlConfig {
             .iter()
             .any(|member| member.role == FederationRole::Incoming)
         {
-            return Err(Error::InvalidConfig(
-                format!(
-                    "incoming members must not be defined in multisig {}",
-                    current.multisig_id
-                ),
-            ));
+            return Err(Error::InvalidConfig(format!(
+                "incoming members must not be defined in multisig {}",
+                current.multisig_id
+            )));
         }
 
         if next
@@ -366,12 +342,10 @@ impl FederationTomlConfig {
             .iter()
             .any(|member| member.role == FederationRole::Outgoing)
         {
-            return Err(Error::InvalidConfig(
-                format!(
-                    "outgoing members must not be defined in multisig {}",
-                    next.multisig_id
-                ),
-            ));
+            return Err(Error::InvalidConfig(format!(
+                "outgoing members must not be defined in multisig {}",
+                next.multisig_id
+            )));
         }
 
         let continuing_current = Self::continuing_member_set(current);
@@ -394,24 +368,20 @@ impl FederationTomlConfig {
             .iter()
             .any(|key| Self::member_exists_with_key(current, key))
         {
-            return Err(Error::InvalidConfig(
-                format!(
-                    "incoming members must not appear in multisig {}",
-                    current.multisig_id
-                ),
-            ));
+            return Err(Error::InvalidConfig(format!(
+                "incoming members must not appear in multisig {}",
+                current.multisig_id
+            )));
         }
 
         if outgoing_current
             .iter()
             .any(|key| Self::member_exists_with_key(next, key))
         {
-            return Err(Error::InvalidConfig(
-                format!(
-                    "outgoing members must not appear in multisig {}",
-                    next.multisig_id
-                ),
-            ));
+            return Err(Error::InvalidConfig(format!(
+                "outgoing members must not appear in multisig {}",
+                next.multisig_id
+            )));
         }
 
         Ok(())
@@ -492,37 +462,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_legacy_federation_format() {
-        let legacy = r#"
-botanix-fee-recipient = "0x0000000000000000000000000000000000000000"
-minting-contract-bytecode = ""
-lst-fee-receiver = "0x0000000000000000000000000000000000000000"
-
-[[federation-member-public-key]]
-key = "029dfea7f03f62cace4b1efb5acd3c3185850a7164cc1754667fdca192e4837ad9"
-socket-addr = "127.0.0.1:30303"
-
-[[federation-member-public-key]]
-key = "038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140"
-socket-addr = "127.0.0.1:30304"
-"#;
-
-        let config = FederationTomlConfig::from_str(legacy)
-            .expect("legacy config parses");
-        assert!(config.legacy_federation_member_public_key.is_empty());
-        assert_eq!(config.multisig.len(), 1);
-        let multisig = &config.multisig[0];
-        assert_eq!(multisig.multisig_id, LEGACY_MULTISIG_ID);
-        assert_eq!(multisig.max_signers, Some(2));
-        assert!(multisig.min_signers.is_none());
-        assert_eq!(multisig.federation_member_public_key.len(), 2);
-        assert!(multisig
-            .federation_member_public_key
-            .iter()
-            .all(|member| member.role == FederationRole::Continuing));
-    }
-
-    #[test]
     fn parses_multisig_format() {
         let toml = r#"
 botanix-fee-recipient = "0x08b9676Eb48F02060BB6A98c1829d58Db5Bc2413"
@@ -575,17 +514,11 @@ role = "continuing"
         assert_eq!(config.multisig.len(), 2);
         assert_eq!(config.multisig[0].multisig_id, 0);
         assert_eq!(config.multisig[1].multisig_id, 1);
-        assert_eq!(config.multisig[0].min_signers, Some(2));
-        assert_eq!(config.multisig[1].min_signers, Some(2));
+        assert_eq!(config.multisig[0].min_signers, 2);
+        assert_eq!(config.multisig[1].min_signers, 2);
         assert_eq!(config.multisig[0].max_signers, Some(3));
         assert_eq!(config.multisig[1].max_signers, Some(3));
-        assert_eq!(
-            config.multisig[0].federation_member_public_key.len(),
-            3
-        );
-        assert_eq!(
-            config.multisig[1].federation_member_public_key.len(),
-            3
-        );
+        assert_eq!(config.multisig[0].federation_member_public_key.len(), 3);
+        assert_eq!(config.multisig[1].federation_member_public_key.len(), 3);
     }
 }

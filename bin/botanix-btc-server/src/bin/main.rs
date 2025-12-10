@@ -13,13 +13,13 @@ use std::{
 
 use base64::{engine::general_purpose, Engine};
 use bitcoin::{
-    consensus::Decodable, secp256k1, Amount, BlockHash, Psbt, ScriptBuf,
-    Transaction, TxOut,
+    consensus::Decodable, hashes::Hash, secp256k1, Amount, BlockHash, Psbt,
+    ScriptBuf, Transaction, TxOut,
 };
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
+use botanix_configs::hash::verify_config_hash;
 use btc_server::btc_server_server::{BtcServer, BtcServerServer};
-use botanix_configs::hash::{compute_config_hash, verify_config_hash};
 use btcserverlib::{
     badarg,
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
@@ -266,7 +266,6 @@ struct App<BitcoinRpcApi> {
     /// spend the same operations twice.
     tx_lock: Arc<Mutex<()>>,
     identifier: frost::Identifier,
-    #[cfg(test)]
     max_signers: u16,
     min_signers: u16,
     dkg: Mutex<Option<DkgState>>,
@@ -443,52 +442,31 @@ where
         // Prepare the federation config.
         // TODO: Handle error
         let raw = std::fs::read_to_string(&config.federation_config_path)?;
-        if let Some(expected_hash) = config.config_hash.as_deref() {
-            verify_config_hash(&raw, expected_hash).map_err(|e| {
-                dkg::Error::BadConfig(e.to_string())
-            })?;
-        }
+        verify_config_hash(&raw, &config.config_hash)
+            .map_err(|e| dkg::Error::BadConfig(e.to_string()))?;
         let federation = FederationTomlConfig::from_str(&raw).map_err(|e| {
             dkg::Error::BadConfig(format!(
                 "invalid federation Toml config: {}",
                 e
             ))
         })?;
+        let active_multisig_id = database::LEGACY_MULTISIG_ID;
         let active_multisig = federation
-            .get_config_by_multisig_id(config.multisig_id)
+            .get_config_by_multisig_id(active_multisig_id)
             .ok_or_else(|| {
                 dkg::Error::BadConfig(format!(
                     "missing multisig id {}",
-                    config.multisig_id
+                    active_multisig_id
                 ))
             })?;
 
-        if let Some(max_signers) = active_multisig.max_signers {
-            if config.max_signers != max_signers {
-                panic!(
-                    "max signers mismatch between CLI ({}) and multisig {} ({})",
-                    config.max_signers, config.multisig_id, max_signers
-                );
-            }
-        }
-        if let Some(min_signers) = active_multisig.min_signers {
-            if config.min_signers != min_signers {
-                panic!(
-                    "min signers mismatch between CLI ({}) and multisig {} ({})",
-                    config.min_signers, config.multisig_id, min_signers
-                );
-            }
-        } else {
-            info!(
-                "Multisig {} does not specify a threshold; using CLI-provided min_signers ({})",
-                config.multisig_id, config.min_signers
-            );
-        }
+        let member_count = active_multisig.federation_member_public_key.len();
+        let max_signers = active_multisig.max_signers.unwrap_or(member_count as u16);
+        let min_signers = active_multisig.min_signers;
 
         info!(
             "Using multisig {} with {} members",
-            active_multisig.multisig_id,
-            active_multisig.federation_member_public_key.len()
+            active_multisig.multisig_id, member_count
         );
 
         // Prepare our secret key.
@@ -499,15 +477,6 @@ where
             sanitzed_key.as_str().parse::<secp256k1::SecretKey>().map_err(
                 |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
             )?;
-
-        let min_signers = config.min_signers;
-        let max_signers = config.max_signers;
-        if min_signers > max_signers {
-            panic!("min_signers should be less than or equal to max_signers");
-        }
-        if min_signers < 2 {
-            panic!("min_signers should be at least 2");
-        }
 
         info!(
             "excluded eth addresses len = {:?}",
@@ -688,7 +657,6 @@ where
             config,
             btc_signing_server_jwt_secret,
             min_signers,
-            #[cfg(test)]
             max_signers,
             bitcoind_client,
             fall_back_fee_rate,
@@ -2794,15 +2762,6 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    if let Some(metrics) = telemetry.as_ref() {
-        metrics.set_config_metrics(
-            config.btc_network,
-            config.identifier,
-            config.min_signers,
-            config.max_signers,
-        );
-    }
-
     // setup the grpc server
     let bitcoind_client = bitcoincore_rpc::Client::new(
         config.bitcoind_url.as_str(),
@@ -2814,6 +2773,15 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
     .expect("bitcoind client");
     let btc_server: App<bitcoincore_rpc::Client> =
         App::new(config.clone(), bitcoind_client, telemetry.clone())?;
+
+    if let Some(metrics) = telemetry.as_ref() {
+        metrics.set_config_metrics(
+            btc_server.btc_network,
+            btc_server.config.identifier,
+            btc_server.min_signers,
+            btc_server.max_signers,
+        );
+    }
 
     // run grpc server in the background
     let grpc_stop_tx = match btc_server.serve_async().await {
@@ -2911,6 +2879,7 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use bitcoin::{secp256k1, OutPoint, Script, Txid};
+    use botanix_configs::hash::compute_config_hash;
     use btcserverlib::{
         dkg::DkgMessage, test_utils::pegout_requests_from_tx,
         wallet::address::generate_taproot_change_scriptpubkey,
@@ -2981,12 +2950,9 @@ mod tests {
             identifier: 0,
             coordinator: Some(0),
             federation_config_path: temp_federation.path().to_owned(),
-            multisig_id: 0,
-            config_hash: Some(config_hash),
+            config_hash,
             p2p_secret_key: temp_secret_key.path().to_owned(),
             address: "0.0.0.0:8080".to_string(),
-            max_signers: 3,
-            min_signers: 2,
             toml: None,
             btc_signing_server_jwt_secret: None,
             bitcoind_url: Url::from_str("http://localhost:8332").unwrap(),
