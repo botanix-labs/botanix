@@ -168,9 +168,9 @@ impl FederationTomlConfig {
     /// Extracts federation public keys and socket addresses from the config
     pub fn get_federation_pks_from_path(
         &self,
+        multisig_id: u32,
     ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
-        // Passing `None` defaults to the primary (legacy) multisig entry or the first available one.
-        self.get_federation_pks_internal(None)
+        self.get_federation_pks_internal(multisig_id)
     }
 
     /// Extracts federation public keys and socket addresses for a specific
@@ -179,12 +179,12 @@ impl FederationTomlConfig {
         &self,
         multisig_id: u32,
     ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
-        self.get_federation_pks_internal(Some(multisig_id))
+        self.get_federation_pks_internal(multisig_id)
     }
 
     fn get_federation_pks_internal(
         &self,
-        multisig_id: Option<u32>,
+        multisig_id: u32,
     ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
         let multisig = self.select_multisig(multisig_id)?;
         let federation_members = multisig
@@ -222,29 +222,22 @@ impl FederationTomlConfig {
 
     fn select_multisig(
         &self,
-        multisig_id: Option<u32>,
+        multisig_id: u32,
     ) -> Result<&MultisigConfig, Error> {
         if self.multisig.is_empty() {
             return Err(Error::MissingMultisigs);
         }
 
-        let selected = if let Some(multisig_id) = multisig_id {
-            self.multisig
-                .iter()
-                .find(|m| m.multisig_id == multisig_id)
-                .ok_or_else(|| {
-                    Error::InvalidConfig(format!(
-                        "missing multisig id {}",
-                        multisig_id
-                    ))
-                })?
-        } else {
-            self.multisig
-                .iter()
-                .find(|m| m.multisig_id == LEGACY_MULTISIG_ID)
-                .or_else(|| self.multisig.first())
-                .ok_or(Error::MissingMultisigs)?
-        };
+        let selected = self
+            .multisig
+            .iter()
+            .find(|m| m.multisig_id == multisig_id)
+            .ok_or_else(|| {
+                Error::InvalidConfig(format!(
+                    "missing multisig id {}",
+                    multisig_id
+                ))
+            })?;
 
         Ok(selected)
     }
