@@ -100,7 +100,7 @@ pub fn setup_frost(
         }
     };
     let federation_authorities = federation_config
-        .get_federation_pks_from_path(LEGACY_MULTISIG_ID)?;
+        .get_federation_pks_for_multisig(LEGACY_MULTISIG_ID)?;
     let genesis_authorities = federation_authorities
         .iter()
         .map(|authority| authority.0)

@@ -1,7 +1,6 @@
 use crate::{context::GlobalContext, suite::consensus::common::is_port_free};
 use alloy_primitives::Address;
 use anyhow::Context;
-use bitcoin_hashes::sha256;
 use botanix_consensus_common::utils::unix_timestamp;
 use btcserverlib::{database::LEGACY_MULTISIG_ID, federation_args::{
     FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
@@ -129,8 +128,7 @@ fn spawn_btc_server_process(
 
     let mut temp_federation = tempfile::NamedTempFile::new().unwrap();
     let federation_toml = toml::to_string(&federation_config)?;
-    let config_hash =
-        sha256::Hash::hash(federation_toml.as_bytes()).to_string();
+    let config_hash = compute_config_hash(&federation_toml);
     std::io::Write::write_all(
         &mut temp_federation,
         federation_toml.as_bytes(),

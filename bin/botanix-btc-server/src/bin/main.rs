@@ -461,7 +461,7 @@ where
             })?;
 
         let member_count = active_multisig.federation_member_public_key.len();
-        let max_signers = active_multisig.max_signers.unwrap_or(member_count as u16);
+        let max_signers = active_multisig.effective_max_signers();
         let min_signers = active_multisig.min_signers;
 
         info!(

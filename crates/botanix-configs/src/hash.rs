@@ -36,5 +36,6 @@ pub fn compute_config_hash(raw: &str) -> String {
 }
 
 pub fn normalize_hash(value: &str) -> String {
-    value.trim().trim_start_matches("0x").to_ascii_lowercase()
+    let trimmed = value.trim().to_ascii_lowercase();
+    trimmed.trim_start_matches("0x").to_string()
 }

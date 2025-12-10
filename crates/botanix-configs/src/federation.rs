@@ -99,6 +99,12 @@ impl MultisigConfig {
             federation_member_public_key,
         }
     }
+
+    /// Returns max_signers if set, otherwise defaults to the member count.
+    pub fn effective_max_signers(&self) -> u16 {
+        self.max_signers
+            .unwrap_or(self.federation_member_public_key.len() as u16)
+    }
 }
 
 /// Configuration for the genesis block (toml)
@@ -161,17 +167,9 @@ impl FederationTomlConfig {
         Ok(())
     }
 
-    /// Extracts federation public keys and socket addresses from the config
-    pub fn get_federation_pks_from_path(
-        &self,
-        multisig_id: u32,
-    ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
-        self.get_federation_pks_internal(multisig_id)
-    }
-
     /// Extracts federation public keys and socket addresses for a specific
     /// multisig id.
-    pub fn get_federation_pks_for_id(
+    pub fn get_federation_pks_for_multisig(
         &self,
         multisig_id: u32,
     ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
@@ -290,8 +288,7 @@ impl FederationTomlConfig {
             )));
         }
 
-        let max_signers =
-            multisig.max_signers.unwrap_or(member_count as u16);
+        let max_signers = multisig.effective_max_signers();
         if max_signers as usize != member_count {
             return Err(Error::InvalidConfig(format!(
                 "multisig {} max-signers ({}) must equal listed members ({})",
