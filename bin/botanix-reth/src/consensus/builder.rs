@@ -328,10 +328,9 @@ where
 
         // create frost and block production tasks if btc_server is available:
         // only federation nodes will have btc_server
-        let (dkg_frost_notifications_tx, dkg_frost_notifications_rx) =
-            tokio::sync::broadcast::channel::<SubscribeToDkgNotificationsStream>(
-                100,
-            );
+        let (dkg_frost_notifications_tx, _) = tokio::sync::broadcast::channel::<
+            SubscribeToDkgNotificationsStream,
+        >(100);
         let mut frost_task = None;
         if is_fed_node {
             // frost task
@@ -393,40 +392,37 @@ where
             "subscribe_to_dkg_notifications task",
             Box::pin(async move {
 
-                let dkg_notifications_stream = if let Some(btc) = btc_server_client_clone.as_mut() {
-                    match btc.subscribe_to_dkg_notifications(Empty {}).await {
-                        Ok(res) => {
-                            info!(target: "reth::authority", "Btc server is healthy");
-                            Some(res)
-                            
-                        }
-                        Err(e) => {
-                            tracing::error!(target: "reth::authority", "Btc server is unhealthy: {}", e);
-                            None
-                        }
-                    }
-                } else {
-                    None
+                let Some(btc) = btc_server_client_clone.as_mut() else {
+                    return;
                 };
 
-                if let Some(dkg_notifications_stream) = dkg_notifications_stream {
-                    pin_mut!(dkg_notifications_stream);
-                    while let Some(msg) = dkg_notifications_stream.next().await {
-                        match msg {
-                            Ok(msg) => {
-                                info!(target: "reth::authority", "Received DKG notification from btc server");
-                                match dkg_frost_notifications_tx.send(msg) {
-                                    Ok(_) => {
-                                        info!(target: "reth::authority", "Sent DKG notification to frost task");
-                                    }
-                                    Err(e) => {
-                                        tracing::error!(target: "reth::authority", "Error sending DKG notification to frost task: {}", e);
-                                    }
+                let dkg_notifications_stream = match btc.subscribe_to_dkg_notifications(Empty {}).await {
+                    Ok(res) => {
+                        info!(target: "reth::authority", "Btc server is healthy");
+                        res
+                    }
+                    Err(e) => {
+                        tracing::error!(target: "reth::authority", "Btc server is unhealthy: {}", e);
+                        return;
+                    }
+                };
+
+                pin_mut!(dkg_notifications_stream);
+                while let Some(msg) = dkg_notifications_stream.next().await {
+                    match msg {
+                        Ok(msg) => {
+                            info!(target: "reth::authority", "Received DKG notification from btc server");
+                            match dkg_frost_notifications_tx.send(msg) {
+                                Ok(_) => {
+                                    info!(target: "reth::authority", "Sent DKG notification to frost task");
+                                }
+                                Err(e) => {
+                                    tracing::error!(target: "reth::authority", "Error sending DKG notification to frost task: {}", e);
                                 }
                             }
-                            Err(e) => {
-                                tracing::error!(target: "reth::authority", "Error receiving DKG notification from btc server: {}", e);
-                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(target: "reth::authority", "Error receiving DKG notification from btc server: {}", e);
                         }
                     }
                 }

@@ -409,7 +409,7 @@ where
     }
 
     /// Creates a new DKG state machine for the given multisig_id.
-    fn init_dkg_session(
+    fn new_dkg_state_machine(
         frost_identifier: frost::Identifier,
         p2p_secret_key: secp256k1::SecretKey,
         multisig_id: u32,
@@ -659,7 +659,7 @@ where
             {
                 warn!("No key package found, starting DKG process for multisig_id {}...", LEGACY_MULTISIG_ID);
 
-                let state = Self::init_dkg_session(
+                let state = Self::new_dkg_state_machine(
                     frost_identifier,
                     p2p_secret_key,
                     LEGACY_MULTISIG_ID,
@@ -1233,8 +1233,8 @@ where
                 )
                 .await
                 {
-                    error!("subscribe_to_dkg_notifications stream task: Error sending a notification. Error = {:?}", e);
-                    continue;
+                    error!("subscribe_to_dkg_notifications stream task: client disconnected or send failed permanently: {:?}. Stopping stream task.", e);
+                    break;
                 };
             }
             trace!(
@@ -2582,7 +2582,7 @@ where
             .config
             .coordinator
             .unwrap_or(DEFAULT_COORDINATOR_ID));
-        let state = Self::init_dkg_session(
+        let state = Self::new_dkg_state_machine(
             self.identifier,
             self.p2p_secret_key,
             multisig_id,

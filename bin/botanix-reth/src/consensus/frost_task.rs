@@ -117,7 +117,7 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     metrics: Arc<AuthorityMetrics>,
     /// cometbft light client provider
     cbft_rpc_provider: HttpClient,
-    /// Sender for DKG notifications from btc-server
+    /// DKG frost notifications subscriber
     dkg_frost_notifications_tx:
         tokio::sync::broadcast::Sender<SubscribeToDkgNotificationsStream>,
 }
