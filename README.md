@@ -16,6 +16,31 @@ This project aims to bring Reth's high-performance Ethereum client capabilities 
 - Pectra Support ✅
 - Live Sync ✅
 
+## Building
+
+This project uses Rust `1.92.0`. The [`rust-toolchain.toml`](rust-toolchain.toml) file automatically configures the correct toolchain and components.
+
+**First-time setup:**
+
+```console
+rustup install 1.92.0
+```
+
+The `rustfmt` and `clippy` components are installed automatically when the `cargo` command is run.
+
+**Verify setup:**
+
+```console
+$ rustc --version
+rustc 1.92.0 (ded5c06cf 2025-12-08)
+
+$ cargo fmt --version
+rustfmt 1.8.0-stable (ded5c06cf2 2025-12-08)
+
+$ cargo clippy --version
+clippy 0.1.92 (ded5c06cf2 2025-12-08)
+```
+
 ## Getting Started
 
 Refer to the [Reth documentation](https://reth.rs/) for general guidance on running a node and be sure to
