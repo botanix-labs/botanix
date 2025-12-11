@@ -11,6 +11,7 @@ alloy-eips = { workspace = true }
 # other deps
 alloy-primitives = { workspace = true }
 alloy-rpc-types-engine = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 
@@ -18,15 +19,19 @@ bitcoincore-rpc = { workspace = true }
 botanix-authority-edh = { workspace = true }
 botanix-btc-server = { workspace = true }
 botanix-btc-wallet = { workspace = true }
+botanix-rpc-types = { workspace = true }
 frost-secp256k1-tr = { workspace = true }
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
 
 # reth deps
 reth-primitives = { workspace = true, features = ["secp256k1"] }
+reth-rpc-eth-api = { workspace = true }
 reth-storage-api = { workspace = true }
 revm-primitives = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "recovery"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
