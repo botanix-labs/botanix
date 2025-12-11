@@ -35,6 +35,7 @@ impl BotanixHardfork {
             (EthereumHardfork::MuirGlacier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Paris.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Shanghai.boxed(), ForkCondition::Timestamp(0)),
             (EthereumHardfork::Cancun.boxed(), ForkCondition::Timestamp(0)),
             (EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(0)),
@@ -55,9 +56,10 @@ impl BotanixHardfork {
             (EthereumHardfork::MuirGlacier.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
             (EthereumHardfork::London.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Shanghai.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Cancun.boxed(), ForkCondition::Block(0)),
-            (EthereumHardfork::Prague.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Paris.boxed(), ForkCondition::Block(0)),
+            (EthereumHardfork::Shanghai.boxed(), ForkCondition::Timestamp(0)),
+            (EthereumHardfork::Cancun.boxed(), ForkCondition::Timestamp(0)),
+            (EthereumHardfork::Prague.boxed(), ForkCondition::Timestamp(0)),
         ])
     }
 }
