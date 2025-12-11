@@ -646,7 +646,7 @@ where
             // Receive DKG frost notifications
             while let Ok(notification) = dkg_frost_notifications_rx.try_recv() {
                 info!(target: "consensus::authority::frost_task::start_task", "Received DKG frost notification from btc-server: {:?}", notification);
-                
+
                 // The returned tx needs to be stored with a mapping to the multisig_id
                 if let Some(tasks) = self.dkg_tasks.as_mut() {
                     if tasks.contains_key(&notification.multisig_id) {
