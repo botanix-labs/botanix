@@ -1,20 +1,22 @@
 //! Defines structure for botanix RPC configurables and business logic
 
 use alloy_primitives::U256;
-use alloy_rpc_types_eth::{Block, BlockId, BlockNumberOrTag, Header, Transaction};
+use alloy_rpc_types_eth::{
+    Block, BlockId, BlockNumberOrTag, Header, Transaction,
+};
 use botanix_authority_edh::extra_data_header::ExtraDataHeader;
 use botanix_authority_edh::header_ext::HeaderExt;
-use botanix_rpc_types::types::RichBlock;
 use botanix_btc_wallet::{
     bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory},
     error::{BitcoindAdapterError, BitcoindError},
     fallback::FallbackBitcoindClient,
 };
+use botanix_rpc_types::types::RichBlock;
 use btcserverlib::wallet::address::{
     generate_taproot_address, generate_tweaked_public_key,
 };
-use reth_rpc_eth_api::helpers::EthBlocks;
 use frost_secp256k1_tr::{self as frost};
+use reth_rpc_eth_api::helpers::EthBlocks;
 use reth_storage_api::{BlockReaderIdExt, HeaderProvider};
 use std::{fmt, str::FromStr, sync::Arc};
 use thiserror::Error;
@@ -330,11 +332,12 @@ impl Botanix {
     where
         EthApi: EthBlocks,
     {
-
         // Call the standard eth_getBlockByNumber via EthBlocks helper
-        let Some(api_block) = EthBlocks::rpc_block(eth_api, BlockId::Number(number), full)
-            .await
-            .map_err(|_| RichBlockRPCError::FailedToGetBlock)? else {
+        let Some(api_block) =
+            EthBlocks::rpc_block(eth_api, BlockId::Number(number), full)
+                .await
+                .map_err(|_| RichBlockRPCError::FailedToGetBlock)?
+        else {
             return Ok(None);
         };
 
@@ -342,7 +345,7 @@ impl Botanix {
         // This is necessary because rpc_block returns EthApi-specific types
         let block: Block<Transaction, Header> = serde_json::from_value(
             serde_json::to_value(&api_block)
-                .map_err(RichBlockRPCError::FailedToSerializeBlock)?
+                .map_err(RichBlockRPCError::FailedToSerializeBlock)?,
         )
         .map_err(RichBlockRPCError::FailedToDeserializeBlock)?;
 
@@ -354,17 +357,16 @@ impl Botanix {
                     &mut block.header.extra_data.to_vec().as_slice(),
                 )
                 .map_err(|e| {
-                    RichBlockRPCError::FailedToDeserializeExtraDataHeader(e.to_string())
+                    RichBlockRPCError::FailedToDeserializeExtraDataHeader(
+                        e.to_string(),
+                    )
                 })?;
                 Some(header)
             }
             _ => None,
         };
         // construct richblock
-        let rich_block = RichBlock {
-            block,
-            extra_data_header,
-        };
+        let rich_block = RichBlock { block, extra_data_header };
 
         Ok(Some(rich_block))
     }
