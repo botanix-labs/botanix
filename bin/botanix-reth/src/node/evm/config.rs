@@ -19,7 +19,10 @@ use reth_evm::{
     ExecutionCtxFor, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv,
     NextBlockEnvAttributes,
 };
-use reth_evm_ethereum::{EthBlockAssembler, RethReceiptBuilder};
+use reth_evm_ethereum::{
+    revm_spec_by_timestamp_and_block_number as reth_revm_spec_by_timestamp_and_block_number,
+    EthBlockAssembler, RethReceiptBuilder,
+};
 use reth_primitives::{
     BlockTy, HeaderTy, SealedBlock, SealedHeader, TransactionSigned,
 };
@@ -390,47 +393,16 @@ where
 
 /// Map the latest active hardfork at the given timestamp or block number to a
 /// [`BotanixHardfork`].
+/// Currently just a wrapper for the external reth function.
 pub fn revm_spec_by_timestamp_and_block_number(
-    chain_spec: impl BotanixHardforks,
+    chain_spec: impl BotanixHardforks + EthChainSpec + Hardforks,
     timestamp: u64,
     block_number: u64,
 ) -> BotanixHardfork {
-    if chain_spec.is_pectra_active_at_timestamp(timestamp) {
-        BotanixHardfork::Pectra
-    } else {
-        // Dynamically determine the order for the current chain
-        fn get_activation_block(
-            fc: &reth_chainspec::ForkCondition,
-        ) -> Option<u64> {
-            match fc {
-                reth_chainspec::ForkCondition::Block(b) => Some(*b),
-                _ => None,
-            }
-        }
-        let jalapeno_block = get_activation_block(
-            &chain_spec.botanix_fork_activation(BotanixHardfork::Jalapeno),
-        );
-        let pectra_block = get_activation_block(
-            &chain_spec.botanix_fork_activation(BotanixHardfork::Pectra),
-        );
-        // Sort by activation block descending (newest first)
-        let mut forks = vec![
-            (jalapeno_block, BotanixHardfork::Jalapeno),
-            (pectra_block, BotanixHardfork::Pectra),
-        ];
-        forks.sort_by(|a, b| b.0.cmp(&a.0));
-        for &(_, fork) in &forks {
-            if chain_spec
-                .botanix_fork_activation(fork)
-                .active_at_block(block_number)
-            {
-                return fork;
-            }
-        }
-        if chain_spec.is_jalapeno_active_at_block(block_number) {
-            BotanixHardfork::Jalapeno
-        } else {
-            BotanixHardfork::Jalapeno
-        }
-    }
+    let spec_id = reth_revm_spec_by_timestamp_and_block_number(
+        &chain_spec,
+        timestamp,
+        block_number,
+    );
+    spec_id.into()
 }
