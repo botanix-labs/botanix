@@ -55,7 +55,9 @@ impl Cli {
 
     pub(crate) fn validate(&self) -> Result<()> {
         if self.num_nodes == 0 {
-            return Err(anyhow::anyhow!("Number of nodes must be greater than 0"));
+            return Err(anyhow::anyhow!(
+                "Number of nodes must be greater than 0"
+            ));
         }
 
         if self.multisig_max_signers() == 0 {
@@ -66,8 +68,8 @@ impl Cli {
             return Err(anyhow::anyhow!("Min signers must be greater than 0"));
         }
 
-        if self.multisig_min_signers() > self.num_nodes ||
-            self.multisig_max_signers() > self.num_nodes
+        if self.multisig_min_signers() > self.num_nodes
+            || self.multisig_max_signers() > self.num_nodes
         {
             return Err(anyhow::anyhow!(
                 "Min signers and max signers must be less than or equal to the number of nodes"
@@ -81,7 +83,10 @@ impl Cli {
         }
 
         if self.output_path.exists() {
-            return Err(anyhow::anyhow!("Output path already exists: {:?}", self.output_path));
+            return Err(anyhow::anyhow!(
+                "Output path already exists: {:?}",
+                self.output_path
+            ));
         }
 
         Ok(())
@@ -96,6 +101,7 @@ fn validate_project_name_prefix(s: &str) -> Result<String, String> {
     if s.chars().all(|c| c.is_ascii_alphanumeric()) {
         Ok(s.to_string())
     } else {
-        Err("Project name prefix must contain only alphanumeric characters".to_string())
+        Err("Project name prefix must contain only alphanumeric characters"
+            .to_string())
     }
 }

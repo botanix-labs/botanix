@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, Bytes, U256};
-use alloy_rpc_types_eth::{BlockNumberOrTag};
+use alloy_rpc_types_eth::BlockNumberOrTag;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_rpc_client::botanix::EthBotanixApi;
 use botanix_rpc_config::{botanix_config::Botanix, result::ToRpcResult};
@@ -53,7 +53,6 @@ pub trait BotanixRpcExtApi {
         full: bool,
         include_extra_data_header: Option<bool>,
     ) -> RpcResult<Option<RichBlock>>;
-
 }
 
 /// The type that implements `botanixrpcExt` rpc namespace trait
@@ -67,7 +66,8 @@ pub struct BotanixRpcExt<Provider, EthApi> {
 }
 
 #[async_trait::async_trait]
-impl<Provider, EthApi> BotanixRpcExtApiServer for BotanixRpcExt<Provider, EthApi>
+impl<Provider, EthApi> BotanixRpcExtApiServer
+    for BotanixRpcExt<Provider, EthApi>
 where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static,
     <Provider as HeaderProvider>::Header: HeaderExt,
@@ -120,11 +120,15 @@ where
         include_extra_data_header: Option<bool>,
     ) -> RpcResult<Option<RichBlock>> {
         self.botanix
-            .rich_block_by_number(&self.eth_api, number, full, include_extra_data_header)
+            .rich_block_by_number(
+                &self.eth_api,
+                number,
+                full,
+                include_extra_data_header,
+            )
             .await
             .to_rpc_result()
     }
-
 }
 
 impl<Provider, Eth> EthBotanixApi for BotanixRpcExt<Provider, Eth>

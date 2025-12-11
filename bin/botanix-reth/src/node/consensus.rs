@@ -216,9 +216,9 @@ impl BotanixConsensus<BotanixChainSpec> {
                     .unwrap()
                     .as_secs();
 
-                if header.timestamp() >
-                    present_timestamp +
-                        alloy_eips::merge::ALLOWED_FUTURE_BLOCK_TIME_SECONDS
+                if header.timestamp()
+                    > present_timestamp
+                        + alloy_eips::merge::ALLOWED_FUTURE_BLOCK_TIME_SECONDS
                 {
                     return Err(ConsensusError::TimestampIsInFuture {
                         timestamp: header.timestamp(),
@@ -269,11 +269,12 @@ impl BotanixConsensus<BotanixChainSpec> {
         // Determine the parent gas limit, considering elasticity multiplier on
         // the London fork.
         let parent_gas_limit =
-            if !self.chain_spec.is_london_active_at_block(parent.number()) &&
-                self.chain_spec.is_london_active_at_block(header.number())
+            if !self.chain_spec.is_london_active_at_block(parent.number())
+                && self.chain_spec.is_london_active_at_block(header.number())
             {
-                parent.gas_limit() *
-                    self.chain_spec
+                parent.gas_limit()
+                    * self
+                        .chain_spec
                         .base_fee_params_at_timestamp(header.timestamp())
                         .elasticity_multiplier as u64
             } else {
@@ -282,8 +283,8 @@ impl BotanixConsensus<BotanixChainSpec> {
 
         // Check for an increase in gas limit beyond the allowed threshold.
         if header.gas_limit() > parent_gas_limit {
-            if header.gas_limit() - parent_gas_limit >=
-                parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR
+            if header.gas_limit() - parent_gas_limit
+                >= parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR
             {
                 return Err(ConsensusError::GasLimitInvalidIncrease {
                     parent_gas_limit,
@@ -292,8 +293,8 @@ impl BotanixConsensus<BotanixChainSpec> {
             }
         }
         // Check for a decrease in gas limit beyond the allowed threshold.
-        else if parent_gas_limit - header.gas_limit() >=
-            parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR
+        else if parent_gas_limit - header.gas_limit()
+            >= parent_gas_limit / GAS_LIMIT_BOUND_DIVISOR
         {
             return Err(ConsensusError::GasLimitInvalidDecrease {
                 parent_gas_limit,
@@ -386,14 +387,14 @@ impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
             return Err(RethConsensusError::BodyOmmersHashDiff(
                 GotExpected { got: ommers_hash, expected: block.ommers_hash() }
                     .into(),
-            ))
+            ));
         }
 
         // Check transaction root
         if let Err(error) = block.ensure_transaction_root_valid() {
             return Err(RethConsensusError::BodyTransactionRootDiff(
                 error.into(),
-            ))
+            ));
         }
 
         if self.chain_spec.is_cancun_active_at_timestamp(block.timestamp()) {

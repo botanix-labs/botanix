@@ -53,8 +53,8 @@ pub fn setup_frost(
     reth_config: &mut reth_config::Config,
 ) -> eyre::Result<FrostConfigSetupResult> {
     // Only check if in federation mode.
-    if poa_cfg.federation_mode &&
-        frost_args.min_signers > frost_args.max_signers
+    if poa_cfg.federation_mode
+        && frost_args.min_signers > frost_args.max_signers
     {
         return Err(eyre::eyre!(
             "min_signers should be less than or equal to max_signers"
@@ -103,8 +103,8 @@ pub fn setup_frost(
         .iter()
         .map(|authority| authority.1)
         .collect::<Vec<SocketAddr>>();
-    if poa_cfg.federation_mode &&
-        federation_authorities.len() != frost_args.max_signers as usize
+    if poa_cfg.federation_mode
+        && federation_authorities.len() != frost_args.max_signers as usize
     {
         return Err(eyre::eyre!(
             "max_signers does not match the length of federation_authorities"
