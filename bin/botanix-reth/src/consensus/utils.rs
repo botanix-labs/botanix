@@ -1,7 +1,8 @@
 //! Botanix consensus utility functions
-use alloy_consensus::{Header, Sealed};
+use alloy_consensus::{EthereumTxEnvelope, Header, Sealed, Signed, TxEip4844};
 use alloy_eips::BlockHashOrNumber;
 use alloy_primitives::{keccak256, BlockNumber, Bloom, BloomInput, B256};
+use alloy_rlp::Decodable;
 use bitcoin::{
     consensus::Encodable,
     hashes::{sha256, Hash},
@@ -666,9 +667,21 @@ pub fn validate_psbt_id_by_maximum_cutoff_age(
 /// For example, if the first Bytes are non-deterministic data
 pub fn transactions_signed_from_bytes(
     bytes: impl Iterator<Item = prost::bytes::Bytes>,
-) -> Result<Vec<TransactionSigned>, Box<dyn std::error::Error>> {
-    // TODO:
-    Ok(vec![])
+) -> Result<Vec<EthereumTxEnvelope<TxEip4844>>, Box<dyn std::error::Error>> {
+    let mut txs = Vec::new();
+    for tx in bytes {
+        match EthereumTxEnvelope::<TxEip4844>::decode(
+            &mut tx.to_vec().as_slice(),
+        ) {
+            Ok(signed_tx) => txs.push(signed_tx),
+            Err(e) => {
+                error!("Error decoding signed transaction: {:?}", e);
+                return Err(Box::new(e));
+            }
+        }
+    }
+
+    Ok(txs)
 }
 
 /// Returns true if header represents the start of an epoch
