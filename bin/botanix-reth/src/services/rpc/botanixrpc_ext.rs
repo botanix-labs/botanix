@@ -1,10 +1,12 @@
 use alloy_primitives::{Address, Bytes, U256};
+use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_rpc_client::botanix::EthBotanixApi;
 use botanix_rpc_config::{botanix_config::Botanix, result::ToRpcResult};
 use botanix_rpc_types::types::GatewayAddress;
 use jsonrpsee_core::RpcResult;
 // Reth block related imports
 use reth_ethereum::provider::BlockReaderIdExt;
+use reth_provider::HeaderProvider;
 
 // Rpc related imports
 use jsonrpsee::proc_macros::rpc;
@@ -12,10 +14,10 @@ use secp256k1::PublicKey;
 
 use crate::BotanixBlock;
 
-/// trait interface for a custom rpc namespace: `botanixrpcExt`
+/// trait interface for a custom rpc namespace: `eth`
 ///
 /// This defines an additional namespace where all methods are configured as trait functions.
-#[rpc(server, namespace = "botanixrpcExt")]
+#[rpc(server, namespace = "eth")]
 #[async_trait::async_trait]
 pub trait BotanixRpcExtApi {
     /// Returns the frost aggregated public key.
@@ -54,6 +56,7 @@ pub struct BotanixRpcExt<Provider> {
 impl<Provider> BotanixRpcExtApiServer for BotanixRpcExt<Provider>
 where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static,
+    <Provider as HeaderProvider>::Header: HeaderExt,
 {
     async fn aggregate_public_key(&self) -> RpcResult<PublicKey> {
         self.botanix
@@ -98,6 +101,7 @@ where
 impl<Provider> EthBotanixApi for BotanixRpcExt<Provider>
 where
     Provider: BlockReaderIdExt<Block = BotanixBlock> + Clone + 'static,
+    <Provider as HeaderProvider>::Header: HeaderExt,
 {
     fn provider(&self) -> impl BlockReaderIdExt {
         self.provider.clone()

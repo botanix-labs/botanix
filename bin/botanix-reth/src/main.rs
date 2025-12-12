@@ -40,17 +40,18 @@ use botanix_reth::{
         network_builder::{lookup_head, setup_network_builder},
         provider::create_blockchain_provider,
         recover_utxos::recover_missing_utxos,
-        reth::load_reth_config,
+        reth::{load_reth_config, verify_federation_config_hash},
         rpc::rpc::setup_and_run_rpc,
     },
 };
-use botanix_storage::BotanixProviderFactory;
+use botanix_storage::{tables::create_botanix_tables, BotanixProviderFactory};
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use eyre::Ok;
-use reth::cli::{Cli, Commands};
-use reth::providers::CanonStateSubscriptions;
-use reth::providers::DatabaseProviderFactory;
+use reth::{
+    cli::{Cli, Commands},
+    providers::CanonStateSubscriptions,
+};
 use reth_db::DatabaseEnv;
 use reth_node_builder::RethTransactionPoolConfig;
 use reth_node_core::version::version_metadata;
@@ -138,6 +139,8 @@ fn main() -> eyre::Result<()> {
             // POA Config
             let poa_cfg = args.poa.clone();
 
+            verify_federation_config_hash(&poa_cfg)?;
+
             // State Sync Config
             let state_sync_cfg = args.poa.state_sync.clone();
 
@@ -205,16 +208,25 @@ fn main() -> eyre::Result<()> {
             ).await?;
 
             // build the node
-            let node = BotanixNode::default();
+            let _node = BotanixNode::default();
 
             let reth_database: Arc<DatabaseEnv> = builder.db().clone();
             // Migrate the db if needed
-           let botanix_database = init_and_migrate_botanix_db(
+            let mut botanix_database = init_and_migrate_botanix_db(
                 reth_database.clone(),
                 &datadir_args,
                 Arc::clone(&chain_spec_arc),
                 &db_args
             )?;
+
+            // For the initial chain startup, the custom Botanix tables need to be added
+            if let Some(db) = Arc::get_mut(&mut botanix_database) {
+                create_botanix_tables(db)
+                    .map_err(|e| eyre::eyre!("Failed to create Botanix tables: {}", e))?;
+                info!("Successfully created Botanix tables");
+            } else {
+                debug!("Skipping Botanix table creation: database already initialized");
+            }
 
             // Create a blockchain provider
             let (blockchain_provider, static_files_provider, reth_provider_factory) = create_blockchain_provider(
@@ -350,7 +362,7 @@ fn main() -> eyre::Result<()> {
                 };
 
                 // Setup and launch RPC server
-                setup_and_run_rpc(
+                let _rpc_handle = setup_and_run_rpc(
                     blockchain_provider.clone(),
                     &original_rpc_server_args,
                     &task_executor,

@@ -9,7 +9,11 @@ use crate::{
     },
 };
 use anyhow::Context;
-use botanix_configs::federation::{FedMemberPubKey, FederationTomlConfig};
+use bitcoin::hashes::{sha256, Hash};
+use botanix_configs::federation::{
+    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+};
+use btcserverlib::database::LEGACY_MULTISIG_ID;
 use reth_network_peers::pk2id;
 use reth_network_peers::PeerId;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
@@ -83,6 +87,8 @@ pub struct NonFederationMemberTestConfig {
     pub botanix_fee_recipient: String,
     pub botanix_eth_client: Option<BotanixEthClient>,
     pub lst_fee_receiver: String,
+    pub frost_min_signers: u16,
+    pub frost_max_signers: u16,
 }
 
 impl NonFederationMemberTestConfig {
@@ -101,6 +107,8 @@ impl NonFederationMemberTestConfig {
         discovery_port: u16,
         abci_port: u16,
         lst_fee_receiver: String,
+        frost_min_signers: u16,
+        frost_max_signers: u16,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             index,
@@ -119,6 +127,8 @@ impl NonFederationMemberTestConfig {
             botanix_fee_recipient,
             botanix_eth_client: None,
             lst_fee_receiver,
+            frost_min_signers,
+            frost_max_signers,
         })
     }
 
@@ -163,6 +173,7 @@ impl NonFederationMemberTestConfig {
             let pk = FedMemberPubKey {
                 key: peer.secret_key.public_key(SECP256K1).to_string(),
                 socket_addr: format!("127.0.0.1:{}", peer.discovery_port),
+                role: FederationRole::Continuing,
             };
             fed_member_pks.push(pk);
         }
@@ -178,17 +189,28 @@ impl NonFederationMemberTestConfig {
         }
 
         // Need to create a federation.toml in the data dir
-        let federation_config = FederationTomlConfig::new(
+        let multisig_current = MultisigConfig::new(
+            LEGACY_MULTISIG_ID,
+            self.frost_min_signers,
+            self.frost_max_signers,
             edh_authorities,
+        );
+        let federation_config = FederationTomlConfig::new(
+            vec![multisig_current],
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
-        );
+        )
+        .expect("valid federation config");
         it_info_print!("Federation config", federation_config);
         let federation_config_path = Path::new(datadir).join("federation.toml");
         federation_config
             .write_to_path(&federation_config_path)
             .context("Error writing federation config to path")?;
+        let federation_config_contents = std::fs::read_to_string(&federation_config_path)
+            .context("failed to read federation config for hashing")?;
+        let federation_config_hash =
+            sha256::Hash::hash(federation_config_contents.as_bytes()).to_string();
 
         // point to the relevant working directory
         let mut working_directory = std::env::current_dir()
@@ -223,6 +245,8 @@ impl NonFederationMemberTestConfig {
             "--is-testnet",
             "--federation-config-path",
             federation_config_path.as_str(),
+            "--config-hash",
+            federation_config_hash.as_str(),
             "--ipcdisable",
             "--datadir",
             datadir,
@@ -391,6 +415,8 @@ pub async fn create_rpc_nodes(
             discovery_port,
             abci_port,
             global_context.lst_fee_receiver.clone(),
+            global_context.min_signers,
+            global_context.max_signers,
         )
         .await?;
         rpc_members.insert(member_index, rpc_node);

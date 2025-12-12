@@ -188,6 +188,7 @@ where
             if latest_header.number > 0 {
                 Some(
                     latest_header
+                        .header()
                         .get_aggregate_public_key()
                         .expect("latest header is greater than genesis"),
                 )

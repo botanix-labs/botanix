@@ -11,6 +11,7 @@ use botanix_comet_bft_rpc::CometBftRpcFactory;
 use botanix_configs::federation::{
     load_federation_config_toml, FederationTomlConfig,
 };
+use btcserverlib::database::LEGACY_MULTISIG_ID;
 use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
 use reth_db::DatabaseEnv;
@@ -98,8 +99,8 @@ pub fn setup_frost(
             return Err(eyre::eyre!("Failed to read federation config file"));
         }
     };
-    let federation_authorities =
-        federation_config.get_federation_pks_from_path()?;
+    let federation_authorities = federation_config
+        .get_federation_pks_for_multisig(LEGACY_MULTISIG_ID)?;
     let genesis_authorities = federation_authorities
         .iter()
         .map(|authority| authority.0)
