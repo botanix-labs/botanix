@@ -25,7 +25,7 @@ use btcserverlib::{
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
     database::{self, LEGACY_MULTISIG_ID},
-    dkg,
+    dkg::{self, DkgSubscriptionMessage},
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
     http::{create_web_server, state::ServerState},
@@ -268,6 +268,10 @@ struct App<BitcoinRpcApi> {
     #[cfg(test)]
     max_signers: u16,
     min_signers: u16,
+    /// Secret key for P2P communication during DKG
+    p2p_secret_key: secp256k1::SecretKey,
+    /// Federation config for DKG
+    federation: FederationTomlConfig,
     /// Map of multisig_id to DKG state machines
     dkg_sessions: Arc<Mutex<HashMap<u32, DkgState>>>,
     /// The signing nonces for the current signing session
@@ -283,6 +287,9 @@ struct App<BitcoinRpcApi> {
     fall_back_fee_rate: bitcoin::FeeRate,
     /// telemetry
     telemetry: Option<Arc<Telemetry>>,
+    /// dkg notifications sender
+    dkg_notifications_tx:
+        Arc<tokio::sync::broadcast::Sender<DkgSubscriptionMessage>>,
 }
 
 impl<BitcoindClient> App<BitcoindClient>
@@ -402,9 +409,9 @@ where
     }
 
     /// Creates a new DKG state machine for the given multisig_id.
-    fn init_dkg_session(
+    fn new_dkg_state_machine(
         frost_identifier: frost::Identifier,
-        secret_key: secp256k1::SecretKey,
+        p2p_secret_key: secp256k1::SecretKey,
         multisig_id: u32,
         coordinator: frost::Identifier,
         federation: &FederationTomlConfig,
@@ -465,7 +472,7 @@ where
 
         let machine = dkg::DkgStateMachine::new(
             frost_identifier,
-            secret_key,
+            p2p_secret_key,
             multisig_id,
             coordinator,
             members,
@@ -529,7 +536,7 @@ where
         let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
         let sanitzed_key =
             raw.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>();
-        let secret_key =
+        let p2p_secret_key =
             sanitzed_key.as_str().parse::<secp256k1::SecretKey>().map_err(
                 |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
             )?;
@@ -652,9 +659,9 @@ where
             {
                 warn!("No key package found, starting DKG process for multisig_id {}...", LEGACY_MULTISIG_ID);
 
-                let state = Self::init_dkg_session(
+                let state = Self::new_dkg_state_machine(
                     frost_identifier,
-                    secret_key,
+                    p2p_secret_key,
                     LEGACY_MULTISIG_ID,
                     coordinator,
                     &federation,
@@ -669,6 +676,9 @@ where
             Arc::new(Mutex::new(sessions))
         };
 
+        let (dkg_notifications_tx, _dkg_notifications_rx) =
+            tokio::sync::broadcast::channel::<DkgSubscriptionMessage>(10000);
+
         Ok(Self {
             start_time: Instant::now(),
             btc_network: config.btc_network,
@@ -676,6 +686,8 @@ where
             pegout_scheduler: pegout_manager,
             tx_lock: Arc::new(Mutex::new(())),
             identifier: frost_identifier,
+            p2p_secret_key,
+            federation,
             dkg_sessions,
             frost_round1_nonces: Arc::new(Mutex::new(None)),
             config,
@@ -686,6 +698,7 @@ where
             bitcoind_client,
             fall_back_fee_rate,
             telemetry,
+            dkg_notifications_tx: Arc::new(dkg_notifications_tx),
         })
     }
 
@@ -831,6 +844,10 @@ where
     // Define the associated type for the stream
     type GetFinalizedPegoutIdsStream = ReceiverStream<
         Result<rpc::GetFinalizedPegoutIdsResponse, tonic::Status>,
+    >;
+
+    type SubscribeToDkgNotificationsStream = ReceiverStream<
+        Result<rpc::SubscribeToDkgNotificationsStream, tonic::Status>,
     >;
 
     /* General Endpoints */
@@ -1163,6 +1180,66 @@ where
                 }
             }
             trace!("get_finalized_pegout_ids stream task: DB stream finished.");
+        });
+
+        Ok(tonic::Response::new(ReceiverStream::new(rx)))
+    }
+
+    /// Subscribe to all DKG notifications
+    async fn subscribe_to_dkg_notifications(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<
+        tonic::Response<Self::SubscribeToDkgNotificationsStream>,
+        tonic::Status,
+    > {
+        self.validate_jwt(&req)?;
+        let _request = req.into_inner();
+
+        let mut dkg_notifications_receiver =
+            self.dkg_notifications_tx.subscribe();
+
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        info!("subscribe_to_dkg_notifications: Starting multisig task...",);
+        tokio::spawn(async move {
+            trace!("subscribe_to_dkg_notifications stream task: Created multisig notifications stream.");
+            while let Ok(dkg_sub_message) =
+                dkg_notifications_receiver.recv().await
+            {
+                trace!(
+                    "subscribe_to_dkg_notifications stream task: Received payload: {:?}",
+                    dkg_sub_message.to_string()
+                );
+                let fut = || async {
+                    let tx = tx.clone();
+                    match dkg_sub_message {
+                        DkgSubscriptionMessage::StartedDkg { multisig_id }
+                        | DkgSubscriptionMessage::RestartedDkg {
+                            multisig_id,
+                        } => {
+                            let payload =
+                                rpc::SubscribeToDkgNotificationsStream {
+                                    multisig_id,
+                                };
+                            tx.send(Ok(payload)).await
+                        }
+                    }
+                };
+                if let Err(e) = retry_exec(
+                    "sending_dkg_notification",
+                    fut,
+                    3,
+                    Duration::from_secs(2),
+                )
+                .await
+                {
+                    error!("subscribe_to_dkg_notifications stream task: client disconnected or send failed permanently: {:?}. Stopping stream task.", e);
+                    break;
+                };
+            }
+            trace!(
+                "subscribe_to_dkg_notifications stream task: Stream cancelled."
+            );
         });
 
         Ok(tonic::Response::new(ReceiverStream::new(rx)))
@@ -2477,6 +2554,67 @@ where
         };
 
         Ok(tonic::Response::new(resp))
+    }
+
+    async fn start_new_dkg(
+        &self,
+        req: tonic::Request<rpc::StartNewDkgRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let multisig_id = req.into_inner().multisig_id;
+
+        if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
+            return Err(already_exists!(
+                "key package already exists for multisig_id {}",
+                multisig_id
+            ));
+        }
+        let mut sessions = self.dkg_sessions.lock().await;
+        if sessions.contains_key(&multisig_id) {
+            return Err(already_exists!(
+                "DKG session already running for multisig_id {}",
+                multisig_id
+            ));
+        }
+
+        let coordinator = frost_id!(self
+            .config
+            .coordinator
+            .unwrap_or(DEFAULT_COORDINATOR_ID));
+        let state = Self::new_dkg_state_machine(
+            self.identifier,
+            self.p2p_secret_key,
+            multisig_id,
+            coordinator,
+            &self.federation,
+            self.config.max_signers,
+            self.min_signers,
+            self.is_coordinator(),
+        )
+        .map_err(|e| {
+            tonic::Status::internal(format!(
+                "failed to init DKG session: {}",
+                e
+            ))
+        })?;
+
+        sessions.insert(multisig_id, state);
+        info!("Started new DKG session for multisig_id {}", multisig_id);
+
+        // send the notification async to the subscription method
+        if let Err(e) = self
+            .dkg_notifications_tx
+            .send(DkgSubscriptionMessage::StartedDkg { multisig_id })
+        {
+            // Log but don't fail - no subscribers is a valid scenario
+            warn!(
+                "No subscribers to receive DKG started notification for multisig_id {}: {}",
+                multisig_id, e
+            );
+        }
+
+        Ok(tonic::Response::new(rpc::Empty {}))
     }
 
     // Currently not used

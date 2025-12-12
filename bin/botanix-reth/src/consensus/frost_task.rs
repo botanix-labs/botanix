@@ -20,7 +20,7 @@ use botanix_authority_peg::peg_contract::{PeginMeta, PegoutWithId};
 use botanix_authority_rsp::RandomSource;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, ConsensusCheckpointRequest, GrpcClientError,
-    PendingPegout, Utxo,
+    PendingPegout, SubscribeToDkgNotificationsStream, Utxo,
 };
 use botanix_chainspec::BotanixChainSpec;
 use botanix_comet_bft_rpc::{
@@ -53,7 +53,12 @@ use reth_provider::{
 };
 use reth_revm::primitives::FixedBytes;
 use reth_storage_api::NodePrimitivesProvider;
-use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 use tendermint_rpc::client::HttpClient;
 use tokio::sync::mpsc::{self, error::SendError};
 use tracing::{error, info, trace, warn};
@@ -97,7 +102,7 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     /// A handle to the `DkgRunnerTask` task. This is only `Some` if no
     /// aggregate public key is available, and the `start_task` method has
     /// hence started the DKG process.
-    dkg_task: Option<mpsc::Sender<DkgResponse>>,
+    dkg_tasks: Option<BTreeMap<u32, mpsc::Sender<DkgResponse>>>,
     /// Pre-configured data-parser
     compressor: DataParser,
     /// btc server client
@@ -112,6 +117,9 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     metrics: Arc<AuthorityMetrics>,
     /// cometbft light client provider
     cbft_rpc_provider: HttpClient,
+    /// DKG frost notifications subscriber
+    dkg_frost_notifications_tx:
+        tokio::sync::broadcast::Sender<SubscribeToDkgNotificationsStream>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -147,6 +155,7 @@ where
         random_source_provider: Source,
         metrics: Arc<AuthorityMetrics>,
         cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
+        dkg_frost_notifications_tx: tokio::sync::broadcast::Sender<SubscribeToDkgNotificationsStream>,
     ) -> Self {
         info!(target: "consensus::authority::frost_task::new", "Frost authority index: {}/{}", config.authority_index, config.authorities.len() - 1);
 
@@ -171,10 +180,11 @@ where
             storage,
             btc_server,
             check_staged_headers: true,
-            dkg_task: None,
+            dkg_tasks: None,
             compressor,
             metrics,
             cbft_rpc_provider,
+            dkg_frost_notifications_tx,
         }
     }
 
@@ -535,7 +545,13 @@ where
                 self.btc_server.clone(),
                 Arc::clone(&self.metrics),
             );
-            self.dkg_task = Some(tx);
+            if let Some(tasks) = self.dkg_tasks.as_mut() {
+                tasks.insert(LEGACY_MULTISIG_ID, tx.clone());
+            } else {
+                let mut tasks = BTreeMap::new();
+                tasks.insert(LEGACY_MULTISIG_ID, tx.clone());
+                self.dkg_tasks = Some(tasks);
+            }
 
             info!(target: "consensus::authority::frost_task::start_task", "DKG runner task started...");
         }
@@ -543,6 +559,12 @@ where
             self.storage.reth_database.subscribe_to_canonical_state();
 
         let mut abci_started = false;
+        let mut dkg_frost_notifications_rx = self.dkg_frost_notifications_tx.subscribe();
+        let frost_handle_clone = self.frost_handle.clone();
+        let frost_config_clone = self.frost_config.clone();
+        let storage_clone = self.storage.clone();
+        let btc_server_clone = self.btc_server.clone();
+        let metrics_clone = Arc::clone(&self.metrics);
 
         loop {
             // check if abci has started
@@ -618,6 +640,40 @@ where
                         pegouts,
                     )
                     .await;
+                }
+            }
+
+            // Receive DKG frost notifications
+            while let Ok(notification) = dkg_frost_notifications_rx.try_recv() {
+                info!(target: "consensus::authority::frost_task::start_task", "Received DKG frost notification from btc-server: {:?}", notification);
+
+                // The returned tx needs to be stored with a mapping to the multisig_id
+                if let Some(tasks) = self.dkg_tasks.as_mut() {
+                    if tasks.contains_key(&notification.multisig_id) {
+                        warn!(target: "consensus::authority::frost_task::start_task", "DKG task for multisig id {} already exists, skipping...", notification.multisig_id);
+                        continue;
+                    }
+                    // Start the dkg state machine task runner for that multisig id
+                    let tx = DkgRunnerTask::new(
+                        frost_handle_clone.clone(),
+                        frost_config_clone.authorities.as_ref(),
+                        storage_clone.clone(),
+                        btc_server_clone.clone(),
+                        Arc::clone(&metrics_clone),
+                    );
+                    tasks.insert(notification.multisig_id, tx.clone());
+                } else {
+                    let mut tasks = BTreeMap::new();
+                    // Start the dkg state machine task runner for that multisig id
+                    let tx = DkgRunnerTask::new(
+                        frost_handle_clone.clone(),
+                        frost_config_clone.authorities.as_ref(),
+                        storage_clone.clone(),
+                        btc_server_clone.clone(),
+                        Arc::clone(&metrics_clone),
+                    );
+                    tasks.insert(notification.multisig_id, tx.clone());
+                    self.dkg_tasks = Some(tasks);
                 }
             }
 
@@ -745,13 +801,15 @@ where
                         }
                     }
                     PeerMessageResponse::Dkg(dkg_response) => {
-                        let Some(task) = self.dkg_task.as_ref() else {
+                        let Some(tasks) = self.dkg_tasks.as_ref() else {
                             warn!(target: "consensus::authority::frost_task::start_task", "Dkg task is not running, dropping request...");
                             continue;
                         };
-
-                        if let Err(err) = task.send(dkg_response).await {
-                            warn!(target: "consensus::authority::frost_task::start_task", "Failed to send dkg response to task: {:?}", err);
+                        if let Some(task) = tasks.get(&dkg_response.multisig_id) {
+                            if let Err(err) = task.send(dkg_response).await {
+                                warn!(target: "consensus::authority::frost_task::start_task", "Failed to send dkg response to task: {:?}", err);
+                                continue;
+                            }
                         }
                     }
                     PeerMessageResponse::Signing(signing_response) => {
@@ -1080,6 +1138,7 @@ where
             }
         }
     }
+
     async fn gossip_payloads(
         &self,
         payloads: Vec<botanix_btc_server_client::DkgPayload>,
@@ -1129,6 +1188,7 @@ where
                 data: payload.payload,
                 sender: payload.sender,
                 recipient: payload.recipient,
+                multisig_id: payload.multisig_id,
             });
 
             match peer_data

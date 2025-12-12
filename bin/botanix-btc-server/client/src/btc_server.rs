@@ -42,6 +42,11 @@ pub struct GetFinalizedPegoutIdsResponse {
     #[prost(bool, tag = "4")]
     pub is_final: bool,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SubscribeToDkgNotificationsStream {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
     #[prost(bytes = "vec", tag = "1")]
@@ -213,6 +218,11 @@ pub struct Empty {}
 /// Frost things
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetDkgPayloadsRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct StartNewDkgRequest {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
 }
@@ -605,6 +615,54 @@ pub mod btc_server_client {
                 "NewDkgPayload",
             ));
             self.inner.unary(req, path, codec).await
+        }
+        pub async fn start_new_dkg(
+            &mut self,
+            request: impl tonic::IntoRequest<super::StartNewDkgRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/StartNewDkg",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("btc_server.BtcServer", "StartNewDkg"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn subscribe_to_dkg_notifications(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<
+                tonic::codec::Streaming<
+                    super::SubscribeToDkgNotificationsStream,
+                >,
+            >,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/SubscribeToDkgNotifications",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "SubscribeToDkgNotifications",
+            ));
+            self.inner.server_streaming(req, path, codec).await
         }
         pub async fn get_round1_signing_package(
             &mut self,
