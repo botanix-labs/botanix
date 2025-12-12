@@ -11,6 +11,7 @@ use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, VecDeque},
+    fmt::Display,
     time::{Duration, Instant},
 };
 use thiserror::Error;
@@ -116,6 +117,46 @@ mod sealed_pkg {
         ) -> Result<secp256k1::ecdsa::Signature, encryption::Error> {
             auth.validate_round3(initiator, self.0)?;
             Ok(self.0)
+        }
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DkgSubscriptionMessage {
+    /// Started a new DKG session notification
+    StartedDkg {
+        /// The multisig id of the new DKG session
+        multisig_id: u32,
+    },
+    /// Restarted a DKG session notification
+    RestartedDkg {
+        /// The multisig id of the restarted DKG session
+        multisig_id: u32,
+    },
+}
+
+impl DkgSubscriptionMessage {
+    /// Returns the multisig id associated with this notification
+    pub fn multisig_id(&self) -> u32 {
+        match self {
+            DkgSubscriptionMessage::StartedDkg { multisig_id } => *multisig_id,
+            DkgSubscriptionMessage::RestartedDkg { multisig_id } => {
+                *multisig_id
+            }
+        }
+    }
+}
+
+impl Display for DkgSubscriptionMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DkgSubscriptionMessage::StartedDkg { multisig_id } => {
+                write!(f, "StartedDkg {{ multisig_id: {} }}", multisig_id)
+            }
+            DkgSubscriptionMessage::RestartedDkg { multisig_id } => {
+                write!(f, "RestartedDkg {{ multisig_id: {} }}", multisig_id)
+            }
         }
     }
 }
@@ -425,6 +466,7 @@ pub struct DkgStateMachine {
     config: Config,
     my_frost_id: frost::Identifier,
     my_static_sec: secp256k1::SecretKey,
+    multisig_id: u32,
     coordinator: frost::Identifier,
     members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
     queue: Queue,
@@ -464,6 +506,7 @@ impl DkgStateMachine {
     pub fn new(
         my_frost_id: frost::Identifier,
         my_static_sec: secp256k1::SecretKey,
+        multisig_id: u32,
         coordinator: frost::Identifier,
         members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         config: Config,
@@ -506,6 +549,7 @@ impl DkgStateMachine {
             config,
             my_frost_id,
             my_static_sec,
+            multisig_id,
             coordinator,
             members,
             queue,
@@ -645,6 +689,10 @@ impl DkgStateMachine {
     /// Returns the FROST identifier of this participant.
     pub fn frost_id(&self) -> frost::Identifier {
         self.my_frost_id
+    }
+    /// Returns the multisig identifier for this DKG session.
+    pub fn multisig_id(&self) -> u32 {
+        self.multisig_id
     }
     /// Checks if this participant is the coordinator of the DKG process.
     pub fn is_coordinator(&self) -> bool {

@@ -17,9 +17,13 @@ service BtcServer {
 
     rpc GetPublicKey(Empty) returns(GetPublicKeyResponse) {}
 
-    rpc GetDkgPayloads(Empty) returns(DkgPayloads) {}
+    rpc GetDkgPayloads(GetDkgPayloadsRequest) returns(DkgPayloads) {}
 
     rpc NewDkgPayload(DkgPayload) returns(DkgPayloads) {}
+
+    rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
+
+    rpc SubscribeToDkgNotifications(Empty) returns(stream SubscribeToDkgNotificationsStream) {}
 
     // Signing Endpoints
 
@@ -93,6 +97,10 @@ message GetFinalizedPegoutIdsResponse {
     uint64 chunk_index = 2;
     uint64 total_chunks = 3;
     bool is_final = 4;
+}
+
+message SubscribeToDkgNotificationsStream {
+    uint32 multisig_id = 1;
 }
 
 message FinalizeSignerRequest {
@@ -217,6 +225,14 @@ message GetTrackedTxsResponse {
 message Empty {}
 
 // Frost things
+message GetDkgPayloadsRequest {
+    uint32 multisig_id = 1;
+}
+
+message StartNewDkgRequest {
+    uint32 multisig_id = 1;
+}
+
 message DkgPayloads {
     uint64 timeout = 1;
     repeated DkgPayload payloads = 2;
@@ -226,6 +242,7 @@ message DkgPayload {
     bytes sender = 1;
     bytes recipient = 2;
     bytes payload = 3;
+    uint32 multisig_id = 4;
 }
 
 message SigningPackageRequest {

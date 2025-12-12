@@ -19,6 +19,7 @@ use botanix_authority_rsp::RandomSource;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
+    SubscribeToDkgNotificationsStream,
 };
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
@@ -32,6 +33,7 @@ use botanix_storage::{
     StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
     WalletStateSyncWriter,
 };
+use futures::{pin_mut, StreamExt};
 use reth_db::DatabaseEnv;
 // use reth_evm::execute::BlockExecutorProvider;
 use alloy_primitives::Address;
@@ -294,7 +296,7 @@ where
         let parser = DataParser::default()
             .with_serialization_type(SerializationType::Postcard);
 
-        let btc_server_client: Option<BtcServerClient> = async {
+        let mut btc_server_client: Option<BtcServerClient> = async {
             if is_fed_node {
                 Some(
                     btc_server_factory
@@ -327,6 +329,9 @@ where
 
         // create frost and block production tasks if btc_server is available:
         // only federation nodes will have btc_server
+        let (dkg_frost_notifications_tx, _) = tokio::sync::broadcast::channel::<
+            SubscribeToDkgNotificationsStream,
+        >(100);
         let mut frost_task = None;
         if is_fed_node {
             // frost task
@@ -341,6 +346,7 @@ where
                 random_source_provider,
                 Arc::clone(&metrics),
                 cometbft_rpc_factory.clone(),
+                dkg_frost_notifications_tx.clone(),
             );
 
             frost_task = Some(task);
@@ -381,6 +387,48 @@ where
         } else {
             None
         };
+
+        let mut btc_server_client_clone = btc_server_client.clone();
+        task_executor.spawn_critical(
+            "subscribe_to_dkg_notifications task",
+            Box::pin(async move {
+
+                let Some(btc) = btc_server_client_clone.as_mut() else {
+                    return;
+                };
+
+                let dkg_notifications_stream = match btc.subscribe_to_dkg_notifications(Empty {}).await {
+                    Ok(res) => {
+                        info!(target: "reth::authority", "Btc server is healthy");
+                        res
+                    }
+                    Err(e) => {
+                        tracing::error!(target: "reth::authority", "Btc server is unhealthy: {}", e);
+                        return;
+                    }
+                };
+
+                pin_mut!(dkg_notifications_stream);
+                while let Some(msg) = dkg_notifications_stream.next().await {
+                    match msg {
+                        Ok(msg) => {
+                            info!(target: "reth::authority", "Received DKG notification from btc server");
+                            match dkg_frost_notifications_tx.send(msg) {
+                                Ok(_) => {
+                                    info!(target: "reth::authority", "Sent DKG notification to frost task");
+                                }
+                                Err(e) => {
+                                    tracing::error!(target: "reth::authority", "Error sending DKG notification to frost task: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(target: "reth::authority", "Error receiving DKG notification from btc server: {}", e);
+                        }
+                    }
+                }
+            })
+        );
 
         // run a background health monitoring task for the btc server, comet and
         // bitcoind

@@ -1,4 +1,5 @@
 use super::*;
+use crate::database::LEGACY_MULTISIG_ID;
 use crate::dkg::Stage;
 use bitcoin::secp256k1;
 use frost::keys::PublicKeyPackage;
@@ -108,6 +109,7 @@ async fn setup_tasks(num_members: u16, config: Config, absent_nodes: &[u16]) {
         let machine = DkgStateMachine::new(
             id,
             static_sec,
+            LEGACY_MULTISIG_ID,
             coordinator,
             members.clone(),
             config,

@@ -42,6 +42,11 @@ pub struct GetFinalizedPegoutIdsResponse {
     #[prost(bool, tag = "4")]
     pub is_final: bool,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SubscribeToDkgNotificationsStream {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
     #[prost(bytes = "vec", tag = "1")]
@@ -211,6 +216,16 @@ pub struct GetTrackedTxsResponse {
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Empty {}
 /// Frost things
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetDkgPayloadsRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct StartNewDkgRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
     #[prost(uint64, tag = "1")]
@@ -226,6 +241,8 @@ pub struct DkgPayload {
     pub recipient: ::prost::alloc::vec::Vec<u8>,
     #[prost(bytes = "vec", tag = "3")]
     pub payload: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "4")]
+    pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SigningPackageRequest {
@@ -390,7 +407,7 @@ pub mod btc_server_server {
         >;
         async fn get_dkg_payloads(
             &self,
-            request: tonic::Request<super::Empty>,
+            request: tonic::Request<super::GetDkgPayloadsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DkgPayloads>,
             tonic::Status,
@@ -400,6 +417,26 @@ pub mod btc_server_server {
             request: tonic::Request<super::DkgPayload>,
         ) -> std::result::Result<
             tonic::Response<super::DkgPayloads>,
+            tonic::Status,
+        >;
+        async fn start_new_dkg(
+            &self,
+            request: tonic::Request<super::StartNewDkgRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
+        /// Server streaming response type for the SubscribeToDkgNotifications method.
+        type SubscribeToDkgNotificationsStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<
+                    super::SubscribeToDkgNotificationsStream,
+                    tonic::Status,
+                >,
+            >
+            + std::marker::Send
+            + 'static;
+        async fn subscribe_to_dkg_notifications(
+            &self,
+            request: tonic::Request<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<Self::SubscribeToDkgNotificationsStream>,
             tonic::Status,
         >;
         async fn get_round1_signing_package(
@@ -864,8 +901,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetDkgPayloads" => {
                     #[allow(non_camel_case_types)]
                     struct GetDkgPayloadsSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                        for GetDkgPayloadsSvc<T>
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::GetDkgPayloadsRequest,
+                        > for GetDkgPayloadsSvc<T>
                     {
                         type Response = super::DkgPayloads;
                         type Future = BoxFuture<
@@ -874,7 +913,9 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::Empty>,
+                            request: tonic::Request<
+                                super::GetDkgPayloadsRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
@@ -960,6 +1001,114 @@ pub mod btc_server_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/StartNewDkg" => {
+                    #[allow(non_camel_case_types)]
+                    struct StartNewDkgSvc<T: BtcServer>(pub Arc<T>);
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::StartNewDkgRequest>
+                        for StartNewDkgSvc<T>
+                    {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::StartNewDkgRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::start_new_dkg(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = StartNewDkgSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/SubscribeToDkgNotifications" => {
+                    #[allow(non_camel_case_types)]
+                    struct SubscribeToDkgNotificationsSvc<T: BtcServer>(
+                        pub Arc<T>,
+                    );
+                    impl<T: BtcServer>
+                        tonic::server::ServerStreamingService<super::Empty>
+                        for SubscribeToDkgNotificationsSvc<T>
+                    {
+                        type Response =
+                            super::SubscribeToDkgNotificationsStream;
+                        type ResponseStream =
+                            T::SubscribeToDkgNotificationsStream;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::ResponseStream>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Empty>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::subscribe_to_dkg_notifications(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SubscribeToDkgNotificationsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
