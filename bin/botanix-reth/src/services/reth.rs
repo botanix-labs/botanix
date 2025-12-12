@@ -1,7 +1,8 @@
 use botanix_cli_args::poa_node::PoaNodeArgs;
+use botanix_configs::hash::verify_config_hash;
 use eyre::{Context, Ok};
 use reth::args::NetworkArgs;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 /// Loads the Reth configuration using the provided PoA and network arguments.
 pub fn load_reth_config(
@@ -33,4 +34,24 @@ pub fn load_reth_config(
         }
         None => Ok(reth_config::Config::default()),
     }
+}
+
+/// Validates that the federation config content matches the provided config
+/// hash flag.
+pub fn verify_federation_config_hash(
+    poa_args: &PoaNodeArgs,
+) -> eyre::Result<()> {
+    if let Some(expected_hash) = &poa_args.federation_config_hash {
+        let raw = fs::read_to_string(&poa_args.federation_config_path)
+            .wrap_err_with(|| {
+                format!(
+                    "Could not read federation config file {:?}",
+                    poa_args.federation_config_path
+                )
+            })?;
+        verify_config_hash(&raw, expected_hash)
+            .map_err(|e| eyre::eyre!(e.to_string()))?;
+    }
+
+    Ok(())
 }

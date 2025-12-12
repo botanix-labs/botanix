@@ -13,12 +13,12 @@ use std::{
 
 use base64::{engine::general_purpose, Engine};
 use bitcoin::{
-    consensus::Decodable, secp256k1, Amount, BlockHash, Psbt, ScriptBuf,
-    Transaction, TxOut,
+    consensus::Decodable, hashes::Hash, secp256k1, Amount, BlockHash, Psbt,
+    ScriptBuf, Transaction, TxOut,
 };
-use bitcoin_hashes::Hash;
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
+use botanix_configs::hash::verify_config_hash;
 use btc_server::btc_server_server::{BtcServer, BtcServerServer};
 use btcserverlib::{
     badarg,
@@ -246,6 +246,7 @@ type SigningNoncesCommitmentsMap = Arc<
     >,
 >;
 
+
 /// The DKG state machine is responsible for managing the DKG process.
 struct DkgState {
     // The DKG state machine
@@ -265,7 +266,6 @@ struct App<BitcoinRpcApi> {
     /// spend the same operations twice.
     tx_lock: Arc<Mutex<()>>,
     identifier: frost::Identifier,
-    #[cfg(test)]
     max_signers: u16,
     min_signers: u16,
     dkg: Mutex<Option<DkgState>>,
@@ -442,12 +442,32 @@ where
         // Prepare the federation config.
         // TODO: Handle error
         let raw = std::fs::read_to_string(&config.federation_config_path)?;
-        let federation =
-            FederationTomlConfig::from_str(&raw).map_err(|_| {
-                dkg::Error::BadConfig(
-                    "invalid federation Toml config".to_string(),
-                )
+        verify_config_hash(&raw, &config.config_hash)
+            .map_err(|e| dkg::Error::BadConfig(e.to_string()))?;
+        let federation = FederationTomlConfig::from_str(&raw).map_err(|e| {
+            dkg::Error::BadConfig(format!(
+                "invalid federation Toml config: {}",
+                e
+            ))
+        })?;
+        let active_multisig_id = database::LEGACY_MULTISIG_ID;
+        let active_multisig = federation
+            .get_config_by_multisig_id(active_multisig_id)
+            .ok_or_else(|| {
+                dkg::Error::BadConfig(format!(
+                    "missing multisig id {}",
+                    active_multisig_id
+                ))
             })?;
+
+        let member_count = active_multisig.federation_member_public_key.len();
+        let max_signers = active_multisig.effective_max_signers();
+        let min_signers = active_multisig.min_signers;
+
+        info!(
+            "Using multisig {} with {} members",
+            active_multisig.multisig_id, member_count
+        );
 
         // Prepare our secret key.
         let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
@@ -457,15 +477,6 @@ where
             sanitzed_key.as_str().parse::<secp256k1::SecretKey>().map_err(
                 |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
             )?;
-
-        let min_signers = config.min_signers;
-        let max_signers = config.max_signers;
-        if min_signers > max_signers {
-            panic!("min_signers should be less than or equal to max_signers");
-        }
-        if min_signers < 2 {
-            panic!("min_signers should be at least 2");
-        }
 
         info!(
             "excluded eth addresses len = {:?}",
@@ -588,7 +599,7 @@ where
 
             let mut members = BTreeMap::new();
             for (pos, fed_pubkey) in
-                federation.federation_member_public_key.iter().enumerate()
+                active_multisig.federation_member_public_key.iter().enumerate()
             {
                 let id = frost_id!(pos as u16);
                 let pubkey = secp256k1::PublicKey::from_str(&fed_pubkey.key)
@@ -646,7 +657,6 @@ where
             config,
             btc_signing_server_jwt_secret,
             min_signers,
-            #[cfg(test)]
             max_signers,
             bitcoind_client,
             fall_back_fee_rate,
@@ -2752,15 +2762,6 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    if let Some(metrics) = telemetry.as_ref() {
-        metrics.set_config_metrics(
-            config.btc_network,
-            config.identifier,
-            config.min_signers,
-            config.max_signers,
-        );
-    }
-
     // setup the grpc server
     let bitcoind_client = bitcoincore_rpc::Client::new(
         config.bitcoind_url.as_str(),
@@ -2772,6 +2773,15 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
     .expect("bitcoind client");
     let btc_server: App<bitcoincore_rpc::Client> =
         App::new(config.clone(), bitcoind_client, telemetry.clone())?;
+
+    if let Some(metrics) = telemetry.as_ref() {
+        metrics.set_config_metrics(
+            btc_server.btc_network,
+            btc_server.config.identifier,
+            btc_server.min_signers,
+            btc_server.max_signers,
+        );
+    }
 
     // run grpc server in the background
     let grpc_stop_tx = match btc_server.serve_async().await {
@@ -2869,6 +2879,7 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use bitcoin::{secp256k1, OutPoint, Script, Txid};
+    use botanix_configs::hash::compute_config_hash;
     use btcserverlib::{
         dkg::DkgMessage, test_utils::pegout_requests_from_tx,
         wallet::address::generate_taproot_change_scriptpubkey,
@@ -2897,20 +2908,23 @@ mod tests {
         minting-contract-bytecode = ""
         lst-fee-receiver = ""
 
-        [[federation-member-public-key]]
+        [[multisig]]
+        multisig-id = 0
+        min-signers = 2
+        max-signers = 3
+
+        [[multisig.federation-member-public-key]]
         key = "03185b1f0226d6d5949b902f083dd6e5b04ecdccdedd4cf48080de60b0bfe3b606"
         # Private key: 46de0f5cdbf2619ba8155964f951661ef89126aaddfcbbab56b7422e37572ff8
         socket-addr = "127.0.0.1:30303"
+        role = "continuing"
 
-        [[federation-member-public-key]]
-        key = "038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140"
-        # Private key: 27eeb2264674f15f2bac84d84b5e8f0c40722f8327fe7354bf14c84e248f8838
-        socket-addr = "127.0.0.1:30304"
-
-        [[federation-member-public-key]]
+        [[multisig.federation-member-public-key]]
         key = "02a7a1a9c37cd072f9752ef6b154876fe51f1ad2f7a6a627ef26e5075631af9f29"
         socket-addr = "127.0.0.1:30305"
+        role = "continuing"
         "#;
+        let config_hash = compute_config_hash(federation_content);
 
         let mut temp_federation = tempfile::NamedTempFile::new().unwrap();
         std::io::Write::write_all(
@@ -2936,10 +2950,9 @@ mod tests {
             identifier: 0,
             coordinator: Some(0),
             federation_config_path: temp_federation.path().to_owned(),
+            config_hash,
             p2p_secret_key: temp_secret_key.path().to_owned(),
             address: "0.0.0.0:8080".to_string(),
-            max_signers: 3,
-            min_signers: 2,
             toml: None,
             btc_signing_server_jwt_secret: None,
             bitcoind_url: Url::from_str("http://localhost:8332").unwrap(),

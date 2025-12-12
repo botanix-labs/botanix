@@ -40,7 +40,7 @@ use botanix_reth::{
         network_builder::{lookup_head, setup_network_builder},
         provider::create_blockchain_provider,
         recover_utxos::recover_missing_utxos,
-        reth::load_reth_config,
+        reth::{load_reth_config, verify_federation_config_hash},
         rpc::rpc::setup_and_run_rpc,
     },
 };
@@ -138,6 +138,8 @@ fn main() -> eyre::Result<()> {
 
             // POA Config
             let poa_cfg = args.poa.clone();
+
+            verify_federation_config_hash(&poa_cfg)?;
 
             // State Sync Config
             let state_sync_cfg = args.poa.state_sync.clone();
