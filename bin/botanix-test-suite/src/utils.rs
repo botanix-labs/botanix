@@ -105,6 +105,7 @@ pub async fn send_pegin_notification(
             vout,
         }),
         eth_address,
+        multisig_id: 0,
     }]
     .to_vec();
 
@@ -156,6 +157,7 @@ pub async fn send_pegins_notifications(
                 vout: 1,
             }),
             eth_address,
+            multisig_id: 0,
         });
     }
 

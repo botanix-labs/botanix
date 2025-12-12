@@ -1764,6 +1764,38 @@ mod tests {
         pub block_number: u64,
     }
 
+    // Original Utxo structure (pre-DynaFed version without multisig_id)
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    struct OldUtxo {
+        pub output: TxOut,
+        pub eth_address: Option<[u8; 20]>,
+        #[serde(default)]
+        pub version: u32,
+    }
+
+    #[test]
+    fn test_utxo_deserialize_old_data_without_multisig_id() {
+        let value = Amount::from_sat(1000);
+        let script_pubkey = ScriptBuf::from_bytes(vec![0x51; 34]);
+        let eth_address = [1u8; 20];
+
+        let old_utxo = OldUtxo {
+            output: TxOut { value, script_pubkey: script_pubkey.clone() },
+            eth_address: Some(eth_address),
+            version: 1,
+        };
+
+        let mut serialized = vec![];
+        ciborium::into_writer(&old_utxo, &mut serialized).unwrap();
+
+        let deserialized: Utxo = ciborium::from_reader(&serialized[..]).unwrap();
+
+        assert_eq!(deserialized.output.value, value);
+        assert_eq!(deserialized.output.script_pubkey, script_pubkey);
+        assert_eq!(deserialized.eth_address, Some(eth_address));
+        assert_eq!(deserialized.multisig_id, LEGACY_MULTISIG_ID);
+    }
+
     #[test]
     fn can_save_and_read_pegout_reqs() {
         let (db, _temp_dir) = setup_db();
