@@ -21,6 +21,8 @@ struct UtxoRecoveryData {
     vout: u32,
     /// Ethereum address (empty string for change UTXOs)
     eth_address: String,
+    /// The multisig ID this UTXO belongs to
+    multisig_id: u32,
 }
 
 impl TryFrom<UtxoRecoveryData> for UtxoToRecover {
@@ -41,6 +43,7 @@ impl TryFrom<UtxoRecoveryData> for UtxoToRecover {
         Ok(UtxoToRecover {
             outpoint: Some(outpoint),
             eth_address: data.eth_address,
+            multisig_id: data.multisig_id,
         })
     }
 }
@@ -91,17 +94,20 @@ mod tests {
 {
     "txid": "7fffc6ffc9db1400ba859447ea1f82946fa3f736f2ad1725cbd4cd1267472a1f",
     "vout": 0,
-    "ethAddress": "1284fEdeda331BbD0b1a868abFeD9A3Cfb91a677"
+    "ethAddress": "1284fEdeda331BbD0b1a868abFeD9A3Cfb91a677",
+    "multisigId": 0
 },
 {
     "txid": "d0204b10e98329ceec73bc50df687416d9c5f28d2e37fa6f1054f170ee0b4442",
     "vout": 0,
-    "ethAddress": "4837f53DCD09Dca12a4761BEfAd7a2398B96617a"
+    "ethAddress": "4837f53DCD09Dca12a4761BEfAd7a2398B96617a",
+    "multisigId": 0
 },
 {
     "txid": "f58feb51fbc4d7484975ced7b8649e51ba8f96d7bb00c3e49b396a080e105abf",
     "vout": 5,
-    "ethAddress": ""
+    "ethAddress": "",
+    "multisigId": 1
 }
 ]"#;
         temp_file.write_all(json_content.as_bytes()).unwrap();
@@ -170,6 +176,7 @@ mod tests {
             txid: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef".to_string(),
             vout: 5,
             eth_address: "0xabcdef".to_string(),
+            multisig_id: 42,
         };
 
         let utxo: UtxoToRecover = data.try_into().unwrap();
@@ -184,5 +191,6 @@ mod tests {
         );
         assert_eq!(utxo.eth_address, "0xabcdef");
         assert_eq!(utxo.outpoint.unwrap().vout, 5);
+        assert_eq!(utxo.multisig_id, 42);
     }
 }

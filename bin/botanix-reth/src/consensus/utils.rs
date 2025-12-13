@@ -171,6 +171,7 @@ fn utxo_from_pegin_meta(pegin_meta: &PeginMeta) -> Utxo {
             value: tx_out.value.to_sat(),
         }),
         eth_address: hex::encode(pegin_meta.address()),
+        multisig_id: 0,
     }
 }
 
@@ -209,6 +210,7 @@ pub(crate) fn get_utxos_from_staged_pegins(
                 script_pubkey: Some(ScriptBuf { script: pegin.script_pubkey }),
             }),
             eth_address: hex::encode(pegin.eth_address),
+            multisig_id: 0,
         })
         .collect()
 }

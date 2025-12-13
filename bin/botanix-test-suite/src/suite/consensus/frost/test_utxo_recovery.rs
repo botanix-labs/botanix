@@ -194,6 +194,7 @@ pub async fn test_utxo_recovery(
             botanix_btc_server_client::UtxoToRecover {
                 outpoint: utxo.outpoint.clone(), // note this is little endian
                 eth_address: utxo.eth_address.clone(),
+                multisig_id: 0,
             }
         })
         .collect::<Vec<_>>();
@@ -227,6 +228,7 @@ pub async fn test_utxo_recovery(
                 vout: pegin.outpoint.vout,
             }),
             eth_address: hex_encode(pegin.eth_address),
+            multisig_id: 0,
         })
         .collect::<Vec<_>>();
 
@@ -252,6 +254,7 @@ pub async fn test_utxo_recovery(
             vout: change_vout as u32,
         }),
         eth_address: "".to_string(), // no eth address for change output
+        multisig_id: 0,
     }];
 
     let res = clients[COORDINATOR_INDEX]

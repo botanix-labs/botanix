@@ -22,8 +22,8 @@ pub async fn recover_missing_utxos(
             if let Some(outpoint) = &utxo.outpoint {
                 let txid = hex::encode(&outpoint.txid);
                 tracing::info!(
-                    "reth::cli::recover_missing_utxos: UTXO recovery request number {}: txid: {}, vout: {}, eth_address: {}",
-                    i, txid, outpoint.vout, utxo.eth_address
+                    "reth::cli::recover_missing_utxos: UTXO recovery request number {}: txid: {}, vout: {}, eth_address: {}, multisig_id: {}",
+                    i, txid, outpoint.vout, utxo.eth_address, utxo.multisig_id
                 );
             }
         }
