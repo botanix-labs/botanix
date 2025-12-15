@@ -15,7 +15,7 @@ service BtcServer {
 
     rpc GetGatewayAddress(GetGatewayAddressRequest) returns(GetGatewayAddressResponse){}
 
-    rpc GetPublicKey(Empty) returns(GetPublicKeyResponse) {}
+    rpc GetPublicKey(GetPublicKeyRequest) returns(GetPublicKeyResponse) {}
 
     rpc GetDkgPayloads(GetDkgPayloadsRequest) returns(DkgPayloads) {}
 
@@ -181,6 +181,10 @@ message GetGatewayAddressRequest {
 message MakeTxResponse {
     string txid = 1;
     bytes tx = 2;
+}
+
+message GetPublicKeyRequest {
+    uint32 multisig_id = 1;
 }
 
 message GetPublicKeyResponse {

@@ -415,12 +415,11 @@ where
         multisig_id: u32,
         coordinator: frost::Identifier,
         federation: &FederationTomlConfig,
-        max_signers: u16,
         min_signers: u16,
         is_coordinator: bool,
     ) -> Result<DkgState, Error> {
         let dkg_config = dkg::Config {
-            max_signers,
+            max_signers: federation.multisig.len() as u16,
             min_signers,
             // NOTE: We set a very conservative timeout for the DKG process
             // to resend messages. For direct connections this could be set
@@ -432,12 +431,17 @@ where
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
 
+        let multisig_config = federation.multisig.get(multisig_id as usize).ok_or_else(|| {
+            dkg::Error::BadConfig(format!(
+                "missing multisig id {}",
+                multisig_id
+            ))
+        })?;
+
         let mut members = BTreeMap::new();
-        for (pos, fed_pubkey) in
-            federation.federation_member_public_key.iter().enumerate()
-        {
+        for (pos, public_key) in multisig_config.federation_member_public_key.iter().enumerate() {
             let id = frost_id!(pos as u16);
-            let pubkey = secp256k1::PublicKey::from_str(&fed_pubkey.key)
+            let pubkey = secp256k1::PublicKey::from_str(&public_key.key)
                 .map_err(|_| {
                     dkg::Error::BadConfig(
                         "invalid federation member public key".to_string(),
@@ -676,7 +680,6 @@ where
                     LEGACY_MULTISIG_ID,
                     coordinator,
                     &federation,
-                    max_signers,
                     min_signers,
                     frost_identifier == coordinator,
                 )?;
@@ -2598,7 +2601,6 @@ where
             multisig_id,
             coordinator,
             &self.federation,
-            self.config.max_signers,
             self.min_signers,
             self.is_coordinator(),
         )

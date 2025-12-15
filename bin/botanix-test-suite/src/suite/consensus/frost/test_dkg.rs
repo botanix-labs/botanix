@@ -2,7 +2,7 @@ use super::error::Error;
 use crate::suite::consensus::ConsensusIntegrationTestSuite;
 
 use botanix_btc_server_client::{self, BtcServerClient};
-use btcserverlib::frost_id;
+use btcserverlib::{database::LEGACY_MULTISIG_ID, frost_id};
 use frost_secp256k1_tr as frost;
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -96,7 +96,9 @@ pub async fn do_dkg(
     for client in clients.iter_mut() {
         let p = client
             .get_dkg_payloads(tonic::Request::new(
-                botanix_btc_server_client::Empty {},
+                botanix_btc_server_client::GetDkgPayloadsRequest {
+                    multisig_id: LEGACY_MULTISIG_ID
+                },
             ))
             .await
             .map_err(Error::Request)?

@@ -6,7 +6,7 @@ use crate::{
         GetAllUtxosResponse, GetDkgPayloadsRequest,
         GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
         GetGatewayAddressRequest, GetGatewayAddressResponse,
-        GetPendingPegoutsResponse, GetPublicKeyResponse, GetSessionIdsRequest,
+        GetPendingPegoutsResponse, GetPublicKeyResponse, GetPublicKeyRequest, GetSessionIdsRequest,
         GetSessionIdsResponse, GetSigningStatusRequest,
         GetSigningStatusResponse, GetTrackedTxsResponse, MakeTxRequest,
         RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
@@ -67,7 +67,7 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
     ) -> BoxFuture<'_, Result<GetGatewayAddressResponse, GrpcClientError>>;
     fn get_public_key(
         &mut self,
-        request: Empty,
+        request: GetPublicKeyRequest,
     ) -> BoxFuture<'_, Result<GetPublicKeyResponse, GrpcClientError>>;
     fn get_dkg_payloads(
         &mut self,
@@ -303,7 +303,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
         GetGatewayAddressRequest,
         GetGatewayAddressResponse
     );
-    generate_method!(get_public_key, Empty, GetPublicKeyResponse);
+    generate_method!(get_public_key, GetPublicKeyRequest, GetPublicKeyResponse);
     generate_method!(get_dkg_payloads, GetDkgPayloadsRequest, DkgPayloads);
     generate_method!(new_dkg_payload, DkgPayload, DkgPayloads);
     generate_method!(

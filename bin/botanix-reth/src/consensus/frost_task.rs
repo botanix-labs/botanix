@@ -514,9 +514,12 @@ where
 
         // Calling get pk
         // Attempt to get the aggregate public key and store in storage
+        // TODO: use the correct multisig_id
         if let Ok(public_key) = self
             .btc_server
-            .get_public_key(botanix_btc_server_client::Empty {})
+            .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
+                multisig_id: LEGACY_MULTISIG_ID
+            })
             .await
         {
             info!(target: "consensus::authority::frost_task::start_task", " received aggregate public key from dkg state machine {:?}", public_key);
@@ -526,7 +529,8 @@ where
                     .as_slice(),
             ) {
                 let mut storage = self.storage.inner.write().await;
-                storage.aggregate_public_key = Some(secp_pk);
+                // TODO: use the correct multisig_id
+                storage.aggregate_public_key = Some(BTreeMap::from([(LEGACY_MULTISIG_ID, secp_pk)]));
 
                 drop(storage);
             } else {
@@ -1072,9 +1076,12 @@ where
                         }
                     };
 
+                    // TODO: use the correct multisig_id
                     if let Ok(resp) = self
                         .btc_server
-                        .get_public_key(botanix_btc_server_client::Empty {})
+                        .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
+                            multisig_id: LEGACY_MULTISIG_ID,
+                        })
                         .await
                     {
                         self.metrics.created_agg_pub_keys.increment(1);
@@ -1086,7 +1093,8 @@ where
                                 .expect("invalid aggregated public key");
 
                         let mut storage = self.storage.write().await;
-                        storage.aggregate_public_key = Some(public_key_package);
+                        // TODO: use the correct multisig_id
+                        storage.aggregate_public_key = Some(BTreeMap::from([(LEGACY_MULTISIG_ID, public_key_package)]));
                     }
 
                     // Update timeout at which point the btc-server should be
