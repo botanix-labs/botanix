@@ -158,6 +158,8 @@ fn utxo_from_pegin_meta(pegin_meta: &PeginMeta) -> Utxo {
         .expect("valid vout");
     let serialized_script_pub_key =
         bitcoin::consensus::serialize(&tx_out.script_pubkey);
+    // TODO: look up the multisig id from the aggregate public key (pegin_meta.aggregate_public_key())
+    let multisig_id = 0;
 
     Utxo {
         outpoint: Some(botanix_btc_server_client::OutPoint {
@@ -171,7 +173,7 @@ fn utxo_from_pegin_meta(pegin_meta: &PeginMeta) -> Utxo {
             value: tx_out.value.to_sat(),
         }),
         eth_address: hex::encode(pegin_meta.address()),
-        multisig_id: 0,
+        multisig_id,
     }
 }
 
@@ -190,7 +192,10 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(
                 bitcoin::consensus::serialize(&tx_out.script_pubkey);
             let eth_address = pegin.address().to_vec();
 
-            models::PeginData { txid, vout, value, script_pubkey, eth_address }
+            // TODO: look up the multisig id from the aggregate public key (pegin.pegin_meta.aggregate_public_key())
+            let multisig_id = 0;
+
+            models::PeginData { txid, vout, value, script_pubkey, eth_address, multisig_id }
         })
         .collect()
 }
@@ -210,7 +215,7 @@ pub(crate) fn get_utxos_from_staged_pegins(
                 script_pubkey: Some(ScriptBuf { script: pegin.script_pubkey }),
             }),
             eth_address: hex::encode(pegin.eth_address),
-            multisig_id: 0,
+            multisig_id: pegin.multisig_id,
         })
         .collect()
 }

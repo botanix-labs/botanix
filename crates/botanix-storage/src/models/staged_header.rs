@@ -95,6 +95,9 @@ pub struct PeginData {
     /// This address is specified by the user when initiating the pegin operation.
     /// Stored as raw bytes rather than hex-encoded string for efficiency.
     pub eth_address: Vec<u8>,
+
+    /// The multisig_id (federation) that the pegin belongs to.
+    pub multisig_id: u32,
 }
 
 /// Pegout data associated with a header.

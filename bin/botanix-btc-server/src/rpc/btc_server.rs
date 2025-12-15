@@ -138,6 +138,8 @@ pub struct UtxoToRecover {
     /// empty eth_address for change utxo
     #[prost(string, tag = "2")]
     pub eth_address: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetAllUtxosResponse {
