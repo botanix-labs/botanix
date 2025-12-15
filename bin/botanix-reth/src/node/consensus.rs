@@ -1,10 +1,9 @@
-use alloy_consensus::Sealable;
-use alloy_consensus::{BlockHeader, Header, EMPTY_OMMER_ROOT_HASH};
+use alloy_consensus::{BlockHeader, Header, Sealable, EMPTY_OMMER_ROOT_HASH};
 use alloy_eips::eip7840::BlobParams;
-use alloy_primitives::{Address, B256};
-use botanix_authority_edh::extra_data_header::CHAIN_VERSION;
-use botanix_authority_edh::header_ext::HeaderExt;
-use botanix_authority_edh::nums_secp256k1_pk;
+use alloy_primitives::Address;
+use botanix_authority_edh::{
+    extra_data_header::CHAIN_VERSION, header_ext::HeaderExt, nums_secp256k1_pk,
+};
 use botanix_chainspec::BotanixChainSpec;
 use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use reth::{
@@ -16,6 +15,7 @@ use reth::{
     },
     consensus_common::validation::{
         validate_against_parent_4844, validate_against_parent_hash_number,
+        validate_cancun_gas,
     },
 };
 use reth_chainspec::{EthChainSpec, EthereumHardforks};
@@ -25,13 +25,14 @@ use reth_consensus_common::validation::{
     validate_body_against_header, validate_header_base_fee,
     validate_header_gas,
 };
-use reth_primitives::{Receipt, RecoveredBlock, SealedBlock, SealedHeader};
+use reth_primitives::{
+    GotExpected, Receipt, RecoveredBlock, SealedBlock, SealedHeader,
+};
 use reth_primitives_traits::constants::{
     GAS_LIMIT_BOUND_DIVISOR, MINIMUM_GAS_LIMIT,
 };
 use reth_provider::BlockExecutionResult;
-use std::convert::Into;
-use std::sync::Arc;
+use std::{convert::Into, sync::Arc};
 use tracing::error;
 
 use crate::{node::BotanixNode, BotanixBlock, BotanixPrimitives};
@@ -72,7 +73,8 @@ impl BotanixConsensus<BotanixChainSpec> {
 }
 
 impl BotanixConsensus<BotanixChainSpec> {
-    /// Validates PoA header standalone according to the authority consensus rules.
+    /// Validates PoA header standalone according to the authority consensus
+    /// rules.
     pub fn validate_header_standalone(
         &self,
         header: &Header,
@@ -154,7 +156,8 @@ impl BotanixConsensus<BotanixChainSpec> {
 
         Self::validate_chain_version(edh.chain_version)?;
 
-        // Past genesis NUMS point should never be used as the aggregated public key
+        // Past genesis NUMS point should never be used as the aggregated public
+        // key
         if edh.aggregated_public_key == nums_secp256k1_pk() {
             return Err(ConsensusError::InvalidAggregatedPublicKey(
                 InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis,
@@ -184,6 +187,8 @@ impl BotanixConsensus<BotanixChainSpec> {
 
 impl BotanixConsensus<BotanixChainSpec> {
     // Mainly copy and paste from Reth `fn validate_header()`
+    // Note: The Botanix chain ignores withdrawals_root since this has no
+    // functionality.
     fn validate_header_inner(
         &self,
         header: &SealedHeader,
@@ -222,25 +227,13 @@ impl BotanixConsensus<BotanixChainSpec> {
                 }
             }
         }
-        // Not using the Reth `validate_header_extra_data()` since we have custom EDH validation
-        // checked in `validate_header_standalone()`.
+        // Not using the Reth `validate_header_extra_data()` since we have
+        // custom EDH validation checked in
+        // `validate_header_standalone()`.
         validate_header_gas(header)
             .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
         validate_header_base_fee(header, &self.chain_spec)
             .map_err(Into::<botanix_evm::error::ConsensusError>::into)?;
-
-        // EIP-4895: Beacon chain push withdrawals as operations
-        if self.chain_spec.is_shanghai_active_at_timestamp(header.timestamp())
-            && header.withdrawals_root().is_none()
-        {
-            return Err(ConsensusError::WithdrawalsRootMissing);
-        } else if !self
-            .chain_spec
-            .is_shanghai_active_at_timestamp(header.timestamp())
-            && header.withdrawals_root().is_some()
-        {
-            return Err(ConsensusError::WithdrawalsRootUnexpected);
-        }
 
         // Ensures that EIP-4844 fields are valid once cancun is active.
         if self.chain_spec.is_cancun_active_at_timestamp(header.timestamp()) {
@@ -259,28 +252,22 @@ impl BotanixConsensus<BotanixChainSpec> {
             return Err(ConsensusError::ParentBeaconBlockRootUnexpected);
         }
 
-        if self.chain_spec.is_prague_active_at_timestamp(header.timestamp()) {
-            if header.requests_hash().is_none() {
-                return Err(ConsensusError::RequestsRootMissing);
-            }
-        } else if header.requests_hash().is_some() {
-            return Err(ConsensusError::RequestsRootUnexpected);
-        }
-
         Ok(())
     }
 
     /// Copy and paste Reth
     /// Checks the gas limit for consistency between parent and self headers.
     ///
-    /// The maximum allowable difference between self and parent gas limits is determined by the
-    /// parent's gas limit divided by the [`GAS_LIMIT_BOUND_DIVISOR`].
+    /// The maximum allowable difference between self and parent gas limits is
+    /// determined by the parent's gas limit divided by the
+    /// [`GAS_LIMIT_BOUND_DIVISOR`].
     fn validate_against_parent_gas_limit<H: BlockHeader>(
         &self,
         header: &SealedHeader<H>,
         parent: &SealedHeader<H>,
     ) -> Result<(), ConsensusError> {
-        // Determine the parent gas limit, considering elasticity multiplier on the London fork.
+        // Determine the parent gas limit, considering elasticity multiplier on
+        // the London fork.
         let parent_gas_limit =
             if !self.chain_spec.is_london_active_at_block(parent.number())
                 && self.chain_spec.is_london_active_at_block(header.number())
@@ -366,8 +353,10 @@ impl HeaderValidator for BotanixConsensus<BotanixChainSpec> {
     }
 }
 
-use crate::consensus::{MAXIMUM_EXTRA_DATA_SIZE, MAX_EDH_SIZE};
-use crate::BotanixBlockBody;
+use crate::{
+    consensus::{MAXIMUM_EXTRA_DATA_SIZE, MAX_EDH_SIZE},
+    BotanixBlockBody,
+};
 
 impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
     type Error = RethConsensusError;
@@ -386,17 +375,33 @@ impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
         Ok(())
     }
 
+    // Copy and paste from Reth `validate_block_pre_execution()` but removing
+    // the withdrawals validation
     fn validate_block_pre_execution(
         &self,
         block: &SealedBlock<BotanixBlock>,
     ) -> Result<(), RethConsensusError> {
-        validate_block_pre_execution(block, &self.chain_spec.inner()).map_err(
-            |e| {
-                RethConsensusError::Other(
-                    format!("pre-execution validation failed: {}", e).into(),
-                )
-            },
-        )
+        // Check ommers hash
+        let ommers_hash = block.body().calculate_ommers_root();
+        if block.ommers_hash() != ommers_hash {
+            return Err(RethConsensusError::BodyOmmersHashDiff(
+                GotExpected { got: ommers_hash, expected: block.ommers_hash() }
+                    .into(),
+            ));
+        }
+
+        // Check transaction root
+        if let Err(error) = block.ensure_transaction_root_valid() {
+            return Err(RethConsensusError::BodyTransactionRootDiff(
+                error.into(),
+            ));
+        }
+
+        if self.chain_spec.is_cancun_active_at_timestamp(block.timestamp()) {
+            validate_cancun_gas(block)?;
+        }
+
+        Ok(())
     }
 }
 

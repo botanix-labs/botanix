@@ -155,44 +155,10 @@ where
     type Receipt = R::Receipt;
     type Evm = E;
 
-    // This method isn't currently used.
+    // This method isn't currently used and is a noop.
     fn apply_pre_execution_changes(
         &mut self,
     ) -> Result<(), BlockExecutionError> {
-        // Set state clear flag if the block is after the Spurious Dragon
-        // hardfork.
-        let state_clear_flag = self
-            .spec
-            .is_spurious_dragon_active_at_block(self.evm.block().number.to());
-        self.evm.db_mut().set_state_clear_flag(state_clear_flag);
-
-        if !self
-            .spec
-            .is_pectra_active_at_timestamp(self.evm.block().timestamp.to())
-        {
-            // This should never happen as Botanix always has Pectra active
-            panic!("Pectra hardfork not active at timestamp!!",);
-        }
-
-        // enable historical block hashes from state
-        if self.spec.is_pectra_transition_at_timestamp(
-            self.evm.block().timestamp.to(),
-            self.evm.block().timestamp.to::<u64>() - 3,
-        ) {
-            self.apply_history_storage_account(
-                self.evm.block().number.to::<u64>(),
-            )?;
-        }
-        if self
-            .spec
-            .is_prague_active_at_timestamp(self.evm.block().timestamp.to())
-        {
-            self.system_caller.apply_blockhashes_contract_call(
-                self._ctx.parent_hash,
-                &mut self.evm,
-            )?;
-        }
-
         Ok(())
     }
 

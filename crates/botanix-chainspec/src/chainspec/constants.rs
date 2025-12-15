@@ -155,10 +155,6 @@ pub fn create_botanix_config_with_genesis(
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks,
         deposit_contract: None, // Only relevant for PoS chains
-        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(
-            DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(),
-            DEFAULT_ELASTICITY_MULTIPLIER.into(),
-        )),
         prune_delete_limit: 1700,
         ..Default::default()
     };
