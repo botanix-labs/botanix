@@ -53,6 +53,8 @@ service BtcServer {
 
     rpc GetAllUtxos(Empty) returns (GetAllUtxosResponse) {}
 
+    rpc ListMultisigs(Empty) returns (ListMultisigsResponse) {}
+
     rpc GetWalletState(Empty) returns (WalletStateResponse) {}
 
     rpc ResetAllUtxos(ResetAllUtxosRequest) returns (Empty) {}
@@ -171,6 +173,10 @@ message UtxoToRecover {
 
 message GetAllUtxosResponse {
     repeated Utxo utxos = 1;
+}
+
+message ListMultisigsResponse {
+    repeated uint32 ids = 1;
 }
 
 message GetGatewayAddressRequest {

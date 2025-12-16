@@ -143,6 +143,11 @@ pub struct GetAllUtxosResponse {
     pub utxos: ::prost::alloc::vec::Vec<Utxo>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListMultisigsResponse {
+    #[prost(uint32, repeated, tag = "1")]
+    pub ids: ::prost::alloc::vec::Vec<u32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetGatewayAddressRequest {
     /// Eth address to tweak by
     #[prost(string, tag = "1")]
@@ -882,6 +887,30 @@ pub mod btc_server_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("btc_server.BtcServer", "GetAllUtxos"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_multisigs(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListMultisigsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/ListMultisigs",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("btc_server.BtcServer", "ListMultisigs"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_wallet_state(

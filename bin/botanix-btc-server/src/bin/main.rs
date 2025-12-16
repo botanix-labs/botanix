@@ -1289,6 +1289,21 @@ where
         Ok(tonic::Response::new(res))
     }
 
+    async fn list_multisigs(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<tonic::Response<rpc::ListMultisigsResponse>, tonic::Status> {
+        self.validate_jwt(&req)?;
+        let multisig_ids = self.db.list_multisig_ids().to_status()?;
+        let multisig_ids = multisig_ids
+            .into_iter()
+            .map(|id| *id)
+            .collect::<Vec<u32>>();
+        let res = rpc::ListMultisigsResponse { ids: multisig_ids };
+
+        Ok(tonic::Response::new(res))
+    }
+
     // Gets the merkle root of the utxo set
     async fn get_wallet_state(
         &self,

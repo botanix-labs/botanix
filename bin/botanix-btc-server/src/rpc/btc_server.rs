@@ -143,6 +143,11 @@ pub struct GetAllUtxosResponse {
     pub utxos: ::prost::alloc::vec::Vec<Utxo>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListMultisigsResponse {
+    #[prost(uint32, repeated, tag = "1")]
+    pub ids: ::prost::alloc::vec::Vec<u32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetGatewayAddressRequest {
     /// Eth address to tweak by
     #[prost(string, tag = "1")]
@@ -480,6 +485,13 @@ pub mod btc_server_server {
             request: tonic::Request<super::Empty>,
         ) -> std::result::Result<
             tonic::Response<super::GetAllUtxosResponse>,
+            tonic::Status,
+        >;
+        async fn list_multisigs(
+            &self,
+            request: tonic::Request<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListMultisigsResponse>,
             tonic::Status,
         >;
         async fn get_wallet_state(
@@ -1452,6 +1464,49 @@ pub mod btc_server_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetAllUtxosSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/ListMultisigs" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListMultisigsSvc<T: BtcServer>(pub Arc<T>);
+                    impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
+                    for ListMultisigsSvc<T> {
+                        type Response = super::ListMultisigsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Empty>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::list_multisigs(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListMultisigsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

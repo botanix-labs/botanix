@@ -1,7 +1,7 @@
 //! Extended bitcoin server client with authentication
 use crate::{
     btc_server::{
-        ConsensusCheckpointRequest, DkgPayload, DkgPayloads, Empty,
+        ConsensusCheckpointRequest, DkgPayload, DkgPayloads, Empty, ListMultisigsResponse,
         FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
         GetAllUtxosResponse, GetDkgPayloadsRequest,
         GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
@@ -145,6 +145,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<GetPendingPegoutsResponse, GrpcClientError>>;
+    fn list_multisigs(
+        &mut self,
+        request: Empty,
+    ) -> BoxFuture<'_, Result<ListMultisigsResponse, GrpcClientError>>;
     fn reset_wallet_state(
         &mut self,
         request: ResetWalletStateRequest,
@@ -305,6 +309,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_public_key, GetPublicKeyRequest, GetPublicKeyResponse);
     generate_method!(get_dkg_payloads, GetDkgPayloadsRequest, DkgPayloads);
+    generate_method!(list_multisigs, Empty, ListMultisigsResponse);
     generate_method!(new_dkg_payload, DkgPayload, DkgPayloads);
     generate_method!(
         get_round1_signing_package,
