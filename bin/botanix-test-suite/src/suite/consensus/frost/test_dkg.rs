@@ -41,7 +41,9 @@ pub async fn dkg_flow(
     for client in clients.iter_mut() {
         let pk = client
             .get_public_key(tonic::Request::new(
-                botanix_btc_server_client::Empty {},
+                botanix_btc_server_client::GetPublicKeyRequest {
+                    multisig_id: *LEGACY_MULTISIG_ID,
+                },
             ))
             .await;
         assert!(pk.is_err());
@@ -58,7 +60,9 @@ pub async fn dkg_flow(
     for client in &mut clients {
         let pk = client
             .get_public_key(tonic::Request::new(
-                botanix_btc_server_client::Empty {},
+                botanix_btc_server_client::GetPublicKeyRequest {
+                    multisig_id: *LEGACY_MULTISIG_ID,
+                },
             ))
             .await
             .map_err(Error::Request)?
@@ -97,7 +101,7 @@ pub async fn do_dkg(
         let p = client
             .get_dkg_payloads(tonic::Request::new(
                 botanix_btc_server_client::GetDkgPayloadsRequest {
-                    multisig_id: LEGACY_MULTISIG_ID
+                    multisig_id: *LEGACY_MULTISIG_ID
                 },
             ))
             .await

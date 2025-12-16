@@ -7,7 +7,7 @@ use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
 use botanix_storage::models::RuntimeVersion;
-use btcserverlib::database::LEGACY_MULTISIG_ID;
+use btcserverlib::database::{LEGACY_MULTISIG_ID, MultisigId};
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
@@ -660,20 +660,20 @@ where
 
     pub(crate) fn aggregate_public_key(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Result<secp256k1::PublicKey, ConsensusError> {
         match &self.storage.inner.blocking_read().aggregate_public_key {
             Some(pkeys) => {
                 pkeys.get(&multisig_id).cloned().ok_or(
                     ConsensusError::InvalidAggregatedPublicKey(
                         InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
-                            multisig_id,
+                            *multisig_id,
                         ),
                     ),
                 )
             }
             None => Err(ConsensusError::InvalidAggregatedPublicKey(
-                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(multisig_id),
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(*multisig_id),
             )),
         }
     }

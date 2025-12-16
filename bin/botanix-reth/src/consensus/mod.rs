@@ -4,7 +4,7 @@ use async_trait as _;
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 
-use btcserverlib::database::LEGACY_MULTISIG_ID;
+use btcserverlib::database::{LEGACY_MULTISIG_ID, MultisigId};
 use bytes as _;
 use displaydoc as _;
 use reth_network_peers as _;
@@ -122,7 +122,7 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
 pub(crate) struct StorageInner {
     /// The aggregate public key of the FROST threshold signature scheme
     /// Should get populated after DKG
-    pub(crate) aggregate_public_key: Option<BTreeMap<u32, secp256k1::PublicKey>>,
+    pub(crate) aggregate_public_key: Option<BTreeMap<MultisigId, secp256k1::PublicKey>>,
     /// Suggests if we are currently syncing blocks
     pub(crate) is_block_syncing: bool,
 }

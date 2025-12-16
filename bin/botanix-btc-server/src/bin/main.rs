@@ -24,7 +24,7 @@ use btcserverlib::{
     badarg,
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
-    database::{self, LEGACY_MULTISIG_ID},
+    database::{self, LEGACY_MULTISIG_ID, MultisigId},
     dkg::{self, DkgSubscriptionMessage},
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -32,18 +32,16 @@ use btcserverlib::{
     measure_rpc_latency,
     merkle::get_wallet_state_commitment,
     pegout_id::PegoutId,
-    pegout_scheduler::{self, is_syncing, PegoutRequest, PegoutScheduler},
+    pegout_scheduler::{self, PegoutRequest, PegoutScheduler, is_syncing},
     rpc::{self, *},
-    shutdown::{stop_signal, StopHandle},
+    shutdown::{StopHandle, stop_signal},
     signer::{
         self,
         error::{SigningError, SigningRound1Error, SigningRound2Error},
     },
     telemetry::Telemetry,
     util::{
-        btc_per_kb_to_sat_per_vb, deserialize_frost_peer_id,
-        get_available_utxos, get_pegin_confirmation_depth, parse_eth_address,
-        parse_signing_session_id, retry_exec, ParsingError, UPPER_PEGOUT_BOUND,
+        ParsingError, UPPER_PEGOUT_BOUND, btc_per_kb_to_sat_per_vb, deserialize_frost_peer_id, get_available_utxos, get_pegin_confirmation_depth, parse_eth_address, parse_signing_session_id, retry_exec
     },
     wallet::{
         self,
@@ -273,7 +271,7 @@ struct App<BitcoinRpcApi> {
     /// Federation config for DKG
     federation: FederationTomlConfig,
     /// Map of multisig_id to DKG state machines
-    dkg_sessions: Arc<Mutex<HashMap<u32, DkgState>>>,
+    dkg_sessions: Arc<Mutex<HashMap<MultisigId, DkgState>>>,
     /// The signing nonces for the current signing session
     /// We will replace this value in the case of a new signing session
     frost_round1_nonces: SigningNoncesCommitmentsMap,
@@ -412,7 +410,7 @@ where
     fn new_dkg_state_machine(
         frost_identifier: frost::Identifier,
         p2p_secret_key: secp256k1::SecretKey,
-        multisig_id: u32,
+        multisig_id: MultisigId,
         coordinator: frost::Identifier,
         federation: &FederationTomlConfig,
         min_signers: u16,
@@ -431,7 +429,7 @@ where
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
 
-        let multisig_config = federation.multisig.get(multisig_id as usize).ok_or_else(|| {
+        let multisig_config = federation.multisig.get(*multisig_id as usize).ok_or_else(|| {
             dkg::Error::BadConfig(format!(
                 "missing multisig id {}",
                 multisig_id
@@ -539,7 +537,7 @@ where
         })?;
         let active_multisig_id = database::LEGACY_MULTISIG_ID;
         let active_multisig = federation
-            .get_config_by_multisig_id(active_multisig_id)
+            .get_config_by_multisig_id(*active_multisig_id)
             .ok_or_else(|| {
                 dkg::Error::BadConfig(format!(
                     "missing multisig id {}",
@@ -672,7 +670,7 @@ where
                 .expect("failed to interact with db")
                 .is_none()
             {
-                warn!("No key package found, starting DKG process for multisig_id {}...", LEGACY_MULTISIG_ID);
+                warn!("No key package found, starting DKG process for multisig_id {}...", *LEGACY_MULTISIG_ID);
 
                 let state = Self::new_dkg_state_machine(
                     frost_identifier,
@@ -1232,7 +1230,7 @@ where
                         } => {
                             let payload =
                                 rpc::SubscribeToDkgNotificationsStream {
-                                    multisig_id,
+                                    multisig_id: *multisig_id,
                                 };
                             tx.send(Ok(payload)).await
                         }
@@ -2233,7 +2231,7 @@ where
 
     async fn get_public_key(
         &self,
-        req: tonic::Request<rpc::Empty>,
+        req: tonic::Request<rpc::GetPublicKeyRequest>,
     ) -> Result<tonic::Response<rpc::GetPublicKeyResponse>, tonic::Status> {
         self.validate_jwt(&req)?;
         // Ensure we have a key package
@@ -2289,7 +2287,7 @@ where
     ) -> Result<tonic::Response<rpc::DkgPayloads>, tonic::Status> {
         self.validate_jwt(&req)?;
 
-        let multisig_id = req.into_inner().multisig_id;
+        let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
         if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
             return Err(already_exists!("already have key package"));
@@ -2322,7 +2320,7 @@ where
                 sender: p.sender.serialize(),
                 recipient: p.recipient.serialize(),
                 payload: bytes.clone(),
-                multisig_id,
+                multisig_id: *multisig_id,
             });
         }
 
@@ -2349,7 +2347,7 @@ where
         // have not received our acknowledgment yet.
 
         let req = req.into_inner();
-        let multisig_id = req.multisig_id;
+        let multisig_id: MultisigId = req.multisig_id.into();
 
         let sender =
             match deserialize_frost_peer_id(req.sender.clone()).to_status() {
@@ -2497,7 +2495,7 @@ where
                 sender: p.sender.serialize(),
                 recipient: p.recipient.serialize(),
                 payload: bytes.clone(),
-                multisig_id,
+                multisig_id: *multisig_id,
             });
         }
 
@@ -2575,7 +2573,7 @@ where
     ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
         self.validate_jwt(&req)?;
 
-        let multisig_id = req.into_inner().multisig_id;
+        let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
         if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
             return Err(already_exists!(
@@ -2595,6 +2593,7 @@ where
             .config
             .coordinator
             .unwrap_or(DEFAULT_COORDINATOR_ID));
+
         let state = Self::new_dkg_state_machine(
             self.identifier,
             self.p2p_secret_key,
@@ -3237,7 +3236,9 @@ mod tests {
     #[tokio::test]
     async fn should_not_get_public_key_without_dkg() {
         let app = setup().await;
-        let req = tonic::Request::new(rpc::Empty {});
+        let req = tonic::Request::new(rpc::GetPublicKeyRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
         let res = app.get_public_key(req).await.unwrap_err();
         assert_eq!(res.code(), tonic::Code::InvalidArgument);
         assert_eq!(res.message(), "Missing key package");
@@ -3247,7 +3248,7 @@ mod tests {
     async fn dkg_should_work_if_missing_key_package() {
         let app = setup().await;
         let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
-            multisig_id: LEGACY_MULTISIG_ID,
+            multisig_id: *LEGACY_MULTISIG_ID,
         });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
@@ -3272,7 +3273,7 @@ mod tests {
 
         // Two payloads to be sent.
         let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
-            multisig_id: LEGACY_MULTISIG_ID,
+            multisig_id: *LEGACY_MULTISIG_ID,
         });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
@@ -3280,7 +3281,7 @@ mod tests {
 
         // No payloads to be sent right now.
         let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
-            multisig_id: LEGACY_MULTISIG_ID,
+            multisig_id: *LEGACY_MULTISIG_ID,
         });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
@@ -3293,7 +3294,7 @@ mod tests {
 
         // Two payloads to be (re-)sent.
         let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
-            multisig_id: LEGACY_MULTISIG_ID,
+            multisig_id: *LEGACY_MULTISIG_ID,
         });
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
@@ -3351,7 +3352,7 @@ mod tests {
         // Alice generates two packages, one for Bob and one for Eve.
         {
             let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
-                multisig_id: LEGACY_MULTISIG_ID,
+                multisig_id: *LEGACY_MULTISIG_ID,
             });
             let payloads = app.get_dkg_payloads(req).await.unwrap();
             let inner = payloads.into_inner();
@@ -3416,7 +3417,7 @@ mod tests {
                 sender: frost_id!(1).serialize().to_vec(),
                 recipient: frost_id!(0).serialize().to_vec(),
                 payload,
-                multisig_id: LEGACY_MULTISIG_ID,
+                multisig_id: *LEGACY_MULTISIG_ID,
             });
 
             let resp = app.new_dkg_payload(req).await.unwrap();

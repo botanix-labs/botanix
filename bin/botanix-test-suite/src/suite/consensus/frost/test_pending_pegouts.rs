@@ -2,7 +2,7 @@ use std::{str::FromStr, time::Duration};
 
 use bitcoin::Address;
 use bitcoincore_rpc::RpcApi;
-use btcserverlib::pegout_id::PegoutId;
+use btcserverlib::{database::LEGACY_MULTISIG_ID, pegout_id::PegoutId};
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 
@@ -78,7 +78,9 @@ pub async fn test_pending_pegouts(
     for client in &mut clients {
         let pk = client
             .get_public_key(tonic::Request::new(
-                botanix_btc_server_client::Empty {},
+                botanix_btc_server_client::GetPublicKeyRequest {
+                    multisig_id: *LEGACY_MULTISIG_ID,
+                },
             ))
             .await;
         assert!(pk.is_err());

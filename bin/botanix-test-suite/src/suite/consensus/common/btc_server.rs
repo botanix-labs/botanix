@@ -114,7 +114,7 @@ fn spawn_btc_server_process(
 
     // Write federation config to tempfile
     let multisig_current = MultisigConfig::new(
-        LEGACY_MULTISIG_ID,
+        *LEGACY_MULTISIG_ID,
         global_context.min_signers,
         global_context.max_signers,
         fed_members,

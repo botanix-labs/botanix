@@ -16,6 +16,8 @@ use std::{
 };
 use thiserror::Error;
 
+use crate::database::MultisigId;
+
 mod encryption;
 #[cfg(test)]
 mod tests;
@@ -127,18 +129,18 @@ pub enum DkgSubscriptionMessage {
     /// Started a new DKG session notification
     StartedDkg {
         /// The multisig id of the new DKG session
-        multisig_id: u32,
+        multisig_id: MultisigId,
     },
     /// Restarted a DKG session notification
     RestartedDkg {
         /// The multisig id of the restarted DKG session
-        multisig_id: u32,
+        multisig_id: MultisigId,
     },
 }
 
 impl DkgSubscriptionMessage {
     /// Returns the multisig id associated with this notification
-    pub fn multisig_id(&self) -> u32 {
+    pub fn multisig_id(&self) -> MultisigId {
         match self {
             DkgSubscriptionMessage::StartedDkg { multisig_id } => *multisig_id,
             DkgSubscriptionMessage::RestartedDkg { multisig_id } => {
@@ -466,7 +468,7 @@ pub struct DkgStateMachine {
     config: Config,
     my_frost_id: frost::Identifier,
     my_static_sec: secp256k1::SecretKey,
-    multisig_id: u32,
+    multisig_id: MultisigId,
     coordinator: frost::Identifier,
     members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
     queue: Queue,
@@ -506,7 +508,7 @@ impl DkgStateMachine {
     pub fn new(
         my_frost_id: frost::Identifier,
         my_static_sec: secp256k1::SecretKey,
-        multisig_id: u32,
+        multisig_id: MultisigId,
         coordinator: frost::Identifier,
         members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         config: Config,
@@ -691,7 +693,7 @@ impl DkgStateMachine {
         self.my_frost_id
     }
     /// Returns the multisig identifier for this DKG session.
-    pub fn multisig_id(&self) -> u32 {
+    pub fn multisig_id(&self) -> MultisigId {
         self.multisig_id
     }
     /// Checks if this participant is the coordinator of the DKG process.

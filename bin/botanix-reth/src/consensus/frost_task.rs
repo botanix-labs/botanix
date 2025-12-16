@@ -518,7 +518,7 @@ where
         if let Ok(public_key) = self
             .btc_server
             .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
-                multisig_id: LEGACY_MULTISIG_ID
+                multisig_id: *LEGACY_MULTISIG_ID
             })
             .await
         {
@@ -550,10 +550,10 @@ where
                 Arc::clone(&self.metrics),
             );
             if let Some(tasks) = self.dkg_tasks.as_mut() {
-                tasks.insert(LEGACY_MULTISIG_ID, tx.clone());
+                tasks.insert(*LEGACY_MULTISIG_ID, tx.clone());
             } else {
                 let mut tasks = BTreeMap::new();
-                tasks.insert(LEGACY_MULTISIG_ID, tx.clone());
+                tasks.insert(*LEGACY_MULTISIG_ID, tx.clone());
                 self.dkg_tasks = Some(tasks);
             }
 
@@ -1063,7 +1063,7 @@ where
                         sender: dkg.sender,
                         recipient: dkg.recipient,
                         payload: dkg.data,
-                        multisig_id: LEGACY_MULTISIG_ID,
+                        multisig_id: *LEGACY_MULTISIG_ID,
                     };
 
                     let resp = match self.btc_server.new_dkg_payload(req).await
@@ -1080,7 +1080,7 @@ where
                     if let Ok(resp) = self
                         .btc_server
                         .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
-                            multisig_id: LEGACY_MULTISIG_ID,
+                            multisig_id: *LEGACY_MULTISIG_ID,
                         })
                         .await
                     {
@@ -1121,7 +1121,7 @@ where
                         .btc_server
                         .get_dkg_payloads(
                             botanix_btc_server_client::GetDkgPayloadsRequest {
-                                multisig_id: LEGACY_MULTISIG_ID,
+                                multisig_id: *LEGACY_MULTISIG_ID,
                             },
                         )
                         .await

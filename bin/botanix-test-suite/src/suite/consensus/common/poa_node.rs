@@ -17,7 +17,7 @@ use botanix_authority_edh::extra_data_header::{
     ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION,
 };
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetSessionIdsRequest,
+    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest, GetSessionIdsRequest,
     GetSigningStatusRequest, SigningStatus,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
@@ -303,7 +303,7 @@ impl FederationMemberTestConfig {
 
         // Need to create a federation.toml in the data dir
         let multisig_current = MultisigConfig::new(
-            LEGACY_MULTISIG_ID,
+            *LEGACY_MULTISIG_ID,
             self.frost_min_signers,
             self.frost_max_signers,
             edh_authorities,
@@ -557,7 +557,9 @@ impl FederationMemberTestConfig {
 
             // wait for the dkg to finish
             let pub_key = loop {
-                match btc_server_client.get_public_key(Empty {}).await {
+                match btc_server_client.get_public_key(GetPublicKeyRequest {
+                    multisig_id: *LEGACY_MULTISIG_ID,
+                }).await {
                     Ok(pub_key) => {
                         it_info_print!("Dkg Finished for index", engine_index);
                         break pub_key;
