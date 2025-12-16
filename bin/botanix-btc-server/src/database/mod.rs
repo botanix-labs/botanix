@@ -86,11 +86,6 @@ impl MultisigId {
         Self(id)
     }
     
-    /// Get the inner u32 value
-    pub const fn inner(&self) -> u32 {
-        self.0
-    }
-    
     /// Get the inner value as a reference
     pub const fn as_u32(&self) -> u32 {
         self.0

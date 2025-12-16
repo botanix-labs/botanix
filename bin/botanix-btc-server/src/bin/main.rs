@@ -24,7 +24,7 @@ use btcserverlib::{
     badarg,
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
-    database::{self, LEGACY_MULTISIG_ID, MultisigId},
+    database::{self, MultisigId},
     dkg::{self, DkgSubscriptionMessage},
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -437,9 +437,9 @@ where
         })?;
 
         let mut members = BTreeMap::new();
-        for (pos, public_key) in multisig_config.federation_member_public_key.iter().enumerate() {
+        for (pos, p2p_public_key) in multisig_config.federation_member_public_key.iter().enumerate() {
             let id = frost_id!(pos as u16);
-            let pubkey = secp256k1::PublicKey::from_str(&public_key.key)
+            let pubkey = secp256k1::PublicKey::from_str(&p2p_public_key.key)
                 .map_err(|_| {
                     dkg::Error::BadConfig(
                         "invalid federation member public key".to_string(),
@@ -657,36 +657,37 @@ where
             config.identifier,
         )?);
 
-        // NOTE (lamafab): in this implementation, the DKG state machine starts
-        // automatically on startup if and only if no existing aggregated public
-        // key is found in the db. In the future, when we're dealing with
-        // dynamic Fed members, multiple multisigs and rotations, we'll need a
-        // mechanism to start/stop the DKG process arbitrarily.
-        let dkg_sessions = {
-            let mut sessions = HashMap::new();
-
-            if db
-                .get_key_package()
-                .expect("failed to interact with db")
-                .is_none()
-            {
-                warn!("No key package found, starting DKG process for multisig_id {}...", *LEGACY_MULTISIG_ID);
-
-                let state = Self::new_dkg_state_machine(
-                    frost_identifier,
-                    p2p_secret_key,
-                    LEGACY_MULTISIG_ID,
-                    coordinator,
-                    &federation,
-                    min_signers,
-                    frost_identifier == coordinator,
-                )?;
-
-                sessions.insert(LEGACY_MULTISIG_ID, state);
+        // get all persisted multisig ids
+        let persisted_multisig_ids = match db.list_multisig_ids() {
+            Ok(multisig_ids) => {
+                info!(target: "reth::authority", "Found {} multisig ids", multisig_ids.len());
+                multisig_ids
             }
-
-            Arc::new(Mutex::new(sessions))
+            Err(e) => {
+                panic!("reth::authority: Error getting multisig ids: {}", e);
+            }
         };
+
+        let mut sessions = HashMap::new();
+        if persisted_multisig_ids.contains(&active_multisig_id) {
+            info!("active multisig {:?} was found and is already processed", active_multisig_id);
+            if db.get_public_key_package_by_id(active_multisig_id).ok().flatten().is_none() {
+                panic!("Public Key for already processes multisig id {:?} is missing in the db", active_multisig_id);
+            }
+        } else {
+            // start the multisig
+            let state = Self::new_dkg_state_machine(
+                frost_identifier,
+                p2p_secret_key,
+                active_multisig_id,
+                coordinator,
+                &federation,
+                min_signers,
+                frost_identifier == coordinator,
+            )?;
+            sessions.insert(active_multisig_id, state);
+        }
+        let dkg_sessions = Arc::new(Mutex::new(sessions));
 
         let (dkg_notifications_tx, _dkg_notifications_rx) =
             tokio::sync::broadcast::channel::<DkgSubscriptionMessage>(10000);
@@ -3088,8 +3089,7 @@ mod tests {
     use bitcoin::{secp256k1, OutPoint, Script, Txid};
     use botanix_configs::hash::compute_config_hash;
     use btcserverlib::{
-        dkg::DkgMessage, test_utils::pegout_requests_from_tx,
-        wallet::address::generate_taproot_change_scriptpubkey,
+        database::LEGACY_MULTISIG_ID, dkg::DkgMessage, test_utils::pegout_requests_from_tx, wallet::address::generate_taproot_change_scriptpubkey
     };
     use frost_secp256k1_tr::keys::dkg::round1;
     use rand::{thread_rng, Rng};
