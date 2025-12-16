@@ -18,7 +18,7 @@ pub mod rpc {
     pub use btc_server::*;
 }
 pub mod config;
-pub mod federation_args;
+pub use botanix_configs::federation as federation_args;
 pub mod macros;
 pub mod shutdown;
 pub mod test_utils;
