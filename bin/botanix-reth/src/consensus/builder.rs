@@ -520,8 +520,9 @@ where
 
             if !aggregated_pub_keys.is_empty() {
                 let mut storage = storage.write().await;
-                if let Some(storage_pub_keys) = storage.aggregate_public_key.as_mut() {
-                    storage_pub_keys.extend(aggregated_pub_keys);
+                match storage.aggregate_public_key.as_mut() {
+                    Some(storage_pub_keys) => storage_pub_keys.extend(aggregated_pub_keys),
+                    None => storage.aggregate_public_key = Some(aggregated_pub_keys.into_iter().collect()),
                 }
                 drop(storage);
             }
