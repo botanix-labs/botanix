@@ -672,7 +672,10 @@ where
         if persisted_multisig_ids.contains(&active_multisig_id) {
             info!("active multisig {:?} was found and is already processed", active_multisig_id);
             if db.get_public_key_package_by_id(active_multisig_id).ok().flatten().is_none() {
-                panic!("Public Key for already processes multisig id {:?} is missing in the db", active_multisig_id);
+                return Err(dkg::Error::BadConfig(format!(
+                   "Public Key for already processed multisig id {:?} is missing in the db",
+                    active_multisig_id
+                )).into());
             }
         } else {
             // start the multisig
