@@ -146,6 +146,7 @@ jobs:
           cp target/debug/botanix-btc-utils /tmp/binaries/ || true
           cp target/debug/botanix-reth /tmp/binaries/ || true
           cp target/debug/botanix-test-suite /tmp/binaries/ || true
+          cp target/debug/botanix-pegin-recovery /tmp/binaries/ || true
 
       - name: Upload compiled binaries
         uses: actions/upload-artifact@v5
@@ -255,6 +256,10 @@ jobs:
           fi
           if [ -d "/tmp/binaries/test-suite-dir" ]; then
             cp -r /tmp/binaries/botanix-test-suite-dir/* ./bin/botanix-test-suite/
+          fi
+          if [ -f "/tmp/binaries/botanix-pegin-recovery" ]; then
+            cp /tmp/binaries/botanix-pegin-recovery target/debug/
+            chmod +x target/debug/botanix-pegin-recovery
           fi
 
       - name: Run ${{ matrix.test }}
