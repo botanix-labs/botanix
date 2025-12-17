@@ -174,7 +174,7 @@ pub async fn test_pegin_recovery(
         .await
         .map_err(Error::ServerConnect)?;
 
-    let test_multisig_id = 1u32;
+    let test_multisig_id = 0u32;
 
     //import keyshare packcage for each exported federation member key package
     for (index, db_path) in fed_key_package_paths.iter().enumerate() {
@@ -277,7 +277,7 @@ fn export_key_packages_for_all_members(
     }
 
     // Use pre-compiled binary
-    let command = "target/debug/btc-utils";
+    let command = "target/debug/botanix-btc-utils";
     let binary_abs_path = working_directory.join(std::path::Path::new(command));
 
     // Check if binary exists
@@ -288,7 +288,7 @@ fn export_key_packages_for_all_members(
         ))
     })? {
         return Err(super::error::Error::TestVectorExport(
-            format!("btc-utils binary not found at {}. Please compile it first before running the test-suite",
+            format!("botanix-btc-utils binary not found at {}. Please compile it first before running the test-suite",
                 binary_abs_path.display())
         ));
     }
@@ -302,12 +302,14 @@ fn export_key_packages_for_all_members(
             format!("Fed member {} -> {}", index, output_path.display())
         );
 
-        // Run the btc-utils export-key-package command using pre-compiled binary
+        // Run the botanix-btc-utils export-key-package command using pre-compiled binary
         let output = Command::new(&binary_abs_path)
             .args(&[
                 "export-key-package",
                 "--db",
                 &db_path.to_string_lossy(),
+                "--multisig-id",
+                "0",
                 "--output",
                 &output_path.to_string_lossy(),
                 "--passphrase",
