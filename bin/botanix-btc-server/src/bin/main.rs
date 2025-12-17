@@ -414,10 +414,11 @@ where
         coordinator: frost::Identifier,
         federation: &FederationTomlConfig,
         min_signers: u16,
+        max_signers: u16,
         is_coordinator: bool,
     ) -> Result<DkgState, Error> {
         let dkg_config = dkg::Config {
-            max_signers: federation.multisig.len() as u16,
+            max_signers,
             min_signers,
             // NOTE: We set a very conservative timeout for the DKG process
             // to resend messages. For direct connections this could be set
@@ -676,6 +677,8 @@ where
                    "Public Key for already processed multisig id {:?} is missing in the db",
                     active_multisig_id
                 )).into());
+            } else {
+                // TODO (when foundation layer is in): check it matches the aggregate pubkey from the foundation layer)
             }
         } else {
             // start the multisig
@@ -686,6 +689,7 @@ where
                 coordinator,
                 &federation,
                 min_signers,
+                max_signers,
                 frost_identifier == coordinator,
             )?;
             sessions.insert(active_multisig_id, state);
@@ -2620,6 +2624,7 @@ where
             coordinator,
             &self.federation,
             self.min_signers,
+            self.max_signers,
             self.is_coordinator(),
         )
         .map_err(|e| {
