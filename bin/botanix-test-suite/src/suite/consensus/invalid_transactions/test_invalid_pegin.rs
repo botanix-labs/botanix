@@ -95,7 +95,7 @@ async fn generate_invalid_pegin_metas(
     // Create invalid pegin meta v1 with incorrect version
     let latest_block_with_edh = provider
         .request::<Vec<serde_json::Value>, BlockWithEDH>(
-            "eth_getBlockByNumber",
+            "eth_richBlockByNumber",
             vec![json!("latest"), json!(false), json!(true)],
         )
         .await;
@@ -184,7 +184,7 @@ async fn generate_invalid_pegin_metas(
     // Create invalid pegin meta with v1 proofs having mixed ref block hashes
     let first_block_with_edh = provider
         .request::<Vec<serde_json::Value>, BlockWithEDH>(
-            "eth_getBlockByNumber",
+            "eth_richBlockByNumber",
             vec![json!("earliest"), json!(false), json!(true)],
         )
         .await;
