@@ -118,9 +118,17 @@ jobs:
       - name: Compile btc-utils
         run: |
           set -eo pipefail
-          cd ./bin/botanix-btc-server 
+          cd ./bin/botanix-btc-server
           cargo build --bin botanix-btc-utils
           echo "BTC utils compiled successfully!"
+          sccache --show-stats
+
+      - name: Compile pegin-recovery
+        run: |
+          set -eo pipefail
+          cd ./bin/botanix-pegin-recovery
+          cargo build --bin botanix-pegin-recovery
+          echo "Pegin recovery compiled successfully!"
           sccache --show-stats
 
       - name: Compile poa-node
