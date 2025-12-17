@@ -17,6 +17,7 @@ use botanix_btc_server_client::BtcServerClient;
 use botanix_comet_bft_rpc::{CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_reth::node::BotanixNode;
 use botanix_storage::BotanixProviderFactory;
+use btcserverlib::database::LEGACY_MULTISIG_ID;
 use common::{
     bitcoind_node::{
         create_bitcoind_node, BitcoindNodeConfig,
@@ -1212,7 +1213,9 @@ impl Suite for ConsensusIntegrationTestSuite {
             let mut keys = HashSet::new();
             for client in btc_server_clients.to_vec().iter_mut() {
                 let key = client
-                    .get_public_key(botanix_btc_server_client::Empty {})
+                    .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
+                        multisig_id: *LEGACY_MULTISIG_ID,
+                    })
                     .await
                     .context("Error getting a pub key from btc-server")?
                     .into_inner()

@@ -68,8 +68,59 @@ const TREE_PENDING_PEGOUTS: &[u8; 7] = b"pegouts";
 /// Sliding window duration in seconds (90 days)
 const RETENTION_WINDOW_SECONDS: u64 = 90 * 24 * 60 * 60;
 
-/// Multisig id reserved for the legacy (pre-dynafed) key package.
-pub const LEGACY_MULTISIG_ID: u32 = 0;
+// For backwards compatibility
+pub const LEGACY_MULTISIG_ID: MultisigId = MultisigId::LEGACY;
+
+use std::fmt;
+
+/// Wrapper type for multisig IDs
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct MultisigId(u32);
+
+impl MultisigId {
+    /// The legacy multisig ID constant
+    pub const LEGACY: Self = Self(0);
+    
+    /// Create a new MultisigId
+    pub const fn new(id: u32) -> Self {
+        Self(id)
+    }
+    
+    /// Get the inner value as a reference
+    pub const fn as_u32(&self) -> u32 {
+        self.0
+    }
+}
+
+// Easy conversion from u32
+impl From<u32> for MultisigId {
+    fn from(id: u32) -> Self {
+        Self(id)
+    }
+}
+
+// Easy conversion to u32
+impl From<MultisigId> for u32 {
+    fn from(id: MultisigId) -> Self {
+        id.0
+    }
+}
+
+// Display implementation
+impl fmt::Display for MultisigId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+// Deref to u32 for convenient method access
+impl std::ops::Deref for MultisigId {
+    type Target = u32;
+    
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Utxo {
@@ -411,9 +462,9 @@ impl Db {
     /// Returns `Err` in case of deserialization or other errors.
     pub fn get_key_package_by_id(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Result<Option<frost::keys::KeyPackage>, Error> {
-        let key = multisig_id.to_le_bytes();
+        let key = multisig_id.as_u32().to_le_bytes();
         if let Some(b) = self.key_packages.get(&key)? {
             let ret = ciborium::from_reader::<frost::keys::KeyPackage, _>(
                 b.as_ref(),
@@ -437,7 +488,7 @@ impl Db {
     /// Returns `Err` in case of deserialization or other errors.
     pub fn get_public_key_package_by_id(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Result<Option<frost::keys::PublicKeyPackage>, Error> {
         let key = multisig_id.to_le_bytes();
         if let Some(b) = self.pubkey_packages.get(&key)? {
@@ -463,10 +514,10 @@ impl Db {
     /// Returns `Err` in case of serialization or other errors.
     pub fn set_key_package_by_id(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
         key_package: frost::keys::KeyPackage,
     ) -> Result<(), Error> {
-        let key = multisig_id.to_le_bytes();
+        let key = multisig_id.as_u32().to_le_bytes();
         let mut bytes = Vec::new();
         ciborium::into_writer(&key_package, &mut bytes)
             .expect("writing to buffer");
@@ -488,10 +539,10 @@ impl Db {
     /// Returns `Err` in case of serialization or other errors.
     pub fn set_pubkey_package_by_id(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
         pk_package: frost::keys::PublicKeyPackage,
     ) -> Result<(), Error> {
-        let key = multisig_id.to_le_bytes();
+        let key = multisig_id.as_u32().to_le_bytes();
         let mut bytes = Vec::new();
         ciborium::into_writer(&pk_package, &mut bytes)
             .expect("writing to buffer");
@@ -504,10 +555,10 @@ impl Db {
     ///
     /// # Returns
     ///
-    /// Returns a `Vec<u32>` containing all multisig_ids that have key packages.
+    /// Returns a `Vec<MultisigId>` containing all multisig_ids that have key packages.
     /// Returns an empty vector if no key packages are found.
     /// Returns `Err` in case of database errors or invalid key lengths.
-    pub fn list_multisig_ids(&self) -> Result<Vec<u32>, Error> {
+    pub fn list_multisig_ids(&self) -> Result<Vec<MultisigId>, Error> {
         let mut ids = Vec::new();
         for res in self.key_packages.iter().keys() {
             let key_bytes = res?;
@@ -515,7 +566,7 @@ impl Db {
                 return Err(Error::InvalidMultisigIdKeyLength(key_bytes.len()));
             }
             let id = u32::from_le_bytes(key_bytes.as_ref().try_into()?);
-            ids.push(id);
+            ids.push(id.into());
         }
         ids.sort();
         Ok(ids)
@@ -589,7 +640,7 @@ impl Db {
     /// * `Err(_)` - Database error during key retrieval
     pub fn export_key_package_by_id(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
         passphrase: Zeroizing<String>,
     ) -> Result<Option<ExportedKeyPackage>, Error> {
         let Some(key_package) = self.get_key_package_by_id(multisig_id)? else {
@@ -690,7 +741,7 @@ impl Db {
     /// - Wrong passphrase will cause decryption to fail
     ///
     /// # Arguments
-    /// * `multisig_id` - The u32 identifier for the multisig/federation.
+    /// * `multisig_id` - The MultisigId identifier for the multisig/federation.
     /// * `passphrase` - The same passphrase used during export
     /// * `export` - The encrypted key package export to import
     ///
@@ -699,7 +750,7 @@ impl Db {
     /// * `Err(_)` - Decryption failed (wrong passphrase), malformed data, or database error
     pub fn import_key_package_by_id(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
         passphrase: Zeroizing<String>,
         export: ExportedKeyPackage,
     ) -> Result<(), Error> {
@@ -2838,9 +2889,10 @@ mod tests {
 
         let good_pass = Zeroizing::new("good_pass".to_string());
         let bad_pass = Zeroizing::new("bad_pass".to_string());
+        let multisig_id: MultisigId = 0.into();
 
         // Key package does not exist yet.
-        let res = db.export_key_package_by_id(0, good_pass.clone()).unwrap();
+        let res = db.export_key_package_by_id(multisig_id, good_pass.clone()).unwrap();
         assert!(res.is_none());
 
         // Generate key packages.
@@ -2851,17 +2903,17 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Set key packages using new storage format.
-        db.set_pubkey_package_by_id(0, pk_package.clone()).unwrap();
-        db.set_key_package_by_id(0, key_package.clone()).unwrap();
+        db.set_pubkey_package_by_id(multisig_id, pk_package.clone()).unwrap();
+        db.set_key_package_by_id(multisig_id, key_package.clone()).unwrap();
 
         let origin_pk_package = pk_package;
         let origin_key_package = key_package;
 
         // Each export creates a new nonce.
         let mut export_1 =
-            db.export_key_package_by_id(0, good_pass.clone()).unwrap().unwrap();
+            db.export_key_package_by_id(multisig_id, good_pass.clone()).unwrap().unwrap();
         let export_2 =
-            db.export_key_package_by_id(0, good_pass.clone()).unwrap().unwrap();
+            db.export_key_package_by_id(multisig_id, good_pass.clone()).unwrap().unwrap();
         //
         assert_ne!(export_1.iv, export_2.iv);
         assert_ne!(export_1, export_2);
@@ -2869,37 +2921,37 @@ mod tests {
         // Remove the key packages to test import.
         db.key_packages.remove(&0u32.to_le_bytes()).unwrap();
         db.pubkey_packages.remove(&0u32.to_le_bytes()).unwrap();
-        assert!(db.get_key_package_by_id(0).unwrap().is_none());
-        assert!(db.get_public_key_package_by_id(0).unwrap().is_none());
+        assert!(db.get_key_package_by_id(multisig_id).unwrap().is_none());
+        assert!(db.get_public_key_package_by_id(multisig_id).unwrap().is_none());
 
         // ERR: Bad password!
         let err = db
-            .import_key_package_by_id(0, bad_pass, export_1.clone())
+            .import_key_package_by_id(multisig_id, bad_pass, export_1.clone())
             .unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad IV/nonce!
         export_1.iv = export_2.iv;
         let err = db
-            .import_key_package_by_id(0, good_pass.clone(), export_1.clone())
+            .import_key_package_by_id(multisig_id, good_pass.clone(), export_1.clone())
             .unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad version indicator!
         export_1.version = u16::MAX;
         let err = db
-            .import_key_package_by_id(0, good_pass.clone(), export_1.clone())
+            .import_key_package_by_id(multisig_id, good_pass.clone(), export_1.clone())
             .unwrap_err();
         assert_eq!(err, Error::BadExportedPackageFormatVersion);
 
         // OK: Successful import with good passphrase and export package.
-        db.import_key_package_by_id(0, good_pass.clone(), export_2.clone())
+        db.import_key_package_by_id(multisig_id, good_pass.clone(), export_2.clone())
             .unwrap();
 
         // Sanity check.
         let new_pk_package =
-            db.get_public_key_package_by_id(0).unwrap().unwrap();
-        let new_key_package = db.get_key_package_by_id(0).unwrap().unwrap();
+            db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
+        let new_key_package = db.get_key_package_by_id(multisig_id).unwrap().unwrap();
         //
         assert_eq!(new_pk_package, origin_pk_package);
         assert_eq!(new_key_package, origin_key_package);
@@ -2908,6 +2960,7 @@ mod tests {
     #[test]
     fn test_set_and_get_key_package_by_id() {
         let (db, _temp_dir) = setup_db();
+        let multisig_id: MultisigId = 0.into();
 
         // Generate key packages for multiple multisigs
         let id =
@@ -2917,19 +2970,19 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Store with multisig_id = 0
-        db.set_key_package_by_id(0, key_package.clone()).unwrap();
-        db.set_pubkey_package_by_id(0, pk_package.clone()).unwrap();
+        db.set_key_package_by_id(multisig_id, key_package.clone()).unwrap();
+        db.set_pubkey_package_by_id(multisig_id, pk_package.clone()).unwrap();
 
         // Retrieve and verify
-        let retrieved_key = db.get_key_package_by_id(0).unwrap().unwrap();
-        let retrieved_pk = db.get_public_key_package_by_id(0).unwrap().unwrap();
+        let retrieved_key = db.get_key_package_by_id(multisig_id).unwrap().unwrap();
+        let retrieved_pk = db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
 
         assert_eq!(retrieved_key, key_package);
         assert_eq!(retrieved_pk, pk_package);
 
         // Non-existent multisig_id should return None
-        assert!(db.get_key_package_by_id(999).unwrap().is_none());
-        assert!(db.get_public_key_package_by_id(999).unwrap().is_none());
+        assert!(db.get_key_package_by_id(999.into()).unwrap().is_none());
+        assert!(db.get_public_key_package_by_id(999.into()).unwrap().is_none());
     }
 
     #[test]
@@ -2948,22 +3001,22 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares2[&id].clone()).unwrap();
 
         // Store with different multisig_ids
-        db.set_key_package_by_id(1, key_package1.clone()).unwrap();
-        db.set_pubkey_package_by_id(1, pk_package1.clone()).unwrap();
+        db.set_key_package_by_id(1.into(), key_package1.clone()).unwrap();
+        db.set_pubkey_package_by_id(1.into(), pk_package1.clone()).unwrap();
 
-        db.set_key_package_by_id(2, key_package2.clone()).unwrap();
-        db.set_pubkey_package_by_id(2, pk_package2.clone()).unwrap();
+        db.set_key_package_by_id(2.into(), key_package2.clone()).unwrap();
+        db.set_pubkey_package_by_id(2.into(), pk_package2.clone()).unwrap();
 
         // Retrieve and verify both are correct
-        let retrieved_key1 = db.get_key_package_by_id(1).unwrap().unwrap();
+        let retrieved_key1 = db.get_key_package_by_id(1.into()).unwrap().unwrap();
         let retrieved_pk1 =
-            db.get_public_key_package_by_id(1).unwrap().unwrap();
+            db.get_public_key_package_by_id(1.into()).unwrap().unwrap();
         assert_eq!(retrieved_key1, key_package1);
         assert_eq!(retrieved_pk1, pk_package1);
 
-        let retrieved_key2 = db.get_key_package_by_id(2).unwrap().unwrap();
+        let retrieved_key2 = db.get_key_package_by_id(2.into()).unwrap().unwrap();
         let retrieved_pk2 =
-            db.get_public_key_package_by_id(2).unwrap().unwrap();
+            db.get_public_key_package_by_id(2.into()).unwrap().unwrap();
         assert_eq!(retrieved_key2, key_package2);
         assert_eq!(retrieved_pk2, pk_package2);
     }
@@ -2984,13 +3037,13 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
 
         // Add in non-sequential order
-        db.set_key_package_by_id(10, key_package.clone()).unwrap();
-        db.set_key_package_by_id(5, key_package.clone()).unwrap();
-        db.set_key_package_by_id(1, key_package.clone()).unwrap();
+        db.set_key_package_by_id(10.into(), key_package.clone()).unwrap();
+        db.set_key_package_by_id(5.into(), key_package.clone()).unwrap();
+        db.set_key_package_by_id(1.into(), key_package.clone()).unwrap();
 
         // List should be sorted
         let ids = db.list_multisig_ids().unwrap();
-        assert_eq!(ids, vec![1, 5, 10]);
+        assert_eq!(ids, vec![1.into(), 5.into(), 10.into()]);
     }
 
     // Test-only helper methods to replicate the state of the database before dynafed.
@@ -3023,6 +3076,7 @@ mod tests {
     #[test]
     fn test_migrate_legacy_key_package() {
         let (db, _temp_dir) = setup_db();
+        let multisig_id: MultisigId = 0.into();
 
         // Generate key packages
         let id =
@@ -3040,16 +3094,16 @@ mod tests {
         assert!(db.get_legacy_public_key_package().unwrap().is_some());
 
         // Verify new storage is empty
-        assert!(db.get_key_package_by_id(0).unwrap().is_none());
-        assert!(db.get_public_key_package_by_id(0).unwrap().is_none());
+        assert!(db.get_key_package_by_id(multisig_id).unwrap().is_none());
+        assert!(db.get_public_key_package_by_id(multisig_id).unwrap().is_none());
 
         // Run migration
         let migrated = db.migrate_legacy_key_package().unwrap();
         assert!(migrated, "Migration should have been performed");
 
         // Verify new storage now has the data at multisig_id = 0
-        let migrated_key = db.get_key_package_by_id(0).unwrap().unwrap();
-        let migrated_pk = db.get_public_key_package_by_id(0).unwrap().unwrap();
+        let migrated_key = db.get_key_package_by_id(multisig_id).unwrap().unwrap();
+        let migrated_pk = db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
         assert_eq!(migrated_key, key_package);
         assert_eq!(migrated_pk, pk_package);
 

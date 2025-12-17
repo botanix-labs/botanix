@@ -4,12 +4,13 @@ use async_trait as _;
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 
+use btcserverlib::database::{LEGACY_MULTISIG_ID, MultisigId};
 use bytes as _;
 use displaydoc as _;
 use reth_network_peers as _;
 use reth_node_core as _;
 use serde_json as _;
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 mod builder;
 
@@ -78,6 +79,13 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
         reth_database: RDB,
         botanix_database_factory: BDB,
     ) -> Self {
+        // TODO: use the correct multisig_id
+        let aggregate_public_key = if let Some(aggregate_public_key) = aggregate_public_key {
+            Some(BTreeMap::from([(LEGACY_MULTISIG_ID, aggregate_public_key)]))
+        } else {
+            None
+        };
+
         let storage_inner =
             StorageInner { aggregate_public_key, is_block_syncing: false };
 
@@ -114,7 +122,7 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
 pub(crate) struct StorageInner {
     /// The aggregate public key of the FROST threshold signature scheme
     /// Should get populated after DKG
-    pub(crate) aggregate_public_key: Option<secp256k1::PublicKey>,
+    pub(crate) aggregate_public_key: Option<BTreeMap<MultisigId, secp256k1::PublicKey>>,
     /// Suggests if we are currently syncing blocks
     pub(crate) is_block_syncing: bool,
 }

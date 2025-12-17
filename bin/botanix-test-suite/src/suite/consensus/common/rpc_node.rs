@@ -190,7 +190,7 @@ impl NonFederationMemberTestConfig {
 
         // Need to create a federation.toml in the data dir
         let multisig_current = MultisigConfig::new(
-            LEGACY_MULTISIG_ID,
+            *LEGACY_MULTISIG_ID,
             self.frost_min_signers,
             self.frost_max_signers,
             edh_authorities,

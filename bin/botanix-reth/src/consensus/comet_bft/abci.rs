@@ -7,6 +7,7 @@ use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
 use botanix_storage::models::RuntimeVersion;
+use btcserverlib::database::{LEGACY_MULTISIG_ID, MultisigId};
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
@@ -19,9 +20,7 @@ use reth_primitives_traits::Block as BlockTrait;
 use reth_trie::updates::TrieUpdates;
 use reth_trie_common::KeccakKeyHasher;
 use std::{
-    error::Error,
-    io,
-    sync::{Arc, RwLock},
+    collections::BTreeMap, error::Error, io, sync::{Arc, RwLock}
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -580,7 +579,8 @@ where
         runtime_version: RuntimeVersion,
         network_upgrade_payload: Option<NetworkUpgradePayload>,
     ) -> Result<NonDeterministicData, ConsensusError> {
-        let aggregate_public_key = self.aggregate_public_key()?;
+        // TODO: use the correct multisig_id
+        let aggregate_public_key = self.aggregate_public_key(LEGACY_MULTISIG_ID)?;
         let block_fee_recipient_address = self
             .block_fee_recipient_address
             .ok_or(ConsensusError::MissingBlockFeeRecipientAddress)?;
@@ -635,7 +635,8 @@ where
         }
 
         // poa validation
-        let agg_pk = match self.aggregate_public_key() {
+        // TODO: use the correct multisig_id
+        let agg_pk = match self.aggregate_public_key(LEGACY_MULTISIG_ID) {
             Ok(pk) => pk,
             Err(e) => {
                 error!("Error getting aggregate public key: {:?}", e);
@@ -659,11 +660,20 @@ where
 
     pub(crate) fn aggregate_public_key(
         &self,
+        multisig_id: MultisigId,
     ) -> Result<secp256k1::PublicKey, ConsensusError> {
-        match self.storage.inner.blocking_read().aggregate_public_key {
-            Some(pk) => Ok(pk),
+        match &self.storage.inner.blocking_read().aggregate_public_key {
+            Some(pkeys) => {
+                pkeys.get(&multisig_id).cloned().ok_or(
+                    ConsensusError::InvalidAggregatedPublicKey(
+                        InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
+                            *multisig_id,
+                        ),
+                    ),
+                )
+            }
             None => Err(ConsensusError::InvalidAggregatedPublicKey(
-                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(*multisig_id),
             )),
         }
     }
@@ -1815,8 +1825,8 @@ where
         trace!("request={:?}", RequestProcessProposalTruncatedDebug(&request));
 
         let txs_len = request.txs.len();
-
-        let agg_pk = match self.aggregate_public_key() {
+        // TODO: pass the exact multisig id
+        let agg_pk = match self.aggregate_public_key(LEGACY_MULTISIG_ID) {
             Ok(pk) => pk,
             Err(_) => {
                 // Fed nodes must always have an aggregate public key
@@ -2573,8 +2583,15 @@ where
                 }
             };
 
+            // TODO: use the correct multisig_id
             let mut storage = self.storage.inner.blocking_write();
-            storage.aggregate_public_key = Some(edh.aggregated_public_key);
+            if let Some(aggregate_public_keys) = storage.aggregate_public_key.as_mut() {
+                aggregate_public_keys.entry(LEGACY_MULTISIG_ID).or_insert(edh.aggregated_public_key);
+            } else {
+                storage.aggregate_public_key = Some(
+                    BTreeMap::from([(LEGACY_MULTISIG_ID, edh.aggregated_public_key)]),
+                );
+            }
         }
 
         if matches!(
