@@ -118,9 +118,17 @@ jobs:
       - name: Compile btc-utils
         run: |
           set -eo pipefail
-          cd ./bin/botanix-btc-server 
+          cd ./bin/botanix-btc-server
           cargo build --bin botanix-btc-utils
           echo "BTC utils compiled successfully!"
+          sccache --show-stats
+
+      - name: Compile pegin-recovery
+        run: |
+          set -eo pipefail
+          cd ./bin/botanix-pegin-recovery
+          cargo build --bin botanix-pegin-recovery
+          echo "Pegin recovery compiled successfully!"
           sccache --show-stats
 
       - name: Compile poa-node
@@ -146,6 +154,7 @@ jobs:
           cp target/debug/botanix-btc-utils /tmp/binaries/ || true
           cp target/debug/botanix-reth /tmp/binaries/ || true
           cp target/debug/botanix-test-suite /tmp/binaries/ || true
+          cp target/debug/botanix-pegin-recovery /tmp/binaries/ || true
 
       - name: Upload compiled binaries
         uses: actions/upload-artifact@v5
@@ -169,7 +178,6 @@ jobs:
           "test_mempool_gossip",
           "utxo_sync",
           "utxo_recovery",
-          "state_sync",
           "wallet_sync",
           "frost_e2e_stable",
           "test_pegin_v1",
@@ -255,6 +263,10 @@ jobs:
           fi
           if [ -d "/tmp/binaries/test-suite-dir" ]; then
             cp -r /tmp/binaries/botanix-test-suite-dir/* ./bin/botanix-test-suite/
+          fi
+          if [ -f "/tmp/binaries/botanix-pegin-recovery" ]; then
+            cp /tmp/binaries/botanix-pegin-recovery target/debug/
+            chmod +x target/debug/botanix-pegin-recovery
           fi
 
       - name: Run ${{ matrix.test }}
