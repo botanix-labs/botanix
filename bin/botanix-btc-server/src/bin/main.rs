@@ -2694,7 +2694,7 @@ where
 
         let mut utxos_to_add = Vec::new();
         for req_utxo in request.into_inner().utxos {
-            let multisig_id = req_utxo.multisig_id;
+            let multisig_id = MultisigId::new(req_utxo.multisig_id);
 
             // Get the key package for this UTXO's multisig_id
             let key_package = self
@@ -3526,6 +3526,8 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
 
+        let multisig_id = MultisigId::new(1);
+
         // Add the key packages
         app.db
             .set_pubkey_package(pk_package.clone())
@@ -3541,7 +3543,7 @@ mod tests {
                 dummy_tx.output[0].clone(),
                 None,
                 None,
-                LEGACY_MULTISIG_ID,
+                multisig_id,
             );
 
             // create pegins btc client can send
@@ -3563,7 +3565,7 @@ mod tests {
                     value: tx_out.value.to_sat(),
                 }),
                 eth_address: hex::encode(&[0; 20]),
-                multisig_id: LEGACY_MULTISIG_ID,
+                multisig_id: multisig_id.into(),
             };
             pegins.push(utxo);
         }
@@ -3641,6 +3643,8 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
 
+        let multisig_id = MultisigId::new(1);
+
         // Add the key packages
         app.db
             .set_pubkey_package(pk_package.clone())
@@ -3656,7 +3660,7 @@ mod tests {
                 dummy_tx.output[0].clone(),
                 None,
                 None,
-                LEGACY_MULTISIG_ID,
+                multisig_id,
             );
 
             // create pegins btc client can send
@@ -3678,7 +3682,7 @@ mod tests {
                     value: tx_out.value.to_sat(),
                 }),
                 eth_address: hex::encode(&[0; 20]),
-                multisig_id: LEGACY_MULTISIG_ID,
+                multisig_id: multisig_id.into(),
             };
             pegins.push(utxo);
         }

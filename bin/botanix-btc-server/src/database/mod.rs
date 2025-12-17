@@ -123,8 +123,8 @@ impl std::ops::Deref for MultisigId {
 }
 
 /// Default function for serde to use LEGACY_MULTISIG_ID as the default value.
-const fn default_multisig_id() -> u32 {
-    LEGACY_MULTISIG_ID
+const fn default_multisig_id() -> MultisigId {
+    MultisigId::LEGACY
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -141,7 +141,7 @@ pub struct Utxo {
     /// The multisig federation this UTXO belongs to.
     /// Defaults to LEGACY_MULTISIG_ID for backwards compatibility with existing data.
     #[serde(default = "default_multisig_id")]
-    pub multisig_id: u32,
+    pub multisig_id: MultisigId,
 }
 
 impl Utxo {
@@ -150,14 +150,14 @@ impl Utxo {
         output: TxOut,
         eth_address: Option<[u8; 20]>,
         version: Option<UtxoVersion>,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Self {
         Utxo {
             outpoint,
             output,
             eth_address,
             version: version.unwrap_or(UtxoVersion::V1) as u32,
-            multisig_id,
+            multisig_id: multisig_id.into(),
         }
     }
 }
@@ -1711,7 +1711,7 @@ impl TryFrom<RpcUtxo> for Utxo {
                 })?)
             },
             Some(UtxoVersion::V1),
-            value.multisig_id,
+            value.multisig_id.into(),
         ))
     }
 }
@@ -1734,7 +1734,7 @@ impl TryFrom<Utxo> for RpcUtxo {
                 script_pubkey: Some(RpcScriptBuf { script: script_pk }),
             }),
             eth_address: item.eth_address.map_or(String::new(), hex::encode),
-            multisig_id: item.multisig_id,
+            multisig_id: item.multisig_id.into(),
         })
     }
 }
@@ -2022,6 +2022,7 @@ mod tests {
         let mut consensus_encoded_bytes = vec![];
         raw_script.consensus_encode(&mut consensus_encoded_bytes).unwrap();
 
+        let multisig_id = MultisigId::new(1);
         // Create a mock RpcUtxo with the consensus-encoded script bytes
         let rpc_utxo = RpcUtxo {
             outpoint: Some(RpcOutPoint {
@@ -2035,7 +2036,7 @@ mod tests {
                 }),
             }),
             eth_address: String::new(),
-            multisig_id: LEGACY_MULTISIG_ID,
+            multisig_id: multisig_id.into(),
         };
 
         // Test that conversion from OLD format works successfully

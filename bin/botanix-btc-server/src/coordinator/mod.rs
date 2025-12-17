@@ -386,7 +386,7 @@ pub async fn finalize_signing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{database::{LEGACY_MULTISIG_ID, Utxo}, test_utils::random_compute_txid};
+    use crate::{database::{MultisigId, Utxo}, test_utils::random_compute_txid};
     use bitcoin::{Amount, ScriptBuf, TxOut};
 
     #[test]
@@ -396,6 +396,7 @@ mod tests {
         let outpoint_to_filter = OutPoint::new(random_compute_txid(), 0);
         let eth_address = [0x12u8; 20]; // Simple test address
 
+        let multisig_id = MultisigId::new(1);
         let utxo_to_filter = Utxo::new(
             outpoint_to_filter,
             TxOut {
@@ -404,7 +405,7 @@ mod tests {
             },
             Some(eth_address),
             None,
-            LEGACY_MULTISIG_ID,
+            multisig_id,
         );
 
         let outpoint_to_keep = OutPoint::new(random_compute_txid(), 1);
@@ -417,7 +418,7 @@ mod tests {
             },
             Some(eth_address_to_keep),
             None,
-            LEGACY_MULTISIG_ID,
+            multisig_id,
         );
 
         let outpoint_change = OutPoint::new(random_compute_txid(), 2);
@@ -429,7 +430,7 @@ mod tests {
             },
             None,
             None,
-            LEGACY_MULTISIG_ID,
+            multisig_id,
         );
 
         utxos.insert(outpoint_to_filter, utxo_to_filter);
