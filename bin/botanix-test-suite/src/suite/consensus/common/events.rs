@@ -159,7 +159,7 @@ pub struct BlockWithEDH {
     pub size: String,
     pub state_root: String,
     pub timestamp: String,
-    pub total_difficulty: String,
+    pub total_difficulty: Option<String>,
     pub transactions: Vec<String>,
     pub transactions_root: String,
     pub uncles: Vec<String>,

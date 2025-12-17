@@ -243,6 +243,7 @@ for i in $(seq 1 "$NUM_NODES"); do
     ports:
       - "$COMET_RPC_PORT:26657"
       - "$COMET_METRICS_PORT:26660"
+    user: root
     networks:
       botanix-local:
         ipv4_address: $COMETBFT_IP

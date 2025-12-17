@@ -145,12 +145,14 @@ pub async fn test_pegin_v1(
     loop {
         let latest_block_result = provider
             .request::<Vec<serde_json::Value>, BlockWithEDH>(
-                "eth_getBlockByNumber",
+                "eth_richBlockByNumber",
                 vec![json!("latest"), json!(false), json!(true)],
             )
             .await;
-        latest_block_with_edh =
-            latest_block_result.expect("valid block with edh");
+        latest_block_with_edh = latest_block_result.map_err(|e| {
+            it_info_print!("RPC call failed with error:", e.to_string());
+            e
+        }).expect("valid block with edh");
         let btc_checkpoint =
             latest_block_with_edh.extra_data_header.bitcoin_block_hash;
         btc_checkpoint_hash =
