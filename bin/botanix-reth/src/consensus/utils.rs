@@ -1,5 +1,8 @@
 //! Botanix consensus utility functions
-use alloy_consensus::{EthereumTxEnvelope, Header, Sealed, Signed, TxEip4844};
+use alloy_consensus::{
+    BlockHeader, EthereumTxEnvelope, Header, Sealed, Signed, TxEip4844,
+    TxReceipt,
+};
 use alloy_eips::BlockHashOrNumber;
 use alloy_primitives::{keccak256, BlockNumber, Bloom, BloomInput, B256};
 use alloy_rlp::Decodable;
@@ -27,7 +30,9 @@ use btcserverlib::{
 };
 use futures_util::Future;
 use reth_network::{NetworkHandle, NetworkInfo};
+use reth_node_types::Block;
 use reth_primitives::{SealedHeader, TransactionSigned};
+use reth_primitives_traits::SignedTransaction;
 use reth_provider::{
     BlockReaderIdExt, HeaderProvider, ReceiptProvider, TransactionsProvider,
 };
@@ -413,65 +418,83 @@ pub(crate) async fn get_block_pegouts(
     max_cutoff_age: Option<Duration>,
 ) -> Result<Vec<(PegoutId, u64)>, EpochPegoutsError> {
     let mut pegouts: Vec<(PegoutId, u64)> = Vec::new();
-    // match client.block_by_number(block) {
-    //     Ok(Some(block)) if bloom_contains_pegout(block.header.logs_bloom) => {
-    //         let block_timestamp = block.header.timestamp;
-    //         if let Some(max_cutoff_age) = max_cutoff_age {
-    //             if !is_block_age_acceptable(block_timestamp, max_cutoff_age) {
-    //                 warn!("Block number {:?} is too old, ignoring ...", block.header.number);
-    //                 return Ok(pegouts);
-    //             }
-    //         }
-    //         let transactions_by_block = match client
-    //             .transactions_by_block(BlockHashOrNumber::Number(block.header.number))
-    //         {
-    //             Ok(transactions_by_block) => transactions_by_block,
-    //             Err(e) => {
-    //                 error!("Error fetching transactions for block {:?}: {}", block, e);
-    //                 return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //             }
-    //         };
-    //         let receipts_by_block =
-    //             match client.receipts_by_block(BlockHashOrNumber::Number(block.header.number)) {
-    //                 Ok(receipts_by_block) => receipts_by_block,
-    //                 Err(e) => {
-    //                     error!("Error fetching receipts for block {:?}: {}", block, e);
-    //                     return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //                 }
-    //             };
+    match client.block_by_number(block) {
+        Ok(Some(block))
+            if bloom_contains_pegout(block.header().logs_bloom()) =>
+        {
+            let block_timestamp = block.header().timestamp();
+            if let Some(max_cutoff_age) = max_cutoff_age {
+                if !is_block_age_acceptable(block_timestamp, max_cutoff_age) {
+                    warn!(
+                        "Block number {:?} is too old, ignoring ...",
+                        block.header().number()
+                    );
+                    return Ok(pegouts);
+                }
+            }
+            let transactions_by_block = match client.transactions_by_block(
+                BlockHashOrNumber::Number(block.header().number()),
+            ) {
+                Ok(transactions_by_block) => transactions_by_block,
+                Err(e) => {
+                    error!(
+                        "Error fetching transactions for block {:?}: {}",
+                        block, e
+                    );
+                    return Err(EpochPegoutsError::FailedToFetchPegouts);
+                }
+            };
+            let receipts_by_block = match client.receipts_by_block(
+                BlockHashOrNumber::Number(block.header().number()),
+            ) {
+                Ok(receipts_by_block) => receipts_by_block,
+                Err(e) => {
+                    error!(
+                        "Error fetching receipts for block {:?}: {}",
+                        block, e
+                    );
+                    return Err(EpochPegoutsError::FailedToFetchPegouts);
+                }
+            };
 
-    //         match transactions_by_block.zip(receipts_by_block) {
-    //             Some((transactions, receipts)) => {
-    //                 for (receipt, tx) in receipts.iter().zip(transactions) {
-    //                     if !receipt.success {
-    //                         continue;
-    //                     }
-    //                     for (index, log) in receipt.logs.iter().enumerate() {
-    //                         if let Ok(Some(_p)) = try_parse_burn_event(log, btc_network) {
-    //                             let mut tx_hash_array = [0u8; 32];
-    //                             tx_hash_array.copy_from_slice(tx.hash().as_slice());
-    //                             let pegout_id = PegoutId::new(tx_hash_array, index as u32);
-    //                             pegouts.push((pegout_id, block_timestamp));
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             None => {
-    //                 info!("No txs/receipts found for block {:?}", block);
-    //                 return Err(EpochPegoutsError::NoReceiptsFoundForBlock(block.header.number));
-    //             }
-    //         }
-    //     }
-    //     Ok(Some(_)) => {}
-    //     Ok(None) => {
-    //         error!("Block {} not found", block);
-    //         return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //     }
-    //     Err(e) => {
-    //         error!("Error fetching block {}: {}", block, e);
-    //         return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //     }
-    // }
+            match transactions_by_block.zip(receipts_by_block) {
+                Some((transactions, receipts)) => {
+                    for (receipt, tx) in receipts.iter().zip(transactions) {
+                        if !receipt.status() {
+                            continue;
+                        }
+                        for (index, log) in receipt.logs().iter().enumerate() {
+                            if let Ok(Some(_p)) =
+                                try_parse_burn_event(log, btc_network)
+                            {
+                                let mut tx_hash_array = [0u8; 32];
+                                tx_hash_array
+                                    .copy_from_slice(tx.tx_hash().as_slice());
+                                let pegout_id =
+                                    PegoutId::new(tx_hash_array, index as u32);
+                                pegouts.push((pegout_id, block_timestamp));
+                            }
+                        }
+                    }
+                }
+                None => {
+                    info!("No txs/receipts found for block {:?}", block);
+                    return Err(EpochPegoutsError::NoReceiptsFoundForBlock(
+                        block.header().number(),
+                    ));
+                }
+            }
+        }
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            error!("Block {} not found", block);
+            return Err(EpochPegoutsError::FailedToFetchPegouts);
+        }
+        Err(e) => {
+            error!("Error fetching block {}: {}", block, e);
+            return Err(EpochPegoutsError::FailedToFetchPegouts);
+        }
+    }
 
     Ok(pegouts)
 }
