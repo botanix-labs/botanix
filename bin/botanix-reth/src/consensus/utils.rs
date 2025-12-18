@@ -30,7 +30,9 @@ use btcserverlib::{
 };
 use futures_util::Future;
 use reth_network::{NetworkHandle, NetworkInfo};
+use reth_node_types::Block;
 use reth_primitives::{SealedHeader, TransactionSigned};
+use reth_primitives_traits::SignedTransaction;
 use reth_provider::{
     BlockReaderIdExt, HeaderProvider, ReceiptProvider, TransactionsProvider,
 };
@@ -416,65 +418,83 @@ pub(crate) async fn get_block_pegouts(
     max_cutoff_age: Option<Duration>,
 ) -> Result<Vec<(PegoutId, u64)>, EpochPegoutsError> {
     let mut pegouts: Vec<(PegoutId, u64)> = Vec::new();
-    // match client.block_by_number(block) {
-    //     Ok(Some(block)) if bloom_contains_pegout(block.header.logs_bloom) => {
-    //         let block_timestamp = block.header.timestamp;
-    //         if let Some(max_cutoff_age) = max_cutoff_age {
-    //             if !is_block_age_acceptable(block_timestamp, max_cutoff_age) {
-    //                 warn!("Block number {:?} is too old, ignoring ...", block.header.number);
-    //                 return Ok(pegouts);
-    //             }
-    //         }
-    //         let transactions_by_block = match client
-    //             .transactions_by_block(BlockHashOrNumber::Number(block.header.number))
-    //         {
-    //             Ok(transactions_by_block) => transactions_by_block,
-    //             Err(e) => {
-    //                 error!("Error fetching transactions for block {:?}: {}", block, e);
-    //                 return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //             }
-    //         };
-    //         let receipts_by_block =
-    //             match client.receipts_by_block(BlockHashOrNumber::Number(block.header.number)) {
-    //                 Ok(receipts_by_block) => receipts_by_block,
-    //                 Err(e) => {
-    //                     error!("Error fetching receipts for block {:?}: {}", block, e);
-    //                     return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //                 }
-    //             };
+    match client.block_by_number(block) {
+        Ok(Some(block))
+            if bloom_contains_pegout(block.header().logs_bloom()) =>
+        {
+            let block_timestamp = block.header().timestamp();
+            if let Some(max_cutoff_age) = max_cutoff_age {
+                if !is_block_age_acceptable(block_timestamp, max_cutoff_age) {
+                    warn!(
+                        "Block number {:?} is too old, ignoring ...",
+                        block.header().number()
+                    );
+                    return Ok(pegouts);
+                }
+            }
+            let transactions_by_block = match client.transactions_by_block(
+                BlockHashOrNumber::Number(block.header().number()),
+            ) {
+                Ok(transactions_by_block) => transactions_by_block,
+                Err(e) => {
+                    error!(
+                        "Error fetching transactions for block {:?}: {}",
+                        block, e
+                    );
+                    return Err(EpochPegoutsError::FailedToFetchPegouts);
+                }
+            };
+            let receipts_by_block = match client.receipts_by_block(
+                BlockHashOrNumber::Number(block.header().number()),
+            ) {
+                Ok(receipts_by_block) => receipts_by_block,
+                Err(e) => {
+                    error!(
+                        "Error fetching receipts for block {:?}: {}",
+                        block, e
+                    );
+                    return Err(EpochPegoutsError::FailedToFetchPegouts);
+                }
+            };
 
-    //         match transactions_by_block.zip(receipts_by_block) {
-    //             Some((transactions, receipts)) => {
-    //                 for (receipt, tx) in receipts.iter().zip(transactions) {
-    //                     if !receipt.success {
-    //                         continue;
-    //                     }
-    //                     for (index, log) in receipt.logs.iter().enumerate() {
-    //                         if let Ok(Some(_p)) = try_parse_burn_event(log, btc_network) {
-    //                             let mut tx_hash_array = [0u8; 32];
-    //                             tx_hash_array.copy_from_slice(tx.hash().as_slice());
-    //                             let pegout_id = PegoutId::new(tx_hash_array, index as u32);
-    //                             pegouts.push((pegout_id, block_timestamp));
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             None => {
-    //                 info!("No txs/receipts found for block {:?}", block);
-    //                 return Err(EpochPegoutsError::NoReceiptsFoundForBlock(block.header.number));
-    //             }
-    //         }
-    //     }
-    //     Ok(Some(_)) => {}
-    //     Ok(None) => {
-    //         error!("Block {} not found", block);
-    //         return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //     }
-    //     Err(e) => {
-    //         error!("Error fetching block {}: {}", block, e);
-    //         return Err(EpochPegoutsError::FailedToFetchPegouts);
-    //     }
-    // }
+            match transactions_by_block.zip(receipts_by_block) {
+                Some((transactions, receipts)) => {
+                    for (receipt, tx) in receipts.iter().zip(transactions) {
+                        if !receipt.status() {
+                            continue;
+                        }
+                        for (index, log) in receipt.logs().iter().enumerate() {
+                            if let Ok(Some(_p)) =
+                                try_parse_burn_event(log, btc_network)
+                            {
+                                let mut tx_hash_array = [0u8; 32];
+                                tx_hash_array
+                                    .copy_from_slice(tx.tx_hash().as_slice());
+                                let pegout_id =
+                                    PegoutId::new(tx_hash_array, index as u32);
+                                pegouts.push((pegout_id, block_timestamp));
+                            }
+                        }
+                    }
+                }
+                None => {
+                    info!("No txs/receipts found for block {:?}", block);
+                    return Err(EpochPegoutsError::NoReceiptsFoundForBlock(
+                        block.header().number(),
+                    ));
+                }
+            }
+        }
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            error!("Block {} not found", block);
+            return Err(EpochPegoutsError::FailedToFetchPegouts);
+        }
+        Err(e) => {
+            error!("Error fetching block {}: {}", block, e);
+            return Err(EpochPegoutsError::FailedToFetchPegouts);
+        }
+    }
 
     Ok(pegouts)
 }
@@ -618,8 +638,26 @@ pub fn validate_psbt_by_output(
     amount: Amount,
     fee_per_output: Amount,
 ) -> Result<(), PsbtValidationError> {
-    // TODO
-    Ok(())
+    if tx_out.script_pubkey != destination.script_pubkey() {
+        error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "Output script pubkey does not match destination");
+        return Err(PsbtValidationError::FailedToValidatePsbtByIds(
+            String::from("Output script pubkey does not match destination"),
+        ));
+    }
+
+    let Some(expected_amount) = amount.checked_sub(fee_per_output) else {
+        return Err(PsbtValidationError::FailedToValidatePsbtByIds(
+            String::from("Calculating expected amount caused an underflow"),
+        ));
+    };
+
+    if tx_out.value == expected_amount {
+        Ok(())
+    } else {
+        Err(PsbtValidationError::FailedToValidatePsbtByIds(String::from(
+            "The output value does not match the expected amount",
+        )))
+    }
 }
 
 /// Validates a PSBT by verifying its pegout outputs against data from the
@@ -646,7 +684,113 @@ pub async fn validate_psbt_by_ids(
     btc_network: bitcoin::Network,
     psbt: &Psbt,
 ) -> Result<(), PsbtValidationError> {
-    // TODO
+    if psbt.outputs.len() != psbt.unsigned_tx.output.len() {
+        error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "psbt.outputs length ({}) does not match psbt.unsigned_tx.output length ({})", psbt.outputs.len(), psbt.unsigned_tx.output.len());
+        return Err(PsbtValidationError::FailedToValidatePsbtByIds(String::from(
+            "Mismatch between number of PSBT outputs and unsigned transaction outputs",
+        )));
+    }
+
+    let pegout_ids = extract_pegout_ids(psbt);
+
+    if pegout_ids.is_empty() {
+        error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "No pegout ids found in psbt");
+        return Err(PsbtValidationError::FailedToValidatePsbtByIds(
+            String::from("No pegout ids found in psbt"),
+        ));
+    }
+
+    // Verify that there are no duplicate Pegout IDs.
+    let mut seen_pegout_ids = std::collections::HashSet::new();
+    for (_, pegout_id) in &pegout_ids {
+        if !seen_pegout_ids.insert(pegout_id) {
+            error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "Duplicate pegout ID found: {:?}", pegout_id);
+            return Err(PsbtValidationError::FailedToValidatePsbtByIds(
+                String::from("Duplicate pegout ID found in PSBT outputs"),
+            ));
+        }
+    }
+
+    // Verify that each pegout is within the maximum cutoff age.
+    // The coordinator and signers should not create nor sign a PSBT if any of the pending pegouts
+    // are older than the maximum cutoff age. The coordinator and signers only store the most recent
+    // maximum cutoff age of finalized pegouts against which the PSBT is validated. This
+    // prevents having to store an unbounded list of finalized pegouts.
+    pegout_ids.iter().try_for_each(|(_, pegout_id)| {
+        validate_psbt_id_by_maximum_cutoff_age(pegout_id, client)
+    })?;
+
+    // Verify that there is at most one change output
+    // and that all outputs are either a validated pegout or the single change output.
+    let mut change_output_count = 0;
+    let mut validated_pegout_indices = std::collections::HashSet::new();
+    for (pos, _) in &pegout_ids {
+        validated_pegout_indices.insert(*pos);
+    }
+
+    for i in 0..psbt.outputs.len() {
+        if !validated_pegout_indices.contains(&i) {
+            // This output at index i is not in our list of validated pegouts,
+            // so it must be the change output.
+            change_output_count += 1;
+        }
+    }
+
+    if change_output_count > 1 {
+        error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "Multiple change outputs (non-pegout IDs) found: {}", change_output_count);
+        return Err(PsbtValidationError::FailedToValidatePsbtByIds(String::from(
+            "Multiple change outputs (non-pegout IDs) found in PSBT outputs",
+        )));
+    }
+
+    // The preceding checks (output length equality, duplicate pegout ID, and change output count)
+    // ensure that every entry in `psbt.unsigned_tx.output` (due to the length check)
+    // is accounted for as either a pegout (validated in the main loop below)
+    // or the single allowed change output. Any other scenario (e.g., undeclared outputs,
+    // too many change outputs) would have triggered an earlier error.
+
+    // check if a corresponding output exists in the psbt and is for the right amount
+    let fee_per_output = psbt.fee_per_output(pegout_ids.len() as u64)
+            .map_err(|e| {
+                error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "Failed to get fee per output {:?}", e);
+                PsbtValidationError::FailedToValidatePsbtByIds(String::from("Failed to get fee per output"))
+            })?;
+
+    // get pegouts from db
+    for (pegout_pos, PegoutId { txid, idx }) in pegout_ids.iter() {
+        let log =
+            client
+            .receipt_by_hash(txid.into())
+            .ok()
+            .flatten()
+            .and_then(|receipts| receipts.logs().get(*idx as usize).cloned())
+            .ok_or_else(|| {
+                error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "Failed to get log from receipts");
+                PsbtValidationError::FailedToValidatePsbtByIds(String::from("Failed to get log from receipts"))
+            })?;
+
+        let PegoutData { amount, destination, network: _} = try_parse_burn_event(&log, btc_network)
+            .map_err(|e| {
+                error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "Failed to parse burn event {:?}", e);
+                PsbtValidationError::FailedToValidatePsbtByIds(String::from("Failed to parse burn event"))
+            })?
+            .ok_or_else(|| {
+                error!(target: "consensus::authority::frost_task::validate_psbt_by_ids", "Failed to get pegout data from burn event");
+                PsbtValidationError::FailedToValidatePsbtByIds(String::from("Failed to get pegout data from burn event"))
+            })?;
+
+        // Retrieve the corresponding TxOut from the PSBT, according to the
+        // specified pegout position.
+        let tx_out = psbt.unsigned_tx.output.get(*pegout_pos).ok_or(
+            PsbtValidationError::FailedToValidatePsbtByIds(format!(
+                "Failed to get output in unsigned_tx at position {}",
+                *pegout_pos
+            )),
+        )?;
+
+        validate_psbt_by_output(tx_out, &destination, amount, fee_per_output)?;
+    }
+
     Ok(())
 }
 
@@ -661,7 +805,53 @@ pub fn validate_psbt_id_by_maximum_cutoff_age(
     pegout_id: &PegoutId,
     client: &(impl ReceiptProvider + TransactionsProvider + HeaderProvider + Clone),
 ) -> Result<(), PsbtValidationError> {
-    // TODO
+    // Get the transaction by pegout id
+    let (_, tx) = client
+        .transaction_by_hash_with_meta(pegout_id.txid.into())
+        .map_err(|e| {
+            error!(target: "consensus::authority::frost_task::validate_psbt_ids_by_maximum_cutoff_age", "Failed to get transaction by pegout id {:?}: {:?}", pegout_id, e);
+            PsbtValidationError::FailedToGetTransactionByPegoutId(format!(
+                "Failed to get transaction by pegout id from database {:?}",
+                pegout_id.txid
+            ))
+        })?
+        .ok_or_else(|| {
+            error!(target: "consensus::authority::frost_task::validate_psbt_ids_by_maximum_cutoff_age", "Transaction not found for pegout id {:?}", pegout_id);
+            PsbtValidationError::FailedToGetTransactionByPegoutId(format!(
+                "Transaction not found for pegout id {:?}",
+                pegout_id.txid
+            ))
+        })?;
+
+    // Get the timestamp of the header that contains the transaction
+    let header_timestamp = client
+        .header_by_number(tx.block_number)
+        .map_err(|e| {
+            error!(target: "consensus::authority::frost_task::validate_psbt_ids_by_maximum_cutoff_age", "Failed to get header by number {:?}: {:?}", tx.block_number, e);
+            PsbtValidationError::FailedToGetHeaderForPegoutId(format!(
+                "Failed to get header by number from database {:?}",
+                tx.block_number
+            ))
+        })?
+        .ok_or_else(|| {
+            error!(target: "consensus::authority::frost_task::validate_psbt_ids_by_maximum_cutoff_age", "Header not found for transaction {:?}", tx);
+            PsbtValidationError::FailedToGetHeaderForPegoutId(format!(
+                "Header not found for pegout id {:?}",
+                tx.tx_hash
+            ))
+        })?.timestamp();
+
+    if !is_block_age_acceptable(header_timestamp, *MAX_BLOCK_TS_CUTOFF_DURATION)
+    {
+        error!(target: "consensus::authority::frost_task::validate_psbt_ids_by_maximum_cutoff_age", "Pegout id: {:?} is outside the maximum cutoff range", tx.tx_hash);
+        return Err(PsbtValidationError::PegoutIdOutsideMaximumCutoffAge(
+            format!(
+                "Pegout id: {:?} is outside the maximum cutoff range",
+                tx.tx_hash
+            ),
+        ));
+    }
+
     Ok(())
 }
 
