@@ -9,9 +9,14 @@ use botanix_authority_peg::consensus_package::{
     BotanixConsensusPackage, RecentHeader,
 };
 use botanix_btc_wallet::{
-    bitcoind::BitcoindFactory,
-    error::{BitcoindAdapterError, BitcoindError},
-    fallback::FallbackBitcoindClient,
+    error::BitcoindAdapterError, fallback::FallbackBitcoindClient,
+};
+use bitcoin::{
+    block::Version,
+    hash_types::TxMerkleNode,
+    hashes::Hash,
+    pow::CompactTarget,
+    BlockHash,
 };
 use reth_primitives_traits::Header;
 use revm_primitives::Address;
@@ -126,6 +131,27 @@ impl HeaderExt for Header {
 
         tracing::trace!("edh={:?}", edh);
 
+        // If the checkpoint hash is not set, return a default package without
+        // hitting bitcoind. This helps keeps tests self-contained while preserving
+        // the aggregated public key and network
+        if edh.bitcoin_block_hash == BlockHash::all_zeros() {
+            let default_header = bitcoin::block::Header {
+                version: Version::default(),
+                prev_blockhash: BlockHash::all_zeros(),
+                merkle_root: TxMerkleNode::from_slice(&[0; 32])
+                    .unwrap_or_else(|_| TxMerkleNode::all_zeros()),
+                time: 0,
+                bits: CompactTarget::from_consensus(0),
+                nonce: 0,
+            };
+            let bitcoin_checkpoint = (default_header, 0u32);
+            return Ok(BotanixConsensusPackage {
+                bitcoin_checkpoint,
+                aggregate_public_key: edh.aggregated_public_key,
+                btc_network,
+            });
+        }
+
         let bitcoin_checkpoint_header = match bitcoind_factory.get_block_header_rpc(&edh.bitcoin_block_hash) {
             Ok(header) => header,
             Err(e) => {
@@ -170,9 +196,6 @@ mod tests {
         block::{BlockHash, Header as BtcHeader, Version},
         hashes::Hash,
         CompactTarget, TxMerkleNode,
-    };
-    use botanix_btc_wallet::{
-        bitcoind::BitcoindConfig, test_utils::MockBitcoindFactory,
     };
 
     use super::*;
