@@ -217,8 +217,8 @@ impl NonFederationMemberTestConfig {
             ));
         }
         let args = vec![
-            "botanix-reth",
             "-vvv",
+            "node",
             "--disable-discovery",
             "--is-testnet",
             "--federation-config-path",
@@ -247,11 +247,11 @@ impl NonFederationMemberTestConfig {
             "eth,net,trace,txpool,web3,rpc,admin",
             "--btc-network",
             "regtest",
-            "--bitcoind.url",
+            "--bitcoind.primary_url",
             bitcoind_url.as_str(),
-            "--bitcoind.username",
+            "--bitcoind.primary_username",
             bitcoind_username.as_str(),
-            "--bitcoind.password",
+            "--bitcoind.primary_password",
             bitcoind_password.as_str(),
             "--port",
             discovery_port.as_str(),
