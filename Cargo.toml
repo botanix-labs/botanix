@@ -247,7 +247,7 @@ proptest-derive = "0.5"
 
 # other
 prost = "0.12.6"
-rand = "0.8.5"
+rand = "0.9.2"
 
 # reth dependencies - using botanix fork
 reth = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
