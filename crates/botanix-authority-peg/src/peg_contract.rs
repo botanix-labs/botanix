@@ -580,8 +580,9 @@ impl PegoutWithId {
         let network = match network_byte {
             0 => Network::Bitcoin,
             1 => Network::Testnet,
-            2 => Network::Signet,
-            3 => Network::Regtest,
+            2 => Network::Testnet4,
+            3 => Network::Signet,
+            4 => Network::Regtest,
             _ => return Err(PegoutDataError::UnknownNetwork),
         };
         // Verify address is valid for the network

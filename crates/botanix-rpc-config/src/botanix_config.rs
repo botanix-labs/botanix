@@ -1,16 +1,22 @@
 //! Defines structure for botanix RPC configurables and business logic
 
 use alloy_primitives::U256;
+use alloy_rpc_types_eth::{
+    Block, BlockId, BlockNumberOrTag, Header, Transaction,
+};
+use botanix_authority_edh::extra_data_header::ExtraDataHeader;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_btc_wallet::{
     bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory},
     error::{BitcoindAdapterError, BitcoindError},
     fallback::FallbackBitcoindClient,
 };
+use botanix_rpc_types::types::RichBlock;
 use btcserverlib::wallet::address::{
     generate_taproot_address, generate_tweaked_public_key,
 };
 use frost_secp256k1_tr::{self as frost};
+use reth_rpc_eth_api::helpers::EthBlocks;
 use reth_storage_api::{BlockReaderIdExt, HeaderProvider};
 use std::{fmt, str::FromStr, sync::Arc};
 use thiserror::Error;
@@ -137,9 +143,27 @@ impl fmt::Display for BtcFeeRateRPCError {
     }
 }
 
+/// Error from rich block by number RPC endpoint
+#[derive(Debug, Error)]
+pub enum RichBlockRPCError {
+    /// Failed to get block from EthApi
+    #[error("Failed to get block")]
+    FailedToGetBlock,
+    /// Failed to serialize block
+    #[error("Failed to serialize block: {0}")]
+    FailedToSerializeBlock(serde_json::Error),
+    /// Failed to deserialize block
+    #[error("Failed to deserialize block: {0}")]
+    FailedToDeserializeBlock(serde_json::Error),
+    /// Failed to deserialize extra data header
+    #[error("Failed to deserialize extra data header: {0}")]
+    FailedToDeserializeExtraDataHeader(String),
+}
+
 impl_to_rpc_result!(BtcFeeRateRPCError);
 impl_to_rpc_result!(MerkleProofRPCError);
 impl_to_rpc_result!(GatewayAddressRPCError);
+impl_to_rpc_result!(RichBlockRPCError);
 
 /// Botanix config
 #[derive(Clone, Default)]
@@ -295,5 +319,55 @@ impl Botanix {
                 ))
             }
         }
+    }
+
+    /// Function to get a rich block by number with optional extra data header
+    pub async fn rich_block_by_number<EthApi>(
+        &self,
+        eth_api: &EthApi,
+        number: BlockNumberOrTag,
+        full: bool,
+        include_extra_data_header: Option<bool>,
+    ) -> std::result::Result<Option<RichBlock>, RichBlockRPCError>
+    where
+        EthApi: EthBlocks,
+    {
+        // Call the standard eth_getBlockByNumber via EthBlocks helper
+        let Some(api_block) =
+            EthBlocks::rpc_block(eth_api, BlockId::Number(number), full)
+                .await
+                .map_err(|_| RichBlockRPCError::FailedToGetBlock)?
+        else {
+            return Ok(None);
+        };
+
+        // Convert the block to concrete alloy types via JSON serialization
+        // This is necessary because rpc_block returns EthApi-specific types
+        let block: Block<Transaction, Header> = serde_json::from_value(
+            serde_json::to_value(&api_block)
+                .map_err(RichBlockRPCError::FailedToSerializeBlock)?,
+        )
+        .map_err(RichBlockRPCError::FailedToDeserializeBlock)?;
+
+        // Create RichBlock with optional extra_data_header
+        let extra_data_header = match include_extra_data_header {
+            Some(true) => {
+                // Deserialize the extra data header from the block's header
+                let header = ExtraDataHeader::deserialize(
+                    &mut block.header.extra_data.to_vec().as_slice(),
+                )
+                .map_err(|e| {
+                    RichBlockRPCError::FailedToDeserializeExtraDataHeader(
+                        e.to_string(),
+                    )
+                })?;
+                Some(header)
+            }
+            _ => None,
+        };
+        // construct richblock
+        let rich_block = RichBlock { block, extra_data_header };
+
+        Ok(Some(rich_block))
     }
 }

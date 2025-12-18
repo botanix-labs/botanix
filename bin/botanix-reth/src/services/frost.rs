@@ -1,40 +1,30 @@
-use botanix_activation_manager::ActivationManager;
-use botanix_authority_rsp::RandomSourceProvider;
-use botanix_btc_server_client::BtcServerExtendedClient;
-use botanix_btc_wallet::bitcoind::{BitcoindClient, BitcoindFactory};
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::{
-    bitcoind::BitcoindArgs, frost_args::FrostArgs, poa_node::PoaNodeArgs,
-    state_sync::StateSyncArgs,
+    frost_args::FrostArgs, poa_node::PoaNodeArgs, state_sync::StateSyncArgs,
 };
-use botanix_comet_bft_rpc::CometBftRpcFactory;
 use botanix_configs::federation::{
     load_federation_config_toml, FederationTomlConfig,
 };
 use btcserverlib::database::LEGACY_MULTISIG_ID;
 use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
-use reth_db::DatabaseEnv;
 use reth_discv4::NodeRecord;
 use reth_network::frost::manager::FrostConfig;
 use reth_network_peers::pk2id;
-use reth_node_types::NodeTypesWithDBAdapter;
-use reth_provider::providers::BlockchainProvider;
-use reth_tasks::TaskExecutor;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use crate::{
     consensus::{
-        snapshot_manager::SnapshotManager, wallet_state_sync::WalletStateSync,
-        AuthorityConsensusBuilder,
+        wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder,
     },
     node::{evm::config::BotanixEvmConfig, BotanixNode},
     services::network_builder::BotanixNetworkHandle,
 };
 
-/// Result of setting up the Frost configuration for a node, containing the optional FrostConfig,
-/// the socket addresses of federation authorities, the node's secret key, and the genesis authorities.
+/// Result of setting up the Frost configuration for a node, containing the
+/// optional FrostConfig, the socket addresses of federation authorities, the
+/// node's secret key, and the genesis authorities.
 #[derive(Debug)]
 pub struct FrostConfigSetupResult {
     pub frost_config: Option<FrostConfig>,
@@ -44,8 +34,10 @@ pub struct FrostConfigSetupResult {
     pub federation_config: FederationTomlConfig,
 }
 
-/// Sets up the Frost configuration for a node, returning `Some(FrostConfig)` if the node is a federation node,
-/// or `None` otherwise. Returns an error if the minimum number of signers is greater than the maximum.
+/// Sets up the Frost configuration for a node, returning
+/// `FrostConfigSetupResult`. If the node is not in federation mode,
+/// `FrostConfigSetupResult.frost_config` will be `None`. Returns an error if
+/// the minimum number of signers is greater than the maximum.
 ///
 /// # Arguments
 /// * `frost_args` - Arguments related to Frost configuration.
@@ -61,7 +53,10 @@ pub fn setup_frost(
     state_sync: &StateSyncArgs,
     reth_config: &mut reth_config::Config,
 ) -> eyre::Result<FrostConfigSetupResult> {
-    if frost_args.min_signers > frost_args.max_signers {
+    // Only check if in federation mode.
+    if poa_cfg.federation_mode
+        && frost_args.min_signers > frost_args.max_signers
+    {
         return Err(eyre::eyre!(
             "min_signers should be less than or equal to max_signers"
         ));
@@ -109,7 +104,9 @@ pub fn setup_frost(
         .iter()
         .map(|authority| authority.1)
         .collect::<Vec<SocketAddr>>();
-    if federation_authorities.len() != frost_args.max_signers as usize {
+    if poa_cfg.federation_mode
+        && federation_authorities.len() != frost_args.max_signers as usize
+    {
         return Err(eyre::eyre!(
             "max_signers does not match the length of federation_authorities"
         ));

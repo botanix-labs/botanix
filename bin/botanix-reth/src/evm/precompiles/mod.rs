@@ -31,15 +31,13 @@ impl BotanixPrecompiles {
     /// Create a new precompile provider with the given Botanix spec.
     #[inline]
     pub fn new(spec: BotanixHardfork) -> Self {
-        let precompiles = if spec >= BotanixHardfork::Jalapeno {
-            jalapeno()
-        } else if spec >= BotanixHardfork::Pectra {
-            pectra()
-        } else {
-            jalapeno()
-        };
-
-        Self { inner: EthPrecompiles { precompiles, spec: spec.into() } }
+        // Add more precompiles as needed
+        Self {
+            inner: EthPrecompiles {
+                precompiles: Precompiles::prague(),
+                spec: spec.into(),
+            },
+        }
     }
 
     #[inline]
@@ -48,7 +46,7 @@ impl BotanixPrecompiles {
     }
 }
 
-/// Returns precompiles for Jalapeno spec.
+/// Returns precompiles for the Prague spec.
 pub fn genesis() -> &'static Precompiles {
     static INSTANCE: OnceBox<Precompiles> = OnceBox::new();
     INSTANCE.get_or_init(|| {
@@ -57,46 +55,6 @@ pub fn genesis() -> &'static Precompiles {
             tendermint::TENDERMINT_HEADER_VALIDATION,
             iavl::IAVL_PROOF_VALIDATION,
         ]);
-        Box::new(precompiles)
-    })
-}
-
-/// Returns precompiles for Jalapeno sepc.
-pub fn jalapeno() -> &'static Precompiles {
-    static INSTANCE: OnceBox<Precompiles> = OnceBox::new();
-    INSTANCE.get_or_init(|| {
-        let mut precompiles = genesis().clone();
-        precompiles.extend([
-            double_sign::DOUBLE_SIGN_EVIDENCE_VALIDATION,
-            tm_secp256k1::TM_SECP256K1_SIGNATURE_RECOVER,
-        ]);
-        precompiles.extend([
-            tendermint::TENDERMINT_HEADER_VALIDATION,
-            iavl::IAVL_PROOF_VALIDATION,
-        ]);
-        precompiles.extend([
-            cometbft::COMETBFT_LIGHT_BLOCK_VALIDATION,
-            modexp::BERLIN,
-        ]);
-        precompiles.extend([iavl::IAVL_PROOF_VALIDATION_PLATO]);
-        precompiles.extend([
-            bls::BLS_SIGNATURE_VALIDATION,
-            cometbft::COMETBFT_LIGHT_BLOCK_VALIDATION_BEFORE_HERTZ,
-        ]);
-        precompiles.extend([
-            tendermint::TENDERMINT_HEADER_VALIDATION_NANO,
-            iavl::IAVL_PROOF_VALIDATION_NANO,
-        ]);
-        Box::new(precompiles)
-    })
-}
-
-/// Returns precompiles for Pectra spec.
-pub fn pectra() -> &'static Precompiles {
-    static INSTANCE: OnceBox<Precompiles> = OnceBox::new();
-    INSTANCE.get_or_init(|| {
-        let mut precompiles = jalapeno().clone();
-        precompiles.extend([kzg_point_evaluation::POINT_EVALUATION]);
         Box::new(precompiles)
     })
 }

@@ -1,7 +1,8 @@
 //! Botanix consensus utility functions
-use alloy_consensus::{Header, Sealed};
+use alloy_consensus::{EthereumTxEnvelope, Header, Sealed, Signed, TxEip4844};
 use alloy_eips::BlockHashOrNumber;
 use alloy_primitives::{keccak256, BlockNumber, Bloom, BloomInput, B256};
+use alloy_rlp::Decodable;
 use bitcoin::{
     consensus::Encodable,
     hashes::{sha256, Hash},
@@ -666,9 +667,21 @@ pub fn validate_psbt_id_by_maximum_cutoff_age(
 /// For example, if the first Bytes are non-deterministic data
 pub fn transactions_signed_from_bytes(
     bytes: impl Iterator<Item = prost::bytes::Bytes>,
-) -> Result<Vec<TransactionSigned>, Box<dyn std::error::Error>> {
-    // TODO:
-    Ok(vec![])
+) -> Result<Vec<EthereumTxEnvelope<TxEip4844>>, Box<dyn std::error::Error>> {
+    let mut txs = Vec::new();
+    for tx in bytes {
+        match EthereumTxEnvelope::<TxEip4844>::decode(
+            &mut tx.to_vec().as_slice(),
+        ) {
+            Ok(signed_tx) => txs.push(signed_tx),
+            Err(e) => {
+                error!("Error decoding signed transaction: {:?}", e);
+                return Err(Box::new(e));
+            }
+        }
+    }
+
+    Ok(txs)
 }
 
 /// Returns true if header represents the start of an epoch
@@ -717,38 +730,42 @@ pub fn seal_slow(header: &Header) -> SealedHeader {
 
 //     const FEERATE: FeeRate = FeeRate::from_sat_per_kwu(5 * 250);
 
-//     #[test]
-//     fn test_transactions_signed_from_bytes() {
-//         let mut tx1 = TransactionSigned::default();
-//         tx1.transaction.set_nonce(1);
-//         let mut tx2 = TransactionSigned::default();
-//         tx2.transaction.set_nonce(2);
-//         let mut tx3 = TransactionSigned::default();
-//         tx3.transaction.set_nonce(3);
+#[test]
+fn test_transactions_signed_from_bytes() {
+    let mut tx1 = TransactionSigned::default();
+    tx1.transaction.set_nonce(1);
+    let mut tx2 = TransactionSigned::default();
+    tx2.transaction.set_nonce(2);
+    let mut tx3 = TransactionSigned::default();
+    tx3.transaction.set_nonce(3);
 
-//         let mut buf1 = Vec::new();
-//         tx1.encode_enveloped(&mut buf1);
-//         let signed_tx1 = TransactionSigned::decode_enveloped(&mut buf1.as_slice()).unwrap();
-//         let bytes1 = prost::bytes::Bytes::copy_from_slice(buf1.as_slice());
+    let mut buf1 = Vec::new();
+    tx1.encode_enveloped(&mut buf1);
+    let signed_tx1 =
+        TransactionSigned::decode_enveloped(&mut buf1.as_slice()).unwrap();
+    let bytes1 = prost::bytes::Bytes::copy_from_slice(buf1.as_slice());
 
-//         let mut buf2 = Vec::new();
-//         tx2.encode_enveloped(&mut buf2);
-//         let signed_tx2 = TransactionSigned::decode_enveloped(&mut buf2.as_slice()).unwrap();
-//         let bytes2 = prost::bytes::Bytes::copy_from_slice(buf2.as_slice());
+    let mut buf2 = Vec::new();
+    tx2.encode_enveloped(&mut buf2);
+    let signed_tx2 =
+        TransactionSigned::decode_enveloped(&mut buf2.as_slice()).unwrap();
+    let bytes2 = prost::bytes::Bytes::copy_from_slice(buf2.as_slice());
 
-//         let mut buf3 = Vec::new();
-//         tx3.encode_enveloped(&mut buf3);
-//         let signed_tx3 = TransactionSigned::decode_enveloped(&mut buf3.as_slice()).unwrap();
-//         let bytes3 = prost::bytes::Bytes::copy_from_slice(buf3.as_slice());
+    let mut buf3 = Vec::new();
+    tx3.encode_enveloped(&mut buf3);
+    let signed_tx3 =
+        TransactionSigned::decode_enveloped(&mut buf3.as_slice()).unwrap();
+    let bytes3 = prost::bytes::Bytes::copy_from_slice(buf3.as_slice());
 
-//         let vec_bytes = [bytes1, bytes2, bytes3];
-//         let txs = transactions_signed_from_bytes(vec_bytes.iter().cloned()).unwrap();
+    let vec_bytes = [bytes1, bytes2, bytes3];
+    let txs =
+        transactions_signed_from_bytes(vec_bytes.iter().cloned()).unwrap();
 
-//         assert_eq!(txs.len(), 3);
-//         assert_eq!(txs[0], signed_tx1);
-//         assert_eq!(txs[1], signed_tx2);
-//         assert_eq!(txs[2], signed_tx3);
-//     }
+    assert_eq!(txs.len(), 3);
+    assert_eq!(txs[0], signed_tx1);
+    assert_eq!(txs[1], signed_tx2);
+    assert_eq!(txs[2], signed_tx3);
+}
 
 //     fn create_random_pegout_id() -> PegoutId {
 //         let mut rng = thread_rng();
