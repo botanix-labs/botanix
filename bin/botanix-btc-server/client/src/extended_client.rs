@@ -12,7 +12,7 @@ use crate::{
         RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
         ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
         SigningPackageRequest, SubscribeToDynafedNotificationsStream,
-        ToSignRequest, WalletStateResponse,
+        ToSignRequest, WalletStateResponse, AbortDkgRequest,
     },
     jwt::{Claims, JwtSecret},
     BtcServerClient,
@@ -116,6 +116,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
     fn abort_signing(
         &mut self,
         request: Empty,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn abort_dkg(
+        &mut self,
+        request: AbortDkgRequest,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn get_signing_status(
         &mut self,
@@ -337,6 +341,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_wallet_state, Empty, WalletStateResponse);
     generate_method!(abort_signing, Empty, Empty);
+    generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(
         get_signing_status,
         GetSigningStatusRequest,

@@ -1232,7 +1232,7 @@ where
                 let fut = || async {
                     let dynafed_sub_message_clone = dynafed_sub_message.clone();
                     match dynafed_sub_message_clone {
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Started { multisig_id }) => {
+                        DynafedSubscriptionMessage::Dkg(DkgNotification::Start { multisig_id }) => {
                             trace!("DKG started for multisig {}", multisig_id);
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
@@ -1241,8 +1241,17 @@ where
                             };
                             tx.send(Ok(payload)).await
                         }
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Restarted { multisig_id }) => {
+                        DynafedSubscriptionMessage::Dkg(DkgNotification::Restart { multisig_id }) => {
                             trace!("DKG restarted for multisig {}", multisig_id);
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
+                                    multisig_id: *multisig_id,
+                                })),
+                            };
+                            tx.send(Ok(payload)).await
+                        }
+                        DynafedSubscriptionMessage::Dkg(DkgNotification::Abort { multisig_id }) => {
+                            trace!("DKG aborted for multisig {}", multisig_id);
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
                                     multisig_id: *multisig_id,
@@ -2689,7 +2698,47 @@ where
         // send the notification async to the subscription method
         if let Err(e) = self
             .dynafed_notifications_tx
-            .send(DynafedSubscriptionMessage::Dkg(DkgNotification::Started { multisig_id }))
+            .send(DynafedSubscriptionMessage::Dkg(DkgNotification::Start { multisig_id }))
+        {
+            // Log but don't fail - no subscribers is a valid scenario
+            warn!(
+                "No subscribers to receive DKG started notification for multisig_id {}: {}",
+                multisig_id, e
+            );
+        }
+
+        Ok(tonic::Response::new(rpc::Empty {}))
+    }
+
+     async fn abort_dkg(
+        &self,
+        req: tonic::Request<rpc::AbortDkgRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let multisig_id: MultisigId = req.into_inner().multisig_id.into();
+
+        if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
+            return Err(already_exists!(
+                "key package already exists for multisig_id {} and cannot be aborted",
+                multisig_id
+            ));
+        }
+        let mut sessions = self.dkg_sessions.lock().await;
+        if !sessions.contains_key(&multisig_id) {
+            return Err(already_exists!(
+                "DKG session not found for multisig_id {}",
+                multisig_id
+            ));
+        }
+
+        sessions.remove(&multisig_id);
+        info!("Requested to abort DKG session for multisig_id {}", multisig_id);
+
+        // send the notification async to the subscription method
+        if let Err(e) = self
+            .dynafed_notifications_tx
+            .send(DynafedSubscriptionMessage::Dkg(DkgNotification::Abort { multisig_id }))
         {
             // Log but don't fail - no subscribers is a valid scenario
             warn!(

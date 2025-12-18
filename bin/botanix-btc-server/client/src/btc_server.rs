@@ -270,6 +270,11 @@ pub struct StartNewDkgRequest {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct AbortDkgRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
     #[prost(uint64, tag = "1")]
@@ -689,6 +694,27 @@ pub mod btc_server_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("btc_server.BtcServer", "StartNewDkg"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn abort_dkg(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AbortDkgRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/AbortDkg",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("btc_server.BtcServer", "AbortDkg"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn subscribe_to_dynafed_notifications(

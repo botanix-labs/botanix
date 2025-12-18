@@ -135,10 +135,12 @@ pub enum DynafedSubscriptionMessage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DkgNotification {
-    /// Started a new DKG session
-    Started { multisig_id: MultisigId },
-    /// Restarted a DKG session
-    Restarted { multisig_id: MultisigId },
+    /// Start a new DKG session
+    Start { multisig_id: MultisigId },
+    /// Restart a DKG session
+    Restart { multisig_id: MultisigId },
+    /// Abort a DKG session
+    Abort { multisig_id: MultisigId },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,8 +162,9 @@ pub enum MigrationEvent {
 impl DkgNotification {
     pub fn multisig_id(&self) -> MultisigId {
         match self {
-            DkgNotification::Started { multisig_id } => *multisig_id,
-            DkgNotification::Restarted { multisig_id } => *multisig_id,
+            DkgNotification::Start { multisig_id } => *multisig_id,
+            DkgNotification::Restart { multisig_id } => *multisig_id,
+            DkgNotification::Abort { multisig_id } => *multisig_id,
         }
     }
 }
@@ -169,11 +172,14 @@ impl DkgNotification {
 impl Display for DkgNotification {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DkgNotification::Started { multisig_id } => {
+            DkgNotification::Start { multisig_id } => {
                 write!(f, "DKG Started {{ multisig_id: {} }}", multisig_id)
             }
-            DkgNotification::Restarted { multisig_id } => {
-                write!(f, "DKG Restarted {{ multisig_id: {} }}", multisig_id)
+            DkgNotification::Restart { multisig_id } => {
+                write!(f, "DKG Restart {{ multisig_id: {} }}", multisig_id)
+            }
+            DkgNotification::Abort { multisig_id } => {
+                write!(f, "DKG Aborted {{ multisig_id: {} }}", multisig_id)
             }
         }
     }

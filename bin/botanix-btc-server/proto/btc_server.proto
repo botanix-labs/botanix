@@ -23,6 +23,8 @@ service BtcServer {
 
     rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
 
+    rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
+
     rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
     // Signing Endpoints
@@ -261,6 +263,10 @@ message GetDkgPayloadsRequest {
 }
 
 message StartNewDkgRequest {
+    uint32 multisig_id = 1;
+}
+
+message AbortDkgRequest {
     uint32 multisig_id = 1;
 }
 

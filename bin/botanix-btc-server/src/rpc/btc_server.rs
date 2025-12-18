@@ -270,6 +270,11 @@ pub struct StartNewDkgRequest {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct AbortDkgRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
     #[prost(uint64, tag = "1")]
@@ -481,6 +486,10 @@ pub mod btc_server_server {
         async fn start_new_dkg(
             &self,
             request: tonic::Request<super::StartNewDkgRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
+        async fn abort_dkg(
+            &self,
+            request: tonic::Request<super::AbortDkgRequest>,
         ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
         /// Server streaming response type for the SubscribeToDynafedNotifications method.
         type SubscribeToDynafedNotificationsStream: tonic::codegen::tokio_stream::Stream<
@@ -1026,6 +1035,51 @@ pub mod btc_server_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = StartNewDkgSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/AbortDkg" => {
+                    #[allow(non_camel_case_types)]
+                    struct AbortDkgSvc<T: BtcServer>(pub Arc<T>);
+                    impl<
+                        T: BtcServer,
+                    > tonic::server::UnaryService<super::AbortDkgRequest>
+                    for AbortDkgSvc<T> {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::AbortDkgRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::abort_dkg(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = AbortDkgSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

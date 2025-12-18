@@ -653,7 +653,7 @@ where
                 info!(target: "consensus::authority::frost_task::start_task", "Received dynafed frost notification from btc-server: {:?}", payload);
                 let dynafed_sub_message = match payload.notification {
                     Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Dkg(dkg)) => {
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Started {
+                        DynafedSubscriptionMessage::Dkg(DkgNotification::Start {
                             multisig_id: dkg.multisig_id.into(),
                         })
                     }
