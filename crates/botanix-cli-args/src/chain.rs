@@ -9,19 +9,14 @@ use botanix_chainspec::{
     constants::{
         create_botanix_config_with_genesis, BotanixMainnetGenesisConfig,
         BotanixTestnetGenesisConfig, BOTANIX_MAINNET, BOTANIX_MAINNET_CHAIN_ID,
-        BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID,
+        BOTANIX_MAINNET_GENESIS, BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID,
+        BOTANIX_TESTNET_GENESIS,
     },
     BotanixChainSpec,
 };
-use botanix_cli_parsers::parsers::SUPPORTED_CHAINS;
 use botanix_configs::federation::FederationTomlConfig;
 use std::{fs, path::PathBuf, str::FromStr};
 use tracing::info;
-
-/// The help info for the --chain flag
-pub fn chain_help() -> String {
-    format!("The chain this node is running.\nPossible values are either a built-in chain or the path to a chain specification file.\n\nBuilt-in chains:\n    {}", SUPPORTED_CHAINS.join(", "))
-}
 
 /// The Botanix network enum
 /// This is used to determine which network to use when creating the chain spec.
@@ -104,7 +99,7 @@ pub fn get_botanix_chain(
                     genesis,
                     BOTANIX_MAINNET.bitcoin_checkpoint_confirmation_depth,
                     BOTANIX_MAINNET_CHAIN_ID,
-                    BOTANIX_MAINNET.inner().genesis_hash(),
+                    BOTANIX_MAINNET_GENESIS,
                     BOTANIX_MAINNET.epoch_length,
                 )
             }
@@ -116,7 +111,7 @@ pub fn get_botanix_chain(
                     genesis,
                     BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth,
                     BOTANIX_TESTNET_CHAIN_ID,
-                    BOTANIX_TESTNET.inner().genesis_hash(),
+                    BOTANIX_TESTNET_GENESIS,
                     BOTANIX_TESTNET.epoch_length,
                 )
             }

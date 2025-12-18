@@ -1,8 +1,6 @@
 use alloy_chains::NamedChain;
 use alloy_consensus::Header;
-use alloy_eips::{
-    eip1559::INITIAL_BASE_FEE as EIP1559_INITIAL_BASE_FEE, eip7840::BlobParams,
-};
+use alloy_eips::eip7840::BlobParams;
 use alloy_genesis::Genesis;
 use alloy_hardforks::Hardfork;
 use alloy_primitives::{Address, B256, U256};
@@ -18,8 +16,8 @@ use std::{ops::Deref, sync::Arc};
 
 use crate::{
     constants::{
-        botanix_mainnet_head, botanix_testnet_head, BOTANIX_INITIAL_BASE_FEE,
-        BOTANIX_MAINNET_CHAIN_ID, BOTANIX_TESTNET, BOTANIX_TESTNET_CHAIN_ID,
+        botanix_mainnet_head, botanix_testnet_head, BOTANIX_MAINNET_CHAIN_ID,
+        BOTANIX_TESTNET_CHAIN_ID,
     },
     BotanixHardfork, BotanixHardforks,
 };
@@ -98,27 +96,6 @@ impl BotanixChainSpec {
 
     pub fn inner_arc(&self) -> Arc<ChainSpec> {
         self.inner().clone().into()
-    }
-
-    /// Returns the initial base fee based on chain id
-    pub fn initial_base_fee_by_chain_id(self) -> u64 {
-        if self.chain().id() == BOTANIX_TESTNET.chain().id() {
-            BOTANIX_INITIAL_BASE_FEE
-        } else {
-            EIP1559_INITIAL_BASE_FEE
-        }
-    }
-
-    /// Get the initial base fee of the genesis block.
-    pub fn initial_base_fee(&self) -> Option<u64> {
-        // If the base fee is set in the genesis block, we use that instead of
-        // the default.
-        let genesis_base_fee = self.clone().initial_base_fee_by_chain_id();
-
-        // If Jalepeno is activated at genesis, we set the initial base fee as
-        // per EIP-1559.
-        (self.inner.fork(BotanixHardfork::Jalapeno).active_at_block(0))
-            .then_some(genesis_base_fee)
     }
 }
 

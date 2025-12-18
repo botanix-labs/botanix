@@ -85,15 +85,15 @@ pub fn is_inturn(
 /// Returns the index of the authority which is currently in turn based on the
 /// seconds passed
 pub const fn current_inturn_index(
-    authorities_len: u64,
-    reference_timestamp: u64,
-    block_time: u64,
+    _authorities_len: u64,
+    _reference_timestamp: u64,
+    _block_time: u64,
 ) -> u64 {
     // Calculate the length of one complete cycle
-    let cycle_length = authorities_len * block_time;
+    // let cycle_length = authorities_len * block_time;
 
     // Calculate the position in the current cycle
-    let _position_in_cycle = reference_timestamp % cycle_length;
+    // let _position_in_cycle = reference_timestamp % cycle_length;
 
     // Determine the current signer index based on the position in the cycle
     // (position_in_cycle / block_time) % authorities_len

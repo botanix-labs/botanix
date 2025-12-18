@@ -73,10 +73,11 @@ where
         .with_ws(RethRpcModule::all_variants())
         .with_ipc(RethRpcModule::all_variants());
 
-    let mut server = rpc_builder.build(module_config, eth_api);
+    let mut server = rpc_builder.build(module_config, eth_api.clone());
 
     // Add a custom rpc namespace
-    let custom_rpc = BotanixRpcExt { provider, botanix: botanix_provider };
+    let custom_rpc =
+        BotanixRpcExt { provider, botanix: botanix_provider, eth_api };
     server.merge_configured(custom_rpc.into_rpc())?;
 
     // Start the server

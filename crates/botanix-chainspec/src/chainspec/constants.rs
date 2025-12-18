@@ -2,6 +2,7 @@ use crate::{BotanixChainSpec, BotanixHardfork};
 use alloy_chains::Chain;
 use alloy_eips::eip1559::{
     DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR, DEFAULT_ELASTICITY_MULTIPLIER,
+    INITIAL_BASE_FEE,
 };
 use alloy_genesis::Genesis;
 use alloy_primitives::{b256, B256, U256};
@@ -24,7 +25,7 @@ pub const BOTANIX_TESTNET_GENESIS: B256 =
 
 /// factor of 1000 less than the initial base fee of 1 gwei suggested in
 /// EIP-1559
-pub const BOTANIX_INITIAL_BASE_FEE: u64 = 1_000_000;
+pub const BOTANIX_TESTNET_INITIAL_BASE_FEE: u64 = 1_000_000;
 
 /// The Botanix specs
 ///
@@ -64,10 +65,10 @@ pub static BOTANIX_TESTNET: Lazy<Arc<BotanixChainSpec>> = Lazy::new(|| {
     ))
     .expect("Can't deserialize Botanix Testnet genesis json");
     let hardforks = BotanixHardfork::botanix_testnet();
-    let genesis_header = SealedHeader::new(
-        make_genesis_header(&genesis, &hardforks),
-        BOTANIX_TESTNET_GENESIS,
-    );
+    let mut header = make_genesis_header(&genesis, &hardforks);
+    // Override the default `base_fee_per_gas`
+    header.base_fee_per_gas = Some(BOTANIX_TESTNET_INITIAL_BASE_FEE);
+    let genesis_header = SealedHeader::new(header, BOTANIX_TESTNET_GENESIS);
     let mut spec = ChainSpec {
         chain: Chain::from_id(BOTANIX_TESTNET_CHAIN_ID),
         genesis,
@@ -144,10 +145,14 @@ pub fn create_botanix_config_with_genesis(
     epoch_length: u64,
 ) -> BotanixChainSpec {
     let hardforks = BotanixHardfork::botanix_testnet();
+    let mut header = make_genesis_header(&genesis, &hardforks);
+    // Override the default `base_fee_per_gas` based on `chain_id``
+    header.base_fee_per_gas = Some(initial_base_fee_by_chain_id(chain_id));
     let genesis_header = SealedHeader::new(
-        make_genesis_header(&genesis, &hardforks),
+        header,
         genesis_hash.unwrap_or(BOTANIX_TESTNET_GENESIS),
     );
+
     let chainspec = ChainSpec {
         chain: Chain::from_id(chain_id),
         genesis,
@@ -155,10 +160,6 @@ pub fn create_botanix_config_with_genesis(
         paris_block_and_final_difficulty: Some((0, U256::from(0))),
         hardforks,
         deposit_contract: None, // Only relevant for PoS chains
-        base_fee_params: BaseFeeParamsKind::Constant(BaseFeeParams::new(
-            DEFAULT_BASE_FEE_MAX_CHANGE_DENOMINATOR.into(),
-            DEFAULT_ELASTICITY_MULTIPLIER.into(),
-        )),
         prune_delete_limit: 1700,
         ..Default::default()
     };
@@ -174,8 +175,17 @@ pub fn create_botanix_config_with_genesis(
     }
 }
 
-// TODO: fix this
+/// Returns the initial base fee based on chain id
+pub fn initial_base_fee_by_chain_id(chain_id: u64) -> u64 {
+    if chain_id == BOTANIX_TESTNET_CHAIN_ID {
+        BOTANIX_TESTNET_INITIAL_BASE_FEE
+    } else {
+        INITIAL_BASE_FEE
+    }
+}
+
 /// Dummy Head for Botanix Testnet
+/// Currently not used.
 pub fn botanix_testnet_head() -> Head {
     Head {
         number: 57_638_970,
@@ -186,8 +196,8 @@ pub fn botanix_testnet_head() -> Head {
     }
 }
 
-// TODO: fix this
-/// Returns the canonical head for Botanix Mainnet.
+/// Dummy head for Botanix Mainnet.
+/// Currently not used.
 pub fn botanix_mainnet_head() -> Head {
     Head { number: 40_000_000, timestamp: 1751250600, ..Default::default() }
 }
