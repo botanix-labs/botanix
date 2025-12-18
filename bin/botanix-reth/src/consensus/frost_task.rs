@@ -20,7 +20,7 @@ use botanix_authority_peg::peg_contract::{PeginMeta, PegoutWithId};
 use botanix_authority_rsp::RandomSource;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, ConsensusCheckpointRequest, GrpcClientError,
-    PendingPegout, SubscribeToDkgNotificationsStream, Utxo,
+    PendingPegout, SubscribeToDynafedNotificationsStream, Utxo,
 };
 use botanix_chainspec::BotanixChainSpec;
 use botanix_comet_bft_rpc::{
@@ -117,9 +117,9 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     metrics: Arc<AuthorityMetrics>,
     /// cometbft light client provider
     cbft_rpc_provider: HttpClient,
-    /// DKG frost notifications subscriber
-    dkg_frost_notifications_tx:
-        tokio::sync::broadcast::Sender<SubscribeToDkgNotificationsStream>,
+    /// Dynafed frost notifications subscriber
+    dynafed_frost_notifications_tx:
+        tokio::sync::broadcast::Sender<SubscribeToDynafedNotificationsStream>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -155,7 +155,7 @@ where
         random_source_provider: Source,
         metrics: Arc<AuthorityMetrics>,
         cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
-        dkg_frost_notifications_tx: tokio::sync::broadcast::Sender<SubscribeToDkgNotificationsStream>,
+        dynafed_frost_notifications_tx: tokio::sync::broadcast::Sender<SubscribeToDynafedNotificationsStream>,
     ) -> Self {
         info!(target: "consensus::authority::frost_task::new", "Frost authority index: {}/{}", config.authority_index, config.authorities.len() - 1);
 
@@ -184,7 +184,7 @@ where
             compressor,
             metrics,
             cbft_rpc_provider,
-            dkg_frost_notifications_tx,
+            dynafed_frost_notifications_tx,
         }
     }
 
@@ -563,7 +563,7 @@ where
             self.storage.reth_database.subscribe_to_canonical_state();
 
         let mut abci_started = false;
-        let mut dkg_frost_notifications_rx = self.dkg_frost_notifications_tx.subscribe();
+        let mut dynafed_frost_notifications_rx = self.dynafed_frost_notifications_tx.subscribe();
         let frost_handle_clone = self.frost_handle.clone();
         let frost_config_clone = self.frost_config.clone();
         let storage_clone = self.storage.clone();
@@ -648,7 +648,7 @@ where
             }
 
             // Receive DKG frost notifications
-            while let Ok(notification) = dkg_frost_notifications_rx.try_recv() {
+            while let Ok(notification) = dynafed_frost_notifications_rx.try_recv() {
                 info!(target: "consensus::authority::frost_task::start_task", "Received DKG frost notification from btc-server: {:?}", notification);
 
                 // The returned tx needs to be stored with a mapping to the multisig_id

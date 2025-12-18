@@ -43,7 +43,7 @@ pub struct GetFinalizedPegoutIdsResponse {
     pub is_final: bool,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct SubscribeToDkgNotificationsStream {
+pub struct SubscribeToDynafedNotificationsStream {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
 }
@@ -416,20 +416,20 @@ pub mod btc_server_server {
             &self,
             request: tonic::Request<super::StartNewDkgRequest>,
         ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
-        /// Server streaming response type for the SubscribeToDkgNotifications method.
-        type SubscribeToDkgNotificationsStream: tonic::codegen::tokio_stream::Stream<
+        /// Server streaming response type for the SubscribeToDynafedNotifications method.
+        type SubscribeToDynafedNotificationsStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<
-                    super::SubscribeToDkgNotificationsStream,
+                    super::SubscribeToDynafedNotificationsStream,
                     tonic::Status,
                 >,
             >
             + std::marker::Send
             + 'static;
-        async fn subscribe_to_dkg_notifications(
+        async fn subscribe_to_dynafed_notifications(
             &self,
             request: tonic::Request<super::Empty>,
         ) -> std::result::Result<
-            tonic::Response<Self::SubscribeToDkgNotificationsStream>,
+            tonic::Response<Self::SubscribeToDynafedNotificationsStream>,
             tonic::Status,
         >;
         async fn get_round1_signing_package(
@@ -975,15 +975,15 @@ pub mod btc_server_server {
                     };
                     Box::pin(fut)
                 }
-                "/btc_server.BtcServer/SubscribeToDkgNotifications" => {
+                "/btc_server.BtcServer/SubscribeToDynafedNotifications" => {
                     #[allow(non_camel_case_types)]
-                    struct SubscribeToDkgNotificationsSvc<T: BtcServer>(pub Arc<T>);
+                    struct SubscribeToDynafedNotificationsSvc<T: BtcServer>(pub Arc<T>);
                     impl<
                         T: BtcServer,
                     > tonic::server::ServerStreamingService<super::Empty>
-                    for SubscribeToDkgNotificationsSvc<T> {
-                        type Response = super::SubscribeToDkgNotificationsStream;
-                        type ResponseStream = T::SubscribeToDkgNotificationsStream;
+                    for SubscribeToDynafedNotificationsSvc<T> {
+                        type Response = super::SubscribeToDynafedNotificationsStream;
+                        type ResponseStream = T::SubscribeToDynafedNotificationsStream;
                         type Future = BoxFuture<
                             tonic::Response<Self::ResponseStream>,
                             tonic::Status,
@@ -994,7 +994,7 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::subscribe_to_dkg_notifications(
+                                <T as BtcServer>::subscribe_to_dynafed_notifications(
                                         &inner,
                                         request,
                                     )
@@ -1009,7 +1009,7 @@ pub mod btc_server_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = SubscribeToDkgNotificationsSvc(inner);
+                        let method = SubscribeToDynafedNotificationsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

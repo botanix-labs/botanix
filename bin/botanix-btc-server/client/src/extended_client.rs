@@ -11,7 +11,7 @@ use crate::{
         GetSigningStatusResponse, GetTrackedTxsResponse, MakeTxRequest,
         RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
         ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
-        SigningPackageRequest, SubscribeToDkgNotificationsStream,
+        SigningPackageRequest, SubscribeToDynafedNotificationsStream,
         ToSignRequest, WalletStateResponse,
     },
     jwt::{Claims, JwtSecret},
@@ -170,7 +170,7 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
             GrpcClientError,
         >,
     >;
-    fn subscribe_to_dkg_notifications(
+    fn subscribe_to_dynafed_notifications(
         &mut self,
         request: Empty,
     ) -> BoxFuture<
@@ -178,7 +178,7 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         Result<
             impl tonic::codegen::tokio_stream::Stream<
                     Item = Result<
-                        SubscribeToDkgNotificationsStream,
+                        SubscribeToDynafedNotificationsStream,
                         tonic::Status,
                     >,
                 > + Send
@@ -370,9 +370,9 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
 
     generate_stream_method!(
-        subscribe_to_dkg_notifications,
+        subscribe_to_dynafed_notifications,
         Empty,
-        SubscribeToDkgNotificationsStream
+        SubscribeToDynafedNotificationsStream
     );
 }
 

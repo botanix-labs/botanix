@@ -865,8 +865,8 @@ where
         Result<rpc::GetFinalizedPegoutIdsResponse, tonic::Status>,
     >;
 
-    type SubscribeToDkgNotificationsStream = ReceiverStream<
-        Result<rpc::SubscribeToDkgNotificationsStream, tonic::Status>,
+    type SubscribeToDynafedNotificationsStream = ReceiverStream<
+        Result<rpc::SubscribeToDynafedNotificationsStream, tonic::Status>,
     >;
 
     /* General Endpoints */
@@ -1204,12 +1204,12 @@ where
         Ok(tonic::Response::new(ReceiverStream::new(rx)))
     }
 
-    /// Subscribe to all DKG notifications
-    async fn subscribe_to_dkg_notifications(
+    /// Subscribe to all dynafed notifications
+    async fn subscribe_to_dynafed_notifications(
         &self,
         req: tonic::Request<rpc::Empty>,
     ) -> Result<
-        tonic::Response<Self::SubscribeToDkgNotificationsStream>,
+        tonic::Response<Self::SubscribeToDynafedNotificationsStream>,
         tonic::Status,
     > {
         self.validate_jwt(&req)?;
@@ -1237,7 +1237,7 @@ where
                             multisig_id,
                         } => {
                             let payload =
-                                rpc::SubscribeToDkgNotificationsStream {
+                                rpc::SubscribeToDynafedNotificationsStream {
                                     multisig_id: *multisig_id,
                                 };
                             tx.send(Ok(payload)).await

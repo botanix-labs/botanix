@@ -43,7 +43,7 @@ pub struct GetFinalizedPegoutIdsResponse {
     pub is_final: bool,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct SubscribeToDkgNotificationsStream {
+pub struct SubscribeToDynafedNotificationsStream {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
 }
@@ -625,12 +625,12 @@ pub mod btc_server_client {
                 .insert(GrpcMethod::new("btc_server.BtcServer", "StartNewDkg"));
             self.inner.unary(req, path, codec).await
         }
-        pub async fn subscribe_to_dkg_notifications(
+        pub async fn subscribe_to_dynafed_notifications(
             &mut self,
             request: impl tonic::IntoRequest<super::Empty>,
         ) -> std::result::Result<
             tonic::Response<
-                tonic::codec::Streaming<super::SubscribeToDkgNotificationsStream>,
+                tonic::codec::Streaming<super::SubscribeToDynafedNotificationsStream>,
             >,
             tonic::Status,
         > {
@@ -644,14 +644,14 @@ pub mod btc_server_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/SubscribeToDkgNotifications",
+                "/btc_server.BtcServer/SubscribeToDynafedNotifications",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
                         "btc_server.BtcServer",
-                        "SubscribeToDkgNotifications",
+                        "SubscribeToDynafedNotifications",
                     ),
                 );
             self.inner.server_streaming(req, path, codec).await

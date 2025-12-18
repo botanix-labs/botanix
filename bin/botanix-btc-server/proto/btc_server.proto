@@ -23,7 +23,7 @@ service BtcServer {
 
     rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
 
-    rpc SubscribeToDkgNotifications(Empty) returns(stream SubscribeToDkgNotificationsStream) {}
+    rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
     // Signing Endpoints
 
@@ -101,7 +101,7 @@ message GetFinalizedPegoutIdsResponse {
     bool is_final = 4;
 }
 
-message SubscribeToDkgNotificationsStream {
+message SubscribeToDynafedNotificationsStream {
     uint32 multisig_id = 1;
 }
 
