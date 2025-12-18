@@ -32,7 +32,7 @@ use botanix_data_parser::{
 };
 use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
 use btcserverlib::{
-    database::LEGACY_MULTISIG_ID, wallet::psbt::frost_id_from_bytes,
+    database::{LEGACY_MULTISIG_ID, MultisigId}, dkg::{DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification}, wallet::psbt::frost_id_from_bytes
 };
 use futures::{pin_mut, StreamExt};
 use reth_network::{
@@ -53,6 +53,7 @@ use reth_provider::{
 };
 use reth_revm::primitives::FixedBytes;
 use reth_storage_api::NodePrimitivesProvider;
+use uuid::Uuid;
 use std::{
     collections::{BTreeMap, HashMap},
     str::FromStr,
@@ -102,7 +103,7 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     /// A handle to the `DkgRunnerTask` task. This is only `Some` if no
     /// aggregate public key is available, and the `start_task` method has
     /// hence started the DKG process.
-    dkg_tasks: Option<BTreeMap<u32, mpsc::Sender<DkgResponse>>>,
+    dkg_tasks: Option<BTreeMap<MultisigId, mpsc::Sender<DkgResponse>>>,
     /// Pre-configured data-parser
     compressor: DataParser,
     /// btc server client
@@ -550,10 +551,10 @@ where
                 Arc::clone(&self.metrics),
             );
             if let Some(tasks) = self.dkg_tasks.as_mut() {
-                tasks.insert(*LEGACY_MULTISIG_ID, tx.clone());
+                tasks.insert(LEGACY_MULTISIG_ID, tx.clone());
             } else {
                 let mut tasks = BTreeMap::new();
-                tasks.insert(*LEGACY_MULTISIG_ID, tx.clone());
+                tasks.insert(LEGACY_MULTISIG_ID, tx.clone());
                 self.dkg_tasks = Some(tasks);
             }
 
@@ -648,36 +649,75 @@ where
             }
 
             // Receive DKG frost notifications
-            while let Ok(notification) = dynafed_frost_notifications_rx.try_recv() {
-                info!(target: "consensus::authority::frost_task::start_task", "Received DKG frost notification from btc-server: {:?}", notification);
-
-                // The returned tx needs to be stored with a mapping to the multisig_id
-                if let Some(tasks) = self.dkg_tasks.as_mut() {
-                    if tasks.contains_key(&notification.multisig_id) {
-                        warn!(target: "consensus::authority::frost_task::start_task", "DKG task for multisig id {} already exists, skipping...", notification.multisig_id);
+            while let Ok(payload) = dynafed_frost_notifications_rx.try_recv() {
+                info!(target: "consensus::authority::frost_task::start_task", "Received dynafed frost notification from btc-server: {:?}", payload);
+                let dynafed_sub_message = match payload.notification {
+                    Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Dkg(dkg)) => {
+                        DynafedSubscriptionMessage::Dkg(DkgNotification::Started {
+                            multisig_id: dkg.multisig_id.into(),
+                        })
+                    }
+                    Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Migration(migration)) => {
+                        let event = match btcserverlib::rpc::MigrationEvent::try_from(migration.event).expect("Invalid migration event") {
+                            btcserverlib::rpc::MigrationEvent::MigrationStart => MigrationEvent::Start,
+                            btcserverlib::rpc::MigrationEvent::MigrationEnd => MigrationEvent::End,
+                            btcserverlib::rpc::MigrationEvent::MigrationAbort => MigrationEvent::Abort,
+                            btcserverlib::rpc::MigrationEvent::Unspecified => {
+                                warn!(target: "consensus::authority::frost_task::start_task", "Unspecified migration event received");
+                                continue;
+                            }
+                        };
+                        DynafedSubscriptionMessage::Migration(MigrationNotification {
+                            event,
+                            multisig_id_from: migration.multisig_id_from.into(),
+                            multisig_id_to: migration.multisig_id_to.into(),
+                            migration_id: Uuid::from_slice(migration.migration_id.as_bytes())
+                                .expect("Invalid migration UUID"),
+                        })
+                    }
+                    None => {
+                        warn!(target: "consensus::authority::frost_task::start_task", "Received dynafed frost notification with no payload");
                         continue;
                     }
-                    // Start the dkg state machine task runner for that multisig id
-                    let tx = DkgRunnerTask::new(
-                        frost_handle_clone.clone(),
-                        frost_config_clone.authorities.as_ref(),
-                        storage_clone.clone(),
-                        btc_server_clone.clone(),
-                        Arc::clone(&metrics_clone),
-                    );
-                    tasks.insert(notification.multisig_id, tx.clone());
-                } else {
-                    let mut tasks = BTreeMap::new();
-                    // Start the dkg state machine task runner for that multisig id
-                    let tx = DkgRunnerTask::new(
-                        frost_handle_clone.clone(),
-                        frost_config_clone.authorities.as_ref(),
-                        storage_clone.clone(),
-                        btc_server_clone.clone(),
-                        Arc::clone(&metrics_clone),
-                    );
-                    tasks.insert(notification.multisig_id, tx.clone());
-                    self.dkg_tasks = Some(tasks);
+                };
+
+                match dynafed_sub_message {
+                    DynafedSubscriptionMessage::Dkg(notification) => {
+                        let multisig_id = notification.multisig_id();
+                        info!(target: "consensus::authority::frost_task::start_task", "Handling DKG notification for multisig id {}", multisig_id);
+
+                        // The returned tx needs to be stored with a mapping to the multisig_id
+                        if let Some(tasks) = self.dkg_tasks.as_mut() {
+                            if tasks.contains_key(&multisig_id) {
+                                warn!(target: "consensus::authority::frost_task::start_task", "DKG task for multisig id {} already exists, skipping...", multisig_id);
+                                continue;
+                            }
+                            // Start the dkg state machine task runner for that multisig id
+                            let tx = DkgRunnerTask::new(
+                                frost_handle_clone.clone(),
+                                frost_config_clone.authorities.as_ref(),
+                                storage_clone.clone(),
+                                btc_server_clone.clone(),
+                                Arc::clone(&metrics_clone),
+                            );
+                            tasks.insert(multisig_id, tx.clone());
+                        } else {
+                            let mut tasks = BTreeMap::new();
+                            // Start the dkg state machine task runner for that multisig id
+                            let tx = DkgRunnerTask::new(
+                                frost_handle_clone.clone(),
+                                frost_config_clone.authorities.as_ref(),
+                                storage_clone.clone(),
+                                btc_server_clone.clone(),
+                                Arc::clone(&metrics_clone),
+                            );
+                            tasks.insert(multisig_id, tx.clone());
+                            self.dkg_tasks = Some(tasks);
+                        }
+                    }
+                    DynafedSubscriptionMessage::Migration(notification) => {
+                        // TODO: do migrations
+                    }
                 }
             }
 
@@ -809,7 +849,7 @@ where
                             warn!(target: "consensus::authority::frost_task::start_task", "Dkg task is not running, dropping request...");
                             continue;
                         };
-                        if let Some(task) = tasks.get(&dkg_response.multisig_id) {
+                        if let Some(task) = tasks.get(&dkg_response.multisig_id.into()) {
                             if let Err(err) = task.send(dkg_response).await {
                                 warn!(target: "consensus::authority::frost_task::start_task", "Failed to send dkg response to task: {:?}", err);
                                 continue;

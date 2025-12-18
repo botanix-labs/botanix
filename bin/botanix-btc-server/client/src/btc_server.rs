@@ -42,10 +42,44 @@ pub struct GetFinalizedPegoutIdsResponse {
     #[prost(bool, tag = "4")]
     pub is_final: bool,
 }
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SubscribeToDynafedNotificationsStream {
+    #[prost(
+        oneof = "subscribe_to_dynafed_notifications_stream::Notification",
+        tags = "1, 2"
+    )]
+    pub notification: ::core::option::Option<
+        subscribe_to_dynafed_notifications_stream::Notification,
+    >,
+}
+/// Nested message and enum types in `SubscribeToDynafedNotificationsStream`.
+pub mod subscribe_to_dynafed_notifications_stream {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Notification {
+        #[prost(message, tag = "1")]
+        Dkg(super::DkgNotification),
+        #[prost(message, tag = "2")]
+        Migration(super::MigrationNotification),
+    }
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct DkgNotification {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MigrationNotification {
+    #[prost(enumeration = "MigrationEvent", tag = "1")]
+    pub event: i32,
+    /// The multisig being migrated FROM
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    /// The multisig being migrated TO
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
+    /// UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
+    #[prost(string, tag = "4")]
+    pub migration_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
@@ -320,6 +354,38 @@ pub struct GetSessionIdsRequest {
 pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MigrationEvent {
+    Unspecified = 0,
+    MigrationStart = 1,
+    MigrationEnd = 2,
+    MigrationAbort = 3,
+}
+impl MigrationEvent {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MIGRATION_EVENT_UNSPECIFIED",
+            Self::MigrationStart => "MIGRATION_START",
+            Self::MigrationEnd => "MIGRATION_END",
+            Self::MigrationAbort => "MIGRATION_ABORT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MIGRATION_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
+            "MIGRATION_START" => Some(Self::MigrationStart),
+            "MIGRATION_END" => Some(Self::MigrationEnd),
+            "MIGRATION_ABORT" => Some(Self::MigrationAbort),
+            _ => None,
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

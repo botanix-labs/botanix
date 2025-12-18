@@ -102,7 +102,28 @@ message GetFinalizedPegoutIdsResponse {
 }
 
 message SubscribeToDynafedNotificationsStream {
+    oneof notification {
+        DkgNotification dkg = 1;
+        MigrationNotification migration = 2;
+    }
+}
+
+message DkgNotification {
     uint32 multisig_id = 1;
+}
+
+message MigrationNotification {
+    MigrationEvent event = 1;
+    uint32 multisig_id_from = 2;  // The multisig being migrated FROM
+    uint32 multisig_id_to = 3;    // The multisig being migrated TO
+    string migration_id = 4;   // UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
+}
+
+enum MigrationEvent {
+    MIGRATION_EVENT_UNSPECIFIED = 0;
+    MIGRATION_START = 1;
+    MIGRATION_END = 2;
+    MIGRATION_ABORT = 3;
 }
 
 message FinalizeSignerRequest {

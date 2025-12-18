@@ -25,7 +25,7 @@ use btcserverlib::{
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
     database::{self, MultisigId},
-    dkg::{self, DkgSubscriptionMessage},
+    dkg::{self, DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification},
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
     http::{create_web_server, state::ServerState},
@@ -285,9 +285,9 @@ struct App<BitcoinRpcApi> {
     fall_back_fee_rate: bitcoin::FeeRate,
     /// telemetry
     telemetry: Option<Arc<Telemetry>>,
-    /// dkg notifications sender
-    dkg_notifications_tx:
-        Arc<tokio::sync::broadcast::Sender<DkgSubscriptionMessage>>,
+    /// dynafed notifications sender
+    dynafed_notifications_tx:
+        Arc<tokio::sync::broadcast::Sender<DynafedSubscriptionMessage>>,
 }
 
 impl<BitcoindClient> App<BitcoindClient>
@@ -696,8 +696,8 @@ where
         }
         let dkg_sessions = Arc::new(Mutex::new(sessions));
 
-        let (dkg_notifications_tx, _dkg_notifications_rx) =
-            tokio::sync::broadcast::channel::<DkgSubscriptionMessage>(10000);
+        let (dynafed_notifications_tx, _dynafed_notifications_rx) =
+            tokio::sync::broadcast::channel::<DynafedSubscriptionMessage>(10000);
 
         Ok(Self {
             start_time: Instant::now(),
@@ -717,7 +717,7 @@ where
             bitcoind_client,
             fall_back_fee_rate,
             telemetry,
-            dkg_notifications_tx: Arc::new(dkg_notifications_tx),
+            dynafed_notifications_tx: Arc::new(dynafed_notifications_tx),
         })
     }
 
@@ -1215,49 +1215,98 @@ where
         self.validate_jwt(&req)?;
         let _request = req.into_inner();
 
-        let mut dkg_notifications_receiver =
-            self.dkg_notifications_tx.subscribe();
+        let mut dynafed_notifications_receiver =
+            self.dynafed_notifications_tx.subscribe();
 
         let (tx, rx) = tokio::sync::mpsc::channel(100);
-        info!("subscribe_to_dkg_notifications: Starting multisig task...",);
+        info!("subscribe_to_dynafed_notifications: Starting multisig task...",);
         tokio::spawn(async move {
-            trace!("subscribe_to_dkg_notifications stream task: Created multisig notifications stream.");
-            while let Ok(dkg_sub_message) =
-                dkg_notifications_receiver.recv().await
+            trace!("subscribe_to_dynafed_notifications stream task: Created multisig notifications stream.");
+            while let Ok(dynafed_sub_message) =
+                dynafed_notifications_receiver.recv().await
             {
                 trace!(
-                    "subscribe_to_dkg_notifications stream task: Received payload: {:?}",
-                    dkg_sub_message.to_string()
+                    "subscribe_to_dynafed_notifications stream task: Received payload: {:?}",
+                    dynafed_sub_message.to_string()
                 );
                 let fut = || async {
-                    let tx = tx.clone();
-                    match dkg_sub_message {
-                        DkgSubscriptionMessage::StartedDkg { multisig_id }
-                        | DkgSubscriptionMessage::RestartedDkg {
-                            multisig_id,
-                        } => {
-                            let payload =
-                                rpc::SubscribeToDynafedNotificationsStream {
+                    let dynafed_sub_message_clone = dynafed_sub_message.clone();
+                    match dynafed_sub_message_clone {
+                        DynafedSubscriptionMessage::Dkg(DkgNotification::Started { multisig_id }) => {
+                            trace!("DKG started for multisig {}", multisig_id);
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
                                     multisig_id: *multisig_id,
-                                };
+                                })),
+                            };
+                            tx.send(Ok(payload)).await
+                        }
+                        DynafedSubscriptionMessage::Dkg(DkgNotification::Restarted { multisig_id }) => {
+                            trace!("DKG restarted for multisig {}", multisig_id);
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
+                                    multisig_id: *multisig_id,
+                                })),
+                            };
+                            tx.send(Ok(payload)).await
+                        }
+                        DynafedSubscriptionMessage::Migration(migration) => {
+
+                            let MigrationNotification { 
+                                event,
+                                migration_id,
+                                multisig_id_from,
+                                multisig_id_to,
+                            } = migration;
+
+                            let migration_event = match event {
+                                MigrationEvent::Start => rpc::MigrationEvent::MigrationStart,
+                                MigrationEvent::End => rpc::MigrationEvent::MigrationEnd,
+                                MigrationEvent::Abort => rpc::MigrationEvent::MigrationAbort,
+                            } as i32;
+
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Migration(rpc::MigrationNotification {
+                                    migration_id: migration_id.to_string(),
+                                    multisig_id_from: multisig_id_from.as_u32(),
+                                    multisig_id_to: multisig_id_to.as_u32(),
+                                    event: migration_event,
+                                })),
+                            };
+
+                            match event {
+                                MigrationEvent::Start => {
+                                    trace!("Multisig Migration {} starting: {} -> {}", 
+                                        migration_id,
+                                        multisig_id_from,
+                                        multisig_id_to
+                                    );
+                                }
+                                MigrationEvent::End => {
+                                    trace!("Multisig Migration {} ending", migration_id);
+                                }
+                                MigrationEvent::Abort => {
+                                    trace!("Multisig Migration {} aborted", migration_id);
+                                }
+                            }
                             tx.send(Ok(payload)).await
                         }
                     }
                 };
                 if let Err(e) = retry_exec(
-                    "sending_dkg_notification",
+                    "sending_dynafed_notification",
                     fut,
                     3,
                     Duration::from_secs(2),
                 )
                 .await
                 {
-                    error!("subscribe_to_dkg_notifications stream task: client disconnected or send failed permanently: {:?}. Stopping stream task.", e);
+                    error!("subscribe_to_dynafed_notifications stream task: client disconnected or send failed permanently: {:?}. Stopping stream task.", e);
                     break;
                 };
             }
             trace!(
-                "subscribe_to_dkg_notifications stream task: Stream cancelled."
+                "subscribe_to_dynafed_notifications stream task: Stream cancelled."
             );
         });
 
@@ -2639,8 +2688,8 @@ where
 
         // send the notification async to the subscription method
         if let Err(e) = self
-            .dkg_notifications_tx
-            .send(DkgSubscriptionMessage::StartedDkg { multisig_id })
+            .dynafed_notifications_tx
+            .send(DynafedSubscriptionMessage::Dkg(DkgNotification::Started { multisig_id }))
         {
             // Log but don't fail - no subscribers is a valid scenario
             warn!(
