@@ -234,22 +234,21 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(
                 bitcoin::consensus::serialize(&tx_out.script_pubkey);
             let eth_address = pegin.address().to_vec();
 
-            let multisig_id = match multisig_id_from_public_key(
+            let multisig_id = multisig_id_from_public_key(
                 aggregate_public_keys,
                 &pegin.aggregate_publickey(),
-            ) {
-                Some(id) => id.as_u32(),
-                None => {
-                    // For this to happen, the pegin would have belonged to a multisig that this
-                    // node was not a part of. This should not happen, as the pegin should not have
-                    // been accepted by the minting contract.
-                    error!(
-                        "No multisig_id found for aggregate public key {:?}, skipping pegin",
-                        pegin.aggregate_publickey()
-                    );
-                    return None;
-                }
-            };
+            )
+            .map(|id| id.as_u32())
+            .ok_or_else(|| {
+                // For this to happen, the pegin would have belonged to a multisig that this
+                // node was not a part of. This should not happen, as the pegin should not have
+                // been accepted by the minting contract.
+                error!(
+                    "No multisig_id found for aggregate public key {:?}, skipping pegin",
+                    pegin.aggregate_publickey()
+                )
+            })
+            .ok()?;
 
             Some(models::PeginData { txid, vout, value, script_pubkey, eth_address, multisig_id })
         })
