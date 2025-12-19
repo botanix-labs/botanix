@@ -10,13 +10,14 @@ use bitcoin_hashes::Hash;
 use frost_secp256k1_tr as frost;
 use thiserror::Error;
 
-use crate::database::version::UtxoVersion;
+use crate::database::{version::UtxoVersion, MultisigId};
 
 // input keys
 const ETH_ADDRESS_KEY_TYPE: u8 = 1;
 const SIGNING_COMMITMENTS_KEY_TYPE: u8 = 2;
 const PARTIAL_SIGNATURE_KEY_TYPE: u8 = 3;
 const UTXO_VERSION_TYPE: u8 = 4;
+const MULTISIG_ID_KEY_TYPE: u8 = 5;
 
 // output keys
 const PEGOUT_ID_KEY_TYPE: u8 = 4;
@@ -42,6 +43,12 @@ lazy_static::lazy_static! {
     pub static ref UTXO_VERSION_TYPE_KEY: ProprietaryKey = ProprietaryKey {
         prefix: PROP_KEY_PREFIX.to_vec(),
         subtype: UTXO_VERSION_TYPE,
+        key: Vec::new(),
+    };
+
+    static ref MULTISIG_ID_KEY: ProprietaryKey = ProprietaryKey {
+        prefix: PROP_KEY_PREFIX.to_vec(),
+        subtype: MULTISIG_ID_KEY_TYPE,
         key: Vec::new(),
     };
 }
@@ -95,6 +102,23 @@ pub trait PsbtInputExt: BorrowMut<PsbtInput> {
                 let mut ret = [0u8; 20];
                 ret.copy_from_slice(&b[..]);
                 Some(ret)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn set_multisig_id(&mut self, multisig_id: MultisigId) {
+        self.borrow_mut()
+            .proprietary
+            .insert(MULTISIG_ID_KEY.clone(), multisig_id.as_u32().to_le_bytes().to_vec());
+    }
+
+    fn multisig_id(&self) -> Option<MultisigId> {
+        self.borrow().proprietary.get(&MULTISIG_ID_KEY).and_then(|b| {
+            if b.len() == 4 {
+                let raw = u32::from_le_bytes(b.as_slice().try_into().ok()?);
+                Some(MultisigId::new(raw))
             } else {
                 None
             }
@@ -333,6 +357,7 @@ pub(crate) struct InputDTO {
     pub output: TxOut,
     pub eth_address: Option<[u8; 20]>,
     pub version: UtxoVersion,
+    pub multisig_id: MultisigId,
 }
 
 /// Create psbt with proprietary tweak fields
@@ -370,6 +395,7 @@ pub(crate) fn create_psbt(
             psbt_input.set_eth_address(eth_addr);
         }
         psbt_input.add_version_to_psbt(utxo.version as u32);
+        psbt_input.set_multisig_id(utxo.multisig_id);
     }
 
     // add output meta

@@ -61,19 +61,22 @@ pub fn get_round1_signing_package(
     validate_psbt(psbt, ROUND1, min_signers, db)?;
 
     let num_inputs = psbt.inputs.len();
-
-    let key_package =
-        db.get_key_package()?.ok_or(SigningRound1Error::MissingKeyPackage)?;
-    // Get our secret package
-    let secret = key_package.signing_share();
     let mut nonces = vec![];
-
     let mut rng = thread_rng();
+
     // Order here is important for both the signer and coordinator
     // Each nonce pair is commitment to a input of the tx
     // When the signing package is produced the signer should be careful to
     // Verify that the nonce pairs are in the same order as the inputs
     for i in 0..num_inputs {
+        let multisig_id = psbt.inputs[i]
+            .multisig_id()
+            .ok_or(SigningRound1Error::MissingMultisigId)?;
+        let key_package = db
+            .get_key_package_by_id(multisig_id)?
+            .ok_or(SigningRound1Error::MissingKeyPackage)?;
+        let secret = key_package.signing_share();
+
         let nonce_pkg = frost::round1::commit(secret, &mut rng);
         psbt.inputs[i].set_signing_commitment(*my_identifier, &nonce_pkg.1);
         nonces.push(nonce_pkg);
@@ -124,13 +127,17 @@ pub fn get_round2_signing_package(
         }
     }
 
-    let key_package =
-        db.get_key_package()?.ok_or(SigningRound2Error::MissingKeyPackage)?;
-
     // Get a partial signature for each input
     for (index, (signing_package, psbt_in)) in
         signing_packages.iter_mut().zip(psbt.inputs.iter_mut()).enumerate()
     {
+        let multisig_id = psbt_in
+            .multisig_id()
+            .ok_or(SigningRound2Error::MissingMultisigId)?;
+        let key_package = db
+            .get_key_package_by_id(multisig_id)?
+            .ok_or(SigningRound2Error::MissingKeyPackage)?;
+
         let eth_address_tweak = psbt_in.eth_address();
         // TODO this will need to be revisited when we add tapleaves as all signatures will need
         // to tweak with the merkel root
