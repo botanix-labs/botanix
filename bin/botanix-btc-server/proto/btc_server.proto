@@ -110,8 +110,16 @@ message SubscribeToDynafedNotificationsStream {
     }
 }
 
+enum DkgEvent {
+    DKG_EVENT_UNSPECIFIED = 0;
+    DKG_START = 1;
+    DKG_RESTART = 2;
+    DKG_ABORT = 3;
+}
+
 message DkgNotification {
-    uint32 multisig_id = 1;
+    DkgEvent event = 1;
+    uint32 multisig_id = 2;
 }
 
 message MigrationNotification {

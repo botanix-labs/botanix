@@ -12,6 +12,7 @@ use crate::{
         network::BotanixNetworkPrimitives, BotanixNode,
     },
 };
+use alloy_primitives::Address;
 use botanix_activation_manager::{ActivationManager, VoteWatcher};
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
@@ -36,8 +37,6 @@ use botanix_storage::{
 use btcserverlib::database::MultisigId;
 use futures::{pin_mut, StreamExt};
 use reth_db::DatabaseEnv;
-// use reth_evm::execute::BlockExecutorProvider;
-use alloy_primitives::Address;
 use reth_network::{
     frost::manager::{FrostConfig, ToFrostManager},
     NetworkHandle,
@@ -197,9 +196,9 @@ where
         };
         info!("Aggregate public key: {:?}", agg_pk);
 
-        // authority length represents a non federation node since it would be
-        // out of bounds this prevents the node from signing blocks
-        // although there are other checks to stop this as well
+        // Authority length represents a non federation node since it would be
+        // out of bounds. This prevents the node from signing blocks
+        // although there are other checks to stop this as well.
         let mut signer_index = Some(genesis_authorities.len() + 1);
         // only a federation node has a btc_server
         if is_fed_node {

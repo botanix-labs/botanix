@@ -536,6 +536,7 @@ where
                 e
             ))
         })?;
+
         let active_multisig_id = database::LEGACY_MULTISIG_ID;
         let active_multisig = federation
             .get_config_by_multisig_id(*active_multisig_id)
@@ -669,31 +670,90 @@ where
             }
         };
 
+        // Get the current node's public key to check membership
+        let secp = secp256k1::Secp256k1::new();
+        let node_public_key = p2p_secret_key.public_key(&secp);
+
         let mut sessions = HashMap::new();
-        if persisted_multisig_ids.contains(&active_multisig_id) {
-            info!("active multisig {:?} was found and is already processed", active_multisig_id);
-            if db.get_public_key_package_by_id(active_multisig_id).ok().flatten().is_none() {
-                return Err(dkg::Error::BadConfig(format!(
-                   "Public Key for already processed multisig id {:?} is missing in the db",
-                    active_multisig_id
-                )).into());
+
+        // Iterate through all multisig configurations
+        for multisig_config in &federation.multisig {
+            let multisig_id = MultisigId::new(multisig_config.multisig_id);
+            
+            // Check if this node is a member of this multisig
+            let is_member = multisig_config
+                .federation_member_public_key
+                .iter()
+                .any(|member| member.key == node_public_key.to_string());
+            
+            if is_member {
+                info!(
+                    "Node is a member of multisig {}, checking status",
+                    multisig_id
+                );
+                
+                // Check if this multisig has already been processed
+                if persisted_multisig_ids.contains(&multisig_id) {
+                    info!(
+                        "Multisig {} was found and is already processed",
+                        multisig_id
+                    );
+                    
+                    // Verify that the key share exists
+                    match db.get_public_key_package_by_id(multisig_id) {
+                        Ok(Some(_key_package)) => {
+                            info!(
+                                "Key share for multisig {} exists in database",
+                                multisig_id
+                            );
+                        }
+                        Ok(None) => {
+                            panic!(
+                                "Public Key for already processed multisig id {} is missing in the db",
+                                multisig_id
+                            );
+                        }
+                        Err(e) => {
+                            panic!(
+                                "Failed to check key share for multisig {}: {}",
+                                multisig_id, e
+                            );
+                        }
+                    }
+                } else {
+                    // Multisig not yet processed, start DKG
+                    info!(
+                        "Multisig {} not yet processed, starting DKG with {} members",
+                        multisig_id,
+                        multisig_config.federation_member_public_key.len()
+                    );
+                    
+                    let _member_count = multisig_config.federation_member_public_key.len();
+                    let max_signers = multisig_config.effective_max_signers();
+                    let min_signers = multisig_config.min_signers;
+                    
+                    let state = Self::new_dkg_state_machine(
+                        frost_identifier,
+                        p2p_secret_key,
+                        multisig_id,
+                        coordinator,
+                        &federation,
+                        min_signers,
+                        max_signers,
+                        frost_identifier == coordinator,
+                    )?;
+                    
+                    sessions.insert(multisig_id, state);
+                }
             } else {
-                // TODO (when foundation layer is in): check it matches the aggregate pubkey from the foundation layer)
+                info!(
+                    "Node is not a member of multisig {}, skipping",
+                    multisig_id
+                );
+                continue;
             }
-        } else {
-            // start the multisig
-            let state = Self::new_dkg_state_machine(
-                frost_identifier,
-                p2p_secret_key,
-                active_multisig_id,
-                coordinator,
-                &federation,
-                min_signers,
-                max_signers,
-                frost_identifier == coordinator,
-            )?;
-            sessions.insert(active_multisig_id, state);
         }
+
         let dkg_sessions = Arc::new(Mutex::new(sessions));
 
         let (dynafed_notifications_tx, _dynafed_notifications_rx) =
@@ -1236,6 +1296,7 @@ where
                             trace!("DKG started for multisig {}", multisig_id);
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
+                                    event: rpc::DkgEvent::DkgStart as i32,
                                     multisig_id: *multisig_id,
                                 })),
                             };
@@ -1245,6 +1306,7 @@ where
                             trace!("DKG restarted for multisig {}", multisig_id);
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
+                                    event: rpc::DkgEvent::DkgRestart as i32,
                                     multisig_id: *multisig_id,
                                 })),
                             };
@@ -1254,6 +1316,7 @@ where
                             trace!("DKG aborted for multisig {}", multisig_id);
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
+                                    event: rpc::DkgEvent::DkgAbort as i32,
                                     multisig_id: *multisig_id,
                                 })),
                             };
@@ -2726,10 +2789,10 @@ where
         }
         let mut sessions = self.dkg_sessions.lock().await;
         if !sessions.contains_key(&multisig_id) {
-            return Err(already_exists!(
+            return Err(tonic::Status::not_found(format!(
                 "DKG session not found for multisig_id {}",
                 multisig_id
-            ));
+            )));
         }
 
         sessions.remove(&multisig_id);

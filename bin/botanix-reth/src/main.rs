@@ -104,20 +104,7 @@ fn main() -> eyre::Result<()> {
             )
         }
         _ => {
-            // TODO: print error as there is no use case for this path
-            // fall back to running without custom launcher
-            cli.run_with_components::<BotanixNode>(
-                |spec| {
-                    (
-                        BotanixEvmConfig::new(spec.clone()),
-                        BotanixConsensus::new(spec),
-                    )
-                },
-                |_builder, _args| async { Ok(()) },
-            )?;
-            return Err(eyre::eyre!(
-               "Unsupported command. Only 'botanix-reth node' is supported in this custom launcher."
-            ));
+            panic!("Only 'node' command is supported in Botanix Reth");
         }
     };
 
@@ -206,9 +193,6 @@ fn main() -> eyre::Result<()> {
                 &bitcoind_cfg,
                 &chain_spec,
             ).await?;
-
-            // build the node
-            let _node = BotanixNode::default();
 
             let reth_database: Arc<DatabaseEnv> = builder.db().clone();
             // Migrate the db if needed

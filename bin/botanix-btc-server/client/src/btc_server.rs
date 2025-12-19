@@ -64,7 +64,9 @@ pub mod subscribe_to_dynafed_notifications_stream {
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct DkgNotification {
-    #[prost(uint32, tag = "1")]
+    #[prost(enumeration = "DkgEvent", tag = "1")]
+    pub event: i32,
+    #[prost(uint32, tag = "2")]
     pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -359,6 +361,38 @@ pub struct GetSessionIdsRequest {
 pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum DkgEvent {
+    Unspecified = 0,
+    DkgStart = 1,
+    DkgRestart = 2,
+    DkgAbort = 3,
+}
+impl DkgEvent {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "DKG_EVENT_UNSPECIFIED",
+            Self::DkgStart => "DKG_START",
+            Self::DkgRestart => "DKG_RESTART",
+            Self::DkgAbort => "DKG_ABORT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "DKG_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
+            "DKG_START" => Some(Self::DkgStart),
+            "DKG_RESTART" => Some(Self::DkgRestart),
+            "DKG_ABORT" => Some(Self::DkgAbort),
+            _ => None,
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

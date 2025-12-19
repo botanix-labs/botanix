@@ -39,8 +39,10 @@ pub enum Error {
     #[allow(dead_code)]
     SocketAddressResolution(std::io::Error),
     /// Invalid federation configuration: {0}
+    #[allow(dead_code)]
     InvalidConfig(String),
     /// Missing multisig configuration entries
+    #[allow(dead_code)]
     MissingMultisigs,
 }
 /// Federation member public key and socket address
