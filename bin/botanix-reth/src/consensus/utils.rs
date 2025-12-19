@@ -1,10 +1,13 @@
 //! Botanix consensus utility functions
 use alloy_consensus::{
-    BlockHeader, EthereumTxEnvelope, Header, Sealed, Signed, TxEip4844,
+    BlockHeader, EthereumTxEnvelope, EthereumTypedTransaction, Header, TxEip4844,
     TxReceipt,
 };
-use alloy_eips::BlockHashOrNumber;
-use alloy_primitives::{keccak256, BlockNumber, Bloom, BloomInput, B256};
+use alloy_eips::{BlockHashOrNumber, eip2930::AccessList};
+use alloy_primitives::{
+    keccak256, Address as EthAddress, BlockNumber, Bloom, BloomInput, Bytes,
+    Signature, U256, B256,
+};
 use alloy_rlp::Decodable;
 use bitcoin::{
     consensus::Encodable,
@@ -925,30 +928,44 @@ pub fn seal_slow(header: &Header) -> SealedHeader {
 
 #[test]
 fn test_transactions_signed_from_bytes() {
-    let mut tx1 = TransactionSigned::default();
-    tx1.transaction.set_nonce(1);
-    let mut tx2 = TransactionSigned::default();
-    tx2.transaction.set_nonce(2);
-    let mut tx3 = TransactionSigned::default();
-    tx3.transaction.set_nonce(3);
+    fn build_tx(nonce: u64) -> EthereumTxEnvelope<TxEip4844> {
+        let tx = TxEip4844 {
+            chain_id: 1,
+            nonce,
+            gas_limit: 0,
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: 0,
+            to: EthAddress::ZERO,
+            value: U256::ZERO,
+            access_list: AccessList::default(),
+            blob_versioned_hashes: Vec::new(),
+            max_fee_per_blob_gas: 0,
+            input: Bytes::new(),
+        };
+        let signature = Signature::new(U256::ZERO, U256::ZERO, false);
+        EthereumTxEnvelope::new_unhashed(
+            EthereumTypedTransaction::Eip4844(tx),
+            signature,
+        )
+    }
 
-    let mut buf1 = Vec::new();
-    tx1.encode_enveloped(&mut buf1);
+    let tx1 = build_tx(1);
+    let mut buf1 = alloy_rlp::encode(&tx1);
     let signed_tx1 =
-        TransactionSigned::decode_enveloped(&mut buf1.as_slice()).unwrap();
-    let bytes1 = prost::bytes::Bytes::copy_from_slice(buf1.as_slice());
+        EthereumTxEnvelope::<TxEip4844>::decode(&mut buf1.as_slice()).unwrap();
+    let bytes1 = prost::bytes::Bytes::from(buf1.clone());
 
-    let mut buf2 = Vec::new();
-    tx2.encode_enveloped(&mut buf2);
+    let tx2 = build_tx(2);
+    let mut buf2 = alloy_rlp::encode(&tx2);
     let signed_tx2 =
-        TransactionSigned::decode_enveloped(&mut buf2.as_slice()).unwrap();
-    let bytes2 = prost::bytes::Bytes::copy_from_slice(buf2.as_slice());
+        EthereumTxEnvelope::<TxEip4844>::decode(&mut buf2.as_slice()).unwrap();
+    let bytes2 = prost::bytes::Bytes::from(buf2.clone());
 
-    let mut buf3 = Vec::new();
-    tx3.encode_enveloped(&mut buf3);
+    let tx3 = build_tx(3);
+    let mut buf3 = alloy_rlp::encode(&tx3);
     let signed_tx3 =
-        TransactionSigned::decode_enveloped(&mut buf3.as_slice()).unwrap();
-    let bytes3 = prost::bytes::Bytes::copy_from_slice(buf3.as_slice());
+        EthereumTxEnvelope::<TxEip4844>::decode(&mut buf3.as_slice()).unwrap();
+    let bytes3 = prost::bytes::Bytes::from(buf3.clone());
 
     let vec_bytes = [bytes1, bytes2, bytes3];
     let txs =
