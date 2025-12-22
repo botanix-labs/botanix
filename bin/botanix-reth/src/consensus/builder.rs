@@ -20,7 +20,7 @@ use botanix_authority_rsp::RandomSource;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
-    SubscribeToDkgNotificationsStream, GetPublicKeyRequest,
+    SubscribeToDynafedNotificationsStream, GetPublicKeyRequest,
 };
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
@@ -327,8 +327,8 @@ where
 
         // create frost and block production tasks if btc_server is available:
         // only federation nodes will have btc_server
-        let (dkg_frost_notifications_tx, _) = tokio::sync::broadcast::channel::<
-            SubscribeToDkgNotificationsStream,
+        let (dynafed_frost_notifications_tx, _) = tokio::sync::broadcast::channel::<
+            SubscribeToDynafedNotificationsStream,
         >(100);
         let mut frost_task = None;
         if is_fed_node {
@@ -344,7 +344,7 @@ where
                 random_source_provider,
                 Arc::clone(&metrics),
                 cometbft_rpc_factory.clone(),
-                dkg_frost_notifications_tx.clone(),
+                dynafed_frost_notifications_tx.clone(),
             );
 
             frost_task = Some(task);
@@ -395,7 +395,7 @@ where
                     return;
                 };
 
-                let dkg_notifications_stream = match btc.subscribe_to_dkg_notifications(Empty {}).await {
+                let dynafed_notifications_stream = match btc.subscribe_to_dynafed_notifications(Empty {}).await {
                     Ok(res) => {
                         info!(target: "reth::authority", "Btc server is healthy");
                         res
@@ -406,22 +406,22 @@ where
                     }
                 };
 
-                pin_mut!(dkg_notifications_stream);
-                while let Some(msg) = dkg_notifications_stream.next().await {
+                pin_mut!(dynafed_notifications_stream);
+                while let Some(msg) = dynafed_notifications_stream.next().await {
                     match msg {
                         Ok(msg) => {
-                            info!(target: "reth::authority", "Received DKG notification from btc server");
-                            match dkg_frost_notifications_tx.send(msg) {
+                            info!(target: "reth::authority", "Received Dynafed notification from btc server");
+                            match dynafed_frost_notifications_tx.send(msg) {
                                 Ok(_) => {
-                                    info!(target: "reth::authority", "Sent DKG notification to frost task");
+                                    info!(target: "reth::authority", "Sent Dynafed notification to frost task");
                                 }
                                 Err(e) => {
-                                    tracing::error!(target: "reth::authority", "Error sending DKG notification to frost task: {}", e);
+                                    tracing::error!(target: "reth::authority", "Error sending Dynafed notification to frost task: {}", e);
                                 }
                             }
                         }
                         Err(e) => {
-                            tracing::error!(target: "reth::authority", "Error receiving DKG notification from btc server: {}", e);
+                            tracing::error!(target: "reth::authority", "Error receiving Dynafed notification from btc server: {}", e);
                         }
                     }
                 }

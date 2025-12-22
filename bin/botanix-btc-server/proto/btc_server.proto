@@ -23,7 +23,9 @@ service BtcServer {
 
     rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
 
-    rpc SubscribeToDkgNotifications(Empty) returns(stream SubscribeToDkgNotificationsStream) {}
+    rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
+
+    rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
     // Signing Endpoints
 
@@ -101,8 +103,37 @@ message GetFinalizedPegoutIdsResponse {
     bool is_final = 4;
 }
 
-message SubscribeToDkgNotificationsStream {
-    uint32 multisig_id = 1;
+message SubscribeToDynafedNotificationsStream {
+    oneof notification {
+        DkgNotification dkg = 1;
+        MigrationNotification migration = 2;
+    }
+}
+
+enum DkgEvent {
+    DKG_EVENT_UNSPECIFIED = 0;
+    DKG_START = 1;
+    DKG_RESTART = 2;
+    DKG_ABORT = 3;
+}
+
+message DkgNotification {
+    DkgEvent event = 1;
+    uint32 multisig_id = 2;
+}
+
+message MigrationNotification {
+    MigrationEvent event = 1;
+    uint32 multisig_id_from = 2;  // The multisig being migrated FROM
+    uint32 multisig_id_to = 3;    // The multisig being migrated TO
+    string migration_id = 4;   // UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
+}
+
+enum MigrationEvent {
+    MIGRATION_EVENT_UNSPECIFIED = 0;
+    MIGRATION_START = 1;
+    MIGRATION_END = 2;
+    MIGRATION_ABORT = 3;
 }
 
 message FinalizeSignerRequest {
@@ -240,6 +271,10 @@ message GetDkgPayloadsRequest {
 }
 
 message StartNewDkgRequest {
+    uint32 multisig_id = 1;
+}
+
+message AbortDkgRequest {
     uint32 multisig_id = 1;
 }
 

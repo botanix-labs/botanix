@@ -2643,6 +2643,7 @@ dependencies = [
  "tonic-reflection",
  "tracing-actix-web",
  "url",
+ "uuid 1.17.0",
  "vergen 8.3.2",
  "zeroize",
 ]

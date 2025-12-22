@@ -11,8 +11,8 @@ use crate::{
         GetSigningStatusResponse, GetTrackedTxsResponse, MakeTxRequest,
         RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
         ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
-        SigningPackageRequest, SubscribeToDkgNotificationsStream,
-        ToSignRequest, WalletStateResponse,
+        SigningPackageRequest, SubscribeToDynafedNotificationsStream,
+        ToSignRequest, WalletStateResponse, AbortDkgRequest,
     },
     jwt::{Claims, JwtSecret},
     BtcServerClient,
@@ -117,6 +117,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn abort_dkg(
+        &mut self,
+        request: AbortDkgRequest,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn get_signing_status(
         &mut self,
         request: GetSigningStatusRequest,
@@ -170,7 +174,7 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
             GrpcClientError,
         >,
     >;
-    fn subscribe_to_dkg_notifications(
+    fn subscribe_to_dynafed_notifications(
         &mut self,
         request: Empty,
     ) -> BoxFuture<
@@ -178,7 +182,7 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         Result<
             impl tonic::codegen::tokio_stream::Stream<
                     Item = Result<
-                        SubscribeToDkgNotificationsStream,
+                        SubscribeToDynafedNotificationsStream,
                         tonic::Status,
                     >,
                 > + Send
@@ -337,6 +341,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_wallet_state, Empty, WalletStateResponse);
     generate_method!(abort_signing, Empty, Empty);
+    generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(
         get_signing_status,
         GetSigningStatusRequest,
@@ -370,9 +375,9 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
 
     generate_stream_method!(
-        subscribe_to_dkg_notifications,
+        subscribe_to_dynafed_notifications,
         Empty,
-        SubscribeToDkgNotificationsStream
+        SubscribeToDynafedNotificationsStream
     );
 }
 

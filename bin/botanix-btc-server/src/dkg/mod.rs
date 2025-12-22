@@ -9,6 +9,7 @@ use frost::keys::{
 use frost_secp256k1_tr::{self as frost, keys::KeyPackage};
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use std::{
     collections::{BTreeMap, VecDeque},
     fmt::Display,
@@ -125,40 +126,80 @@ mod sealed_pkg {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DkgSubscriptionMessage {
-    /// Started a new DKG session notification
-    StartedDkg {
-        /// The multisig id of the new DKG session
-        multisig_id: MultisigId,
-    },
-    /// Restarted a DKG session notification
-    RestartedDkg {
-        /// The multisig id of the restarted DKG session
-        multisig_id: MultisigId,
-    },
+pub enum DynafedSubscriptionMessage {
+    /// DKG-related notifications
+    Dkg(DkgNotification),
+    /// Migration-related notifications
+    Migration(MigrationNotification),
 }
 
-impl DkgSubscriptionMessage {
-    /// Returns the multisig id associated with this notification
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DkgNotification {
+    /// Start a new DKG session
+    Start { multisig_id: MultisigId },
+    /// Restart a DKG session
+    Restart { multisig_id: MultisigId },
+    /// Abort a DKG session
+    Abort { multisig_id: MultisigId },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MigrationNotification {
+    pub event: MigrationEvent,
+    pub multisig_id_from: MultisigId,
+    pub multisig_id_to: MultisigId,
+    pub migration_id: Uuid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MigrationEvent {
+    Start,
+    End,
+    Abort,
+}
+
+// Helper methods
+impl DkgNotification {
     pub fn multisig_id(&self) -> MultisigId {
         match self {
-            DkgSubscriptionMessage::StartedDkg { multisig_id } => *multisig_id,
-            DkgSubscriptionMessage::RestartedDkg { multisig_id } => {
-                *multisig_id
+            DkgNotification::Start { multisig_id } => *multisig_id,
+            DkgNotification::Restart { multisig_id } => *multisig_id,
+            DkgNotification::Abort { multisig_id } => *multisig_id,
+        }
+    }
+}
+
+impl Display for DkgNotification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DkgNotification::Start { multisig_id } => {
+                write!(f, "DKG Started {{ multisig_id: {} }}", multisig_id)
+            }
+            DkgNotification::Restart { multisig_id } => {
+                write!(f, "DKG Restart {{ multisig_id: {} }}", multisig_id)
+            }
+            DkgNotification::Abort { multisig_id } => {
+                write!(f, "DKG Aborted {{ multisig_id: {} }}", multisig_id)
             }
         }
     }
 }
 
-impl Display for DkgSubscriptionMessage {
+impl Display for MigrationNotification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Migration {:?} {{ from: {}, to: {}, id: {} }}",
+            self.event, self.multisig_id_from, self.multisig_id_to, self.migration_id
+        )
+    }
+}
+
+impl Display for DynafedSubscriptionMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DkgSubscriptionMessage::StartedDkg { multisig_id } => {
-                write!(f, "StartedDkg {{ multisig_id: {} }}", multisig_id)
-            }
-            DkgSubscriptionMessage::RestartedDkg { multisig_id } => {
-                write!(f, "RestartedDkg {{ multisig_id: {} }}", multisig_id)
-            }
+            DynafedSubscriptionMessage::Dkg(dkg) => write!(f, "{}", dkg),
+            DynafedSubscriptionMessage::Migration(migration) => write!(f, "{}", migration),
         }
     }
 }

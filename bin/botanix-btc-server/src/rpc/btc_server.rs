@@ -42,10 +42,46 @@ pub struct GetFinalizedPegoutIdsResponse {
     #[prost(bool, tag = "4")]
     pub is_final: bool,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubscribeToDynafedNotificationsStream {
+    #[prost(
+        oneof = "subscribe_to_dynafed_notifications_stream::Notification",
+        tags = "1, 2"
+    )]
+    pub notification: ::core::option::Option<
+        subscribe_to_dynafed_notifications_stream::Notification,
+    >,
+}
+/// Nested message and enum types in `SubscribeToDynafedNotificationsStream`.
+pub mod subscribe_to_dynafed_notifications_stream {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Notification {
+        #[prost(message, tag = "1")]
+        Dkg(super::DkgNotification),
+        #[prost(message, tag = "2")]
+        Migration(super::MigrationNotification),
+    }
+}
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct SubscribeToDkgNotificationsStream {
-    #[prost(uint32, tag = "1")]
+pub struct DkgNotification {
+    #[prost(enumeration = "DkgEvent", tag = "1")]
+    pub event: i32,
+    #[prost(uint32, tag = "2")]
     pub multisig_id: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MigrationNotification {
+    #[prost(enumeration = "MigrationEvent", tag = "1")]
+    pub event: i32,
+    /// The multisig being migrated FROM
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    /// The multisig being migrated TO
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
+    /// UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
+    #[prost(string, tag = "4")]
+    pub migration_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
@@ -236,6 +272,11 @@ pub struct StartNewDkgRequest {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct AbortDkgRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
     #[prost(uint64, tag = "1")]
@@ -320,6 +361,70 @@ pub struct GetSessionIdsRequest {
 pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum DkgEvent {
+    Unspecified = 0,
+    DkgStart = 1,
+    DkgRestart = 2,
+    DkgAbort = 3,
+}
+impl DkgEvent {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "DKG_EVENT_UNSPECIFIED",
+            Self::DkgStart => "DKG_START",
+            Self::DkgRestart => "DKG_RESTART",
+            Self::DkgAbort => "DKG_ABORT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "DKG_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
+            "DKG_START" => Some(Self::DkgStart),
+            "DKG_RESTART" => Some(Self::DkgRestart),
+            "DKG_ABORT" => Some(Self::DkgAbort),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MigrationEvent {
+    Unspecified = 0,
+    MigrationStart = 1,
+    MigrationEnd = 2,
+    MigrationAbort = 3,
+}
+impl MigrationEvent {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MIGRATION_EVENT_UNSPECIFIED",
+            Self::MigrationStart => "MIGRATION_START",
+            Self::MigrationEnd => "MIGRATION_END",
+            Self::MigrationAbort => "MIGRATION_ABORT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MIGRATION_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
+            "MIGRATION_START" => Some(Self::MigrationStart),
+            "MIGRATION_END" => Some(Self::MigrationEnd),
+            "MIGRATION_ABORT" => Some(Self::MigrationAbort),
+            _ => None,
+        }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -416,20 +521,24 @@ pub mod btc_server_server {
             &self,
             request: tonic::Request<super::StartNewDkgRequest>,
         ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
-        /// Server streaming response type for the SubscribeToDkgNotifications method.
-        type SubscribeToDkgNotificationsStream: tonic::codegen::tokio_stream::Stream<
+        async fn abort_dkg(
+            &self,
+            request: tonic::Request<super::AbortDkgRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
+        /// Server streaming response type for the SubscribeToDynafedNotifications method.
+        type SubscribeToDynafedNotificationsStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<
-                    super::SubscribeToDkgNotificationsStream,
+                    super::SubscribeToDynafedNotificationsStream,
                     tonic::Status,
                 >,
             >
             + std::marker::Send
             + 'static;
-        async fn subscribe_to_dkg_notifications(
+        async fn subscribe_to_dynafed_notifications(
             &self,
             request: tonic::Request<super::Empty>,
         ) -> std::result::Result<
-            tonic::Response<Self::SubscribeToDkgNotificationsStream>,
+            tonic::Response<Self::SubscribeToDynafedNotificationsStream>,
             tonic::Status,
         >;
         async fn get_round1_signing_package(
@@ -975,15 +1084,60 @@ pub mod btc_server_server {
                     };
                     Box::pin(fut)
                 }
-                "/btc_server.BtcServer/SubscribeToDkgNotifications" => {
+                "/btc_server.BtcServer/AbortDkg" => {
                     #[allow(non_camel_case_types)]
-                    struct SubscribeToDkgNotificationsSvc<T: BtcServer>(pub Arc<T>);
+                    struct AbortDkgSvc<T: BtcServer>(pub Arc<T>);
+                    impl<
+                        T: BtcServer,
+                    > tonic::server::UnaryService<super::AbortDkgRequest>
+                    for AbortDkgSvc<T> {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::AbortDkgRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::abort_dkg(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = AbortDkgSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/SubscribeToDynafedNotifications" => {
+                    #[allow(non_camel_case_types)]
+                    struct SubscribeToDynafedNotificationsSvc<T: BtcServer>(pub Arc<T>);
                     impl<
                         T: BtcServer,
                     > tonic::server::ServerStreamingService<super::Empty>
-                    for SubscribeToDkgNotificationsSvc<T> {
-                        type Response = super::SubscribeToDkgNotificationsStream;
-                        type ResponseStream = T::SubscribeToDkgNotificationsStream;
+                    for SubscribeToDynafedNotificationsSvc<T> {
+                        type Response = super::SubscribeToDynafedNotificationsStream;
+                        type ResponseStream = T::SubscribeToDynafedNotificationsStream;
                         type Future = BoxFuture<
                             tonic::Response<Self::ResponseStream>,
                             tonic::Status,
@@ -994,7 +1148,7 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::subscribe_to_dkg_notifications(
+                                <T as BtcServer>::subscribe_to_dynafed_notifications(
                                         &inner,
                                         request,
                                     )
@@ -1009,7 +1163,7 @@ pub mod btc_server_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = SubscribeToDkgNotificationsSvc(inner);
+                        let method = SubscribeToDynafedNotificationsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
