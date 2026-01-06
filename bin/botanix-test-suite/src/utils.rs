@@ -23,7 +23,6 @@ use tokio::time::sleep;
 use tonic::transport::Channel;
 
 pub const MIN_BLOCKS_COINBASE_MATURE: u32 = 101;
-pub const TEST_MULTISIG_ID: u32 = 0;
 
 /// Generate `num_blocks` blocks on the given bitcoind instance
 pub async fn generate_blocks(
@@ -106,7 +105,7 @@ pub async fn send_pegin_notification(
             vout,
         }),
         eth_address,
-        multisig_id: TEST_MULTISIG_ID,
+        multisig_id: TEST_LEGACY_MULTISIG_ID,
     }]
     .to_vec();
 
@@ -158,7 +157,7 @@ pub async fn send_pegins_notifications(
                 vout: 1,
             }),
             eth_address,
-            multisig_id: TEST_MULTISIG_ID,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         });
     }
 
