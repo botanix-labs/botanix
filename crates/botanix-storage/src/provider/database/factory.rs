@@ -136,19 +136,6 @@ impl<DB, N: NodeTypes> BotanixProviderFactory<DB, N> {
     }
 }
 
-// NOTE: This impl block is currently disabled because it requires additional
-// configuration parameters (chain_spec, static_file_provider, prune_modes, storage)
-// that would need to be provided or constructed separately.
-//
-// impl<N: NodeTypes> BotanixProviderFactory<DatabaseEnv, N> {
-//     pub fn new_with_database_path<P: AsRef<Path>>(
-//         path: P,
-//         args: DatabaseArguments,
-//     ) -> eyre::Result<Self> {
-//         todo!("Implement with new required parameters")
-//     }
-// }
-
 impl<DB, N: NodeTypes + NodeTypesForProvider> DatabaseProviderFactoryRO
     for BotanixProviderFactory<DB, N>
 where
@@ -647,26 +634,3 @@ impl<DB: Database, N: NodeTypes + NodeTypesForProvider>
 }
 
 // TODO: add tests
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::provider::SnapshotReader;
-    use reth_db::mdbx::DatabaseArguments;
-
-    // #[test]
-    // fn test_provider_factory_with_database_path() {
-    //     let factory = BotanixProviderFactory::new_with_database_path(
-    //         tempfile::TempDir::new()
-    //             .expect("can't create temp directory")
-    //             .keep(),
-    //         DatabaseArguments::new(Default::default()),
-    //     )
-    //     .unwrap();
-
-    //     let provider = factory.provider().unwrap();
-    //     provider.get_first_chunk_id().unwrap();
-
-    //     let provider_rw = factory.provider_rw().unwrap();
-    //     provider_rw.get_first_chunk_id().unwrap();
-    // }
-}
