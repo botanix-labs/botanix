@@ -140,17 +140,6 @@ mod tests {
         assert_eq!(block_fee_recipient_reward, 10);
     }
 
-    // #[test]
-    // fn should_validate_chain_version() {
-    //     let edh_chain_version = CHAIN_VERSION;
-    //     let result = validate_chain_version(edh_chain_version);
-    //     assert!(result.is_ok());
-
-    //     let edh_chain_version = CHAIN_VERSION + 1;
-    //     let result = validate_chain_version(edh_chain_version);
-    //     assert!(result.is_err());
-    // }
-
     #[test]
     fn should_convert_fixed_bytes_32_to_u256() {
         let value = FixedBytes::from([0u8; 32]);

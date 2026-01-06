@@ -9,7 +9,12 @@ repository = { workspace = true }
 description = "Botanix storage implementation"
 
 [features]
-test-utils = ["reth-db/test-utils"]
+test-utils = [
+  "reth-db/test-utils",
+  "reth-chainspec",
+  "reth-ethereum-engine-primitives",
+  "reth-trie-db",
+]
 
 [dependencies]
 alloy-primitives = { workspace = true }
@@ -23,9 +28,11 @@ itertools = { workspace = true }
 modular-bitfield = { workspace = true }
 reth-codecs = { workspace = true }
 # reth
+reth-chainspec = { workspace = true, optional = true }
 reth-db = { workspace = true, features = ["mdbx"] }
 reth-db-api = { workspace = true }
 reth-execution-types = { workspace = true }
+reth-ethereum-engine-primitives = { workspace = true, optional = true }
 reth-node-types = { workspace = true }
 reth-primitives = { workspace = true, features = ["reth-codec"] }
 reth-primitives-traits = { workspace = true }
@@ -35,6 +42,7 @@ reth-prune-types = { workspace = true }
 reth-storage-api = { workspace = true }
 reth-storage-errors = { workspace = true }
 reth-trie-common = { workspace = true }
+reth-trie-db = { workspace = true, optional = true }
 secp256k1 = { workspace = true, features = [
   "global-context",
   "rand",

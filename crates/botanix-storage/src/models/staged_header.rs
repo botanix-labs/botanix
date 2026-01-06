@@ -97,7 +97,7 @@ pub struct PeginData {
     pub eth_address: Vec<u8>,
 
     /// The multisig_id (federation) that the pegin belongs to.
-    pub multisig_id: u32,
+    pub multisig_id: u64,
 }
 
 /// Pegout data associated with a header.
