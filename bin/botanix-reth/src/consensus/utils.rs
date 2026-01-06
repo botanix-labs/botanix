@@ -910,16 +910,12 @@ pub fn seal_slow(header: &Header) -> SealedHeader {
 
 #[cfg(test)]
 mod tests {
-    use alloy_consensus::{
-        EthereumTxEnvelope, EthereumTypedTransaction, TxEip4844,
-    };
+    use alloy_consensus::{EthereumTxEnvelope, TxEip4844};
     use alloy_primitives::{
-        address, b256, bytes, Address, Bloom, BloomInput, Bytes, FixedBytes,
-        B256, B64, U256,
+        address, b256, bytes, Bloom, BloomInput, FixedBytes, B256, B64, U256,
     };
     use alloy_rlp::Decodable;
-    use alloy_rpc_types::AccessList;
-    use alloy_signer::Signature;
+
     use bitcoin::{
         absolute::LockTime,
         hashes::{sha256, Hash},
@@ -950,7 +946,7 @@ mod tests {
     };
 
     use crate::consensus::{
-        test_utils::MockProvider,
+        test_utils::{build_tx, MockProvider},
         utils::{
             bloom_contains_pegin, bloom_contains_pegout, extract_pegout_ids,
             find_epoch_start, generate_signing_session_id,
@@ -970,27 +966,6 @@ mod tests {
 
     #[test]
     fn test_transactions_signed_from_bytes() {
-        fn build_tx(nonce: u64) -> EthereumTxEnvelope<TxEip4844> {
-            let tx = TxEip4844 {
-                chain_id: 1,
-                nonce,
-                gas_limit: 0,
-                max_fee_per_gas: 0,
-                max_priority_fee_per_gas: 0,
-                to: Address::ZERO,
-                value: U256::ZERO,
-                access_list: AccessList::default(),
-                blob_versioned_hashes: Vec::new(),
-                max_fee_per_blob_gas: 0,
-                input: Bytes::new(),
-            };
-            let signature = Signature::new(U256::ZERO, U256::ZERO, false);
-            EthereumTxEnvelope::new_unhashed(
-                EthereumTypedTransaction::Eip4844(tx),
-                signature,
-            )
-        }
-
         let tx1 = build_tx(1);
         let mut buf1 = alloy_rlp::encode(&tx1);
         let signed_tx1 =

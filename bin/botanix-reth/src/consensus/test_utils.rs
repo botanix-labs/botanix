@@ -1,9 +1,13 @@
 //! Test utilities for the authority consensus crate.
-use alloy_consensus::Header;
-use alloy_primitives::{
-    address, b256, bytes, hex_literal::hex, BlockHash, BlockNumber, Bytes,
-    TxHash, TxNumber, B256, U256,
+use alloy_consensus::{
+    EthereumTxEnvelope, EthereumTypedTransaction, Header, TxEip4844,
 };
+use alloy_primitives::{
+    address, b256, bytes, hex_literal::hex, Address, BlockHash, BlockNumber,
+    Bytes, TxHash, TxNumber, B256, U256,
+};
+use alloy_rpc_types::AccessList;
+use alloy_signer::Signature;
 use botanix_authority_peg::mint_validation::{
     BURN_TOPIC, MINT_CONTRACT_ADDRESS,
 };
@@ -130,7 +134,10 @@ impl TransactionsProvider for MockProvider {
         &self,
         _hash: TxHash,
     ) -> ProviderResult<Option<(TransactionSigned, TransactionMeta)>> {
-        unimplemented!();
+        let tx_signed = build_tx(0);
+        let tx_meta = TransactionMeta::default();
+
+        Ok(Some((tx_signed, tx_meta)))
     }
 
     fn transaction_id(
@@ -309,4 +316,25 @@ impl HeaderProvider for MockProvider {
     ) -> ProviderResult<Vec<SealedHeader<Self::Header>>> {
         unimplemented!()
     }
+}
+
+pub fn build_tx(nonce: u64) -> EthereumTxEnvelope<TxEip4844> {
+    let tx = TxEip4844 {
+        chain_id: 1,
+        nonce,
+        gas_limit: 0,
+        max_fee_per_gas: 0,
+        max_priority_fee_per_gas: 0,
+        to: Address::ZERO,
+        value: U256::ZERO,
+        access_list: AccessList::default(),
+        blob_versioned_hashes: Vec::new(),
+        max_fee_per_blob_gas: 0,
+        input: Bytes::new(),
+    };
+    let signature = Signature::new(U256::ZERO, U256::ZERO, false);
+    EthereumTxEnvelope::new_unhashed(
+        EthereumTypedTransaction::Eip4844(tx),
+        signature,
+    )
 }
