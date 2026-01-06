@@ -2853,15 +2853,19 @@ where
         let db_outpoints =
             db_utxos.iter().map(|u| u.outpoint).collect::<HashSet<_>>();
 
-        // Ensure we have a key package
-        let key_package = self
-            .db
-            .get_key_package()
-            .to_status()?
-            .ok_or(tonic::Status::internal("Missing key package"))?;
-
         let mut utxos_to_add = Vec::new();
         for req_utxo in request.into_inner().utxos {
+            let multisig_id = MultisigId::new(req_utxo.multisig_id);
+
+            // Get the key package for this UTXO's multisig_id
+            let key_package = self
+                .db
+                .get_key_package_by_id(multisig_id)
+                .to_status()?
+                .ok_or(tonic::Status::internal(format!(
+                    "Missing key package for multisig_id {}",
+                    multisig_id
+                )))?;
             // convert the request outpoint to the database outpoint
             let req_outpoint = req_utxo.outpoint.as_ref().ok_or_else(|| {
                 error!(
@@ -2941,6 +2945,7 @@ where
                 },
                 eth_address,
                 version: 0,
+                multisig_id,
             };
 
             // Generate the expected scriptPubKey for the eth address (if present) or the change
@@ -3661,6 +3666,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             app.db.store_utxos(&[&utxo]).expect("Failed to store UTXO");
         }
@@ -3681,6 +3687,8 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
 
+        let multisig_id = MultisigId::new(1);
+
         // Add the key packages
         app.db
             .set_pubkey_package(pk_package.clone())
@@ -3696,6 +3704,7 @@ mod tests {
                 dummy_tx.output[0].clone(),
                 None,
                 None,
+                multisig_id,
             );
 
             // create pegins btc client can send
@@ -3717,6 +3726,7 @@ mod tests {
                     value: tx_out.value.to_sat(),
                 }),
                 eth_address: hex::encode(&[0; 20]),
+                multisig_id: multisig_id.into(),
             };
             pegins.push(utxo);
         }
@@ -3794,6 +3804,8 @@ mod tests {
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
 
+        let multisig_id = MultisigId::new(1);
+
         // Add the key packages
         app.db
             .set_pubkey_package(pk_package.clone())
@@ -3809,6 +3821,7 @@ mod tests {
                 dummy_tx.output[0].clone(),
                 None,
                 None,
+                multisig_id,
             );
 
             // create pegins btc client can send
@@ -3830,6 +3843,7 @@ mod tests {
                     value: tx_out.value.to_sat(),
                 }),
                 eth_address: hex::encode(&[0; 20]),
+                multisig_id: multisig_id.into(),
             };
             pegins.push(utxo);
         }
@@ -4020,6 +4034,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
             database::Utxo::new(
                 input_2,
@@ -4029,6 +4044,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
             database::Utxo::new(
                 input_3,
@@ -4038,6 +4054,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
         ];
         let utxo_refs: Vec<&database::Utxo> = utxos.iter().collect();
@@ -4124,6 +4141,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
             database::Utxo::new(
                 input_2,
@@ -4133,6 +4151,7 @@ mod tests {
                 },
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             ),
         ];
         let utxo_refs: Vec<&database::Utxo> = utxos.iter().collect();
@@ -4212,6 +4231,7 @@ mod tests {
             },
             eth_address,
             None,
+            LEGACY_MULTISIG_ID,
         );
 
         let utxo_refs: Vec<&database::Utxo> = vec![&utxo];
@@ -4223,6 +4243,7 @@ mod tests {
         let (app, key_package) = setup_app_with_keys().await;
         let agg_key = key_package.verifying_key();
         let mut rng = thread_rng();
+        let multisig_id = 2;
 
         // add dummy utxo to db to prevent 'no utxo in db' error
         let (dummy_outpoint, dummy_amount, dummy_script_pubkey) =
@@ -4258,11 +4279,13 @@ mod tests {
         let utxo_with_eth = rpc::UtxoToRecover {
             outpoint: Some(rpc::OutPoint::from(outpoint1)),
             eth_address: hex::encode(eth_address),
+            multisig_id,
         };
 
         let utxo_without_eth = rpc::UtxoToRecover {
             outpoint: Some(rpc::OutPoint::from(outpoint2)),
             eth_address: String::new(), // Empty for change UTXO
+            multisig_id,
         };
 
         let request = tonic::Request::new(RecoverMissingUtxosRequest {
@@ -4294,6 +4317,7 @@ mod tests {
         let (app, key_package) = setup_app_with_keys().await;
         let agg_key = key_package.verifying_key();
         let mut rng = thread_rng();
+        let multisig_id = 2;
 
         // add existing utxo to db
         let (existing_outpoint, existing_amount, existing_script_pubkey) =
@@ -4334,6 +4358,7 @@ mod tests {
         let existing_utxo = rpc::UtxoToRecover {
             outpoint: Some(rpc::OutPoint::from(existing_outpoint)),
             eth_address: String::new(),
+            multisig_id,
         };
 
         // Case 2 - wrong eth address
@@ -4341,18 +4366,21 @@ mod tests {
         let utxo_wrong_eth_address = rpc::UtxoToRecover {
             outpoint: Some(rpc::OutPoint::from(outpoint1)),
             eth_address: hex::encode(wrong_eth_address),
+            multisig_id,
         };
 
         // Case 3 - utxo does not match change script pubkey
         let utxo_not_change_script = rpc::UtxoToRecover {
             outpoint: Some(rpc::OutPoint::from(outpoint2)),
             eth_address: String::new(),
+            multisig_id,
         };
 
         // Case 4 - utxo is not found by bitcoind
         let utxo_not_found = rpc::UtxoToRecover {
             outpoint: Some(rpc::OutPoint::from(outpoint3)),
             eth_address: String::new(),
+            multisig_id,
         };
 
         let request = tonic::Request::new(RecoverMissingUtxosRequest {

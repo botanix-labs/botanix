@@ -41,6 +41,7 @@ mod test {
     };
     use bitcoin::{hashes::Hash, Txid};
     use botanix_btc_server_client::{GetAllUtxosResponse, TxOut, Utxo};
+    use btcserverlib::database::LEGACY_MULTISIG_ID;
     use rand::{thread_rng, Rng};
 
     #[tokio::test]
@@ -108,6 +109,7 @@ mod test {
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
+                multisig_id: LEGACY_MULTISIG_ID,
             };
             utxos.push(utxo);
         }
@@ -155,6 +157,7 @@ mod test {
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
+                multisig_id: LEGACY_MULTISIG_ID,
             };
             utxos.push(utxo);
         }

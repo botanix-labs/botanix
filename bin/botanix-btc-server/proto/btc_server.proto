@@ -194,12 +194,14 @@ message Utxo {
     OutPoint outpoint = 1;
     TxOut output = 2;
     string eth_address = 3;
+    uint32 multisig_id = 4;
 }
 
 message UtxoToRecover {
     OutPoint outpoint = 1;
     // empty eth_address for change utxo
     string eth_address = 2;
+    uint32 multisig_id = 3;
 }
 
 message GetAllUtxosResponse {

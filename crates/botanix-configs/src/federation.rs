@@ -429,6 +429,8 @@ pub fn load_federation_config_toml(
 mod tests {
     use super::*;
 
+    const TEST_MULTISIG_ID: u32 = 0;
+
     #[test]
     fn parses_multisig_format() {
         let toml = r#"
@@ -497,7 +499,7 @@ role = "continuing"
     #[test]
     fn dynafed_roles_pass_with_consistent_continuing() {
         let current = MultisigConfig {
-            multisig_id: 0,
+            multisig_id: TEST_MULTISIG_ID,
             min_signers: 2,
             max_signers: Some(3),
             federation_member_public_key: vec![
@@ -523,7 +525,7 @@ role = "continuing"
     #[test]
     fn dynafed_roles_fail_when_continuing_differs() {
         let current = MultisigConfig {
-            multisig_id: 0,
+            multisig_id: TEST_MULTISIG_ID,
             min_signers: 2,
             max_signers: Some(2),
             federation_member_public_key: vec![
@@ -547,7 +549,7 @@ role = "continuing"
     #[test]
     fn dynafed_roles_fail_when_current_has_incoming() {
         let current = MultisigConfig {
-            multisig_id: 0,
+            multisig_id: TEST_MULTISIG_ID,
             min_signers: 2,
             max_signers: Some(2),
             federation_member_public_key: vec![
@@ -571,7 +573,7 @@ role = "continuing"
     #[test]
     fn dynafed_roles_fail_when_next_has_outgoing() {
         let current = MultisigConfig {
-            multisig_id: 0,
+            multisig_id: TEST_MULTISIG_ID,
             min_signers: 2,
             max_signers: Some(2),
             federation_member_public_key: vec![

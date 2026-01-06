@@ -122,6 +122,11 @@ impl std::ops::Deref for MultisigId {
     }
 }
 
+/// Default function for serde to use LEGACY_MULTISIG_ID as the default value.
+const fn default_multisig_id() -> MultisigId {
+    MultisigId::LEGACY
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Utxo {
     // This is skipped during serialization because the db key is the outpoint so its redundant.
@@ -133,6 +138,10 @@ pub struct Utxo {
     #[serde(default)]
     /// The version of the UTXO.
     pub version: u32,
+    /// The multisig federation this UTXO belongs to.
+    /// Defaults to LEGACY_MULTISIG_ID for backwards compatibility with existing data.
+    #[serde(default = "default_multisig_id")]
+    pub multisig_id: MultisigId,
 }
 
 impl Utxo {
@@ -141,12 +150,14 @@ impl Utxo {
         output: TxOut,
         eth_address: Option<[u8; 20]>,
         version: Option<UtxoVersion>,
+        multisig_id: MultisigId,
     ) -> Self {
         Utxo {
             outpoint,
             output,
             eth_address,
             version: version.unwrap_or(UtxoVersion::V1) as u32,
+            multisig_id: multisig_id.into(),
         }
     }
 }
@@ -1700,6 +1711,7 @@ impl TryFrom<RpcUtxo> for Utxo {
                 })?)
             },
             Some(UtxoVersion::V1),
+            value.multisig_id.into(),
         ))
     }
 }
@@ -1722,6 +1734,7 @@ impl TryFrom<Utxo> for RpcUtxo {
                 script_pubkey: Some(RpcScriptBuf { script: script_pk }),
             }),
             eth_address: item.eth_address.map_or(String::new(), hex::encode),
+            multisig_id: item.multisig_id.into(),
         })
     }
 }
@@ -1749,6 +1762,38 @@ mod tests {
     struct OldFinalizedPegout {
         pub id: PegoutId,
         pub block_number: u64,
+    }
+
+    // Original Utxo structure (pre-DynaFed version without multisig_id)
+    #[derive(Debug, Serialize, Deserialize, Clone)]
+    struct OldUtxo {
+        pub output: TxOut,
+        pub eth_address: Option<[u8; 20]>,
+        #[serde(default)]
+        pub version: u32,
+    }
+
+    #[test]
+    fn test_utxo_deserialize_old_data_without_multisig_id() {
+        let value = Amount::from_sat(1000);
+        let script_pubkey = ScriptBuf::from_bytes(vec![0x51; 34]);
+        let eth_address = [1u8; 20];
+
+        let old_utxo = OldUtxo {
+            output: TxOut { value, script_pubkey: script_pubkey.clone() },
+            eth_address: Some(eth_address),
+            version: 1,
+        };
+
+        let mut serialized = vec![];
+        ciborium::into_writer(&old_utxo, &mut serialized).unwrap();
+
+        let deserialized: Utxo = ciborium::from_reader(&serialized[..]).unwrap();
+
+        assert_eq!(deserialized.output.value, value);
+        assert_eq!(deserialized.output.script_pubkey, script_pubkey);
+        assert_eq!(deserialized.eth_address, Some(eth_address));
+        assert_eq!(deserialized.multisig_id, LEGACY_MULTISIG_ID);
     }
 
     #[test]
@@ -1950,6 +1995,7 @@ mod tests {
                 taproot_output,
                 *eth_address,
                 *utxo_version,
+                LEGACY_MULTISIG_ID,
             );
 
             let rpc_utxo = RpcUtxo::try_from(original_db_utxo.clone()).unwrap();
@@ -1976,6 +2022,7 @@ mod tests {
         let mut consensus_encoded_bytes = vec![];
         raw_script.consensus_encode(&mut consensus_encoded_bytes).unwrap();
 
+        let multisig_id = MultisigId::new(1);
         // Create a mock RpcUtxo with the consensus-encoded script bytes
         let rpc_utxo = RpcUtxo {
             outpoint: Some(RpcOutPoint {
@@ -1989,6 +2036,7 @@ mod tests {
                 }),
             }),
             eth_address: String::new(),
+            multisig_id: multisig_id.into(),
         };
 
         // Test that conversion from OLD format works successfully
@@ -2029,6 +2077,7 @@ mod tests {
             tx.output.get(0).expect("one output").clone(),
             None,
             None,
+            LEGACY_MULTISIG_ID,
         );
         db.store_utxo(&utxo).unwrap();
         db.flush().unwrap();
@@ -2049,6 +2098,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2083,6 +2133,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2109,6 +2160,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2142,6 +2194,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2176,6 +2229,7 @@ mod tests {
                 tx.output.get(0).expect("one output").clone(),
                 None,
                 None,
+                LEGACY_MULTISIG_ID,
             );
             utxos.push(utxo);
         }
@@ -2198,6 +2252,7 @@ mod tests {
             tx.output.get(0).expect("one output").clone(),
             None,
             None,
+            LEGACY_MULTISIG_ID,
         );
         db.store_utxo(&utxo).unwrap();
         db.update_utxo_merkle_root().unwrap();

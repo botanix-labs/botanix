@@ -2916,8 +2916,17 @@ impl ABCIDriver {
                         // once the Frost task has successfully initiated a new
                         // checkpoint on the btc-server.
 
+                        // Read aggregate public keys once for lookups
+                        let aggregate_public_keys = self
+                            .storage
+                            .inner
+                            .blocking_read()
+                            .aggregate_public_key
+                            .clone()
+                            .expect("aggregate_public_keys must be set after DKG");
+
                         let staged_pegins: Vec<PeginData> =
-                            get_staged_pegins_from_pegin_meta(&pegins);
+                            get_staged_pegins_from_pegin_meta(&pegins, &aggregate_public_keys);
                         let staged_pegouts: Vec<PegoutData> =
                             get_staged_pegouts_from_pegout_data(
                                 &sealed_block_with_peg.pegouts(),

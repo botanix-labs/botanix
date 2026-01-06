@@ -17,7 +17,7 @@ use crate::{
     },
     utils::{
         generate_blocks, get_checkpoint_block_hash, send_pegin_notification,
-        send_pegout_notification, MIN_BLOCKS_COINBASE_MATURE,
+        send_pegout_notification, MIN_BLOCKS_COINBASE_MATURE, TEST_MULTISIG_ID,
     },
 };
 
@@ -194,6 +194,7 @@ pub async fn test_utxo_recovery(
             botanix_btc_server_client::UtxoToRecover {
                 outpoint: utxo.outpoint.clone(), // note this is little endian
                 eth_address: utxo.eth_address.clone(),
+                multisig_id: TEST_MULTISIG_ID,
             }
         })
         .collect::<Vec<_>>();
@@ -227,6 +228,7 @@ pub async fn test_utxo_recovery(
                 vout: pegin.outpoint.vout,
             }),
             eth_address: hex_encode(pegin.eth_address),
+            multisig_id: TEST_MULTISIG_ID,
         })
         .collect::<Vec<_>>();
 
@@ -252,6 +254,7 @@ pub async fn test_utxo_recovery(
             vout: change_vout as u32,
         }),
         eth_address: "".to_string(), // no eth address for change output
+        multisig_id: TEST_MULTISIG_ID,
     }];
 
     let res = clients[COORDINATOR_INDEX]

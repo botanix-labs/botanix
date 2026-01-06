@@ -917,6 +917,16 @@ where
                         let header_hash = tip.hash();
                         let header = tip.header();
 
+                        // Read aggregate public keys once for lookups
+                        let aggregate_public_keys = self
+                            .storage
+                            .inner
+                            .read()
+                            .await
+                            .aggregate_public_key
+                            .clone()
+                            .expect("aggregate_public_keys must be set after DKG");
+
                         // Convert pegins into correct format
                         let pegins =
                             pegins.as_ref().map_or_else(Vec::new, |pegins| {
@@ -929,7 +939,7 @@ where
                                         }
                                     }
                                 }).collect::<Vec<_>>();
-                                get_utxos_from_pegin_meta(deserialized.as_slice())
+                                get_utxos_from_pegin_meta(deserialized.as_slice(), &aggregate_public_keys)
                             });
 
                         // Convert pegouts into correct format
