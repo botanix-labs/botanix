@@ -2495,6 +2495,7 @@ name = "botanix-activation-manager"
 version = "1.5.4"
 dependencies = [
  "alloy-primitives",
+ "botanix-activation-manager",
  "botanix-storage",
  "reth-storage-errors",
 ]
