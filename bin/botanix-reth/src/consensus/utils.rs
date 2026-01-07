@@ -250,7 +250,7 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(
             })
             .ok()?;
 
-            Some(models::PeginData { txid, vout, value, script_pubkey, eth_address, multisig_id })
+            Some(models::PeginData { txid, vout, value, script_pubkey, eth_address, multisig_id: multisig_id.into() })
         })
         .collect()
 }
@@ -270,7 +270,7 @@ pub(crate) fn get_utxos_from_staged_pegins(
                 script_pubkey: Some(ScriptBuf { script: pegin.script_pubkey }),
             }),
             eth_address: hex::encode(pegin.eth_address),
-            multisig_id: pegin.multisig_id,
+            multisig_id: pegin.multisig_id.into(),
         })
         .collect()
 }
