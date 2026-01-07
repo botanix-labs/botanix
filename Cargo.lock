@@ -2495,6 +2495,7 @@ name = "botanix-activation-manager"
 version = "1.5.4"
 dependencies = [
  "alloy-primitives",
+ "botanix-activation-manager",
  "botanix-storage",
  "reth-storage-errors",
 ]
@@ -2873,6 +2874,7 @@ version = "1.5.4"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "botanix-chainspec",
  "botanix-reth",
  "botanix-storage",
  "clap",
@@ -2880,6 +2882,7 @@ dependencies = [
  "reth-db",
  "reth-node-core",
  "reth-provider",
+ "reth-prune-types",
  "serde",
  "serde_json",
  "tokio",
@@ -3087,6 +3090,7 @@ dependencies = [
  "phf",
  "prost 0.12.6",
  "rand 0.8.5",
+ "rand 0.9.2",
  "reth",
  "reth-basic-payload-builder",
  "reth-chain-state",
@@ -3128,6 +3132,7 @@ dependencies = [
  "reth-primitives",
  "reth-primitives-traits",
  "reth-provider",
+ "reth-prune",
  "reth-prune-types",
  "reth-revm",
  "reth-rpc-engine-api",
@@ -3240,9 +3245,11 @@ dependencies = [
  "modular-bitfield",
  "proptest",
  "proptest-arbitrary-interop",
+ "reth-chainspec",
  "reth-codecs",
  "reth-db",
  "reth-db-api",
+ "reth-ethereum-engine-primitives",
  "reth-execution-types",
  "reth-node-types",
  "reth-primitives",
@@ -3253,6 +3260,7 @@ dependencies = [
  "reth-storage-api",
  "reth-storage-errors",
  "reth-trie-common",
+ "reth-trie-db",
  "secp256k1 0.30.0",
  "serde",
  "sha2 0.9.9",
@@ -3268,6 +3276,7 @@ version = "1.5.4"
 dependencies = [
  "alloy-primitives",
  "botanix-storage",
+ "botanix-storage-migrate",
  "eyre",
  "reth-db",
  "reth-db-api",
@@ -3355,6 +3364,7 @@ version = "1.5.4"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "botanix-btc-server",
  "botanix-cli-args",
  "botanix-configs",
  "botanix-test-suite",

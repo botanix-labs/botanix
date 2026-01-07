@@ -109,7 +109,7 @@ mod test {
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
-                multisig_id: LEGACY_MULTISIG_ID,
+                multisig_id: *LEGACY_MULTISIG_ID,
             };
             utxos.push(utxo);
         }
@@ -157,7 +157,7 @@ mod test {
                     value: rng.gen::<u64>(),
                 }),
                 eth_address: "0x0".to_string(),
-                multisig_id: LEGACY_MULTISIG_ID,
+                multisig_id: *LEGACY_MULTISIG_ID,
             };
             utxos.push(utxo);
         }

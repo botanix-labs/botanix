@@ -1,8 +1,11 @@
 //! Wallet state sync module
+use crate::consensus::utils::is_poa_epoch;
 use crate::consensus::{
     utils::{get_block_pegouts, EpochPegoutsError},
     Storage,
 };
+use alloy_consensus::BlockHeader;
+use alloy_primitives::Bytes;
 use bitcoin::hashes::{sha256::Hash as Sha256Hash, FromSliceError};
 use botanix_authority_edh::extra_data_header::ExtraDataHeaderDeserializeError;
 use botanix_btc_server_client::{
@@ -19,8 +22,6 @@ use botanix_storage::{
 };
 use btcserverlib::pegout_id::PegoutId;
 use once_cell::sync::Lazy;
-// use reth_evm::execute::BlockExecutorProvider;
-use alloy_primitives::Bytes;
 use reth_evm::ConfigureEvm;
 use reth_network::frost::{
     manager::{FrostCommand, FrostConfig, ToFrostManager},
@@ -418,13 +419,14 @@ where
             debug!(target: "consensus::authority::snapshot_manager::run", "received canon event {:?}", canon_event);
             match canon_event {
                 CanonStateNotification::Commit { new, .. } => {
-                    let tip = new.tip();
-                    // TODO: fix me
-                    // if !tip.is_poa_epoch(storage.chain_spec.epoch_length) ||
-                    //     tip.header().number == 0
-                    // {
-                    //     continue;
-                    // }
+                    let block_number = new.tip().header().number();
+                    if !is_poa_epoch(
+                        block_number,
+                        storage.chain_spec.epoch_length,
+                    ) || block_number == 0
+                    {
+                        continue;
+                    }
                     // Request the wallet state from all peers for poa epoch blocks only
                     let uuid = uuid::Uuid::new_v4();
                     if let Err(e) = self.to_frost_manager.send_command(
