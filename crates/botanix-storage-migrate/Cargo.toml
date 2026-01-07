@@ -30,6 +30,7 @@ tracing = { workspace = true }
 
 # botanix deps
 botanix-storage = { workspace = true, features = ["test-utils"] }
+botanix-storage-migrate = { workspace = true, features = ["test-utils"] }
 
 # reth deps
 reth-db = { workspace = true, features = ["mdbx", "test-utils"] }

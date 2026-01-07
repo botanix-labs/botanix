@@ -25,6 +25,7 @@ use reth_consensus_common::validation::{
     validate_body_against_header, validate_header_base_fee,
     validate_header_gas,
 };
+use reth_ethereum_consensus::validate_block_post_execution;
 use reth_primitives::{
     GotExpected, Receipt, RecoveredBlock, SealedBlock, SealedHeader,
 };
@@ -406,12 +407,353 @@ impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
 }
 
 impl FullConsensus<BotanixPrimitives> for BotanixConsensus<BotanixChainSpec> {
+    // Currently not being used. For Botanix purposes, this effectively
+    // `Compares the gas used in the block header to the actual gas usage after execution.`
+    // Since the gas used is taken after block execution and added to the header, this check is not needed.
     fn validate_block_post_execution(
         &self,
-        _block: &RecoveredBlock<BotanixBlock>,
-        _result: &BlockExecutionResult<Receipt>,
+        block: &RecoveredBlock<BotanixBlock>,
+        result: &BlockExecutionResult<Receipt>,
     ) -> Result<(), RethConsensusError> {
-        // TODO: implement post-execution validation
-        Ok(())
+        validate_block_post_execution(
+            block,
+            &self.chain_spec.inner(),
+            &result.receipts,
+            &result.requests,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::consensus::MAXIMUM_EXTRA_DATA_SIZE;
+    use alloy_consensus::Header;
+    use alloy_eips::merge::ALLOWED_FUTURE_BLOCK_TIME_SECONDS;
+    use alloy_primitives::{Address, Bytes};
+    use botanix_authority_edh::extra_data_header::{
+        ExtraDataHeader, CHAIN_VERSION,
+    };
+    use botanix_authority_edh::header_ext::HeaderExt;
+    use botanix_authority_edh::nums_secp256k1_pk;
+    use botanix_authority_rsp::{RandomSource, RandomSourceProvider};
+    use botanix_chainspec::constants::BOTANIX_TESTNET;
+    use botanix_consensus_common::utils::is_inturn;
+    use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
+    use std::{str::FromStr, sync::Arc};
+
+    use super::*;
+
+    #[allow(dead_code)]
+    const EDH_DEFAULT_SIGHASH: &str =
+        "0xaaa3492fe3eec8da1ca35aca5930a44b1a5805e813bdd1773678b5041d905276";
+
+    #[allow(dead_code)]
+    const SK1: &str =
+        "1aabc5cc52b62b570dc69001f1ab49cd1a7056bf6312fe058f094135f2c9b019";
+    #[allow(dead_code)]
+    const SK2: &str =
+        "1bc1f5cc52b62b570dc69001f1ab49cd1a7056bf6312fe058f094135f2c9b019";
+
+    // Tests for validating poa extra data header
+    #[test]
+    fn should_skip_over_genesis() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        let header = Header { number: 0, ..Default::default() };
+        let authority_signers = vec![];
+        // Just use the first key as the dummy agg key
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
+
+        let result = consensus.validate_extra_data_header(
+            &header,
+            &authority_signers,
+            Some(&dummy_agg_key),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn fails_when_edh_exceeds_max_size() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        // In this case we are signing with a non federation different key
+        let mut edh = ExtraDataHeader::default();
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+
+        // Just use the first key as the dummy agg key
+        let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
+        edh.aggregated_public_key = dummy_agg_key;
+
+        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
+        let header = Header {
+            number: 1,
+            extra_data: Bytes::from([1; MAXIMUM_EXTRA_DATA_SIZE + 1]),
+            ..Default::default()
+        };
+
+        let result = consensus.validate_extra_data_header(
+            &header,
+            &authority_signers,
+            Some(&dummy_agg_key),
+        );
+        assert!(result.is_err());
+        assert!(matches!(
+            result.err().unwrap(),
+            ConsensusError::ExtraDataExceedsMax { len } if len == MAXIMUM_EXTRA_DATA_SIZE + 1
+        ));
+    }
+
+    #[test]
+    fn fails_when_edh_has_no_agg_pk() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
+        let header = Header { number: 1, ..Default::default() };
+
+        let result = consensus.validate_extra_data_header(
+            &header,
+            &authority_signers,
+            None,
+        );
+        assert!(result.is_err());
+        assert!(matches!(
+            result.err().unwrap(),
+            ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey
+            )
+        ));
+    }
+
+    #[test]
+    fn fails_with_invalid_edh() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        // Just use the first key as the dummy agg key
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
+
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
+        let header = Header {
+            number: 1,
+            extra_data: Bytes::from([0; 64]),
+            ..Default::default()
+        };
+
+        let result = consensus.validate_extra_data_header(
+            &header,
+            &authority_signers,
+            Some(&dummy_agg_key),
+        );
+        assert!(result.is_err());
+        assert!(matches!(
+            result.err().unwrap(),
+            ConsensusError::ExtraDataInvalid
+        ));
+    }
+
+    #[test]
+    fn should_not_accept_edh_with_nums_point_past_genesis() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        // By default edh will use the nums point
+        let edh = ExtraDataHeader::default();
+
+        // Just use the first key as the dummy agg key
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
+
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
+        let header = Header {
+            number: 1,
+            extra_data: Bytes::from(edh.serialize()),
+            ..Default::default()
+        };
+
+        let result = consensus.validate_extra_data_header(
+            &header,
+            &authority_signers,
+            Some(&dummy_agg_key),
+        );
+        assert!(matches!(
+            result.err().unwrap(),
+            ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis
+            )
+        ));
+    }
+
+    #[test]
+    fn should_not_accept_edh_with_exact_nums_point() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        // By default edh will use the nums point
+        let edh = ExtraDataHeader {
+            aggregated_public_key: nums_secp256k1_pk(),
+            ..Default::default()
+        };
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
+        let header = Header {
+            number: 1,
+            extra_data: Bytes::from(edh.serialize()),
+            ..Default::default()
+        };
+
+        let result = consensus.validate_extra_data_header(
+            &header,
+            &authority_signers,
+            Some(&nums_secp256k1_pk()),
+        );
+        assert!(matches!(
+            result.err().unwrap(),
+            ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis
+            )
+        ));
+    }
+
+    #[test]
+    fn should_not_accept_edh_with_invalid_agg_pk() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        // By default edh will use the nums point
+        let mut edh = ExtraDataHeader::default();
+
+        // Just use the first key as the dummy agg key
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
+
+        edh.aggregated_public_key = dummy_agg_key;
+
+        let different_key = secp256k1::SecretKey::from_str(SK2).unwrap();
+        let different_pk = different_key.public_key(secp256k1::SECP256K1);
+
+        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
+        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
+        let header = Header {
+            number: 1,
+            extra_data: Bytes::from(edh.serialize()),
+            ..Default::default()
+        };
+
+        let result = consensus.validate_extra_data_header(
+            &header,
+            &authority_signers,
+            Some(&different_pk),
+        );
+        assert!(matches!(
+            result.err().unwrap(),
+            ConsensusError::InvalidAggregatedPublicKey(
+                InvalidAggregatedPublicKeyError::InvalidAggregatedPublicKey
+            )
+        ));
+    }
+
+    #[test]
+    fn unix_timestamp() {
+        let timestamp = botanix_consensus_common::utils::unix_timestamp();
+        assert!(timestamp > 0);
+    }
+
+    #[test]
+    fn should_validate_poa_block_beneficiary() {
+        // default beneficiary is the burn address
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        let header = Header::default();
+        let result = consensus.validate_block_beneficiary(&header);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn should_fail_validate_poa_block_beneficiary() {
+        let consensus = BotanixConsensus::new(Arc::new(
+            BOTANIX_TESTNET.as_ref().to_owned(),
+        ));
+        let header = Header {
+            beneficiary: Address::from_str(
+                "0x4e0f6e05C8ca4b3dc2B7b7Ad6249B149b1980394",
+            )
+            .unwrap(),
+            ..Default::default()
+        };
+        let result = consensus.validate_block_beneficiary(&header);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn is_inturn_true() {
+        let authorities_len = 1;
+        let signer_index = 0;
+        let random_source = RandomSourceProvider::new().random_source();
+        assert!(is_inturn(
+            authorities_len,
+            signer_index,
+            ALLOWED_FUTURE_BLOCK_TIME_SECONDS,
+            random_source
+        ));
+    }
+
+    #[test]
+    fn is_inturn_false() {
+        let authorities_len = 1;
+        let signer_index = 1;
+        let random_source = RandomSourceProvider::new().random_source();
+
+        assert!(!is_inturn(
+            authorities_len,
+            signer_index,
+            ALLOWED_FUTURE_BLOCK_TIME_SECONDS,
+            random_source
+        ));
+    }
+
+    #[test]
+    fn should_get_block_fee_recipient_address_from_header() {
+        let mut header = Header::default();
+        let edh = ExtraDataHeader::default();
+        header.add_extra_data_header(&edh);
+        let block_fee_recipient_address =
+            header.block_fee_recipient_address().unwrap();
+        assert_eq!(block_fee_recipient_address, Address::ZERO);
+
+        let mut header2 = Header::default();
+        let edh2 = ExtraDataHeader {
+            block_fee_recipient_address: Address::from_str(
+                "0x4e0f6e05C8ca4b3dc2B7b7Ad6249B149b1980394",
+            )
+            .unwrap(),
+            ..Default::default()
+        };
+        header2.add_extra_data_header(&edh2);
+        let block_producer_address2 =
+            header2.block_fee_recipient_address().unwrap();
+        assert_eq!(block_producer_address2, edh2.block_fee_recipient_address);
+    }
+
+    #[test]
+    fn should_validate_chain_version() {
+        let edh_chain_version = CHAIN_VERSION;
+        let result =
+            BotanixConsensus::validate_chain_version(edh_chain_version);
+        assert!(result.is_ok());
+
+        let edh_chain_version = CHAIN_VERSION + 1;
+        let result =
+            BotanixConsensus::validate_chain_version(edh_chain_version);
+        assert!(result.is_err());
     }
 }

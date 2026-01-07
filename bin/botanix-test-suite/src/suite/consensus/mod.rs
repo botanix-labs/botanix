@@ -1233,6 +1233,7 @@ impl Suite for ConsensusIntegrationTestSuite {
 
         // // =================== RPC NODES ================== //
         if create_test_config.create_rpc_nodes {
+            it_info_print!("Creating RPC nodes", self.global_context.rpc_instances);
             let (mut rpc_nodes, tx) =
                 create_rpc_nodes(self.global_context.clone()).await?;
             let build_command_authorities_list =

@@ -10,12 +10,10 @@ use botanix_authority_peg::{
     },
     peg_contract::{PeginData, PegoutWithId},
 };
-use botanix_btc_wallet::{
-    bitcoind::BitcoindFactory, fallback::FallbackBitcoindClient,
-};
+use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 use btcserverlib::pegout_id::PegoutId;
-use reth_chainspec::{ChainSpec, EthereumHardforks};
+use reth_chainspec::EthereumHardforks;
 use reth_evm::{
     revm::primitives::{alloy_primitives::BlockNumber, hex},
     ConfigureEvm, Database as RethDatabase, EvmEnvFor,
@@ -149,18 +147,13 @@ where
     }
 
     #[inline]
-    fn chain_spec(&self) -> &ChainSpec {
-        self.executor.botanix_chain_spec.inner()
-    }
-
-    #[inline]
     fn botanix_chain_spec(&self) -> &BotanixChainSpec {
         self.executor.botanix_chain_spec.as_ref()
     }
 
     /// Returns mutable reference to the state that wraps the underlying database.
     #[allow(unused)]
-    fn state_mut(&mut self) -> &mut State<DB> {
+    const fn state_mut(&mut self) -> &mut State<DB> {
         &mut self.state
     }
 
@@ -276,18 +269,6 @@ where
     where
         EvmConfig: ConfigureEvm,
     {
-        // let mut cfg = CfgEnvWithHandlerCfg::new(Default::default(), Default::default());
-        // let mut block_env = BlockEnv::default();
-        // self.executor.evm_config.fill_cfg_and_block_env(
-        //     &mut cfg,
-        //     &mut block_env,
-        //     self.chain_spec(),
-        //     header,
-        //     total_difficulty,
-        // );
-
-        // EnvWithHandlerCfg::new_with_cfg_env(cfg, block_env, Default::default())
-
         self.executor.evm_config.evm_env(header)
     }
 }
@@ -403,7 +384,7 @@ where
             // calculate the total transaction fee
             let mut transaction_fee = transaction
                 .clone()
-                .effective_tip_per_gas(base_fee.unwrap_or_default()) // TODO: is this right??
+                .effective_tip_per_gas(base_fee.unwrap_or(0))
                 .expect("base fee exists");
             // Include the base fee so it's not burned
             transaction_fee += base_fee.unwrap_or(0) as u128;
@@ -485,8 +466,7 @@ where
                                 info: original_sender_info,
                                 storage: Default::default(), // Storage changes remain reverted.
                                 status: AccountStatus::Touched, // Mark as touched
-                                transaction_id: tx_index, /* TODO: confirm tx_index is correct
-                                                           * here */
+                                transaction_id: tx_index,
                             };
                             state.insert(*sender, reverted_account);
 

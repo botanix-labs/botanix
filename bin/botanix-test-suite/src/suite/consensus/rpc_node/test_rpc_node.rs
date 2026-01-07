@@ -59,10 +59,10 @@ pub async fn test_rpc_node(
         .local_context
         .rpc_nodes
         .as_ref()
-        .map(|rpc| rpc.get(&0))
-        .flatten()
+        .and_then(|rpc| rpc.get(&0))
         .cloned()
-        .expect("first rpc node to be valid");
+        .ok_or_else(|| anyhow::anyhow!("No RPC node found at index 0. RPC nodes available: {:?}", 
+            suite.local_context.rpc_nodes.as_ref().map(|rpc| rpc.keys().collect::<Vec<_>>())))?;
     // get latest header hash from rpc node
     // Note: alternative way is to wait for cannon state notification from rpc node and get hash
     // from notification but this way also tests that rpc node can handle rpc requests
@@ -75,27 +75,40 @@ pub async fn test_rpc_node(
     .await
     .context("Failed to create rpc botanix client")?;
 
-    // get the latest header hash from the federation
-    let fed_latest_header_hash = botanix_clients
-        .first()
-        .expect("botanix client to exist")
-        .get_latest_block_hash()
-        .await
-        .unwrap();
-    let rpc_latest_block_header =
-        rpc_botanix_client.get_latest_block_hash().await.unwrap();
+    // get the latest header hash from the federation with timeout
+    let fed_latest_header_hash = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        botanix_clients
+            .first()
+            .expect("botanix client to exist")
+            .get_latest_block_hash()
+    )
+    .await
+    .context("Timeout getting federation latest block hash")?
+    .unwrap();
+    
+    let rpc_latest_block_header = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        rpc_botanix_client.get_latest_block_hash()
+    )
+    .await
+    .context("Timeout getting RPC node latest block hash")?
+    .unwrap();
 
     it_info_print!("Federation latest header hash", fed_latest_header_hash);
     it_info_print!("RPC node latest header hash", rpc_latest_block_header);
 
     assert_eq!(rpc_latest_block_header, fed_latest_header_hash);
 
-    // submit a tx to the rpc node
-    let rpc_tx_receipt = rpc_botanix_client
-        .send_eoa(eoa_receiver, SEND_AMOUNT)
-        .await
-        .unwrap()
-        .unwrap();
+    // submit a tx to the rpc node with timeout
+    let rpc_tx_receipt = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        rpc_botanix_client.send_eoa(eoa_receiver, SEND_AMOUNT)
+    )
+    .await
+    .context("Timeout sending transaction to RPC node")?
+    .unwrap()
+    .unwrap();
     it_info_print!("RPC node tx receipt", rpc_tx_receipt);
 
     // assert tx is confirmed (status = 1)
@@ -108,8 +121,13 @@ pub async fn test_rpc_node(
 
     // call all fed members and check they have the block with the rpc tx
     for client in botanix_clients.iter() {
-        let block =
-            client.get_latest_block_by_hash(rpc_tx_block_hash).await.unwrap();
+        let block = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            client.get_latest_block_by_hash(rpc_tx_block_hash)
+        )
+        .await
+        .context("Timeout getting block from federation member")?
+        .unwrap();
         let tx_hash = block.transactions.first().expect("tx to exist");
         it_info_print!("Fed node tx hash", tx_hash);
         it_info_print!("RPC node tx hash", rpc_tx_receipt.transaction_hash);
