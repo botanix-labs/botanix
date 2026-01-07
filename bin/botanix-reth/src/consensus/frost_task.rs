@@ -918,14 +918,25 @@ where
                         let header = tip.header();
 
                         // Read aggregate public keys once for lookups
-                        let aggregate_public_keys = self
+                        let Some(aggregate_public_keys) = self
                             .storage
                             .inner
                             .read()
                             .await
                             .aggregate_public_key
                             .clone()
-                            .expect("aggregate_public_keys must be set after DKG");
+                        else {
+                            // Same pattern as handle_canon_state_commit btc-server failure
+                            error!(
+                                target: "consensus::authority::frost_task::start_task",
+                                "no aggregate public keys found"
+                            );
+
+                            // Since we are skipping the current block, we need to check for staged headers on the next iteration.
+                            self.check_staged_headers = true;
+
+                            continue;
+                        };
 
                         // Convert pegins into correct format
                         let pegins =

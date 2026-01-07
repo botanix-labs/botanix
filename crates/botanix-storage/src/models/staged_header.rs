@@ -1,8 +1,74 @@
 //! Models for staged headers with their associated pegins and pegouts.
 
+use bytes::BufMut;
 use reth_codecs::{add_arbitrary_tests, Compact};
 use reth_primitives::Header;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// Wrapper type for multisig IDs.
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+pub struct MultisigId(u32);
+
+impl MultisigId {
+    /// The legacy multisig ID constant.
+    pub const LEGACY: Self = Self(0);
+
+    /// Create a new MultisigId.
+    pub const fn new(id: u32) -> Self {
+        Self(id)
+    }
+
+    /// Get the inner value as u32.
+    pub const fn as_u32(&self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for MultisigId {
+    fn from(id: u32) -> Self {
+        Self::new(id)
+    }
+}
+
+impl From<MultisigId> for u32 {
+    fn from(id: MultisigId) -> Self {
+        id.as_u32()
+    }
+}
+
+impl fmt::Display for MultisigId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::ops::Deref for MultisigId {
+    type Target = u32;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Compact for MultisigId {
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: BufMut + AsMut<[u8]>,
+    {
+        // Convert to u64 for Compact encoding (u32 doesn't implement Compact)
+        (self.0 as u64).to_compact(buf)
+    }
+
+    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+        // Decode as u64 then convert back to u32
+        let (val, remaining) = u64::from_compact(buf, len);
+        (Self(val as u32), remaining)
+    }
+}
 
 /// A header with associated pegins and pegouts.
 ///
@@ -97,7 +163,7 @@ pub struct PeginData {
     pub eth_address: Vec<u8>,
 
     /// The multisig_id (federation) that the pegin belongs to.
-    pub multisig_id: u64,
+    pub multisig_id: MultisigId,
 }
 
 /// Pegout data associated with a header.

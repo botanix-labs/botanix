@@ -118,7 +118,7 @@ pub fn max_number_of_psbt_inputs(num_outputs: u64) -> u64 {
 mod tests {
     use super::*;
     use crate::{
-        database::version::UtxoVersion,
+        database::{version::UtxoVersion, TEST_LEGACY_MULTISIG_ID},
         test_utils::{
             add_dummy_signatures_to_psbt, create_random_pegout_id,
             random_compute_txid, random_p2tr_keyspend_script,
@@ -185,6 +185,7 @@ mod tests {
             },
             eth_address: None,
             version: UtxoVersion::default(),
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         }
     }
 

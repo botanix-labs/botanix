@@ -309,15 +309,19 @@ pub async fn finalize_signing(
         .get_psbt(signing_session_id)?
         .ok_or(CoordinatorError::CouldNotFindPsbt)?;
 
-    let pk_package = db
-        .get_public_key_package()?
-        .ok_or(CoordinatorError::MissingKeyPackage)?;
     // Get signing packages for this signing session
     let signing_packages = psbt
         .signing_packages()
         .map_err(CoordinatorError::PsbtToSigningPackageConversionError)?;
 
     for (index, psbt_input) in psbt.inputs.iter_mut().enumerate() {
+        let multisig_id = psbt_input
+            .multisig_id()
+            .ok_or(CoordinatorError::MissingMultisigId)?;
+        let pk_package = db
+            .get_public_key_package_by_id(multisig_id)?
+            .ok_or(CoordinatorError::MissingKeyPackage)?;
+
         let signing_package = signing_packages
             .get(index)
             .ok_or(CoordinatorError::MissingSigningPackageAtIndex(index))?;
@@ -334,7 +338,7 @@ pub async fn finalize_signing(
             &signing_parameters,
         )?;
 
-        let effective_key = pk_package.clone().tweak(&signing_parameters);
+        let effective_key = pk_package.tweak(&signing_parameters);
         // Verify signature -- redundant check finalize psbt already checks this
         effective_key
             .verifying_key()

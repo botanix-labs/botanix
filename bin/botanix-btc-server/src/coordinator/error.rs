@@ -13,6 +13,8 @@ use thiserror::Error;
 pub enum CoordinatorError {
     #[error("missing key package")]
     MissingKeyPackage,
+    #[error("missing multisig_id in PSBT input")]
+    MissingMultisigId,
     #[error("invalid frost peer id")]
     InvalidFrostPeerId,
     #[error("not enough signers")]

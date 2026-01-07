@@ -218,6 +218,7 @@ fn perform_coin_selection<T: CoinSelectionAlgorithm>(
             output: s.output.clone(),
             eth_address: s.eth_address,
             version: UtxoVersion::try_from(s.version).ok().unwrap_or_default(),
+            multisig_id: s.multisig_id,
         })
         .collect();
 
