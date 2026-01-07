@@ -3,6 +3,7 @@
 mod cli;
 use anyhow::Result as AnyResult;
 use botanix_reth::node::{storage::BotanixStorage, BotanixNode};
+use botanix_chainspec::BotanixChainSpec;
 use botanix_storage::BotanixProviderFactory;
 use clap::Parser;
 use cli::Cli;
@@ -11,8 +12,10 @@ use reth_db::{
     models::ClientVersion,
     open_db, DatabaseEnv,
 };
-use reth_provider::errors::db::LogLevel;
+use reth_prune_types::PruneModes;
+use reth_provider::{errors::db::LogLevel, providers::StaticFileProvider};
 use std::{
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -56,7 +59,11 @@ async fn main() -> AnyResult<()> {
     tracing::info!(target: "db_cleaner::cli", path = ?db_path, "Database successfully opened!");
     let database = Arc::new(db);
     let storage = Arc::new(BotanixStorage::default());
-    let chain_spec_arc = Arc::new(chain_spec.clone());
+    let chain_spec = BotanixChainSpec::default();
+    let static_files_path = Path::new(&db_path).join("static_files");
+    fs::create_dir_all(&static_files_path)?;
+    let static_files_provider = StaticFileProvider::read_write(&static_files_path)?;
+    let chain_spec_arc = Arc::new(chain_spec);
     let provider_factory =
         BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(
             database,

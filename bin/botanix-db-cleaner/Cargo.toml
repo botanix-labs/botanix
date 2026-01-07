@@ -23,11 +23,13 @@ botanix-storage = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 
 # reth deps
+botanix-chainspec = { workspace = true }
 botanix-reth = { workspace = true }
 reth-chainspec = { workspace = true }
 reth-db = { workspace = true, features = ["mdbx"] }
 reth-node-core = { workspace = true }
 reth-provider = { workspace = true }
+reth-prune-types = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
