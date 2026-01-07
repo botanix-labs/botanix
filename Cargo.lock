@@ -2811,6 +2811,7 @@ dependencies = [
  "alloy-primitives",
  "askama",
  "bitcoin 0.32.7",
+ "botanix-types",
  "displaydoc",
  "eyre",
  "reth-chainspec",

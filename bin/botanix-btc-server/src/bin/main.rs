@@ -539,7 +539,7 @@ where
 
         let active_multisig_id = database::LEGACY_MULTISIG_ID;
         let active_multisig = federation
-            .get_config_by_multisig_id(*active_multisig_id)
+            .get_config_by_multisig_id(active_multisig_id)
             .ok_or_else(|| {
                 dkg::Error::BadConfig(format!(
                     "missing multisig id {}",
@@ -678,7 +678,7 @@ where
 
         // Iterate through all multisig configurations
         for multisig_config in &federation.multisig {
-            let multisig_id = MultisigId::new(multisig_config.multisig_id);
+            let multisig_id = multisig_config.multisig_id;
             
             // Check if this node is a member of this multisig
             let is_member = multisig_config

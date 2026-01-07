@@ -1,3 +1,4 @@
+use botanix_types::MultisigId;
 use displaydoc::Display as DisplayDoc;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -76,7 +77,7 @@ pub enum FederationRole {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MultisigConfig {
     /// Identifier for this multisig (0 = pre-dynafed, 1 = next, ...)
-    pub multisig_id: u32,
+    pub multisig_id: MultisigId,
     /// Threshold for this multisig
     pub min_signers: u16,
     /// Total number of signers for this multisig (defaults to member count)
@@ -89,7 +90,7 @@ pub struct MultisigConfig {
 impl MultisigConfig {
     #[allow(dead_code)]
     pub fn new(
-        multisig_id: u32,
+        multisig_id: MultisigId,
         min_signers: u16,
         max_signers: u16,
         federation_member_public_key: Vec<FedMemberPubKey>,
@@ -173,14 +174,14 @@ impl FederationTomlConfig {
     /// multisig id.
     pub fn get_federation_pks_for_multisig(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
         self.get_federation_pks_internal(multisig_id)
     }
 
     fn get_federation_pks_internal(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
         let multisig = self.select_multisig(multisig_id)?;
         let federation_members = multisig
@@ -218,7 +219,7 @@ impl FederationTomlConfig {
 
     fn select_multisig(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Result<&MultisigConfig, Error> {
         if self.multisig.is_empty() {
             return Err(Error::MissingMultisigs);
@@ -240,7 +241,7 @@ impl FederationTomlConfig {
 
     pub fn get_config_by_multisig_id(
         &self,
-        multisig_id: u32,
+        multisig_id: MultisigId,
     ) -> Option<&MultisigConfig> {
         self.multisig.iter().find(|m| m.multisig_id == multisig_id)
     }
@@ -428,9 +429,7 @@ pub fn load_federation_config_toml(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Test constant matching LEGACY_MULTISIG_ID (0) from btcserverlib
-    const TEST_LEGACY_MULTISIG_ID: u32 = 0;
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
 
     #[test]
     fn parses_multisig_format() {
@@ -483,8 +482,8 @@ role = "continuing"
         let config = FederationTomlConfig::from_str(toml)
             .expect("multisig config parses");
         assert_eq!(config.multisig.len(), 2);
-        assert_eq!(config.multisig[0].multisig_id, 0);
-        assert_eq!(config.multisig[1].multisig_id, 1);
+        assert_eq!(config.multisig[0].multisig_id, MultisigId::new(0));
+        assert_eq!(config.multisig[1].multisig_id, MultisigId::new(1));
         assert_eq!(config.multisig[0].min_signers, 2);
         assert_eq!(config.multisig[1].min_signers, 2);
         assert_eq!(config.multisig[0].max_signers, Some(3));
@@ -510,7 +509,7 @@ role = "continuing"
             ],
         };
         let next = MultisigConfig {
-            multisig_id: 1,
+            multisig_id: MultisigId::new(1),
             min_signers: 2,
             max_signers: Some(3),
             federation_member_public_key: vec![
@@ -535,7 +534,7 @@ role = "continuing"
             ],
         };
         let next = MultisigConfig {
-            multisig_id: 1,
+            multisig_id: MultisigId::new(1),
             min_signers: 2,
             max_signers: Some(2),
             federation_member_public_key: vec![
@@ -559,7 +558,7 @@ role = "continuing"
             ],
         };
         let next = MultisigConfig {
-            multisig_id: 1,
+            multisig_id: MultisigId::new(1),
             min_signers: 2,
             max_signers: Some(2),
             federation_member_public_key: vec![
@@ -583,7 +582,7 @@ role = "continuing"
             ],
         };
         let next = MultisigConfig {
-            multisig_id: 1,
+            multisig_id: MultisigId::new(1),
             min_signers: 2,
             max_signers: Some(2),
             federation_member_public_key: vec![
