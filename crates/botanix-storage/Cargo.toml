@@ -55,6 +55,7 @@ uuid = { workspace = true }
 
 # Botanix
 botanix-primitives = { workspace = true }
+botanix-types = { workspace = true, features = ["compact", "arbitrary"] }
 
 [dev-dependencies]
 arbitrary = { workspace = true }

@@ -68,67 +68,8 @@ const TREE_PENDING_PEGOUTS: &[u8; 7] = b"pegouts";
 /// Sliding window duration in seconds (90 days)
 const RETENTION_WINDOW_SECONDS: u64 = 90 * 24 * 60 * 60;
 
-// For backwards compatibility
-pub const LEGACY_MULTISIG_ID: MultisigId = MultisigId::LEGACY;
-
-/// Test constant that aliases LEGACY_MULTISIG_ID for use in tests
-pub const TEST_LEGACY_MULTISIG_ID: MultisigId = LEGACY_MULTISIG_ID;
-
-use std::fmt;
-
-/// Wrapper type for multisig IDs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct MultisigId(u32);
-
-impl MultisigId {
-    /// The legacy multisig ID constant
-    pub const LEGACY: Self = Self(0);
-    
-    /// Create a new MultisigId
-    pub const fn new(id: u32) -> Self {
-        Self(id)
-    }
-    
-    /// Get the inner value as a reference
-    pub const fn as_u32(&self) -> u32 {
-        self.0
-    }
-}
-
-// Easy conversion from u32
-impl From<u32> for MultisigId {
-    fn from(id: u32) -> Self {
-        Self(id)
-    }
-}
-
-// Easy conversion to u32
-impl From<MultisigId> for u32 {
-    fn from(id: MultisigId) -> Self {
-        id.0
-    }
-}
-
-// Display implementation
-impl fmt::Display for MultisigId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-// Deref to u32 for convenient method access
-impl std::ops::Deref for MultisigId {
-    type Target = u32;
-    
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-/// Default function for serde to use LEGACY_MULTISIG_ID as the default value.
-const fn default_multisig_id() -> MultisigId {
-    MultisigId::LEGACY
-}
+// Re-export MultisigId and constants from botanix-types for backwards compatibility
+pub use botanix_types::{MultisigId, LEGACY_MULTISIG_ID, TEST_LEGACY_MULTISIG_ID, default_multisig_id};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Utxo {
