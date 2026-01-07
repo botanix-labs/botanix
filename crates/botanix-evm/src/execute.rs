@@ -466,8 +466,7 @@ where
                                 info: original_sender_info,
                                 storage: Default::default(), // Storage changes remain reverted.
                                 status: AccountStatus::Touched, // Mark as touched
-                                transaction_id: tx_index, /* TODO: confirm tx_index is correct
-                                                           * here */
+                                transaction_id: tx_index,
                             };
                             state.insert(*sender, reverted_account);
 
