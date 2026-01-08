@@ -71,6 +71,9 @@ const RETENTION_WINDOW_SECONDS: u64 = 90 * 24 * 60 * 60;
 // For backwards compatibility
 pub const LEGACY_MULTISIG_ID: MultisigId = MultisigId::LEGACY;
 
+/// Test constant that aliases LEGACY_MULTISIG_ID for use in tests
+pub const TEST_LEGACY_MULTISIG_ID: MultisigId = LEGACY_MULTISIG_ID;
+
 use std::fmt;
 
 /// Wrapper type for multisig IDs
