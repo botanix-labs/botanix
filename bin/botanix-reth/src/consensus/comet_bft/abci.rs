@@ -2351,15 +2351,17 @@ where
 
                 // get non-deterministic data
                 let txs_bytes = request.txs.clone();
-                let non_deterministic_data_bytes =
-                    match txs_bytes.clone().first() {
-                        Some(tx) => tx.clone(),
-                        None => {
-                            panic!(
+                let non_deterministic_data_bytes = match txs_bytes
+                    .clone()
+                    .first()
+                {
+                    Some(tx) => tx.clone(),
+                    None => {
+                        panic!(
                             "No non-deterministic tx in finalize block request"
                         );
-                        }
-                    };
+                    }
+                };
                 let reader_inner: Vec<u8> = vec![non_deterministic_data_bytes]
                     .into_iter()
                     .flatten()
@@ -2851,43 +2853,45 @@ impl ABCIDriver {
                             .flat_map(|p| p.meta.clone())
                             .collect::<Vec<_>>();
                         // Serialize pegins to pass in Commit notification
-                        let pegin_bytes =
-                            if pegins.is_empty() {
-                                None
-                            } else {
-                                Some(
-                                    pegins
-                                        .iter()
-                                        .map(|p| {
-                                            Bytes::copy_from_slice(
-                                    p.serialize()
-                                        .expect("Pegins to be serialized")
-                                        .as_slice(),
-                                )
-                                        })
-                                        .collect::<Vec<Bytes>>(),
-                                )
-                            };
+                        let pegin_bytes = if pegins.is_empty() {
+                            None
+                        } else {
+                            Some(
+                                pegins
+                                    .iter()
+                                    .map(|p| {
+                                        Bytes::copy_from_slice(
+                                            p.serialize()
+                                                .expect(
+                                                    "Pegins to be serialized",
+                                                )
+                                                .as_slice(),
+                                        )
+                                    })
+                                    .collect::<Vec<Bytes>>(),
+                            )
+                        };
                         debug!("Pegin bytes: {:?}", pegin_bytes);
                         // Serialize pegouts to pass in Commit notification
                         let pegouts = sealed_block_with_peg.pegouts().to_vec();
-                        let pegout_bytes =
-                            if pegouts.is_empty() {
-                                None
-                            } else {
-                                Some(
-                                    pegouts
-                                        .iter()
-                                        .map(|p| {
-                                            Bytes::copy_from_slice(
-                                    p.serialize()
-                                        .expect("Pegouts to be serialized")
-                                        .as_slice(),
-                                )
-                                        })
-                                        .collect::<Vec<Bytes>>(),
-                                )
-                            };
+                        let pegout_bytes = if pegouts.is_empty() {
+                            None
+                        } else {
+                            Some(
+                                pegouts
+                                    .iter()
+                                    .map(|p| {
+                                        Bytes::copy_from_slice(
+                                            p.serialize()
+                                                .expect(
+                                                    "Pegouts to be serialized",
+                                                )
+                                                .as_slice(),
+                                        )
+                                    })
+                                    .collect::<Vec<Bytes>>(),
+                            )
+                        };
                         debug!("Pegout bytes: {:?}", pegout_bytes);
 
                         // Prepare the staged entries for insertion into the
@@ -3159,7 +3163,7 @@ mod tests {
 
         let evm_config = BotanixEvmConfig::new(spec.clone());
 
-        // Create a bitcoin header for testing 
+        // Create a bitcoin header for testing
         let bitcoin_header = Header {
             version: Version::default(),
             prev_blockhash: BlockHash::all_zeros(),
@@ -3223,14 +3227,14 @@ mod tests {
         .build_ignore_nework_upgrade();
 
         let bitcoin_checkpoints_chain =
-            BitcoinCheckpointsChain::try_new(1, 0, 0).expect(
-                "create a valid chain",
-            );
+            BitcoinCheckpointsChain::try_new(1, 0, 0)
+                .expect("create a valid chain");
 
-        let bitcoin_checkpoint = BitcoinCheckpoint::new(bitcoin_header.clone(), 0);
-        bitcoin_checkpoints_chain.push(bitcoin_checkpoint).expect(
-            "push a checkpoint",
-        );
+        let bitcoin_checkpoint =
+            BitcoinCheckpoint::new(bitcoin_header.clone(), 0);
+        bitcoin_checkpoints_chain
+            .push(bitcoin_checkpoint)
+            .expect("push a checkpoint");
 
         let cometbft_rpc_factory = HttpCometBFTRpcClientFactory::default();
 
@@ -3334,23 +3338,14 @@ mod tests {
         let response = abci_client.prepare_proposal(request);
 
         let expected_ndd = NonDeterministicData::new_v2(
-            abci_client.bitcoin_blockhash().expect(
-                "to have bitcoin blockhash",
-            ),
-            abci_client.aggregate_public_key().expect(
-                "to have agg pk",
-            ),
+            abci_client.bitcoin_blockhash().expect("to have bitcoin blockhash"),
+            abci_client.aggregate_public_key().expect("to have agg pk"),
             Address::ZERO,
             RUNTIME_VERSION_GENESIS,
             None,
         );
-        let response_ndd_bytes = response
-            .txs
-            .first()
-            .expect(
-                "to have tx",
-            )
-            .clone();
+        let response_ndd_bytes =
+            response.txs.first().expect("to have tx").clone();
         let reader_inner: Vec<u8> =
             vec![response_ndd_bytes].into_iter().flatten().collect();
         let reader = &mut io::Cursor::new(reader_inner);
@@ -3389,21 +3384,14 @@ mod tests {
         let response = abci_client.prepare_proposal(request);
 
         let expected_ndd = NonDeterministicData::new_v1(
-            abci_client.bitcoin_blockhash().expect(
-                "to have agg bitcoin blockhash",
-            ),
-            abci_client.aggregate_public_key().expect(
-                "to have agg pk",
-            ),
+            abci_client
+                .bitcoin_blockhash()
+                .expect("to have agg bitcoin blockhash"),
+            abci_client.aggregate_public_key().expect("to have agg pk"),
             Address::ZERO,
         );
-        let response_ndd_bytes = response
-            .txs
-            .first()
-            .expect(
-                "to have tx",
-            )
-            .clone();
+        let response_ndd_bytes =
+            response.txs.first().expect("to have tx").clone();
         let reader_inner: Vec<u8> =
             vec![response_ndd_bytes].into_iter().flatten().collect();
         let reader = &mut io::Cursor::new(reader_inner);
@@ -3422,9 +3410,8 @@ mod tests {
 
         let mut request = RequestProcessProposal::default();
 
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         request.txs = vec![ndd_bytes];
 
@@ -3447,9 +3434,8 @@ mod tests {
         let abci_client = abci_client_builder();
 
         // first tx should be non-deterministic data
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         // second tx should be a signed transaction
         let mut tx_generator = TransactionGenerator::new(rand_09::rng());
@@ -3485,9 +3471,8 @@ mod tests {
 
         let mut request = RequestFinalizeBlock::default();
 
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         request.txs = vec![ndd_bytes.clone()];
 
@@ -3503,9 +3488,8 @@ mod tests {
         let response = abci_client.finalize_block(request);
 
         // get newly made block from cache to recreate expected app hash
-        let mut rw_lock = abci_client.block_cache.write().expect(
-            "should get lock",
-        );
+        let mut rw_lock =
+            abci_client.block_cache.write().expect("should get lock");
         let sealed_block_with_context =
             rw_lock.cache.pop_newest().expect("to have block").1;
         let expected_app_hash = prost::bytes::Bytes::copy_from_slice(
@@ -3539,10 +3523,9 @@ mod tests {
         let ndd = abci_client
             .non_deterministic_data(RUNTIME_VERSION_V1, None)
             .expect("to have ndd");
-        let ndd_bytes =
-            abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect(
-                "to serialize ndd",
-            );
+        let ndd_bytes = abci_client
+            .serialize_non_deterministic_data_to_bytes(ndd)
+            .expect("to serialize ndd");
 
         // second tx should be a signed transaction
         let mut tx_generator = TransactionGenerator::new(rand_09::rng());

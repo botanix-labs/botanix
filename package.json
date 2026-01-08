@@ -7,7 +7,7 @@
         "prettier:fix": "prettier --write \"**/*.@(json|md|sh|toml)\"",
         "prettier:validate": "prettier --check \"**/*.@(json|md|sh|toml)\"",
         "md:lint": "markdownlint -c .markdownlint.json \"**/*.md\" \".github/**/*.md\" -i \"target\" -i \"node_modules\" -i \"CHANGELOG.md\"",
-        "md:fix": "pnpm md:lint --fix",
+        "md:fix": "markdownlint -c .markdownlint.json \"**/*.md\" \".github/**/*.md\" -i \"target\" -i \"node_modules\" -i \"CHANGELOG.md\" --fix",
         "release": "semantic-release"
     },
     "devDependencies": {

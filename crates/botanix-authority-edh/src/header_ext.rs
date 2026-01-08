@@ -5,18 +5,15 @@ use super::extra_data_header::{
 };
 use alloy_primitives::Bytes;
 // use bitcoincore_rpc::{Error as BitcoindError, RpcApi};
+use bitcoin::{
+    block::Version, hash_types::TxMerkleNode, hashes::Hash, pow::CompactTarget,
+    BlockHash,
+};
 use botanix_authority_peg::consensus_package::{
     BotanixConsensusPackage, RecentHeader,
 };
 use botanix_btc_wallet::{
     error::BitcoindAdapterError, fallback::FallbackBitcoindClient,
-};
-use bitcoin::{
-    block::Version,
-    hash_types::TxMerkleNode,
-    hashes::Hash,
-    pow::CompactTarget,
-    BlockHash,
 };
 use reth_primitives_traits::Header;
 use revm_primitives::Address;
@@ -152,24 +149,30 @@ impl HeaderExt for Header {
             });
         }
 
-        let bitcoin_checkpoint_header = match bitcoind_factory.get_block_header_rpc(&edh.bitcoin_block_hash) {
-            Ok(header) => header,
-            Err(e) => {
-                return Err(BotanixConsensusPackageError::FailedToRetrieveBitcoinCheckpointHeader(e))
-            }
-        };
+        let bitcoin_checkpoint_header =
+            match bitcoind_factory.get_block_header_rpc(&edh.bitcoin_block_hash) {
+                Ok(header) => header,
+                Err(e) => {
+                    return Err(
+                        BotanixConsensusPackageError::FailedToRetrieveBitcoinCheckpointHeader(e),
+                    )
+                }
+            };
 
         tracing::trace!(
             "bitcoin_checkpoint_header={:?}",
             bitcoin_checkpoint_header
         );
 
-        let bitcoin_checkpoint_height = match bitcoind_factory.get_block_info_rpc(&edh.bitcoin_block_hash) {
-            Ok(info) => info.height,
-            Err(e) => {
-                return Err(BotanixConsensusPackageError::FailedToRetrieveBitcoinCheckpointHeight(e))
-            }
-        };
+        let bitcoin_checkpoint_height =
+            match bitcoind_factory.get_block_info_rpc(&edh.bitcoin_block_hash) {
+                Ok(info) => info.height,
+                Err(e) => {
+                    return Err(
+                        BotanixConsensusPackageError::FailedToRetrieveBitcoinCheckpointHeight(e),
+                    )
+                }
+            };
 
         let bitcoin_checkpoint: RecentHeader =
             (bitcoin_checkpoint_header, bitcoin_checkpoint_height as u32);

@@ -315,18 +315,19 @@ where
                                     error!("Failed to base64 decode request metadata: {}", e);
                                     badarg!("Failed to base64 decode request metadata: {}", e)
                                 })?;
-                            let jwt_stringified =
-                                String::from_utf8(jwt_token_base64_decoded)
-                                    .map_err(|e| {
-                                        error!(
+                            let jwt_stringified = String::from_utf8(
+                                jwt_token_base64_decoded,
+                            )
+                            .map_err(|e| {
+                                error!(
                                     "Failed to utf8 decode jwt value: {}",
                                     e
                                 );
-                                        badarg!(
+                                badarg!(
                                     "Failed to utf8 decode jwt value: {}",
                                     e
                                 )
-                                    })?;
+                            })?;
                             jwt_secret.validate(&jwt_stringified).map_err(
                                 |e| {
                                     error!(

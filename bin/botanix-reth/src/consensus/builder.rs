@@ -266,7 +266,7 @@ where
     where
         BtcServerClient: BtcServerExtendedApi + Clone + Send + Sync + 'static,
         BtcServerExtendedClient: Into<BtcServerClient>,
-    <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader: HeaderExt
+        <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
     {
         let Self {
             btc_server_factory,

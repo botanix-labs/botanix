@@ -44,8 +44,8 @@ bitcoincore-rpc = "0.19.0"
 
 # Botanix deps
 botanix-btc-server-client.workspace = true
-botanix-fs-util = { workspace = true }
 botanix-configs.workspace = true
+botanix-fs-util = { workspace = true }
 chacha20poly1305 = "0.10.1"
 ciborium = "0.2.1"
 clap = { version = "4.3.22", features = ["derive"] }
@@ -56,8 +56,8 @@ displaydoc = "0.2"
 dotenvy = { version = "0.15.7" }
 env_logger = "0.11.3"
 frost-secp256k1-tr = { git = "https://github.com/botanix-labs/frost", rev = "b4c5ab017bb0d182f3c56fd80b95d6375a4bfeea", features = [
-  "serde",
-  "serialization",
+    "serde",
+    "serialization",
 ] }
 futures = "0.3"
 futures-util = "0.3.25"
@@ -98,13 +98,7 @@ zeroize = "1.8.1"
 [build-dependencies]
 prost-build = "0.13.3"
 tonic-build = "0.12.3"
-vergen = { version = "8.0.0", features = [
-  "build",
-  "cargo",
-  "git",
-  "gitcl",
-  "rustc",
-] }
+vergen = { version = "8.0.0", features = ["build", "cargo", "git", "gitcl", "rustc"] }
 
 [dev-dependencies]
 assert_matches = "1.5.0"

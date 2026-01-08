@@ -13,18 +13,16 @@ CONFIG_PATH=${3:-${CONFIG_PATH:-"docker-local/configs"}}
 PROJECT_PREFIX=${4:-${PROJECT_PREFIX:-"botanix"}}
 COMPOSE_FILE="$OUTPUT_PATH/docker-compose-generated.yml"
 
-
 echo "Extracting CometBFT node IDs..."
 declare -a NODE_IDS
 for j in $(seq 1 "$NUM_NODES"); do
     NODE_CONFIG_PATH="$CONFIG_PATH/node-$j/cometbft"
     if [ -d "$NODE_CONFIG_PATH" ]; then
-        NODE_ID=$(cometbft show-node-id --home="$NODE_CONFIG_PATH" 2>/dev/null || echo "")
+        NODE_ID=$(cometbft show-node-id --home="$NODE_CONFIG_PATH" 2> /dev/null || echo "")
         NODE_IDS[$j]=$NODE_ID
         echo "  Node $j ID: $NODE_ID"
     fi
 done
-
 
 PRIVATE_PEER_IDS=""
 for j in $(seq 1 "$NUM_NODES"); do
@@ -60,8 +58,8 @@ if [[ "$CONFIG_PATH" == "$OUTPUT_PATH"* ]]; then
     RELATIVE_CONFIG_PATH=".${CONFIG_PATH#"$OUTPUT_PATH"}"
 else
     # Convert to absolute paths if needed
-    ABS_OUTPUT_PATH=$(cd "$OUTPUT_PATH" 2>/dev/null && pwd || echo "$OUTPUT_PATH")
-    ABS_CONFIG_PATH=$(cd "$CONFIG_PATH" 2>/dev/null && pwd || echo "$CONFIG_PATH")
+    ABS_OUTPUT_PATH=$(cd "$OUTPUT_PATH" 2> /dev/null && pwd || echo "$OUTPUT_PATH")
+    ABS_CONFIG_PATH=$(cd "$CONFIG_PATH" 2> /dev/null && pwd || echo "$CONFIG_PATH")
 
     RELATIVE_CONFIG_PATH="$ABS_CONFIG_PATH"
 fi
@@ -98,7 +96,7 @@ for i in $(seq 1 "$NUM_NODES"); do
     COMET_RPC_PORT=$((26657 + NODE_INDEX * 100))
     COMET_METRICS_PORT=$((26660 + NODE_INDEX * 100))
     COMET_P2P_PORT=$((26656 + NODE_INDEX * 100))
-    ABCI_PORT=26658  # Fixed ABCI port for all nodes
+    ABCI_PORT=26658 # Fixed ABCI port for all nodes
     MIN_SIGNERS=${MIN_SIGNERS:-2}
     MAX_SIGNERS=${MAX_SIGNERS:-3}
     BLOCK_FEE_RECIPIENT_ADDRESS=${BLOCK_FEE_RECIPIENT_ADDRESS:-0xF27a6Ea4a1d5f7341Da7EDAaa47C5C933b738f4F}

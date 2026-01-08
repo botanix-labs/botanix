@@ -17,6 +17,7 @@ alloy-primitives = { workspace = true }
 anyhow = "1.0.95"
 botanix-cli-args = { workspace = true }
 botanix-configs = { workspace = true }
+botanix-test-suite = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 hex = "0.4.3"
 rand = { workspace = true }
@@ -25,7 +26,6 @@ reth-node-core = { workspace = true }
 secp256k1 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-botanix-test-suite = { workspace = true }
 tokio = { version = "1.45.0", features = ["full"] }
 toml = { workspace = true }
 tracing = { workspace = true }

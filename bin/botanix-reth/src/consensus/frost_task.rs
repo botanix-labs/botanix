@@ -122,12 +122,9 @@ impl<RDB, BDB, ToFrostMan, Source, BtcServerClient>
     FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient>
 where
     ToFrostMan: 'static + Send + Sync + ToFrostManager + Clone,
-    RDB: BlockReaderIdExt
-        + StateProviderFactory
-        + CanonStateSubscriptions
-        + Clone
-        + 'static,
-    <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader: HeaderExt + Sealable,
+    RDB: BlockReaderIdExt + StateProviderFactory + CanonStateSubscriptions + Clone + 'static,
+    <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader:
+        HeaderExt + Sealable,
     BDB: StagedHeaderReader + StagedHeaderWriter + Clone + 'static,
     Source: RandomSource,
     BtcServerClient: BtcServerExtendedApi + Clone,
@@ -157,9 +154,8 @@ where
             metrics.clone(),
         );
 
-        let cbft_rpc_provider = cometbft_rpc_factory
-            .build_and_connect()
-            .expect("light client to connect");
+        let cbft_rpc_provider =
+            cometbft_rpc_factory.build_and_connect().expect("light client to connect");
 
         Self {
             network_handle,
@@ -188,13 +184,10 @@ where
         wallet_state_response: &WalletStateResponse,
     ) -> Result<(), FinalizedPegoutIdsSyncSerializationError> {
         // create the request
-        let request = botanix_btc_server_client::GetFinalizedPegoutIdsRequest {
-            chunk_size,
-        };
+        let request = botanix_btc_server_client::GetFinalizedPegoutIdsRequest { chunk_size };
 
         // call the streaming RPC method
-        let response =
-            self.btc_server.get_finalized_pegout_ids(request).await?;
+        let response = self.btc_server.get_finalized_pegout_ids(request).await?;
         pin_mut!(response);
 
         let mut received_healthy_chunks = 0;
@@ -205,8 +198,7 @@ where
         while let Some(item) = response.next().await {
             match item {
                 Ok(prost_serialized_pegout_ids) => {
-                    total_expected_chunks =
-                        prost_serialized_pegout_ids.total_chunks;
+                    total_expected_chunks = prost_serialized_pegout_ids.total_chunks;
                     if prost_serialized_pegout_ids.is_final {
                         is_final_chunk_received = true;
                     }
@@ -216,8 +208,7 @@ where
                     }
 
                     // serialize the prost message
-                    let prost_message_wrapper =
-                        ProstMessageSerdelizer(prost_serialized_pegout_ids);
+                    let prost_message_wrapper = ProstMessageSerdelizer(prost_serialized_pegout_ids);
                     let prost_serialized = prost_message_wrapper.serialize().map_err(|e| {
                         error!(target: "consensus::authority::forst_task::send_serialized_compressed_finalized_pegout_ids", "Got serializer error {:?}", e);
                         FinalizedPegoutIdsSyncSerializationError::Prost(e)
@@ -230,19 +221,13 @@ where
                     })?;
                     received_healthy_chunks += 1;
 
-                    let mut wallet_state_response =
-                        wallet_state_response.clone();
-                    wallet_state_response.finalized_pegout_ids =
-                        prost_serialized_compressed;
+                    let mut wallet_state_response = wallet_state_response.clone();
+                    wallet_state_response.finalized_pegout_ids = prost_serialized_compressed;
 
                     trace!(target: "consensus::authority::frost_task::start_task", "Sending wallet state to peer {:?}", peer_data.peer_id);
-                    if let Err(e) = peer_data.peer_commands_tx.send(
-                        FrostPeerCommand::PeerMessage(
-                            PeerMessageResponse::WalletState(
-                                wallet_state_response,
-                            ),
-                        ),
-                    ) {
+                    if let Err(e) = peer_data.peer_commands_tx.send(FrostPeerCommand::PeerMessage(
+                        PeerMessageResponse::WalletState(wallet_state_response),
+                    )) {
                         error!(target: "consensus::authority::frost_task::start_task", "Error sending wallet state message to peer {:?}: {:?}",  peer_data.peer_id, e);
                         continue;
                     }
@@ -253,9 +238,7 @@ where
                 }
             }
 
-            if (received_healthy_chunks == total_expected_chunks) &&
-                is_final_chunk_received
-            {
+            if (received_healthy_chunks == total_expected_chunks) && is_final_chunk_received {
                 trace!(target: "consensus::authority::forst_task::send_serialized_compressed_finalized_pegout_ids", "Received all chunks");
             } else {
                 trace!(target: "consensus::authority::forst_task::send_serialized_compressed_finalized_pegout_ids", "Received {} out of {} chunks", received_healthy_chunks, total_expected_chunks);
@@ -338,14 +321,7 @@ where
         };
 
         // (Re-)try initiating a checkpoint on the btc-server.
-        match retry_exec(
-            "new_consensus_checkpoint",
-            fut,
-            3,
-            Duration::from_secs(2),
-        )
-        .await
-        {
+        match retry_exec("new_consensus_checkpoint", fut, 3, Duration::from_secs(2)).await {
             Ok(_) => {
                 info!(
                     target: "consensus::authority::frost_task::handle_canon_state_commit",
@@ -361,10 +337,7 @@ where
                     .remove_staged_header(header_hash)
                     .expect("to remove staged header");
 
-                debug_assert!(
-                    existed,
-                    "Staged header should exist for the given header hash"
-                );
+                debug_assert!(existed, "Staged header should exist for the given header hash");
             }
             Err(err) => {
                 error!(
@@ -384,8 +357,7 @@ where
 
         // Check if this is an epoch block and if we are the coordinator. If
         // yes, initiate signing session.
-        if !is_poa_epoch(header.number(), self.storage.chain_spec.epoch_length)
-        {
+        if !is_poa_epoch(header.number(), self.storage.chain_spec.epoch_length) {
             return;
         }
 
@@ -418,9 +390,7 @@ where
         };
 
         // Validate psbt.
-        let psbt = match bitcoin::Psbt::deserialize(
-            psbt_payload.psbt.as_slice(),
-        ) {
+        let psbt = match bitcoin::Psbt::deserialize(psbt_payload.psbt.as_slice()) {
             Ok(psbt) => psbt,
             Err(e) => {
                 error!(
@@ -432,12 +402,8 @@ where
             }
         };
 
-        if let Err(e) = validate_psbt_by_ids(
-            &self.storage.reth_database,
-            self.storage.btc_network,
-            &psbt,
-        )
-        .await
+        if let Err(e) =
+            validate_psbt_by_ids(&self.storage.reth_database, self.storage.btc_network, &psbt).await
         {
             error!(
                 target: "consensus::authority::frost_task::handle_canon_state_commit",
@@ -453,10 +419,8 @@ where
         );
 
         // Initiate signing session.
-        if let Err(e) = self
-            .signing_state_machine
-            .initate_signing_session(header_hash, psbt_payload.psbt)
-            .await
+        if let Err(e) =
+            self.signing_state_machine.initate_signing_session(header_hash, psbt_payload.psbt).await
         {
             error!(
                 target: "consensus::authority::frost_task::handle_canon_state_commit",
@@ -472,13 +436,9 @@ where
         );
     }
 
-    pub async fn start_task(
-        &mut self,
-        mut abci_started_rx: tokio::sync::oneshot::Receiver<()>,
-    ) {
+    pub async fn start_task(&mut self, mut abci_started_rx: tokio::sync::oneshot::Receiver<()>) {
         // before we start get a proper event receiver
-        let (peer_messages_tx, peer_messages_rx) =
-            tokio::sync::oneshot::channel();
+        let (peer_messages_tx, peer_messages_rx) = tokio::sync::oneshot::channel();
 
         let mut peer_messages_rx = match self
             .frost_handle
@@ -502,10 +462,8 @@ where
 
         // Calling get pk
         // Attempt to get the aggregate public key and store in storage
-        if let Ok(public_key) = self
-            .btc_server
-            .get_public_key(botanix_btc_server_client::Empty {})
-            .await
+        if let Ok(public_key) =
+            self.btc_server.get_public_key(botanix_btc_server_client::Empty {}).await
         {
             info!(target: "consensus::authority::frost_task::start_task", " received aggregate public key from dkg state machine {:?}", public_key);
             if let Ok(secp_pk) = secp256k1::PublicKey::from_slice(
@@ -537,8 +495,7 @@ where
 
             info!(target: "consensus::authority::frost_task::start_task", "DKG runner task started...");
         }
-        let mut canon_state_notifs =
-            self.storage.reth_database.subscribe_to_canonical_state();
+        let mut canon_state_notifs = self.storage.reth_database.subscribe_to_canonical_state();
 
         let mut abci_started = false;
 
@@ -551,21 +508,16 @@ where
                 // get sync status
                 match self.is_syncing().await {
                     Ok(is_syncing) => {
-                        self.storage.inner.write().await.is_block_syncing =
-                            is_syncing;
+                        self.storage.inner.write().await.is_block_syncing = is_syncing;
                         if is_syncing {
                             info!(target: "consensus::authority::frost_task::start_task", "Node is syncing, pausing frost task...");
-                            tokio::time::sleep(std::time::Duration::from_secs(
-                                5,
-                            ))
-                            .await;
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                             continue;
                         }
                     }
                     Err(e) => {
                         warn!(target: "consensus::authority::frost_task::start_task", "Error getting block sync status {:?}", e);
-                        tokio::time::sleep(std::time::Duration::from_secs(5))
-                            .await;
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                         continue;
                     }
                 }
@@ -592,9 +544,7 @@ where
                 }
 
                 // Sort staged headers by block number in ascending order.
-                staged_headers.sort_by(|(_, a), (_, b)| {
-                    a.header.number.cmp(&b.header.number)
-                });
+                staged_headers.sort_by(|(_, a), (_, b)| a.header.number.cmp(&b.header.number));
 
                 // NOTE: This flag might be overridden by the
                 // `handle_canon_state_commit` method.
@@ -604,18 +554,10 @@ where
                     let header = entry.header;
 
                     let pegins = get_utxos_from_staged_pegins(entry.pegins);
-                    let pegouts = get_pending_pegouts_from_staged_pegouts(
-                        entry.pegouts,
-                        header.timestamp,
-                    );
+                    let pegouts =
+                        get_pending_pegouts_from_staged_pegouts(entry.pegouts, header.timestamp);
 
-                    self.handle_canon_state_commit(
-                        header_hash,
-                        &header,
-                        pegins,
-                        pegouts,
-                    )
-                    .await;
+                    self.handle_canon_state_commit(header_hash, &header, pegins, pegouts).await;
                 }
             }
 
@@ -630,38 +572,38 @@ where
                         let header = tip.header();
 
                         // Convert pegins into correct format
-                        let pegins =
-                            pegins.as_ref().map_or_else(Vec::new, |pegins| {
-                                let deserialized = pegins.iter().filter_map(|bytes| {
-                                    match PeginMeta::deserialize(bytes) {
-                                        Ok((pegin, _)) => Some(pegin),
-                                        Err(e) => {
-                                            error!("Failed to deserialize pegin: {:?}", e);
-                                            None
-                                        }
+                        let pegins = pegins.as_ref().map_or_else(Vec::new, |pegins| {
+                            let deserialized = pegins
+                                .iter()
+                                .filter_map(|bytes| match PeginMeta::deserialize(bytes) {
+                                    Ok((pegin, _)) => Some(pegin),
+                                    Err(e) => {
+                                        error!("Failed to deserialize pegin: {:?}", e);
+                                        None
                                     }
-                                }).collect::<Vec<_>>();
-                                get_utxos_from_pegin_meta(deserialized.as_slice())
-                            });
+                                })
+                                .collect::<Vec<_>>();
+                            get_utxos_from_pegin_meta(deserialized.as_slice())
+                        });
 
                         // Convert pegouts into correct format
-                        let pending_pegouts =
-                            pegouts.as_ref().map_or_else(Vec::new, |pegouts| {
-                                let deserialized  = pegouts.iter().filter_map(|bytes| {
-                                    match PegoutWithId::deserialize(bytes) {
-                                        Ok(pegout) => Some(pegout),
-                                        Err(e) => {
-                                            error!("Failed to deserialize pegout: {:?}", e);
-                                            None
-                                        }
+                        let pending_pegouts = pegouts.as_ref().map_or_else(Vec::new, |pegouts| {
+                            let deserialized = pegouts
+                                .iter()
+                                .filter_map(|bytes| match PegoutWithId::deserialize(bytes) {
+                                    Ok(pegout) => Some(pegout),
+                                    Err(e) => {
+                                        error!("Failed to deserialize pegout: {:?}", e);
+                                        None
                                     }
-                                }).collect::<Vec<_>>();
-                                get_pending_pegouts_from_pegout_data(
-                                    &deserialized,
-                                    tip.number(),
-                                    tip.header().timestamp(),
-                                )
-                            });
+                                })
+                                .collect::<Vec<_>>();
+                            get_pending_pegouts_from_pegout_data(
+                                &deserialized,
+                                tip.number(),
+                                tip.header().timestamp(),
+                            )
+                        });
 
                         self.handle_canon_state_commit(
                             header_hash,
@@ -712,8 +654,7 @@ where
                             let (tx, rx) = tokio::sync::oneshot::channel();
 
                             let cmd = FrostCommand::GetAllConnectedPeers(tx);
-                            if let Err(e) = self.frost_handle.send_command(cmd)
-                            {
+                            if let Err(e) = self.frost_handle.send_command(cmd) {
                                 error!(target: "consensus::authority::frost_task::start_task", "Error getting all peers handle {:?}", e);
                                 continue;
                             }
@@ -726,9 +667,8 @@ where
                             error!(target: "consensus::authority::frost_task::start_task", "Peer handle not found for peer id {:?}", peer_id);
                             continue;
                         }
-                        let peer_handle = all_peers_handle
-                            .get(&peer_id)
-                            .expect("peer handle to exist");
+                        let peer_handle =
+                            all_peers_handle.get(&peer_id).expect("peer handle to exist");
 
                         if let Err(e) = self
                             .send_serialized_compressed_finalized_pegout_ids(
@@ -753,11 +693,8 @@ where
                         }
                     }
                     PeerMessageResponse::Signing(signing_response) => {
-                        let SigningResponse {
-                            response_type,
-                            signing_session_id,
-                            psbt,
-                        } = signing_response;
+                        let SigningResponse { response_type, signing_session_id, psbt } =
+                            signing_response;
                         let signing_session_id = match FixedBytes::try_from(
                             signing_session_id.as_slice(),
                         ) {

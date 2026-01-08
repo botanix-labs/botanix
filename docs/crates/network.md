@@ -4,10 +4,10 @@ The `network` crate is responsible for managing the node's connection to the Eth
 
 Reth's P2P networking consists primarily of 4 ongoing tasks:
 
-- **Discovery**: Discovers new peers in the network
-- **Transactions**: Accepts, requests, and broadcasts mempool transactions
-- **ETH Requests**: Responds to incoming requests for headers and bodies
-- **Network Management**: Handles incoming & outgoing connections with peers, and routes requests between peers and the other tasks
+-   **Discovery**: Discovers new peers in the network
+-   **Transactions**: Accepts, requests, and broadcasts mempool transactions
+-   **ETH Requests**: Responds to incoming requests for headers and bodies
+-   **Network Management**: Handles incoming & outgoing connections with peers, and routes requests between peers and the other tasks
 
 We'll leave most of the discussion of the discovery task for the [discv4](./discv4.md) chapter, and will focus on the other three here.
 
@@ -726,10 +726,10 @@ pub struct TransactionsHandle {
 
 We'll touch on most of the fields in the `TransactionsManager` as the chapter continues, but some worth noting now are the 4 streams from which inputs to the task are fed:
 
-- `transaction_events`: A listener for `NetworkTransactionEvent`s sent from the `NetworkManager`, which consist solely of events related to transactions emitted by the network.
-- `network_events`: A listener for `NetworkEvent`s sent from the `NetworkManager`, which consist of other "meta" events such as sessions with peers being established or closed.
-- `command_rx`: A listener for `TransactionsCommand`s sent from the `TransactionsHandle`
-- `pending`: A listener for new pending transactions added to the `TransactionPool`
+-   `transaction_events`: A listener for `NetworkTransactionEvent`s sent from the `NetworkManager`, which consist solely of events related to transactions emitted by the network.
+-   `network_events`: A listener for `NetworkEvent`s sent from the `NetworkManager`, which consist of other "meta" events such as sessions with peers being established or closed.
+-   `command_rx`: A listener for `TransactionsCommand`s sent from the `TransactionsHandle`
+-   `pending`: A listener for new pending transactions added to the `TransactionPool`
 
 Let's get a view into the transactions task's operation by walking through the `TransactionManager::poll` method.
 
