@@ -65,6 +65,7 @@ pub mod frost;
 mod invalid_transactions;
 mod rpc_node;
 mod sync;
+mod dynafed;
 
 fn split_members_at<T: Clone>(
     map: BTreeMap<u16, T>,
