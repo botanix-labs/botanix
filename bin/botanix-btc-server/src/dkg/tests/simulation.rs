@@ -1,5 +1,5 @@
 use super::*;
-use crate::database::LEGACY_MULTISIG_ID;
+use botanix_types::LEGACY_MULTISIG_ID;
 use crate::dkg::Stage;
 use bitcoin::secp256k1;
 use frost::keys::PublicKeyPackage;

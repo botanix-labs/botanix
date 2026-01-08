@@ -6,7 +6,8 @@ use botanix_btc_server_client::{
     BtcServerClient, SigningPackage, SigningPackageRequest,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
-use btcserverlib::{database::LEGACY_MULTISIG_ID, pegout_id::PegoutId};
+use botanix_types::LEGACY_MULTISIG_ID;
+use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use tonic::transport::Channel;

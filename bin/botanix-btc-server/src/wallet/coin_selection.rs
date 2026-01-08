@@ -516,9 +516,9 @@ fn utxo_to_bdk(utxo: &Utxo) -> bdk_wallet::WeightedUtxo {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
     use crate::{
-        database::{LEGACY_MULTISIG_ID, Utxo},
+        database::Utxo,
         test_utils::{
             add_dummy_signatures_to_psbt, create_random_pegout_id,
             random_compute_txid, random_p2tr_keyspend_script,
@@ -628,7 +628,7 @@ mod tests {
             },
             None,
             None,
-            LEGACY_MULTISIG_ID,
+            TEST_LEGACY_MULTISIG_ID,
         );
         optional_utxos.insert(utxo.outpoint, utxo);
 
@@ -684,7 +684,7 @@ mod tests {
             },
             None,
             None,
-            LEGACY_MULTISIG_ID,
+            TEST_LEGACY_MULTISIG_ID,
         );
         optional_utxos.insert(utxo.outpoint, utxo);
 
@@ -957,7 +957,7 @@ mod tests {
                     },
                     None,
                     None,
-                    LEGACY_MULTISIG_ID,
+                    TEST_LEGACY_MULTISIG_ID,
                 );
                 (utxo.outpoint, utxo)
             })

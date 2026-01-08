@@ -41,7 +41,7 @@ mod test {
     };
     use bitcoin::{hashes::Hash, Txid};
     use botanix_btc_server_client::{GetAllUtxosResponse, TxOut, Utxo};
-    use btcserverlib::database::LEGACY_MULTISIG_ID;
+    use botanix_types::LEGACY_MULTISIG_ID;
     use rand::{thread_rng, Rng};
 
     #[tokio::test]

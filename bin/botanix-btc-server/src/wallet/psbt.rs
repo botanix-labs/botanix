@@ -10,7 +10,8 @@ use bitcoin_hashes::Hash;
 use frost_secp256k1_tr as frost;
 use thiserror::Error;
 
-use crate::database::{version::UtxoVersion, MultisigId};
+use crate::database::version::UtxoVersion;
+use botanix_types::MultisigId;
 
 // input keys
 const ETH_ADDRESS_KEY_TYPE: u8 = 1;

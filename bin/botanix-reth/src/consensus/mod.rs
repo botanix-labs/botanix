@@ -4,7 +4,7 @@ use async_trait as _;
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 
-use btcserverlib::database::{LEGACY_MULTISIG_ID, MultisigId};
+use botanix_types::{LEGACY_MULTISIG_ID, MultisigId};
 use bytes as _;
 use displaydoc as _;
 use reth_network_peers as _;

@@ -7,7 +7,7 @@ use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
 use botanix_storage::models::RuntimeVersion;
-use btcserverlib::database::{LEGACY_MULTISIG_ID, MultisigId};
+use botanix_types::{LEGACY_MULTISIG_ID, MultisigId};
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };

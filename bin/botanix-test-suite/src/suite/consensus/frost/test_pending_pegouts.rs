@@ -2,7 +2,8 @@ use std::{str::FromStr, time::Duration};
 
 use bitcoin::Address;
 use bitcoincore_rpc::RpcApi;
-use btcserverlib::{database::LEGACY_MULTISIG_ID, pegout_id::PegoutId};
+use botanix_types::LEGACY_MULTISIG_ID;
+use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 

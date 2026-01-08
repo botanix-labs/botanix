@@ -3,9 +3,10 @@ use alloy_primitives::Address;
 use anyhow::Context;
 use botanix_configs::hash::compute_config_hash;
 use botanix_consensus_common::utils::unix_timestamp;
-use btcserverlib::{database::LEGACY_MULTISIG_ID, federation_args::{
+use botanix_types::LEGACY_MULTISIG_ID;
+use btcserverlib::federation_args::{
     FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
-}};
+};
 use reth_network_peers::PeerId;
 use std::{
     path::{Path, PathBuf},
@@ -114,7 +115,7 @@ fn spawn_btc_server_process(
 
     // Write federation config to tempfile
     let multisig_current = MultisigConfig::new(
-        *LEGACY_MULTISIG_ID,
+        LEGACY_MULTISIG_ID,
         global_context.min_signers,
         global_context.max_signers,
         fed_members,
