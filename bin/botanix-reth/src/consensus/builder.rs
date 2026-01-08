@@ -19,8 +19,8 @@ use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
-    SubscribeToDynafedNotificationsStream, GetPublicKeyRequest,
+    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest,
+    GrpcClientFactory, SubscribeToDynafedNotificationsStream,
 };
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
@@ -50,7 +50,10 @@ use reth_provider::{
 use reth_storage_api::NodePrimitivesProvider;
 use reth_tasks::TaskExecutor;
 use std::{
-    net::SocketAddr, str::FromStr, sync::{Arc, RwLock}, time::Duration
+    net::SocketAddr,
+    str::FromStr,
+    sync::{Arc, RwLock},
+    time::Duration,
 };
 use tracing::{info, warn};
 
@@ -267,7 +270,7 @@ where
     where
         BtcServerClient: BtcServerExtendedApi + Clone + Send + Sync + 'static,
         BtcServerExtendedClient: Into<BtcServerClient>,
-    <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader: HeaderExt
+        <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
     {
         let Self {
             btc_server_factory,
@@ -327,9 +330,10 @@ where
 
         // create frost and block production tasks if btc_server is available:
         // only federation nodes will have btc_server
-        let (dynafed_frost_notifications_tx, _) = tokio::sync::broadcast::channel::<
-            SubscribeToDynafedNotificationsStream,
-        >(100);
+        let (dynafed_frost_notifications_tx, _) =
+            tokio::sync::broadcast::channel::<
+                SubscribeToDynafedNotificationsStream,
+            >(100);
         let mut frost_task = None;
         if is_fed_node {
             // frost task
@@ -494,20 +498,25 @@ where
                 }
             }
             .ids;
-            
+
             let mut aggregated_pub_keys = vec![];
             for multisig_id in multisig_ids {
-                match btc_server.get_public_key(GetPublicKeyRequest {
-                    multisig_id,
-                })
-                .await {
+                match btc_server
+                    .get_public_key(GetPublicKeyRequest { multisig_id })
+                    .await
+                {
                     Ok(resp) => {
-                        if let Ok(pk) = secp256k1::PublicKey::from_str(&resp.publickey) {
+                        if let Ok(pk) =
+                            secp256k1::PublicKey::from_str(&resp.publickey)
+                        {
                             let multisig_id: MultisigId = multisig_id.into();
                             aggregated_pub_keys.push((multisig_id, pk));
                         } else {
                             tracing::error!(target: "reth::authority", "Error parsing public key for multisig id: {}", multisig_id);
-                            panic!("Error parsing public key for multisig id: {}", multisig_id);
+                            panic!(
+                                "Error parsing public key for multisig id: {}",
+                                multisig_id
+                            );
                         }
                     }
                     Err(e) => {
@@ -520,8 +529,13 @@ where
             if !aggregated_pub_keys.is_empty() {
                 let mut storage = storage.write().await;
                 match storage.aggregate_public_key.as_mut() {
-                    Some(storage_pub_keys) => storage_pub_keys.extend(aggregated_pub_keys),
-                    None => storage.aggregate_public_key = Some(aggregated_pub_keys.into_iter().collect()),
+                    Some(storage_pub_keys) => {
+                        storage_pub_keys.extend(aggregated_pub_keys)
+                    }
+                    None => {
+                        storage.aggregate_public_key =
+                            Some(aggregated_pub_keys.into_iter().collect())
+                    }
                 }
                 drop(storage);
             }

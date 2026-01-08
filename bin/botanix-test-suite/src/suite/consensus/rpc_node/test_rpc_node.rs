@@ -61,8 +61,16 @@ pub async fn test_rpc_node(
         .as_ref()
         .and_then(|rpc| rpc.get(&0))
         .cloned()
-        .ok_or_else(|| anyhow::anyhow!("No RPC node found at index 0. RPC nodes available: {:?}", 
-            suite.local_context.rpc_nodes.as_ref().map(|rpc| rpc.keys().collect::<Vec<_>>())))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No RPC node found at index 0. RPC nodes available: {:?}",
+                suite
+                    .local_context
+                    .rpc_nodes
+                    .as_ref()
+                    .map(|rpc| rpc.keys().collect::<Vec<_>>())
+            )
+        })?;
     // get latest header hash from rpc node
     // Note: alternative way is to wait for cannon state notification from rpc node and get hash
     // from notification but this way also tests that rpc node can handle rpc requests
@@ -81,15 +89,15 @@ pub async fn test_rpc_node(
         botanix_clients
             .first()
             .expect("botanix client to exist")
-            .get_latest_block_hash()
+            .get_latest_block_hash(),
     )
     .await
     .context("Timeout getting federation latest block hash")?
     .unwrap();
-    
+
     let rpc_latest_block_header = tokio::time::timeout(
         std::time::Duration::from_secs(30),
-        rpc_botanix_client.get_latest_block_hash()
+        rpc_botanix_client.get_latest_block_hash(),
     )
     .await
     .context("Timeout getting RPC node latest block hash")?
@@ -103,7 +111,7 @@ pub async fn test_rpc_node(
     // submit a tx to the rpc node with timeout
     let rpc_tx_receipt = tokio::time::timeout(
         std::time::Duration::from_secs(60),
-        rpc_botanix_client.send_eoa(eoa_receiver, SEND_AMOUNT)
+        rpc_botanix_client.send_eoa(eoa_receiver, SEND_AMOUNT),
     )
     .await
     .context("Timeout sending transaction to RPC node")?
@@ -123,7 +131,7 @@ pub async fn test_rpc_node(
     for client in botanix_clients.iter() {
         let block = tokio::time::timeout(
             std::time::Duration::from_secs(30),
-            client.get_latest_block_by_hash(rpc_tx_block_hash)
+            client.get_latest_block_by_hash(rpc_tx_block_hash),
         )
         .await
         .context("Timeout getting block from federation member")?

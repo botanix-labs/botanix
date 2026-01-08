@@ -37,7 +37,6 @@ ciborium = "0.2.1"
 
 # Botanix
 botanix-btc-server = { workspace = true }
-botanix-types = { workspace = true }
 botanix-btc-server-client = { workspace = true }
 botanix-btc-wallet = { workspace = true }
 botanix-chainspec = { workspace = true }
@@ -50,6 +49,7 @@ botanix-pegin-recovery = { workspace = true }
 botanix-pegin-recovery-client = { workspace = true }
 botanix-reth = { workspace = true }
 botanix-storage = { workspace = true }
+botanix-types = { workspace = true }
 
 # other dependencies
 bytes = "1.4.0"

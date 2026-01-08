@@ -1,7 +1,7 @@
 use super::*;
-use botanix_types::LEGACY_MULTISIG_ID;
 use crate::dkg::Stage;
 use bitcoin::secp256k1;
+use botanix_types::LEGACY_MULTISIG_ID;
 use frost::keys::PublicKeyPackage;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::collections::BTreeMap;

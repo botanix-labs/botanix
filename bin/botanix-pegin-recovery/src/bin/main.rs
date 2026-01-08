@@ -7,7 +7,8 @@ use bitcoin::{psbt::Psbt, Amount, FeeRate, OutPoint, ScriptBuf, TxOut};
 use bitcoincore_rpc::RpcApi;
 use botanix_types::MultisigId;
 use btcserverlib::{
-    badarg, database::{self},
+    badarg,
+    database::{self},
     util::parse_eth_address,
     wallet::{
         address::{generate_taproot_scriptpubkey, generate_tweaked_public_key},

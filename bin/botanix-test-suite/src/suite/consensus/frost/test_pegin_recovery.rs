@@ -174,7 +174,6 @@ pub async fn test_pegin_recovery(
         .await
         .map_err(Error::ServerConnect)?;
 
-
     //import keyshare packcage for each exported federation member key package
     for (index, db_path) in fed_key_package_paths.iter().enumerate() {
         let frost_identifier =
