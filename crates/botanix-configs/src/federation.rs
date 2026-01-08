@@ -60,8 +60,16 @@ pub struct FedMemberPubKey {
 
 /// Member role (outgoing/continuing/incoming)
 #[derive(
-    Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq,
-    PartialOrd, Ord,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Deserialize,
+    Serialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum FederationRole {
@@ -298,9 +306,7 @@ impl FederationTomlConfig {
             )));
         }
 
-        if multisig.min_signers < 2 ||
-            multisig.min_signers > max_signers
-        {
+        if multisig.min_signers < 2 || multisig.min_signers > max_signers {
             return Err(Error::InvalidConfig(format!(
                 "multisig {} min-signers ({}) must be within 2..={} (member count)",
                 multisig.multisig_id, multisig.min_signers, max_signers
@@ -494,7 +500,11 @@ role = "continuing"
     }
 
     fn member(key: &str, role: FederationRole) -> FedMemberPubKey {
-        FedMemberPubKey { key: key.to_string(), socket_addr: "127.0.0.1:1".into(), role }
+        FedMemberPubKey {
+            key: key.to_string(),
+            socket_addr: "127.0.0.1:1".into(),
+            role,
+        }
     }
 
     #[test]
@@ -520,7 +530,8 @@ role = "continuing"
             ],
         };
 
-        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_ok());
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next)
+            .is_ok());
     }
 
     #[test]
@@ -544,7 +555,8 @@ role = "continuing"
             ],
         };
 
-        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_err());
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next)
+            .is_err());
     }
 
     #[test]
@@ -568,7 +580,8 @@ role = "continuing"
             ],
         };
 
-        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_err());
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next)
+            .is_err());
     }
 
     #[test]
@@ -592,6 +605,7 @@ role = "continuing"
             ],
         };
 
-        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next).is_err());
+        assert!(FederationTomlConfig::validate_dynafed_roles(&current, &next)
+            .is_err());
     }
 }

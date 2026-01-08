@@ -25,23 +25,28 @@ use btcserverlib::{
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
     database::{self, MultisigId},
-    dkg::{self, DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification},
+    dkg::{
+        self, DkgNotification, DynafedSubscriptionMessage, MigrationEvent,
+        MigrationNotification,
+    },
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
     http::{create_web_server, state::ServerState},
     measure_rpc_latency,
     merkle::get_wallet_state_commitment,
     pegout_id::PegoutId,
-    pegout_scheduler::{self, PegoutRequest, PegoutScheduler, is_syncing},
+    pegout_scheduler::{self, is_syncing, PegoutRequest, PegoutScheduler},
     rpc::{self, *},
-    shutdown::{StopHandle, stop_signal},
+    shutdown::{stop_signal, StopHandle},
     signer::{
         self,
         error::{SigningError, SigningRound1Error, SigningRound2Error},
     },
     telemetry::Telemetry,
     util::{
-        ParsingError, UPPER_PEGOUT_BOUND, btc_per_kb_to_sat_per_vb, deserialize_frost_peer_id, get_available_utxos, get_pegin_confirmation_depth, parse_eth_address, parse_signing_session_id, retry_exec
+        btc_per_kb_to_sat_per_vb, deserialize_frost_peer_id,
+        get_available_utxos, get_pegin_confirmation_depth, parse_eth_address,
+        parse_signing_session_id, retry_exec, ParsingError, UPPER_PEGOUT_BOUND,
     },
     wallet::{
         self,
@@ -244,7 +249,6 @@ type SigningNoncesCommitmentsMap = Arc<
     >,
 >;
 
-
 /// The DKG state machine is responsible for managing the DKG process.
 struct DkgState {
     // The DKG state machine
@@ -430,15 +434,20 @@ where
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
 
-        let multisig_config = federation.multisig.get(*multisig_id as usize).ok_or_else(|| {
-            dkg::Error::BadConfig(format!(
-                "missing multisig id {}",
-                multisig_id
-            ))
-        })?;
+        let multisig_config = federation
+            .multisig
+            .get(*multisig_id as usize)
+            .ok_or_else(|| {
+                dkg::Error::BadConfig(format!(
+                    "missing multisig id {}",
+                    multisig_id
+                ))
+            })?;
 
         let mut members = BTreeMap::new();
-        for (pos, p2p_public_key) in multisig_config.federation_member_public_key.iter().enumerate() {
+        for (pos, p2p_public_key) in
+            multisig_config.federation_member_public_key.iter().enumerate()
+        {
             let id = frost_id!(pos as u16);
             let pubkey = secp256k1::PublicKey::from_str(&p2p_public_key.key)
                 .map_err(|_| {
@@ -679,26 +688,26 @@ where
         // Iterate through all multisig configurations
         for multisig_config in &federation.multisig {
             let multisig_id = MultisigId::new(multisig_config.multisig_id);
-            
+
             // Check if this node is a member of this multisig
             let is_member = multisig_config
                 .federation_member_public_key
                 .iter()
                 .any(|member| member.key == node_public_key.to_string());
-            
+
             if is_member {
                 info!(
                     "Node is a member of multisig {}, checking status",
                     multisig_id
                 );
-                
+
                 // Check if this multisig has already been processed
                 if persisted_multisig_ids.contains(&multisig_id) {
                     info!(
                         "Multisig {} was found and is already processed",
                         multisig_id
                     );
-                    
+
                     // Verify that the key share exists
                     match db.get_public_key_package_by_id(multisig_id) {
                         Ok(Some(_key_package)) => {
@@ -727,11 +736,12 @@ where
                         multisig_id,
                         multisig_config.federation_member_public_key.len()
                     );
-                    
-                    let _member_count = multisig_config.federation_member_public_key.len();
+
+                    let _member_count =
+                        multisig_config.federation_member_public_key.len();
                     let max_signers = multisig_config.effective_max_signers();
                     let min_signers = multisig_config.min_signers;
-                    
+
                     let state = Self::new_dkg_state_machine(
                         frost_identifier,
                         p2p_secret_key,
@@ -742,7 +752,7 @@ where
                         max_signers,
                         frost_identifier == coordinator,
                     )?;
-                    
+
                     sessions.insert(multisig_id, state);
                 }
             } else {
@@ -757,7 +767,9 @@ where
         let dkg_sessions = Arc::new(Mutex::new(sessions));
 
         let (dynafed_notifications_tx, _dynafed_notifications_rx) =
-            tokio::sync::broadcast::channel::<DynafedSubscriptionMessage>(10000);
+            tokio::sync::broadcast::channel::<DynafedSubscriptionMessage>(
+                10000,
+            );
 
         Ok(Self {
             start_time: Instant::now(),
@@ -1292,7 +1304,9 @@ where
                 let fut = || async {
                     let dynafed_sub_message_clone = dynafed_sub_message.clone();
                     match dynafed_sub_message_clone {
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Start { multisig_id }) => {
+                        DynafedSubscriptionMessage::Dkg(
+                            DkgNotification::Start { multisig_id },
+                        ) => {
                             trace!("DKG started for multisig {}", multisig_id);
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
@@ -1302,8 +1316,13 @@ where
                             };
                             tx.send(Ok(payload)).await
                         }
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Restart { multisig_id }) => {
-                            trace!("DKG restarted for multisig {}", multisig_id);
+                        DynafedSubscriptionMessage::Dkg(
+                            DkgNotification::Restart { multisig_id },
+                        ) => {
+                            trace!(
+                                "DKG restarted for multisig {}",
+                                multisig_id
+                            );
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
                                     event: rpc::DkgEvent::DkgRestart as i32,
@@ -1312,7 +1331,9 @@ where
                             };
                             tx.send(Ok(payload)).await
                         }
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Abort { multisig_id }) => {
+                        DynafedSubscriptionMessage::Dkg(
+                            DkgNotification::Abort { multisig_id },
+                        ) => {
                             trace!("DKG aborted for multisig {}", multisig_id);
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
@@ -1323,8 +1344,7 @@ where
                             tx.send(Ok(payload)).await
                         }
                         DynafedSubscriptionMessage::Migration(migration) => {
-
-                            let MigrationNotification { 
+                            let MigrationNotification {
                                 event,
                                 migration_id,
                                 multisig_id_from,
@@ -1332,10 +1352,17 @@ where
                             } = migration;
 
                             let migration_event = match event {
-                                MigrationEvent::Start => rpc::MigrationEvent::MigrationStart,
-                                MigrationEvent::End => rpc::MigrationEvent::MigrationEnd,
-                                MigrationEvent::Abort => rpc::MigrationEvent::MigrationAbort,
-                            } as i32;
+                                MigrationEvent::Start => {
+                                    rpc::MigrationEvent::MigrationStart
+                                }
+                                MigrationEvent::End => {
+                                    rpc::MigrationEvent::MigrationEnd
+                                }
+                                MigrationEvent::Abort => {
+                                    rpc::MigrationEvent::MigrationAbort
+                                }
+                            }
+                                as i32;
 
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Migration(rpc::MigrationNotification {
@@ -1355,10 +1382,16 @@ where
                                     );
                                 }
                                 MigrationEvent::End => {
-                                    trace!("Multisig Migration {} ending", migration_id);
+                                    trace!(
+                                        "Multisig Migration {} ending",
+                                        migration_id
+                                    );
                                 }
                                 MigrationEvent::Abort => {
-                                    trace!("Multisig Migration {} aborted", migration_id);
+                                    trace!(
+                                        "Multisig Migration {} aborted",
+                                        migration_id
+                                    );
                                 }
                             }
                             tx.send(Ok(payload)).await
@@ -1421,13 +1454,12 @@ where
     async fn list_multisigs(
         &self,
         req: tonic::Request<rpc::Empty>,
-    ) -> Result<tonic::Response<rpc::ListMultisigsResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<rpc::ListMultisigsResponse>, tonic::Status>
+    {
         self.validate_jwt(&req)?;
         let multisig_ids = self.db.list_multisig_ids().to_status()?;
-        let multisig_ids = multisig_ids
-            .into_iter()
-            .map(|id| *id)
-            .collect::<Vec<u32>>();
+        let multisig_ids =
+            multisig_ids.into_iter().map(|id| *id).collect::<Vec<u32>>();
         let res = rpc::ListMultisigsResponse { ids: multisig_ids };
 
         Ok(tonic::Response::new(res))
@@ -2759,9 +2791,10 @@ where
         info!("Started new DKG session for multisig_id {}", multisig_id);
 
         // send the notification async to the subscription method
-        if let Err(e) = self
-            .dynafed_notifications_tx
-            .send(DynafedSubscriptionMessage::Dkg(DkgNotification::Start { multisig_id }))
+        if let Err(e) =
+            self.dynafed_notifications_tx.send(DynafedSubscriptionMessage::Dkg(
+                DkgNotification::Start { multisig_id },
+            ))
         {
             // Log but don't fail - no subscribers is a valid scenario
             warn!(
@@ -2773,7 +2806,7 @@ where
         Ok(tonic::Response::new(rpc::Empty {}))
     }
 
-     async fn abort_dkg(
+    async fn abort_dkg(
         &self,
         req: tonic::Request<rpc::AbortDkgRequest>,
     ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
@@ -2799,9 +2832,10 @@ where
         info!("Requested to abort DKG session for multisig_id {}", multisig_id);
 
         // send the notification async to the subscription method
-        if let Err(e) = self
-            .dynafed_notifications_tx
-            .send(DynafedSubscriptionMessage::Dkg(DkgNotification::Abort { multisig_id }))
+        if let Err(e) =
+            self.dynafed_notifications_tx.send(DynafedSubscriptionMessage::Dkg(
+                DkgNotification::Abort { multisig_id },
+            ))
         {
             // Log but don't fail - no subscribers is a valid scenario
             warn!(
@@ -2858,14 +2892,13 @@ where
             let multisig_id = MultisigId::new(req_utxo.multisig_id);
 
             // Get the key package for this UTXO's multisig_id
-            let key_package = self
-                .db
-                .get_key_package_by_id(multisig_id)
-                .to_status()?
-                .ok_or(tonic::Status::internal(format!(
-                    "Missing key package for multisig_id {}",
-                    multisig_id
-                )))?;
+            let key_package =
+                self.db.get_key_package_by_id(multisig_id).to_status()?.ok_or(
+                    tonic::Status::internal(format!(
+                        "Missing key package for multisig_id {}",
+                        multisig_id
+                    )),
+                )?;
             // convert the request outpoint to the database outpoint
             let req_outpoint = req_utxo.outpoint.as_ref().ok_or_else(|| {
                 error!(
@@ -3263,7 +3296,9 @@ mod tests {
     use bitcoin::{secp256k1, OutPoint, Script, Txid};
     use botanix_configs::hash::compute_config_hash;
     use btcserverlib::{
-        database::LEGACY_MULTISIG_ID, dkg::DkgMessage, test_utils::pegout_requests_from_tx, wallet::address::generate_taproot_change_scriptpubkey
+        database::LEGACY_MULTISIG_ID, dkg::DkgMessage,
+        test_utils::pegout_requests_from_tx,
+        wallet::address::generate_taproot_change_scriptpubkey,
     };
     use frost_secp256k1_tr::keys::dkg::round1;
     use rand::{thread_rng, Rng};

@@ -366,7 +366,17 @@ pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    ::prost::Enumeration,
+)]
 #[repr(i32)]
 pub enum DkgEvent {
     Unspecified = 0,
@@ -398,7 +408,17 @@ impl DkgEvent {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    ::prost::Enumeration,
+)]
 #[repr(i32)]
 pub enum MigrationEvent {
     Unspecified = 0,
@@ -430,7 +450,17 @@ impl MigrationEvent {
         }
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    ::prost::Enumeration,
+)]
 #[repr(i32)]
 pub enum SigningStatus {
     Running = 0,
@@ -466,12 +496,14 @@ pub mod btc_server_server {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use tonic::codegen::*;
     /// Generated trait containing gRPC methods that should be implemented for use with BtcServerServer.
     #[async_trait]
-    pub trait BtcServer: std::marker::Send + std::marker::Sync + 'static {
+    pub trait BtcServer:
+        std::marker::Send + std::marker::Sync + 'static
+    {
         async fn health_check(
             &self,
             request: tonic::Request<super::Empty>,
@@ -489,8 +521,7 @@ pub mod btc_server_server {
                     super::GetFinalizedPegoutIdsResponse,
                     tonic::Status,
                 >,
-            >
-            + std::marker::Send
+            > + std::marker::Send
             + 'static;
         async fn get_finalized_pegout_ids(
             &self,
@@ -516,11 +547,17 @@ pub mod btc_server_server {
         async fn get_dkg_payloads(
             &self,
             request: tonic::Request<super::GetDkgPayloadsRequest>,
-        ) -> std::result::Result<tonic::Response<super::DkgPayloads>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::DkgPayloads>,
+            tonic::Status,
+        >;
         async fn new_dkg_payload(
             &self,
             request: tonic::Request<super::DkgPayload>,
-        ) -> std::result::Result<tonic::Response<super::DkgPayloads>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::DkgPayloads>,
+            tonic::Status,
+        >;
         async fn start_new_dkg(
             &self,
             request: tonic::Request<super::StartNewDkgRequest>,
@@ -548,11 +585,17 @@ pub mod btc_server_server {
         async fn get_round1_signing_package(
             &self,
             request: tonic::Request<super::SigningPackageRequest>,
-        ) -> std::result::Result<tonic::Response<super::SigningPackage>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::SigningPackage>,
+            tonic::Status,
+        >;
         async fn get_round2_signing_package(
             &self,
             request: tonic::Request<super::SigningPackageRequest>,
-        ) -> std::result::Result<tonic::Response<super::SigningPackage>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::SigningPackage>,
+            tonic::Status,
+        >;
         /// Ran by the signer.
         async fn signer_finalize(
             &self,
@@ -578,13 +621,19 @@ pub mod btc_server_server {
         async fn get_psbt(
             &self,
             request: tonic::Request<super::MakeTxRequest>,
-        ) -> std::result::Result<tonic::Response<super::SigningPackage>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::SigningPackage>,
+            tonic::Status,
+        >;
         /// Meant to be used to transition the signing round to round 2 after round 1
         /// signing commitments have been collected
         async fn get_to_sign_package(
             &self,
             request: tonic::Request<super::ToSignRequest>,
-        ) -> std::result::Result<tonic::Response<super::SigningPackage>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::SigningPackage>,
+            tonic::Status,
+        >;
         /// Ran by the coordinator.
         async fn finalize_signing(
             &self,
@@ -687,13 +736,19 @@ pub mod btc_server_server {
         }
         /// Enable decompressing requests with the given encoding.
         #[must_use]
-        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+        pub fn accept_compressed(
+            mut self,
+            encoding: CompressionEncoding,
+        ) -> Self {
             self.accept_compression_encodings.enable(encoding);
             self
         }
         /// Compress responses with the given encoding, if the client supports it.
         #[must_use]
-        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+        pub fn send_compressed(
+            mut self,
+            encoding: CompressionEncoding,
+        ) -> Self {
             self.send_compression_encodings.enable(encoding);
             self
         }
@@ -735,7 +790,8 @@ pub mod btc_server_server {
                     #[allow(non_camel_case_types)]
                     struct HealthCheckSvc<T: BtcServer>(pub Arc<T>);
                     impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                    for HealthCheckSvc<T> {
+                        for HealthCheckSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -747,15 +803,20 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::health_check(&inner, request).await
+                                <T as BtcServer>::health_check(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = HealthCheckSvc(inner);
@@ -778,7 +839,8 @@ pub mod btc_server_server {
                     #[allow(non_camel_case_types)]
                     struct GetPendingPegoutsSvc<T: BtcServer>(pub Arc<T>);
                     impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                    for GetPendingPegoutsSvc<T> {
+                        for GetPendingPegoutsSvc<T>
+                    {
                         type Response = super::GetPendingPegoutsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -790,15 +852,22 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_pending_pegouts(&inner, request).await
+                                <T as BtcServer>::get_pending_pegouts(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetPendingPegoutsSvc(inner);
@@ -820,11 +889,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetFinalizedPegoutIds" => {
                     #[allow(non_camel_case_types)]
                     struct GetFinalizedPegoutIdsSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::ServerStreamingService<
-                        super::GetFinalizedPegoutIdsRequest,
-                    > for GetFinalizedPegoutIdsSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::ServerStreamingService<
+                            super::GetFinalizedPegoutIdsRequest,
+                        > for GetFinalizedPegoutIdsSvc<T>
+                    {
                         type Response = super::GetFinalizedPegoutIdsResponse;
                         type ResponseStream = T::GetFinalizedPegoutIdsStream;
                         type Future = BoxFuture<
@@ -833,20 +902,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetFinalizedPegoutIdsRequest>,
+                            request: tonic::Request<
+                                super::GetFinalizedPegoutIdsRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_finalized_pegout_ids(&inner, request)
-                                    .await
+                                <T as BtcServer>::get_finalized_pegout_ids(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetFinalizedPegoutIdsSvc(inner);
@@ -868,10 +945,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetGatewayAddress" => {
                     #[allow(non_camel_case_types)]
                     struct GetGatewayAddressSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::GetGatewayAddressRequest>
-                    for GetGatewayAddressSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::GetGatewayAddressRequest,
+                        > for GetGatewayAddressSvc<T>
+                    {
                         type Response = super::GetGatewayAddressResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -879,19 +957,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetGatewayAddressRequest>,
+                            request: tonic::Request<
+                                super::GetGatewayAddressRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_gateway_address(&inner, request).await
+                                <T as BtcServer>::get_gateway_address(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetGatewayAddressSvc(inner);
@@ -913,10 +1000,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetPublicKey" => {
                     #[allow(non_camel_case_types)]
                     struct GetPublicKeySvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::GetPublicKeyRequest>
-                    for GetPublicKeySvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::GetPublicKeyRequest>
+                        for GetPublicKeySvc<T>
+                    {
                         type Response = super::GetPublicKeyResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -928,15 +1015,22 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_public_key(&inner, request).await
+                                <T as BtcServer>::get_public_key(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetPublicKeySvc(inner);
@@ -958,10 +1052,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetDkgPayloads" => {
                     #[allow(non_camel_case_types)]
                     struct GetDkgPayloadsSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::GetDkgPayloadsRequest>
-                    for GetDkgPayloadsSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::GetDkgPayloadsRequest,
+                        > for GetDkgPayloadsSvc<T>
+                    {
                         type Response = super::DkgPayloads;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -969,19 +1064,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetDkgPayloadsRequest>,
+                            request: tonic::Request<
+                                super::GetDkgPayloadsRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_dkg_payloads(&inner, request).await
+                                <T as BtcServer>::get_dkg_payloads(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetDkgPayloadsSvc(inner);
@@ -1003,8 +1107,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/NewDkgPayload" => {
                     #[allow(non_camel_case_types)]
                     struct NewDkgPayloadSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::DkgPayload>
-                    for NewDkgPayloadSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::DkgPayload>
+                        for NewDkgPayloadSvc<T>
+                    {
                         type Response = super::DkgPayloads;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1016,15 +1122,22 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::new_dkg_payload(&inner, request).await
+                                <T as BtcServer>::new_dkg_payload(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = NewDkgPayloadSvc(inner);
@@ -1046,10 +1159,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/StartNewDkg" => {
                     #[allow(non_camel_case_types)]
                     struct StartNewDkgSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::StartNewDkgRequest>
-                    for StartNewDkgSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::StartNewDkgRequest>
+                        for StartNewDkgSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1061,15 +1174,20 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::start_new_dkg(&inner, request).await
+                                <T as BtcServer>::start_new_dkg(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = StartNewDkgSvc(inner);
@@ -1091,10 +1209,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/AbortDkg" => {
                     #[allow(non_camel_case_types)]
                     struct AbortDkgSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::AbortDkgRequest>
-                    for AbortDkgSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::AbortDkgRequest>
+                        for AbortDkgSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1106,15 +1224,20 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::abort_dkg(&inner, request).await
+                                <T as BtcServer>::abort_dkg(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = AbortDkgSvc(inner);
@@ -1135,13 +1258,17 @@ pub mod btc_server_server {
                 }
                 "/btc_server.BtcServer/SubscribeToDynafedNotifications" => {
                     #[allow(non_camel_case_types)]
-                    struct SubscribeToDynafedNotificationsSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::ServerStreamingService<super::Empty>
-                    for SubscribeToDynafedNotificationsSvc<T> {
-                        type Response = super::SubscribeToDynafedNotificationsStream;
-                        type ResponseStream = T::SubscribeToDynafedNotificationsStream;
+                    struct SubscribeToDynafedNotificationsSvc<T: BtcServer>(
+                        pub Arc<T>,
+                    );
+                    impl<T: BtcServer>
+                        tonic::server::ServerStreamingService<super::Empty>
+                        for SubscribeToDynafedNotificationsSvc<T>
+                    {
+                        type Response =
+                            super::SubscribeToDynafedNotificationsStream;
+                        type ResponseStream =
+                            T::SubscribeToDynafedNotificationsStream;
                         type Future = BoxFuture<
                             tonic::Response<Self::ResponseStream>,
                             tonic::Status,
@@ -1161,10 +1288,14 @@ pub mod btc_server_server {
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = SubscribeToDynafedNotificationsSvc(inner);
@@ -1186,10 +1317,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetRound1SigningPackage" => {
                     #[allow(non_camel_case_types)]
                     struct GetRound1SigningPackageSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::SigningPackageRequest>
-                    for GetRound1SigningPackageSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::SigningPackageRequest,
+                        > for GetRound1SigningPackageSvc<T>
+                    {
                         type Response = super::SigningPackage;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1197,23 +1329,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::SigningPackageRequest>,
+                            request: tonic::Request<
+                                super::SigningPackageRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 <T as BtcServer>::get_round1_signing_package(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetRound1SigningPackageSvc(inner);
@@ -1235,10 +1372,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetRound2SigningPackage" => {
                     #[allow(non_camel_case_types)]
                     struct GetRound2SigningPackageSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::SigningPackageRequest>
-                    for GetRound2SigningPackageSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::SigningPackageRequest,
+                        > for GetRound2SigningPackageSvc<T>
+                    {
                         type Response = super::SigningPackage;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1246,23 +1384,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::SigningPackageRequest>,
+                            request: tonic::Request<
+                                super::SigningPackageRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 <T as BtcServer>::get_round2_signing_package(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetRound2SigningPackageSvc(inner);
@@ -1284,10 +1427,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/SignerFinalize" => {
                     #[allow(non_camel_case_types)]
                     struct SignerFinalizeSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::FinalizeSignerRequest>
-                    for SignerFinalizeSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::FinalizeSignerRequest,
+                        > for SignerFinalizeSvc<T>
+                    {
                         type Response = super::FinalizeSigningResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1295,19 +1439,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::FinalizeSignerRequest>,
+                            request: tonic::Request<
+                                super::FinalizeSignerRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::signer_finalize(&inner, request).await
+                                <T as BtcServer>::signer_finalize(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = SignerFinalizeSvc(inner);
@@ -1330,7 +1483,8 @@ pub mod btc_server_server {
                     #[allow(non_camel_case_types)]
                     struct AbortSigningSvc<T: BtcServer>(pub Arc<T>);
                     impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                    for AbortSigningSvc<T> {
+                        for AbortSigningSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1342,15 +1496,20 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::abort_signing(&inner, request).await
+                                <T as BtcServer>::abort_signing(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = AbortSigningSvc(inner);
@@ -1372,8 +1531,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/NewRound1SigningPackage" => {
                     #[allow(non_camel_case_types)]
                     struct NewRound1SigningPackageSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::SigningPackage>
-                    for NewRound1SigningPackageSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::SigningPackage>
+                        for NewRound1SigningPackageSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1386,18 +1547,21 @@ pub mod btc_server_server {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 <T as BtcServer>::new_round1_signing_package(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = NewRound1SigningPackageSvc(inner);
@@ -1419,8 +1583,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/NewRound2SigningPackage" => {
                     #[allow(non_camel_case_types)]
                     struct NewRound2SigningPackageSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::SigningPackage>
-                    for NewRound2SigningPackageSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::SigningPackage>
+                        for NewRound2SigningPackageSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1433,18 +1599,21 @@ pub mod btc_server_server {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 <T as BtcServer>::new_round2_signing_package(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = NewRound2SigningPackageSvc(inner);
@@ -1466,8 +1635,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetPsbt" => {
                     #[allow(non_camel_case_types)]
                     struct GetPsbtSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::MakeTxRequest>
-                    for GetPsbtSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::MakeTxRequest>
+                        for GetPsbtSvc<T>
+                    {
                         type Response = super::SigningPackage;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1479,15 +1650,20 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_psbt(&inner, request).await
+                                <T as BtcServer>::get_psbt(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetPsbtSvc(inner);
@@ -1509,8 +1685,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetToSignPackage" => {
                     #[allow(non_camel_case_types)]
                     struct GetToSignPackageSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::ToSignRequest>
-                    for GetToSignPackageSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::ToSignRequest>
+                        for GetToSignPackageSvc<T>
+                    {
                         type Response = super::SigningPackage;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1522,15 +1700,22 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_to_sign_package(&inner, request).await
+                                <T as BtcServer>::get_to_sign_package(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetToSignPackageSvc(inner);
@@ -1552,10 +1737,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/FinalizeSigning" => {
                     #[allow(non_camel_case_types)]
                     struct FinalizeSigningSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::FinalizeSigningRequest>
-                    for FinalizeSigningSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::FinalizeSigningRequest,
+                        > for FinalizeSigningSvc<T>
+                    {
                         type Response = super::FinalizeSigningResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1563,19 +1749,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::FinalizeSigningRequest>,
+                            request: tonic::Request<
+                                super::FinalizeSigningRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::finalize_signing(&inner, request).await
+                                <T as BtcServer>::finalize_signing(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = FinalizeSigningSvc(inner);
@@ -1598,7 +1793,8 @@ pub mod btc_server_server {
                     #[allow(non_camel_case_types)]
                     struct GetAllUtxosSvc<T: BtcServer>(pub Arc<T>);
                     impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                    for GetAllUtxosSvc<T> {
+                        for GetAllUtxosSvc<T>
+                    {
                         type Response = super::GetAllUtxosResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1610,15 +1806,20 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_all_utxos(&inner, request).await
+                                <T as BtcServer>::get_all_utxos(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetAllUtxosSvc(inner);
@@ -1641,7 +1842,8 @@ pub mod btc_server_server {
                     #[allow(non_camel_case_types)]
                     struct ListMultisigsSvc<T: BtcServer>(pub Arc<T>);
                     impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                    for ListMultisigsSvc<T> {
+                        for ListMultisigsSvc<T>
+                    {
                         type Response = super::ListMultisigsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1653,15 +1855,22 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::list_multisigs(&inner, request).await
+                                <T as BtcServer>::list_multisigs(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListMultisigsSvc(inner);
@@ -1684,7 +1893,8 @@ pub mod btc_server_server {
                     #[allow(non_camel_case_types)]
                     struct GetWalletStateSvc<T: BtcServer>(pub Arc<T>);
                     impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                    for GetWalletStateSvc<T> {
+                        for GetWalletStateSvc<T>
+                    {
                         type Response = super::WalletStateResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1696,15 +1906,22 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_wallet_state(&inner, request).await
+                                <T as BtcServer>::get_wallet_state(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetWalletStateSvc(inner);
@@ -1726,10 +1943,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/ResetAllUtxos" => {
                     #[allow(non_camel_case_types)]
                     struct ResetAllUtxosSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::ResetAllUtxosRequest>
-                    for ResetAllUtxosSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::ResetAllUtxosRequest>
+                        for ResetAllUtxosSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1737,19 +1954,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ResetAllUtxosRequest>,
+                            request: tonic::Request<
+                                super::ResetAllUtxosRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::reset_all_utxos(&inner, request).await
+                                <T as BtcServer>::reset_all_utxos(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ResetAllUtxosSvc(inner);
@@ -1771,10 +1997,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/RecoverMissingUtxos" => {
                     #[allow(non_camel_case_types)]
                     struct RecoverMissingUtxosSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::RecoverMissingUtxosRequest>
-                    for RecoverMissingUtxosSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::RecoverMissingUtxosRequest,
+                        > for RecoverMissingUtxosSvc<T>
+                    {
                         type Response = super::RecoverMissingUtxosResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1782,20 +2009,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::RecoverMissingUtxosRequest>,
+                            request: tonic::Request<
+                                super::RecoverMissingUtxosRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::recover_missing_utxos(&inner, request)
-                                    .await
+                                <T as BtcServer>::recover_missing_utxos(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = RecoverMissingUtxosSvc(inner);
@@ -1817,10 +2052,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetSigningStatus" => {
                     #[allow(non_camel_case_types)]
                     struct GetSigningStatusSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::GetSigningStatusRequest>
-                    for GetSigningStatusSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::GetSigningStatusRequest,
+                        > for GetSigningStatusSvc<T>
+                    {
                         type Response = super::GetSigningStatusResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1828,19 +2064,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetSigningStatusRequest>,
+                            request: tonic::Request<
+                                super::GetSigningStatusRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_signing_status(&inner, request).await
+                                <T as BtcServer>::get_signing_status(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetSigningStatusSvc(inner);
@@ -1862,10 +2107,10 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetSessionIds" => {
                     #[allow(non_camel_case_types)]
                     struct GetSessionIdsSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::GetSessionIdsRequest>
-                    for GetSessionIdsSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::GetSessionIdsRequest>
+                        for GetSessionIdsSvc<T>
+                    {
                         type Response = super::GetSessionIdsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1873,19 +2118,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetSessionIdsRequest>,
+                            request: tonic::Request<
+                                super::GetSessionIdsRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_session_ids(&inner, request).await
+                                <T as BtcServer>::get_session_ids(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetSessionIdsSvc(inner);
@@ -1908,7 +2162,8 @@ pub mod btc_server_server {
                     #[allow(non_camel_case_types)]
                     struct GetTrackedTxsSvc<T: BtcServer>(pub Arc<T>);
                     impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                    for GetTrackedTxsSvc<T> {
+                        for GetTrackedTxsSvc<T>
+                    {
                         type Response = super::GetTrackedTxsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1920,15 +2175,22 @@ pub mod btc_server_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::get_tracked_txs(&inner, request).await
+                                <T as BtcServer>::get_tracked_txs(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetTrackedTxsSvc(inner);
@@ -1950,10 +2212,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/ResetWalletState" => {
                     #[allow(non_camel_case_types)]
                     struct ResetWalletStateSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::ResetWalletStateRequest>
-                    for ResetWalletStateSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::ResetWalletStateRequest,
+                        > for ResetWalletStateSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -1961,19 +2224,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ResetWalletStateRequest>,
+                            request: tonic::Request<
+                                super::ResetWalletStateRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::reset_wallet_state(&inner, request).await
+                                <T as BtcServer>::reset_wallet_state(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ResetWalletStateSvc(inner);
@@ -1995,10 +2267,11 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/NewConsensusCheckpoint" => {
                     #[allow(non_camel_case_types)]
                     struct NewConsensusCheckpointSvc<T: BtcServer>(pub Arc<T>);
-                    impl<
-                        T: BtcServer,
-                    > tonic::server::UnaryService<super::ConsensusCheckpointRequest>
-                    for NewConsensusCheckpointSvc<T> {
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<
+                            super::ConsensusCheckpointRequest,
+                        > for NewConsensusCheckpointSvc<T>
+                    {
                         type Response = super::Empty;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
@@ -2006,20 +2279,28 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ConsensusCheckpointRequest>,
+                            request: tonic::Request<
+                                super::ConsensusCheckpointRequest,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::new_consensus_checkpoint(&inner, request)
-                                    .await
+                                <T as BtcServer>::new_consensus_checkpoint(
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
                     }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = NewConsensusCheckpointSvc(inner);
@@ -2038,23 +2319,19 @@ pub mod btc_server_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        let mut response = http::Response::new(empty_body());
-                        let headers = response.headers_mut();
-                        headers
-                            .insert(
-                                tonic::Status::GRPC_STATUS,
-                                (tonic::Code::Unimplemented as i32).into(),
-                            );
-                        headers
-                            .insert(
-                                http::header::CONTENT_TYPE,
-                                tonic::metadata::GRPC_CONTENT_TYPE,
-                            );
-                        Ok(response)
-                    })
-                }
+                _ => Box::pin(async move {
+                    let mut response = http::Response::new(empty_body());
+                    let headers = response.headers_mut();
+                    headers.insert(
+                        tonic::Status::GRPC_STATUS,
+                        (tonic::Code::Unimplemented as i32).into(),
+                    );
+                    headers.insert(
+                        http::header::CONTENT_TYPE,
+                        tonic::metadata::GRPC_CONTENT_TYPE,
+                    );
+                    Ok(response)
+                }),
             }
         }
     }

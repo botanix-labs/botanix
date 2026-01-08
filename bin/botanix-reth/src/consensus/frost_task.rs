@@ -32,7 +32,12 @@ use botanix_data_parser::{
 };
 use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
 use btcserverlib::{
-    database::{LEGACY_MULTISIG_ID, MultisigId}, dkg::{DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification}, wallet::psbt::frost_id_from_bytes
+    database::{MultisigId, LEGACY_MULTISIG_ID},
+    dkg::{
+        DkgNotification, DynafedSubscriptionMessage, MigrationEvent,
+        MigrationNotification,
+    },
+    wallet::psbt::frost_id_from_bytes,
 };
 use futures::{pin_mut, StreamExt};
 use reth_network::{
@@ -53,7 +58,6 @@ use reth_provider::{
 };
 use reth_revm::primitives::FixedBytes;
 use reth_storage_api::NodePrimitivesProvider;
-use uuid::Uuid;
 use std::{
     collections::{BTreeMap, HashMap},
     str::FromStr,
@@ -63,6 +67,7 @@ use std::{
 use tendermint_rpc::client::HttpClient;
 use tokio::sync::mpsc::{self, error::SendError};
 use tracing::{error, info, trace, warn};
+use uuid::Uuid;
 
 // TODO: @rwlock Combine with FrostTaskError?
 #[derive(Debug, thiserror::Error)]
@@ -1329,9 +1334,11 @@ where
 
                     if let Ok(resp) = self
                         .btc_server
-                        .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
-                            multisig_id: *self.multisig_id,
-                        })
+                        .get_public_key(
+                            botanix_btc_server_client::GetPublicKeyRequest {
+                                multisig_id: *self.multisig_id,
+                            },
+                        )
                         .await
                     {
                         self.metrics.created_agg_pub_keys.increment(1);
@@ -1343,10 +1350,17 @@ where
                                 .expect("invalid aggregated public key");
 
                         let mut storage = self.storage.write().await;
-                        if let Some(agg_pks) = storage.aggregate_public_key.as_mut() {
-                            agg_pks.insert(self.multisig_id, public_key_package);
+                        if let Some(agg_pks) =
+                            storage.aggregate_public_key.as_mut()
+                        {
+                            agg_pks
+                                .insert(self.multisig_id, public_key_package);
                         } else {
-                            storage.aggregate_public_key = Some(BTreeMap::from([(self.multisig_id, public_key_package)]));
+                            storage.aggregate_public_key =
+                                Some(BTreeMap::from([(
+                                    self.multisig_id,
+                                    public_key_package,
+                                )]));
                         }
                     }
 

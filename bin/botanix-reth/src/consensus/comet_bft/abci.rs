@@ -7,7 +7,7 @@ use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
 use botanix_storage::models::RuntimeVersion;
-use btcserverlib::database::{LEGACY_MULTISIG_ID, MultisigId};
+use btcserverlib::database::{MultisigId, LEGACY_MULTISIG_ID};
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
@@ -20,7 +20,10 @@ use reth_primitives_traits::Block as BlockTrait;
 use reth_trie::updates::TrieUpdates;
 use reth_trie_common::KeccakKeyHasher;
 use std::{
-    collections::BTreeMap, error::Error, io, sync::{Arc, RwLock}
+    collections::BTreeMap,
+    error::Error,
+    io,
+    sync::{Arc, RwLock},
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -584,7 +587,8 @@ where
         network_upgrade_payload: Option<NetworkUpgradePayload>,
     ) -> Result<NonDeterministicData, ConsensusError> {
         // TODO: use the correct multisig_id
-        let aggregate_public_key = self.aggregate_public_key(LEGACY_MULTISIG_ID)?;
+        let aggregate_public_key =
+            self.aggregate_public_key(LEGACY_MULTISIG_ID)?;
         let block_fee_recipient_address = self
             .block_fee_recipient_address
             .ok_or(ConsensusError::MissingBlockFeeRecipientAddress)?;
@@ -668,16 +672,19 @@ where
     ) -> Result<secp256k1::PublicKey, ConsensusError> {
         match &self.storage.inner.blocking_read().aggregate_public_key {
             Some(pkeys) => {
-                pkeys.get(&multisig_id).cloned().ok_or(
-                    ConsensusError::InvalidAggregatedPublicKey(
-                        InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
-                            *multisig_id,
-                        ),
+                pkeys
+                    .get(&multisig_id)
+                    .cloned()
+                    .ok_or(ConsensusError::InvalidAggregatedPublicKey(
+                    InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
+                        *multisig_id,
                     ),
-                )
+                ))
             }
             None => Err(ConsensusError::InvalidAggregatedPublicKey(
-                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(*multisig_id),
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
+                    *multisig_id,
+                ),
             )),
         }
     }
@@ -2589,12 +2596,17 @@ where
 
             // TODO: use the correct multisig_id
             let mut storage = self.storage.inner.blocking_write();
-            if let Some(aggregate_public_keys) = storage.aggregate_public_key.as_mut() {
-                aggregate_public_keys.entry(LEGACY_MULTISIG_ID).or_insert(edh.aggregated_public_key);
+            if let Some(aggregate_public_keys) =
+                storage.aggregate_public_key.as_mut()
+            {
+                aggregate_public_keys
+                    .entry(LEGACY_MULTISIG_ID)
+                    .or_insert(edh.aggregated_public_key);
             } else {
-                storage.aggregate_public_key = Some(
-                    BTreeMap::from([(LEGACY_MULTISIG_ID, edh.aggregated_public_key)]),
-                );
+                storage.aggregate_public_key = Some(BTreeMap::from([(
+                    LEGACY_MULTISIG_ID,
+                    edh.aggregated_public_key,
+                )]));
             }
         }
 
@@ -2788,7 +2800,12 @@ pub struct ABCIDriver {
     blockchain_provider: BlockchainProvider<
         NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
     >,
-    storage: Storage<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>>
+    storage: Storage<
+        BlockchainProvider<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >,
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+    >,
 }
 
 impl ABCIDriver {
@@ -2806,7 +2823,12 @@ impl ABCIDriver {
         blockchain_provider: BlockchainProvider<
             NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
         >,
-        storage: Storage<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>>
+        storage: Storage<
+            BlockchainProvider<
+                NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+            >,
+            BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+        >,
     ) -> Self {
         Self {
             driver_rx: Arc::new(Mutex::new(driver_rx)),
@@ -2930,10 +2952,15 @@ impl ABCIDriver {
                             .blocking_read()
                             .aggregate_public_key
                             .clone()
-                            .expect("aggregate_public_keys must be set after DKG");
+                            .expect(
+                                "aggregate_public_keys must be set after DKG",
+                            );
 
                         let staged_pegins: Vec<PeginData> =
-                            get_staged_pegins_from_pegin_meta(&pegins, &aggregate_public_keys);
+                            get_staged_pegins_from_pegin_meta(
+                                &pegins,
+                                &aggregate_public_keys,
+                            );
                         let staged_pegouts: Vec<PegoutData> =
                             get_staged_pegouts_from_pegout_data(
                                 &sealed_block_with_peg.pegouts(),
@@ -3192,7 +3219,7 @@ mod tests {
 
         let evm_config = BotanixEvmConfig::new(spec.clone());
 
-        // Create a bitcoin header for testing 
+        // Create a bitcoin header for testing
         let bitcoin_header = Header {
             version: Version::default(),
             prev_blockhash: BlockHash::all_zeros(),
@@ -3256,14 +3283,14 @@ mod tests {
         .build_ignore_nework_upgrade();
 
         let bitcoin_checkpoints_chain =
-            BitcoinCheckpointsChain::try_new(1, 0, 0).expect(
-                "create a valid chain",
-            );
+            BitcoinCheckpointsChain::try_new(1, 0, 0)
+                .expect("create a valid chain");
 
-        let bitcoin_checkpoint = BitcoinCheckpoint::new(bitcoin_header.clone(), 0);
-        bitcoin_checkpoints_chain.push(bitcoin_checkpoint).expect(
-            "push a checkpoint",
-        );
+        let bitcoin_checkpoint =
+            BitcoinCheckpoint::new(bitcoin_header.clone(), 0);
+        bitcoin_checkpoints_chain
+            .push(bitcoin_checkpoint)
+            .expect("push a checkpoint");
 
         let cometbft_rpc_factory = HttpCometBFTRpcClientFactory::default();
 
@@ -3367,23 +3394,16 @@ mod tests {
         let response = abci_client.prepare_proposal(request);
 
         let expected_ndd = NonDeterministicData::new_v2(
-            abci_client.bitcoin_blockhash().expect(
-                "to have bitcoin blockhash",
-            ),
-            abci_client.aggregate_public_key(LEGACY_MULTISIG_ID).expect(
-                "to have agg pk",
-            ),
+            abci_client.bitcoin_blockhash().expect("to have bitcoin blockhash"),
+            abci_client
+                .aggregate_public_key(LEGACY_MULTISIG_ID)
+                .expect("to have agg pk"),
             Address::ZERO,
             RUNTIME_VERSION_GENESIS,
             None,
         );
-        let response_ndd_bytes = response
-            .txs
-            .first()
-            .expect(
-                "to have tx",
-            )
-            .clone();
+        let response_ndd_bytes =
+            response.txs.first().expect("to have tx").clone();
         let reader_inner: Vec<u8> =
             vec![response_ndd_bytes].into_iter().flatten().collect();
         let reader = &mut io::Cursor::new(reader_inner);
@@ -3422,21 +3442,16 @@ mod tests {
         let response = abci_client.prepare_proposal(request);
 
         let expected_ndd = NonDeterministicData::new_v1(
-            abci_client.bitcoin_blockhash().expect(
-                "to have agg bitcoin blockhash",
-            ),
-            abci_client.aggregate_public_key(LEGACY_MULTISIG_ID).expect(
-                "to have agg pk",
-            ),
+            abci_client
+                .bitcoin_blockhash()
+                .expect("to have agg bitcoin blockhash"),
+            abci_client
+                .aggregate_public_key(LEGACY_MULTISIG_ID)
+                .expect("to have agg pk"),
             Address::ZERO,
         );
-        let response_ndd_bytes = response
-            .txs
-            .first()
-            .expect(
-                "to have tx",
-            )
-            .clone();
+        let response_ndd_bytes =
+            response.txs.first().expect("to have tx").clone();
         let reader_inner: Vec<u8> =
             vec![response_ndd_bytes].into_iter().flatten().collect();
         let reader = &mut io::Cursor::new(reader_inner);
@@ -3455,9 +3470,8 @@ mod tests {
 
         let mut request = RequestProcessProposal::default();
 
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         request.txs = vec![ndd_bytes];
 
@@ -3480,9 +3494,8 @@ mod tests {
         let abci_client = abci_client_builder();
 
         // first tx should be non-deterministic data
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         // second tx should be a signed transaction
         let mut tx_generator = TransactionGenerator::new(rand_09::rng());
@@ -3518,9 +3531,8 @@ mod tests {
 
         let mut request = RequestFinalizeBlock::default();
 
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         request.txs = vec![ndd_bytes.clone()];
 
@@ -3536,9 +3548,8 @@ mod tests {
         let response = abci_client.finalize_block(request);
 
         // get newly made block from cache to recreate expected app hash
-        let mut rw_lock = abci_client.block_cache.write().expect(
-            "should get lock",
-        );
+        let mut rw_lock =
+            abci_client.block_cache.write().expect("should get lock");
         let sealed_block_with_context =
             rw_lock.cache.pop_newest().expect("to have block").1;
         let expected_app_hash = prost::bytes::Bytes::copy_from_slice(
@@ -3572,10 +3583,9 @@ mod tests {
         let ndd = abci_client
             .non_deterministic_data(RUNTIME_VERSION_V1, None)
             .expect("to have ndd");
-        let ndd_bytes =
-            abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect(
-                "to serialize ndd",
-            );
+        let ndd_bytes = abci_client
+            .serialize_non_deterministic_data_to_bytes(ndd)
+            .expect("to serialize ndd");
 
         // second tx should be a signed transaction
         let mut tx_generator = TransactionGenerator::new(rand_09::rng());

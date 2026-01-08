@@ -390,7 +390,10 @@ pub async fn finalize_signing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{database::{MultisigId, Utxo}, test_utils::random_compute_txid};
+    use crate::{
+        database::{MultisigId, Utxo},
+        test_utils::random_compute_txid,
+    };
     use bitcoin::{Amount, ScriptBuf, TxOut};
 
     #[test]

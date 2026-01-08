@@ -5,18 +5,15 @@ use super::extra_data_header::{
 };
 use alloy_primitives::Bytes;
 // use bitcoincore_rpc::{Error as BitcoindError, RpcApi};
+use bitcoin::{
+    block::Version, hash_types::TxMerkleNode, hashes::Hash, pow::CompactTarget,
+    BlockHash,
+};
 use botanix_authority_peg::consensus_package::{
     BotanixConsensusPackage, RecentHeader,
 };
 use botanix_btc_wallet::{
     error::BitcoindAdapterError, fallback::FallbackBitcoindClient,
-};
-use bitcoin::{
-    block::Version,
-    hash_types::TxMerkleNode,
-    hashes::Hash,
-    pow::CompactTarget,
-    BlockHash,
 };
 use reth_primitives_traits::Header;
 use revm_primitives::Address;

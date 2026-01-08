@@ -101,7 +101,7 @@ pub async fn do_dkg(
         let p = client
             .get_dkg_payloads(tonic::Request::new(
                 botanix_btc_server_client::GetDkgPayloadsRequest {
-                    multisig_id: *LEGACY_MULTISIG_ID
+                    multisig_id: *LEGACY_MULTISIG_ID,
                 },
             ))
             .await

@@ -1213,9 +1213,11 @@ impl Suite for ConsensusIntegrationTestSuite {
             let mut keys = HashSet::new();
             for client in btc_server_clients.to_vec().iter_mut() {
                 let key = client
-                    .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
-                        multisig_id: *LEGACY_MULTISIG_ID,
-                    })
+                    .get_public_key(
+                        botanix_btc_server_client::GetPublicKeyRequest {
+                            multisig_id: *LEGACY_MULTISIG_ID,
+                        },
+                    )
                     .await
                     .context("Error getting a pub key from btc-server")?
                     .into_inner()
@@ -1236,7 +1238,10 @@ impl Suite for ConsensusIntegrationTestSuite {
 
         // // =================== RPC NODES ================== //
         if create_test_config.create_rpc_nodes {
-            it_info_print!("Creating RPC nodes", self.global_context.rpc_instances);
+            it_info_print!(
+                "Creating RPC nodes",
+                self.global_context.rpc_instances
+            );
             let (mut rpc_nodes, tx) =
                 create_rpc_nodes(self.global_context.clone()).await?;
             let build_command_authorities_list =

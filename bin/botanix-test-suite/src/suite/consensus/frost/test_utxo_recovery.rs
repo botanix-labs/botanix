@@ -17,7 +17,8 @@ use crate::{
     },
     utils::{
         generate_blocks, get_checkpoint_block_hash, send_pegin_notification,
-        send_pegout_notification, MIN_BLOCKS_COINBASE_MATURE, TEST_LEGACY_MULTISIG_ID,
+        send_pegout_notification, MIN_BLOCKS_COINBASE_MATURE,
+        TEST_LEGACY_MULTISIG_ID,
     },
 };
 

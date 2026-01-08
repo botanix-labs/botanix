@@ -6,7 +6,8 @@ extern crate log;
 use bitcoin::{psbt::Psbt, Amount, FeeRate, OutPoint, ScriptBuf, TxOut};
 use bitcoincore_rpc::RpcApi;
 use btcserverlib::{
-    badarg, database::{self, MultisigId},
+    badarg,
+    database::{self, MultisigId},
     util::parse_eth_address,
     wallet::{
         address::{generate_taproot_scriptpubkey, generate_tweaked_public_key},

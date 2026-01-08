@@ -634,7 +634,7 @@ mod tests {
     use std::time::SystemTime;
 
     use crate::{
-        database::{FinalizedPegout, LEGACY_MULTISIG_ID, version::UtxoVersion},
+        database::{version::UtxoVersion, FinalizedPegout, LEGACY_MULTISIG_ID},
         frost_id,
         wallet::psbt::{PsbtExt, PsbtInputExt, PsbtOutputExt},
     };

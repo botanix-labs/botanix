@@ -109,9 +109,10 @@ pub trait PsbtInputExt: BorrowMut<PsbtInput> {
     }
 
     fn set_multisig_id(&mut self, multisig_id: MultisigId) {
-        self.borrow_mut()
-            .proprietary
-            .insert(MULTISIG_ID_KEY.clone(), multisig_id.as_u32().to_le_bytes().to_vec());
+        self.borrow_mut().proprietary.insert(
+            MULTISIG_ID_KEY.clone(),
+            multisig_id.as_u32().to_le_bytes().to_vec(),
+        );
     }
 
     fn multisig_id(&self) -> Option<MultisigId> {

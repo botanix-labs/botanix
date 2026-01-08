@@ -77,18 +77,29 @@ pub const TEST_LEGACY_MULTISIG_ID: MultisigId = LEGACY_MULTISIG_ID;
 use std::fmt;
 
 /// Wrapper type for multisig IDs
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+)]
 pub struct MultisigId(u32);
 
 impl MultisigId {
     /// The legacy multisig ID constant
     pub const LEGACY: Self = Self(0);
-    
+
     /// Create a new MultisigId
     pub const fn new(id: u32) -> Self {
         Self(id)
     }
-    
+
     /// Get the inner value as a reference
     pub const fn as_u32(&self) -> u32 {
         self.0
@@ -119,7 +130,7 @@ impl fmt::Display for MultisigId {
 // Deref to u32 for convenient method access
 impl std::ops::Deref for MultisigId {
     type Target = u32;
-    
+
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -1791,7 +1802,8 @@ mod tests {
         let mut serialized = vec![];
         ciborium::into_writer(&old_utxo, &mut serialized).unwrap();
 
-        let deserialized: Utxo = ciborium::from_reader(&serialized[..]).unwrap();
+        let deserialized: Utxo =
+            ciborium::from_reader(&serialized[..]).unwrap();
 
         assert_eq!(deserialized.output.value, value);
         assert_eq!(deserialized.output.script_pubkey, script_pubkey);
@@ -2950,7 +2962,9 @@ mod tests {
         let multisig_id: MultisigId = 0.into();
 
         // Key package does not exist yet.
-        let res = db.export_key_package_by_id(multisig_id, good_pass.clone()).unwrap();
+        let res = db
+            .export_key_package_by_id(multisig_id, good_pass.clone())
+            .unwrap();
         assert!(res.is_none());
 
         // Generate key packages.
@@ -2968,10 +2982,14 @@ mod tests {
         let origin_key_package = key_package;
 
         // Each export creates a new nonce.
-        let mut export_1 =
-            db.export_key_package_by_id(multisig_id, good_pass.clone()).unwrap().unwrap();
-        let export_2 =
-            db.export_key_package_by_id(multisig_id, good_pass.clone()).unwrap().unwrap();
+        let mut export_1 = db
+            .export_key_package_by_id(multisig_id, good_pass.clone())
+            .unwrap()
+            .unwrap();
+        let export_2 = db
+            .export_key_package_by_id(multisig_id, good_pass.clone())
+            .unwrap()
+            .unwrap();
         //
         assert_ne!(export_1.iv, export_2.iv);
         assert_ne!(export_1, export_2);
@@ -2980,7 +2998,10 @@ mod tests {
         db.key_packages.remove(&0u32.to_le_bytes()).unwrap();
         db.pubkey_packages.remove(&0u32.to_le_bytes()).unwrap();
         assert!(db.get_key_package_by_id(multisig_id).unwrap().is_none());
-        assert!(db.get_public_key_package_by_id(multisig_id).unwrap().is_none());
+        assert!(db
+            .get_public_key_package_by_id(multisig_id)
+            .unwrap()
+            .is_none());
 
         // ERR: Bad password!
         let err = db
@@ -2991,25 +3012,38 @@ mod tests {
         // ERR: Bad IV/nonce!
         export_1.iv = export_2.iv;
         let err = db
-            .import_key_package_by_id(multisig_id, good_pass.clone(), export_1.clone())
+            .import_key_package_by_id(
+                multisig_id,
+                good_pass.clone(),
+                export_1.clone(),
+            )
             .unwrap_err();
         assert_eq!(err, Error::BadDecryptionPassphrase);
 
         // ERR: Bad version indicator!
         export_1.version = u16::MAX;
         let err = db
-            .import_key_package_by_id(multisig_id, good_pass.clone(), export_1.clone())
+            .import_key_package_by_id(
+                multisig_id,
+                good_pass.clone(),
+                export_1.clone(),
+            )
             .unwrap_err();
         assert_eq!(err, Error::BadExportedPackageFormatVersion);
 
         // OK: Successful import with good passphrase and export package.
-        db.import_key_package_by_id(multisig_id, good_pass.clone(), export_2.clone())
-            .unwrap();
+        db.import_key_package_by_id(
+            multisig_id,
+            good_pass.clone(),
+            export_2.clone(),
+        )
+        .unwrap();
 
         // Sanity check.
         let new_pk_package =
             db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
-        let new_key_package = db.get_key_package_by_id(multisig_id).unwrap().unwrap();
+        let new_key_package =
+            db.get_key_package_by_id(multisig_id).unwrap().unwrap();
         //
         assert_eq!(new_pk_package, origin_pk_package);
         assert_eq!(new_key_package, origin_key_package);
@@ -3032,8 +3066,10 @@ mod tests {
         db.set_pubkey_package_by_id(multisig_id, pk_package.clone()).unwrap();
 
         // Retrieve and verify
-        let retrieved_key = db.get_key_package_by_id(multisig_id).unwrap().unwrap();
-        let retrieved_pk = db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
+        let retrieved_key =
+            db.get_key_package_by_id(multisig_id).unwrap().unwrap();
+        let retrieved_pk =
+            db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
 
         assert_eq!(retrieved_key, key_package);
         assert_eq!(retrieved_pk, pk_package);
@@ -3066,13 +3102,15 @@ mod tests {
         db.set_pubkey_package_by_id(2.into(), pk_package2.clone()).unwrap();
 
         // Retrieve and verify both are correct
-        let retrieved_key1 = db.get_key_package_by_id(1.into()).unwrap().unwrap();
+        let retrieved_key1 =
+            db.get_key_package_by_id(1.into()).unwrap().unwrap();
         let retrieved_pk1 =
             db.get_public_key_package_by_id(1.into()).unwrap().unwrap();
         assert_eq!(retrieved_key1, key_package1);
         assert_eq!(retrieved_pk1, pk_package1);
 
-        let retrieved_key2 = db.get_key_package_by_id(2.into()).unwrap().unwrap();
+        let retrieved_key2 =
+            db.get_key_package_by_id(2.into()).unwrap().unwrap();
         let retrieved_pk2 =
             db.get_public_key_package_by_id(2.into()).unwrap().unwrap();
         assert_eq!(retrieved_key2, key_package2);
@@ -3153,15 +3191,20 @@ mod tests {
 
         // Verify new storage is empty
         assert!(db.get_key_package_by_id(multisig_id).unwrap().is_none());
-        assert!(db.get_public_key_package_by_id(multisig_id).unwrap().is_none());
+        assert!(db
+            .get_public_key_package_by_id(multisig_id)
+            .unwrap()
+            .is_none());
 
         // Run migration
         let migrated = db.migrate_legacy_key_package().unwrap();
         assert!(migrated, "Migration should have been performed");
 
         // Verify new storage now has the data at multisig_id = 0
-        let migrated_key = db.get_key_package_by_id(multisig_id).unwrap().unwrap();
-        let migrated_pk = db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
+        let migrated_key =
+            db.get_key_package_by_id(multisig_id).unwrap().unwrap();
+        let migrated_pk =
+            db.get_public_key_package_by_id(multisig_id).unwrap().unwrap();
         assert_eq!(migrated_key, key_package);
         assert_eq!(migrated_pk, pk_package);
 
