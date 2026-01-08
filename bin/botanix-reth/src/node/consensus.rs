@@ -128,7 +128,7 @@ impl BotanixConsensus<BotanixChainSpec> {
             return Ok(());
         }
 
-        // there should alawys be an aggregate public key for poa
+        // there should always be an aggregate public key for poa
         if aggregate_public_key.is_none() {
             return Err(ConsensusError::InvalidAggregatedPublicKey(
                 InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,

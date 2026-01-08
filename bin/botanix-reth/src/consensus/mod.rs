@@ -15,7 +15,7 @@ mod builder;
 
 /// Comet BFT abci and consensus driver
 pub mod comet_bft;
-mod excecution_utils;
+mod execution_utils;
 mod frost_task;
 mod signing;
 pub mod snapshot_manager;
@@ -118,4 +118,3 @@ pub(crate) struct StorageInner {
     /// Suggests if we are currently syncing blocks
     pub(crate) is_block_syncing: bool,
 }
-

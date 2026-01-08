@@ -563,14 +563,13 @@ impl PegoutWithId {
             return Err(PegoutDataError::WrongVersion(version));
         }
         // Decode amount
-        let amount = Amount::consensus_decode(&mut bytes).map_err(|err| {
-            match err {
+        let amount =
+            Amount::consensus_decode(&mut bytes).map_err(|err| match err {
                 bitcoin::consensus::encode::Error::Io(io_err) => {
                     PegoutDataError::InvalidAmount(io_err)
                 }
                 other => PegoutDataError::InvalidVersion(other),
-            }
-        })?;
+            })?;
         // Decode destination address
         let addr_len =
             btcencode::VarInt::consensus_decode(&mut bytes)?.0 as usize;

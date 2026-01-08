@@ -2,8 +2,8 @@
 
 mod cli;
 use anyhow::Result as AnyResult;
-use botanix_reth::node::{storage::BotanixStorage, BotanixNode};
 use botanix_chainspec::BotanixChainSpec;
+use botanix_reth::node::{storage::BotanixStorage, BotanixNode};
 use botanix_storage::BotanixProviderFactory;
 use clap::Parser;
 use cli::Cli;
@@ -12,8 +12,8 @@ use reth_db::{
     models::ClientVersion,
     open_db, DatabaseEnv,
 };
-use reth_prune_types::PruneModes;
 use reth_provider::{errors::db::LogLevel, providers::StaticFileProvider};
+use reth_prune_types::PruneModes;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -62,7 +62,8 @@ async fn main() -> AnyResult<()> {
     let chain_spec = BotanixChainSpec::default();
     let static_files_path = Path::new(&db_path).join("static_files");
     fs::create_dir_all(&static_files_path)?;
-    let static_files_provider = StaticFileProvider::read_write(&static_files_path)?;
+    let static_files_provider =
+        StaticFileProvider::read_write(&static_files_path)?;
     let chain_spec_arc = Arc::new(chain_spec);
     let provider_factory =
         BotanixProviderFactory::<Arc<DatabaseEnv>, BotanixNode>::new(

@@ -16,6 +16,5 @@ alloy-primitives = { workspace = true }
 botanix-storage = { workspace = true }
 reth-storage-errors = { workspace = true }
 
-
 [dev-dependencies]
 botanix-activation-manager = { workspace = true, features = ["test-utils"] }

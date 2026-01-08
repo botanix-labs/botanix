@@ -32,7 +32,7 @@ pub enum CoordinatorError {
     #[error("PSBT finalization failed : {0:?}")]
     PbstFinalizationFailed(Vec<PsbtError>),
     #[error("Invalid resulting transaction")]
-    InvaildResultingTx,
+    InvalidResultingTx,
     #[error("Failed parse out to sign package: {0}")]
     PsbtToSigningPackageConversionError(
         #[from] crate::wallet::psbt::PsbtToSigningPackageConversionError,

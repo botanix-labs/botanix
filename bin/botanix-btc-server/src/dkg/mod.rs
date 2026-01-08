@@ -286,7 +286,7 @@ struct OutEntryRoundThree {
 /// Represents the current state of the DKG process.
 enum StageState {
     /// The DKG process is waiting for the coordinator to initialize the session.
-    AwatingInit,
+    AwaitingInit,
     /// The active stage of round1. Participants are exchanging round1 packages
     /// with each other. The coordinator distributes packages between all
     /// participants.
@@ -509,7 +509,7 @@ impl DkgStateMachine {
             coordinator,
             members,
             queue,
-            state: StageState::AwatingInit,
+            state: StageState::AwaitingInit,
             session_nonce: None,
             session_activated: None,
         };
@@ -653,7 +653,7 @@ impl DkgStateMachine {
     /// Returns the current stage of the DKG protocol.
     pub fn stage(&self) -> Stage {
         match &self.state {
-            StageState::AwatingInit => Stage::AwaitingInit,
+            StageState::AwaitingInit => Stage::AwaitingInit,
             StageState::RoundOne { .. } => Stage::RoundOne,
             StageState::RoundTwo { .. } => Stage::RoundTwo,
             StageState::RoundThree { .. } => Stage::RoundThree,

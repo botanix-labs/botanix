@@ -67,7 +67,7 @@ struct BotanixTestnetGenesisConfig<'a> {
 
 #[derive(Clone, Debug)]
 pub enum Notifications {
-    CanonState(CannonStateNofificationPayload),
+    CanonState(CannonStateNotificationPayload),
     DkgFinished(DkgPayload),
     SigningStatusReport((u16, Vec<u8>, SigningStatus)),
 }
@@ -123,7 +123,7 @@ pub struct DkgPayload {
 }
 
 #[derive(Clone, Debug)]
-pub struct CannonStateNofificationPayload {
+pub struct CannonStateNotificationPayload {
     pub engine_index: u16,
     pub ts: tokio::time::Instant,
     pub tx_receipts: Vec<ethers::core::types::TransactionReceipt>,
@@ -590,7 +590,7 @@ impl FederationMemberTestConfig {
                     if let Some(tx_receipts) = tx_receipts {
                         // send a notification about a new block
                         match rx_sender.send(Notifications::CanonState(
-                            CannonStateNofificationPayload {
+                            CannonStateNotificationPayload {
                                 engine_index,
                                 ts: tokio::time::Instant::now(),
                                 tx_receipts,
@@ -824,9 +824,9 @@ impl FederationMemberTestConfig {
 }
 
 pub fn is_dkg_ready(
-    federation_memebers: &BTreeMap<u16, FederationMemberTestConfig>,
+    federation_members: &BTreeMap<u16, FederationMemberTestConfig>,
 ) -> bool {
-    !federation_memebers.iter().any(|(_, member)| !member.is_dkg_ready())
+    !federation_members.iter().any(|(_, member)| !member.is_dkg_ready())
 }
 
 pub async fn create_poa_nodes(

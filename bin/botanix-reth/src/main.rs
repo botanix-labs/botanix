@@ -416,8 +416,6 @@ fn main() -> eyre::Result<()> {
             // add metrics if necessary
             run_metrics_service(metrics_args, &task_executor, chain_spec_arc).await?;
 
-        
-
             // launch the bitcoin checkpoints synchronizer task
             task_executor.spawn_critical(
                 "async bitcoin checkpoint chain synchronization task",

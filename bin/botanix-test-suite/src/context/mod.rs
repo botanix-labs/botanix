@@ -6,7 +6,7 @@ use crate::{
     suite::RunSuite,
 };
 
-pub const BOTANIX_FEE_RECEIPIENT: &str =
+pub const BOTANIX_FEE_RECIPIENT: &str =
     "0xb8c03cb8C9bAC79c53926E3C66344C13452105f5";
 pub const LST_FEE_RECEIVER: &str = "0xDAfdb73cF5f14417fc5aEd97486704dC7C6ee0a4";
 pub const BTC_NETWORK: &str = "regtest";
@@ -77,7 +77,7 @@ impl GlobalContext {
                 .context(
                     "Failed to parse BITCOIND_ZMQ_HASH_BLOCK_ADDRESS to an Url",
                 )?,
-            botanix_fee_recipient: BOTANIX_FEE_RECEIPIENT.to_string(),
+            botanix_fee_recipient: BOTANIX_FEE_RECIPIENT.to_string(),
             lst_fee_receiver: LST_FEE_RECEIVER.to_string(),
             features: args.features,
         })

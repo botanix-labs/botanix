@@ -694,7 +694,7 @@ pub mod btc_server_client {
             ));
             self.inner.unary(req, path, codec).await
         }
-        /// only meant to be used by the cordinator
+        /// only meant to be used by the coordinator
         pub async fn new_round1_signing_package(
             &mut self,
             request: impl tonic::IntoRequest<super::SigningPackage>,

@@ -8,16 +8,16 @@ license = { workspace = true }
 [features]
 default = ["secp256k1"]
 secp256k1 = [
-  "dep:secp256k1",
-  "dep:bitcoincore-rpc",
-  "dep:ethers",
-  "dep:ethabi",
-  "dep:frost-secp256k1-tr",
-  "dep:lazy_static",
-  "dep:botanix-btc-wallet",
-  "dep:botanix-btc-server",
-  "dep:bitcoin",
-  "dep:tracing",
+    "dep:secp256k1",
+    "dep:bitcoincore-rpc",
+    "dep:ethers",
+    "dep:ethabi",
+    "dep:frost-secp256k1-tr",
+    "dep:lazy_static",
+    "dep:botanix-btc-wallet",
+    "dep:botanix-btc-server",
+    "dep:bitcoin",
+    "dep:tracing",
 ]
 
 [dependencies]
