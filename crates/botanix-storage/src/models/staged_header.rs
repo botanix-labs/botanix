@@ -4,8 +4,7 @@ use reth_codecs::{add_arbitrary_tests, Compact};
 use reth_primitives::Header;
 use serde::{Deserialize, Serialize};
 
-// Re-export MultisigId from botanix-types for backwards compatibility
-pub use botanix_types::MultisigId;
+use botanix_types::MultisigId;
 
 /// A header with associated pegins and pegouts.
 ///

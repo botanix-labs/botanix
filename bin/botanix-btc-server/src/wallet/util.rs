@@ -117,8 +117,9 @@ pub fn max_number_of_psbt_inputs(num_outputs: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
     use crate::{
-        database::{version::UtxoVersion, TEST_LEGACY_MULTISIG_ID},
+        database::version::UtxoVersion,
         test_utils::{
             add_dummy_signatures_to_psbt, create_random_pegout_id,
             random_compute_txid, random_p2tr_keyspend_script,

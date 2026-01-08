@@ -5,7 +5,7 @@ use botanix_cli_args::{
 use botanix_configs::federation::{
     load_federation_config_toml, FederationTomlConfig,
 };
-use btcserverlib::database::LEGACY_MULTISIG_ID;
+use botanix_types::LEGACY_MULTISIG_ID;
 use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
 use reth_discv4::NodeRecord;

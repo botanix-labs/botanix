@@ -68,8 +68,7 @@ const TREE_PENDING_PEGOUTS: &[u8; 7] = b"pegouts";
 /// Sliding window duration in seconds (90 days)
 const RETENTION_WINDOW_SECONDS: u64 = 90 * 24 * 60 * 60;
 
-// Re-export MultisigId and constants from botanix-types for backwards compatibility
-pub use botanix_types::{MultisigId, LEGACY_MULTISIG_ID, TEST_LEGACY_MULTISIG_ID, default_multisig_id};
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID, default_multisig_id};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Utxo {

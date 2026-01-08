@@ -31,8 +31,9 @@ use botanix_data_parser::{
     DataParser, Error as DataParserError,
 };
 use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
+use botanix_types::{LEGACY_MULTISIG_ID, MultisigId};
 use btcserverlib::{
-    database::{LEGACY_MULTISIG_ID, MultisigId}, dkg::{DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification}, wallet::psbt::frost_id_from_bytes
+    dkg::{DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification}, wallet::psbt::frost_id_from_bytes
 };
 use futures::{pin_mut, StreamExt};
 use reth_network::{

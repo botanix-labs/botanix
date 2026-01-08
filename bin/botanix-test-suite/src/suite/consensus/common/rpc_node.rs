@@ -13,7 +13,7 @@ use bitcoin::hashes::{sha256, Hash};
 use botanix_configs::federation::{
     FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
 };
-use btcserverlib::database::LEGACY_MULTISIG_ID;
+use botanix_types::LEGACY_MULTISIG_ID;
 use reth_network_peers::pk2id;
 use reth_network_peers::PeerId;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
@@ -190,7 +190,7 @@ impl NonFederationMemberTestConfig {
 
         // Need to create a federation.toml in the data dir
         let multisig_current = MultisigConfig::new(
-            *LEGACY_MULTISIG_ID,
+            LEGACY_MULTISIG_ID,
             self.frost_min_signers,
             self.frost_max_signers,
             edh_authorities,
