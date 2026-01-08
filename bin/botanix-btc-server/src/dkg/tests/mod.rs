@@ -1,8 +1,6 @@
-use botanix_types::LEGACY_MULTISIG_ID;
-use crate::{
-    dkg::{Config, DkgMessage, DkgPayload, DkgStateMachine},
-};
+use crate::dkg::{Config, DkgMessage, DkgPayload, DkgStateMachine};
 use bitcoin::secp256k1;
+use botanix_types::LEGACY_MULTISIG_ID;
 use frost_secp256k1_tr as frost;
 use std::{
     collections::BTreeMap,

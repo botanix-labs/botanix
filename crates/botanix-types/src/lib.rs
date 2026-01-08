@@ -5,5 +5,7 @@
 
 mod multisig_id;
 
-pub use multisig_id::{MultisigId, LEGACY_MULTISIG_ID, TEST_LEGACY_MULTISIG_ID, default_multisig_id};
-
+pub use multisig_id::{
+    default_multisig_id, MultisigId, LEGACY_MULTISIG_ID,
+    TEST_LEGACY_MULTISIG_ID,
+};

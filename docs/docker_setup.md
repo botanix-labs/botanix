@@ -91,9 +91,9 @@ make reset-docker-local
 
 ## Known issues
 
-- This setup is not tested on Windows.
-- You may see `permission denied` errors running `make clean-docker-local` on Ubuntu.
-  Please use `sudo` to remove CometBFT data files.
+-   This setup is not tested on Windows.
+-   You may see `permission denied` errors running `make clean-docker-local` on Ubuntu.
+    Please use `sudo` to remove CometBFT data files.
 
 ## Getting Help
 
@@ -101,9 +101,9 @@ If you have any questions, first see if the answer to your question can be found
 
 If the answer is not there:
 
-- Join the [Telegram](https://botanixlabs.xyz/en/home) to get help, or
-- Open a [discussion](https://github.com/botanix-labs/Macbeth/issues/new) with your question, or
-- Open an issue with [the bug](https://github.com/botanix-labs/Macbeth/issues)
+-   Join the [Telegram](https://botanixlabs.xyz/en/home) to get help, or
+-   Open a [discussion](https://github.com/botanix-labs/Macbeth/issues/new) with your question, or
+-   Open an issue with [the bug](https://github.com/botanix-labs/Macbeth/issues)
 
 ## Security
 

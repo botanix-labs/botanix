@@ -515,8 +515,6 @@ fn utxo_to_bdk(utxo: &Utxo) -> bdk_wallet::WeightedUtxo {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use botanix_types::TEST_LEGACY_MULTISIG_ID;
     use crate::{
         database::Utxo,
         test_utils::{
@@ -526,13 +524,15 @@ mod tests {
         },
         wallet::{
             coin_selection::{
-                CoinSelectionError, MIN_CHANGE_SATS, calculate_target_change
+                calculate_target_change, CoinSelectionError, MIN_CHANGE_SATS,
             },
             util::calculate_signed_tx_fee_rate,
         },
     };
     use bdk_wallet::{coin_selection::InsufficientFunds, psbt::PsbtUtils};
     use bitcoin::{Amount, FeeRate, OutPoint, Psbt, TapSighashType, TxOut};
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
+    use std::collections::HashMap;
 
     use super::coin_selection;
 

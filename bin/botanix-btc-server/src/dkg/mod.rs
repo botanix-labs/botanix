@@ -9,13 +9,13 @@ use frost::keys::{
 use frost_secp256k1_tr::{self as frost, keys::KeyPackage};
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use std::{
     collections::{BTreeMap, VecDeque},
     fmt::Display,
     time::{Duration, Instant},
 };
 use thiserror::Error;
+use uuid::Uuid;
 
 use botanix_types::MultisigId;
 
@@ -190,7 +190,10 @@ impl Display for MigrationNotification {
         write!(
             f,
             "Migration {:?} {{ from: {}, to: {}, id: {} }}",
-            self.event, self.multisig_id_from, self.multisig_id_to, self.migration_id
+            self.event,
+            self.multisig_id_from,
+            self.multisig_id_to,
+            self.migration_id
         )
     }
 }
@@ -199,7 +202,9 @@ impl Display for DynafedSubscriptionMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DynafedSubscriptionMessage::Dkg(dkg) => write!(f, "{}", dkg),
-            DynafedSubscriptionMessage::Migration(migration) => write!(f, "{}", migration),
+            DynafedSubscriptionMessage::Migration(migration) => {
+                write!(f, "{}", migration)
+            }
         }
     }
 }

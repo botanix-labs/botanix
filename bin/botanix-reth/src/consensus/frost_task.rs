@@ -31,9 +31,13 @@ use botanix_data_parser::{
     DataParser, Error as DataParserError,
 };
 use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
-use botanix_types::{LEGACY_MULTISIG_ID, MultisigId};
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use btcserverlib::{
-    dkg::{DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification}, wallet::psbt::frost_id_from_bytes
+    dkg::{
+        DkgNotification, DynafedSubscriptionMessage, MigrationEvent,
+        MigrationNotification,
+    },
+    wallet::psbt::frost_id_from_bytes,
 };
 use futures::{pin_mut, StreamExt};
 use reth_network::{
@@ -54,7 +58,6 @@ use reth_provider::{
 };
 use reth_revm::primitives::FixedBytes;
 use reth_storage_api::NodePrimitivesProvider;
-use uuid::Uuid;
 use std::{
     collections::{BTreeMap, HashMap},
     str::FromStr,
@@ -64,6 +67,7 @@ use std::{
 use tendermint_rpc::client::HttpClient;
 use tokio::sync::mpsc::{self, error::SendError};
 use tracing::{error, info, trace, warn};
+use uuid::Uuid;
 
 // TODO: @rwlock Combine with FrostTaskError?
 #[derive(Debug, thiserror::Error)]
@@ -690,13 +694,13 @@ where
                             }
                         };
 
-                        let migration_id = match Uuid::parse_str(&migration.migration_id) {  
-                            Ok(id) => id,  
-                            Err(e) => {  
+                        let migration_id = match Uuid::parse_str(&migration.migration_id) {
+                            Ok(id) => id,
+                            Err(e) => {
                                 error!(target: "consensus::authority::frost_task::start_task", "Invalid migration UUID: {:?}", e);  
-                                continue;  
-                            }  
-                        }; 
+                                continue;
+                            }
+                        };
 
                         DynafedSubscriptionMessage::Migration(MigrationNotification {
                             event,
@@ -835,7 +839,7 @@ where
 
                                 // Start DKG for the target (new) multisig
                                 info!(target: "consensus::authority::frost_task::start_task", "Starting DKG for migration target multisig {}", notification.multisig_id_to);
-                                
+
                                 let tx = DkgRunnerTask::new(
                                     frost_handle_clone.clone(),
                                     frost_config_clone.authorities.as_ref(),
@@ -869,7 +873,7 @@ where
                                     if let Some(migration) = dkg_migrations.get_mut(&notification.migration_id) {
                                         migration.status = MsigMigrationStatus::FINISHED;
                                         info!(target: "consensus::authority::frost_task::start_task", "Migration {} status updated to FINISHED", notification.migration_id);
-                                        
+
                                         // Clean up the old (source) multisig DKG task if it exists
                                         if let Some(tasks) = self.dkg_tasks.as_mut() {
                                             if tasks.remove(&notification.multisig_id_from).is_some() {
@@ -1330,9 +1334,11 @@ where
 
                     if let Ok(resp) = self
                         .btc_server
-                        .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
-                            multisig_id: *self.multisig_id,
-                        })
+                        .get_public_key(
+                            botanix_btc_server_client::GetPublicKeyRequest {
+                                multisig_id: *self.multisig_id,
+                            },
+                        )
                         .await
                     {
                         self.metrics.created_agg_pub_keys.increment(1);
@@ -1344,10 +1350,17 @@ where
                                 .expect("invalid aggregated public key");
 
                         let mut storage = self.storage.write().await;
-                        if let Some(agg_pks) = storage.aggregate_public_key.as_mut() {
-                            agg_pks.insert(self.multisig_id, public_key_package);
+                        if let Some(agg_pks) =
+                            storage.aggregate_public_key.as_mut()
+                        {
+                            agg_pks
+                                .insert(self.multisig_id, public_key_package);
                         } else {
-                            storage.aggregate_public_key = Some(BTreeMap::from([(self.multisig_id, public_key_package)]));
+                            storage.aggregate_public_key =
+                                Some(BTreeMap::from([(
+                                    self.multisig_id,
+                                    public_key_package,
+                                )]));
                         }
                     }
 

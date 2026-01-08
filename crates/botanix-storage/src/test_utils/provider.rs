@@ -58,16 +58,15 @@ type TestNodeTypes = AnyNodeTypes<
 ///
 /// Each call to this function creates a separate database instance, so
 /// multiple tests can run concurrently without interfering with each other.
-pub fn create_test_provider_factory() -> BotanixProviderFactory<
-    Arc<TempDatabase<DatabaseEnv>>,
-    TestNodeTypes,
-> {
+pub fn create_test_provider_factory(
+) -> BotanixProviderFactory<Arc<TempDatabase<DatabaseEnv>>, TestNodeTypes> {
     let db_path = tempdir_path();
     let mut db = init_db(
         &db_path,
-        DatabaseArguments::new(ClientVersion::default()).with_max_read_transaction_duration(Some(
-            MaxReadTransactionDuration::Unbounded,
-        )),
+        DatabaseArguments::new(ClientVersion::default())
+            .with_max_read_transaction_duration(Some(
+                MaxReadTransactionDuration::Unbounded,
+            )),
     )
     .expect("test db");
     create_botanix_tables(&mut db).expect("botanix tables");
@@ -76,8 +75,9 @@ pub fn create_test_provider_factory() -> BotanixProviderFactory<
     let static_files_dir = db.path().join("static_files");
     std::fs::create_dir_all(&static_files_dir)
         .expect("static files dir for tests");
-    let static_file_provider = StaticFileProvider::read_write(&static_files_dir)
-        .expect("static files provider for tests");
+    let static_file_provider =
+        StaticFileProvider::read_write(&static_files_dir)
+            .expect("static files provider for tests");
     let prune_modes = PruneModes::none();
     let storage = Arc::new(EthStorage::default());
 

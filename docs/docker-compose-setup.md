@@ -9,69 +9,72 @@ Before you begin, ensure you have the following installed on your system:
 ### Required Software
 
 1. **Docker & Docker Compose**
+
     - Docker Engine 20.10+ or Docker Desktop
     - Docker Compose V2 (comes with Docker Desktop)
     - Verify installation:
-      ```bash
-      docker --version
-      docker compose version
-      ```
+        ```bash
+        docker --version
+        docker compose version
+        ```
     - Installation guides:
         - [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
         - [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
         - [Docker Engine for Linux](https://docs.docker.com/engine/install/)
 
 2. **Rust & Cargo**
+
     - Rust 1.70+ (for building Botanix components)
     - Verify installation:
-      ```bash
-      rustc --version
-      cargo --version
-      ```
+        ```bash
+        rustc --version
+        cargo --version
+        ```
     - Install via [rustup](https://rustup.rs/):
-      ```bash
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-      ```
+        ```bash
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+        ```
 
 3. **CometBFT**
+
     - CometBFT v1.0.0+
     - Required for node ID extraction during setup
     - Verify installation:
-      ```bash
-      cometbft version
-      ```
+        ```bash
+        cometbft version
+        ```
     - Installation:
-      ```bash
-      # macOS (via Homebrew)
-      brew install cometbft
- 
-      # Linux (download binary)
-      wget https://github.com/cometbft/cometbft/releases/download/v1.0.1/cometbft_1.0.1_linux_amd64.tar.gz
-      tar -xzf cometbft_1.0.1_linux_amd64.tar.gz
-      sudo mv cometbft /usr/local/bin/
-      ```
 
+        ```bash
+        # macOS (via Homebrew)
+        brew install cometbft
+        
+        # Linux (download binary)
+        wget https://github.com/cometbft/cometbft/releases/download/v1.0.1/cometbft_1.0.1_linux_amd64.tar.gz
+        tar -xzf cometbft_1.0.1_linux_amd64.tar.gz
+        sudo mv cometbft /usr/local/bin/
+        ```
 
 ### System Requirements
 
-- **RAM**: Minimum 8GB (16GB recommended for 3+ nodes)
-- **Disk Space**: At least 10GB free space
-- **CPU**: 4+ cores recommended
-- **OS**: macOS, Linux, or Windows with WSL2
+-   **RAM**: Minimum 8GB (16GB recommended for 3+ nodes)
+-   **Disk Space**: At least 10GB free space
+-   **CPU**: 4+ cores recommended
+-   **OS**: macOS, Linux, or Windows with WSL2
 
 ### Permissions
 
-- Docker must be running and accessible without sudo (add user to `docker` group on Linux)
-- Write permissions in the project directory for config generation
+-   Docker must be running and accessible without sudo (add user to `docker` group on Linux)
+-   Write permissions in the project directory for config generation
 
 ### Network Requirements
 
-- Ports available (default configuration):
-    - `18443`, `38332`, `28332` - Bitcoin Core
-    - `8545-8945` range - POA RPC (100 per node)
-    - `8546-8946` range - POA WebSocket (100 per node)
-    - `8080-8380` range - BTC Server (100 per node)
-    - `26657-26957` range - CometBFT RPC (100 per node)
+-   Ports available (default configuration):
+    -   `18443`, `38332`, `28332` - Bitcoin Core
+    -   `8545-8945` range - POA RPC (100 per node)
+    -   `8546-8946` range - POA WebSocket (100 per node)
+    -   `8080-8380` range - BTC Server (100 per node)
+    -   `26657-26957` range - CometBFT RPC (100 per node)
 
 ## Quick Start
 
@@ -87,10 +90,10 @@ Edit `.env` with your preferred settings:
 
 ```bash
 # Key settings you might want to change
-NUM_NODES=3                    # Number of Federation nodes
-MIN_SIGNERS=2                  # Minimum signers for FROST
-MAX_SIGNERS=3                  # Maximum signers for FROST
-OUTPUT_PATH=docker-local       # Where to generate configs
+NUM_NODES=3              # Number of Federation nodes
+MIN_SIGNERS=2            # Minimum signers for FROST
+MAX_SIGNERS=3            # Maximum signers for FROST
+OUTPUT_PATH=docker-local # Where to generate configs
 ```
 
 ### 2. Start the Environment
@@ -101,10 +104,11 @@ chmod +x botanix-local.sh
 ```
 
 This single command will:
-- Generate all node configurations
-- Create Docker network
-- Start all services (Bitcoin, btc-server, poa, cometbft)
-- Initialize Bitcoin regtest with 1000 blocks
+
+-   Generate all node configurations
+-   Create Docker network
+-   Start all services (Bitcoin, btc-server, poa, cometbft)
+-   Initialize Bitcoin regtest with 1000 blocks
 
 ### 3. Check Status
 
@@ -122,28 +126,28 @@ This single command will:
 
 ### Core Commands
 
-| Command | Description |
-|---------|-------------|
-| `start` | Setup and start all services |
-| `stop` | Stop all running services |
-| `restart` | Restart all services |
-| `clean` | Remove all containers, volumes, and generated config and data files |
+| Command   | Description                                                         |
+| --------- | ------------------------------------------------------------------- |
+| `start`   | Setup and start all services                                        |
+| `stop`    | Stop all running services                                           |
+| `restart` | Restart all services                                                |
+| `clean`   | Remove all containers, volumes, and generated config and data files |
 
 ### Monitoring Commands
 
-| Command | Description |
-|---------|-------------|
-| `services` | Show status of all services |
-| `logs` | Show logs for all services |
+| Command          | Description                                         |
+| ---------------- | --------------------------------------------------- |
+| `services`       | Show status of all services                         |
+| `logs`           | Show logs for all services                          |
 | `logs <service>` | Show logs for specific service (e.g., `logs poa-1`) |
 
 ### Utility Commands
 
-| Command | Description |
-|---------|-------------|
+| Command                | Description                            |
+| ---------------------- | -------------------------------------- |
 | `exec <service> [cmd]` | Execute command in a service container |
-| `bitcoin <args>` | Execute bitcoin-cli commands |
-| `help` | Show help message |
+| `bitcoin <args>`       | Execute bitcoin-cli commands           |
+| `help`                 | Show help message                      |
 
 ## Usage Examples
 
@@ -152,7 +156,7 @@ This single command will:
 ```bash
 # First time setup
 cp .env.example .env
-vim .env  # Customize if needed
+vim .env # Customize if needed
 
 # Start services
 ./botanix-local.sh start
@@ -209,23 +213,24 @@ vim .env  # Customize if needed
 ### Environment Variables (.env)
 
 #### Node Configuration
-- `NUM_NODES`   - Number of federation validator nodes (default: 3)
-- `MIN_SIGNERS` - Minimum signers for FROST multisig (default: 2)
-- `MAX_SIGNERS` - Maximum signers for FROST multisig (default: 3)
+
+-   `NUM_NODES` - Number of federation validator nodes (default: 3)
+-   `MIN_SIGNERS` - Minimum signers for FROST multisig (default: 2)
+-   `MAX_SIGNERS` - Maximum signers for FROST multisig (default: 3)
 
 #### Paths
-- `OUTPUT_PATH` - Output directory for generated files (default: `docker-local`)
-- `CONFIG_PATH` - Path for node configs (default: `docker-local/configs`)
+
+-   `OUTPUT_PATH` - Output directory for generated files (default: `docker-local`)
+-   `CONFIG_PATH` - Path for node configs (default: `docker-local/configs`)
 
 #### Docker
-- `DOCKER_SUBNET` - Docker network subnet (default: `172.22.0.0/16`)
-- `PROJECT_PREFIX` - Prefix for Docker resources (default: `botanix`)
+
+-   `DOCKER_SUBNET` - Docker network subnet (default: `172.22.0.0/16`)
+-   `PROJECT_PREFIX` - Prefix for Docker resources (default: `botanix`)
 
 #### Blockchain
-- `BLOCK_FEE_RECIPIENT_ADDRESS` - Address to receive block fees (default: `0xF27a6Ea4a1d5f7341Da7EDAaa47C5C933b738f4F`)
 
-
-
+-   `BLOCK_FEE_RECIPIENT_ADDRESS` - Address to receive block fees (default: `0xF27a6Ea4a1d5f7341Da7EDAaa47C5C933b738f4F`)
 
 ## System Architecture
 
@@ -274,7 +279,6 @@ docker network ls | grep botanix
 ./botanix-local.sh logs
 ```
 
-
 ### Port conflicts
 
 If you have port conflicts, edit `.env`:
@@ -293,7 +297,6 @@ OUTPUT_PATH=docker-local-alt
 # Manually re-run init
 ./docker-local/init-bitcoin.sh
 ```
-
 
 ### Testing Changes
 
@@ -327,6 +330,7 @@ cat /reth/botanix_testnet/config/federation.toml
 ### Custom Node Count
 
 Edit `.env`:
+
 ```bash
 NUM_NODES=3
 MIN_SIGNERS=2
@@ -334,6 +338,7 @@ MAX_SIGNERS=3
 ```
 
 Then restart:
+
 ```bash
 ./botanix-local clean
 ./botanix-local start
@@ -354,8 +359,6 @@ You can still use the underlying scripts directly:
 docker compose -f docker-local/docker-compose-generated.yml up -d
 ```
 
-
-
 ## Getting Help
 
 ```bash
@@ -371,8 +374,8 @@ docker compose -f docker-local/docker-compose-generated.yml up -d
 
 ## Notes
 
-- All data is stored in `docker-local/` and is gitignored
-- Bitcoin operates in regtest mode (isolated test network)
-- Services are configured to restart automatically unless stopped
-- The first `start` command may take longer as it builds Docker images
-- `.env` file is gitignored - safe for local customization
+-   All data is stored in `docker-local/` and is gitignored
+-   Bitcoin operates in regtest mode (isolated test network)
+-   Services are configured to restart automatically unless stopped
+-   The first `start` command may take longer as it builds Docker images
+-   `.env` file is gitignored - safe for local customization

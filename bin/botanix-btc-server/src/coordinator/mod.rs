@@ -391,8 +391,8 @@ pub async fn finalize_signing(
 mod tests {
     use super::*;
     use crate::{database::Utxo, test_utils::random_compute_txid};
-    use botanix_types::TEST_LEGACY_MULTISIG_ID;
     use bitcoin::{Amount, ScriptBuf, TxOut};
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
 
     #[test]
     fn test_filter_excluded_utxos() {

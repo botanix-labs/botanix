@@ -17,8 +17,8 @@ use botanix_authority_edh::extra_data_header::{
     ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION,
 };
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest, GetSessionIdsRequest,
-    GetSigningStatusRequest, SigningStatus,
+    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest,
+    GetSessionIdsRequest, GetSigningStatusRequest, SigningStatus,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_configs::federation::{
@@ -320,10 +320,12 @@ impl FederationMemberTestConfig {
         federation_config
             .write_to_path(&federation_config_path)
             .context("Error writing federation config to path")?;
-        let federation_config_contents = std::fs::read_to_string(&federation_config_path)
-            .context("failed to read federation config for hashing")?;
+        let federation_config_contents =
+            std::fs::read_to_string(&federation_config_path)
+                .context("failed to read federation config for hashing")?;
         let federation_config_hash =
-            sha256::Hash::hash(federation_config_contents.as_bytes()).to_string();
+            sha256::Hash::hash(federation_config_contents.as_bytes())
+                .to_string();
 
         // point to the relevant working directory
         let mut working_directory = std::env::current_dir()
@@ -557,9 +559,12 @@ impl FederationMemberTestConfig {
 
             // wait for the dkg to finish
             let pub_key = loop {
-                match btc_server_client.get_public_key(GetPublicKeyRequest {
-                    multisig_id: *LEGACY_MULTISIG_ID,
-                }).await {
+                match btc_server_client
+                    .get_public_key(GetPublicKeyRequest {
+                        multisig_id: *LEGACY_MULTISIG_ID,
+                    })
+                    .await
+                {
                     Ok(pub_key) => {
                         it_info_print!("Dkg Finished for index", engine_index);
                         break pub_key;

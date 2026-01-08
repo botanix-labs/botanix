@@ -21,39 +21,35 @@ jemalloc = ["dep:tikv-jemallocator"]
 dev = ["reth-cli-commands/arbitrary", "reth/dev", "revm/dev"]
 
 asm-keccak = [
-  "reth-node-core/asm-keccak",
-  "reth-primitives/asm-keccak",
-  "reth-node-ethereum/asm-keccak",
+    "reth-node-core/asm-keccak",
+    "reth-primitives/asm-keccak",
+    "reth-node-ethereum/asm-keccak",
 ]
 
 serde = [
-  "alloy-chains/serde",
-  "alloy-consensus/serde",
-  "alloy-eips/serde",
-  "alloy-primitives/serde",
-  "alloy-rpc-types-engine/serde",
-  "alloy-rpc-types-eth/serde",
-  "bytes/serde",
-  "parking_lot/serde",
-  "reth-eth-wire/serde",
-  "reth-eth-wire-types/serde",
-  "reth-ethereum-forks/serde",
-  "reth-ethereum-primitives/serde",
-  "reth-network/serde",
-  "reth-network-api/serde",
-  "reth-primitives-traits/serde",
-  "reth-revm/serde",
-  "reth-trie-common/serde",
-  "reth-trie-db/serde",
-  "revm/serde",
-  "secp256k1/serde",
+    "alloy-chains/serde",
+    "alloy-consensus/serde",
+    "alloy-eips/serde",
+    "alloy-primitives/serde",
+    "alloy-rpc-types-engine/serde",
+    "alloy-rpc-types-eth/serde",
+    "bytes/serde",
+    "parking_lot/serde",
+    "reth-eth-wire/serde",
+    "reth-eth-wire-types/serde",
+    "reth-ethereum-forks/serde",
+    "reth-ethereum-primitives/serde",
+    "reth-network/serde",
+    "reth-network-api/serde",
+    "reth-primitives-traits/serde",
+    "reth-revm/serde",
+    "reth-trie-common/serde",
+    "reth-trie-db/serde",
+    "revm/serde",
+    "secp256k1/serde",
 ]
 
-client = [
-  "jsonrpsee/client",
-  "jsonrpsee/async-client",
-  "reth-rpc-eth-api/client",
-]
+client = ["jsonrpsee/client", "jsonrpsee/async-client", "reth-rpc-eth-api/client"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -115,8 +111,8 @@ botanix-rpc-types.workspace = true
 # Botanix dependencies
 botanix-btc-server.workspace = true
 botanix-storage.workspace = true
-botanix-types.workspace = true
 botanix-storage-migrate.workspace = true
+botanix-types.workspace = true
 botanix-utils.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
@@ -169,12 +165,12 @@ reth-engine-primitives.workspace = true
 reth-eth-wire.workspace = true
 reth-eth-wire-types.workspace = true
 reth-ethereum = { workspace = true, features = [
-  "test-utils",
-  "node",
-  "provider",
-  "pool",
-  "network",
-  "rpc",
+    "test-utils",
+    "node",
+    "provider",
+    "pool",
+    "network",
+    "rpc",
 ] }
 reth-ethereum-consensus = { workspace = true }
 reth-ethereum-forks.workspace = true
@@ -198,8 +194,8 @@ reth-payload-primitives.workspace = true
 reth-primitives.workspace = true
 reth-primitives-traits.workspace = true
 reth-provider.workspace = true
-reth-prune-types = { workspace = true }
 reth-prune = { workspace = true }
+reth-prune-types = { workspace = true }
 reth-revm.workspace = true
 reth-rpc-engine-api.workspace = true
 reth-rpc-eth-api.workspace = true
