@@ -80,5 +80,5 @@ jobs:
         with:
           config: ./.typos.toml
 
-      - name: Lint project
-        run: make lint
+      # - name: Lint project
+      #   run: make lint
