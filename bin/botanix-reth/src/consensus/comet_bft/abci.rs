@@ -1693,7 +1693,7 @@ where
             max_tx_bytes: Some(max_tx_bytes),
         };
 
-        // TODO: is default config ok here?
+        // Note: this sets the block gas limit to 30 million
         let builder_config = EthereumBuilderConfig::default();
 
         match default_ethereum_payload(
@@ -2351,17 +2351,15 @@ where
 
                 // get non-deterministic data
                 let txs_bytes = request.txs.clone();
-                let non_deterministic_data_bytes = match txs_bytes
-                    .clone()
-                    .first()
-                {
-                    Some(tx) => tx.clone(),
-                    None => {
-                        panic!(
+                let non_deterministic_data_bytes =
+                    match txs_bytes.clone().first() {
+                        Some(tx) => tx.clone(),
+                        None => {
+                            panic!(
                             "No non-deterministic tx in finalize block request"
                         );
-                    }
-                };
+                        }
+                    };
                 let reader_inner: Vec<u8> = vec![non_deterministic_data_bytes]
                     .into_iter()
                     .flatten()

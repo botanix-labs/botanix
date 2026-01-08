@@ -25,6 +25,7 @@ use reth_consensus_common::validation::{
     validate_body_against_header, validate_header_base_fee,
     validate_header_gas,
 };
+use reth_ethereum_consensus::validate_block_post_execution;
 use reth_primitives::{
     GotExpected, Receipt, RecoveredBlock, SealedBlock, SealedHeader,
 };
@@ -406,13 +407,20 @@ impl Consensus<BotanixBlock> for BotanixConsensus<BotanixChainSpec> {
 }
 
 impl FullConsensus<BotanixPrimitives> for BotanixConsensus<BotanixChainSpec> {
+    // Currently not being used. For Botanix purposes, this effectively
+    // `Compares the gas used in the block header to the actual gas usage after execution.`
+    // Since the gas used is taken after block execution and added to the header, this check is not needed.
     fn validate_block_post_execution(
         &self,
-        _block: &RecoveredBlock<BotanixBlock>,
-        _result: &BlockExecutionResult<Receipt>,
+        block: &RecoveredBlock<BotanixBlock>,
+        result: &BlockExecutionResult<Receipt>,
     ) -> Result<(), RethConsensusError> {
-        // TODO: implement post-execution validation
-        Ok(())
+        validate_block_post_execution(
+            block,
+            &self.chain_spec.inner(),
+            &result.receipts,
+            &result.requests,
+        )
     }
 }
 

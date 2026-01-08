@@ -1,4 +1,4 @@
-name: Docker Build Test 
+name: Docker Build Test
 
 on:
   pull_request:
@@ -6,7 +6,8 @@ on:
       - develop
       - hotfix
       - main
-    types: [opened]
+    types:
+      - opened
 
 jobs:
   build_btc_server:
@@ -32,7 +33,6 @@ jobs:
             --build-arg BIN=botanix-btc-server \
             .
         working-directory: ./
-
 
   build_reth_node:
     runs-on: ubuntu-latest

@@ -20,7 +20,7 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@v1
 
-      - name: Build contract 
+      - name: Build contract
         working-directory: ./contracts
         run: forge build --sizes
 
@@ -30,7 +30,8 @@ jobs:
           echo "## Build result" >> $GITHUB_STEP_SUMMARY
           echo "✅ Passed" >> $GITHUB_STEP_SUMMARY
   contract-test:
-    needs: ["contract-build"]
+    needs:
+      - "contract-build"
     runs-on: "ubuntu-latest"
     env:
       MINTING_CONTRACT_ADDRESS: "0x0Ea320990B44236A0cEd0ecC0Fd2b2df33071e78"
@@ -57,9 +58,9 @@ jobs:
       - name: "Run the mint tests"
         working-directory: "./contracts"
         run: |
-            forge test --match-contract Minting -vvv
+          forge test --match-contract Minting -vvv
       - name: "Add test summary"
         working-directory: "./contracts"
-        run: |
+        run: |-
           echo "## Tests result" >> $GITHUB_STEP_SUMMARY
           echo "✅ Passed" >> $GITHUB_STEP_SUMMARY

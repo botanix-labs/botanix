@@ -9,7 +9,6 @@ Before you begin, ensure you have the following installed on your system:
 ### Required Software
 
 1. **Docker & Docker Compose**
-
     - Docker Engine 20.10+ or Docker Desktop
     - Docker Compose V2 (comes with Docker Desktop)
     - Verify installation:
@@ -23,7 +22,6 @@ Before you begin, ensure you have the following installed on your system:
         - [Docker Engine for Linux](https://docs.docker.com/engine/install/)
 
 2. **Rust & Cargo**
-
     - Rust 1.70+ (for building Botanix components)
     - Verify installation:
         ```bash
@@ -36,7 +34,6 @@ Before you begin, ensure you have the following installed on your system:
         ```
 
 3. **CometBFT**
-
     - CometBFT v1.0.0+
     - Required for node ID extraction during setup
     - Verify installation:
@@ -57,24 +54,24 @@ Before you begin, ensure you have the following installed on your system:
 
 ### System Requirements
 
--   **RAM**: Minimum 8GB (16GB recommended for 3+ nodes)
--   **Disk Space**: At least 10GB free space
--   **CPU**: 4+ cores recommended
--   **OS**: macOS, Linux, or Windows with WSL2
+- **RAM**: Minimum 8GB (16GB recommended for 3+ nodes)
+- **Disk Space**: At least 10GB free space
+- **CPU**: 4+ cores recommended
+- **OS**: macOS, Linux, or Windows with WSL2
 
 ### Permissions
 
--   Docker must be running and accessible without sudo (add user to `docker` group on Linux)
--   Write permissions in the project directory for config generation
+- Docker must be running and accessible without sudo (add user to `docker` group on Linux)
+- Write permissions in the project directory for config generation
 
 ### Network Requirements
 
--   Ports available (default configuration):
-    -   `18443`, `38332`, `28332` - Bitcoin Core
-    -   `8545-8945` range - POA RPC (100 per node)
-    -   `8546-8946` range - POA WebSocket (100 per node)
-    -   `8080-8380` range - BTC Server (100 per node)
-    -   `26657-26957` range - CometBFT RPC (100 per node)
+- Ports available (default configuration):
+    - `18443`, `38332`, `28332` - Bitcoin Core
+    - `8545-8945` range - POA RPC (100 per node)
+    - `8546-8946` range - POA WebSocket (100 per node)
+    - `8080-8380` range - BTC Server (100 per node)
+    - `26657-26957` range - CometBFT RPC (100 per node)
 
 ## Quick Start
 
@@ -105,10 +102,10 @@ chmod +x botanix-local.sh
 
 This single command will:
 
--   Generate all node configurations
--   Create Docker network
--   Start all services (Bitcoin, btc-server, poa, cometbft)
--   Initialize Bitcoin regtest with 1000 blocks
+- Generate all node configurations
+- Create Docker network
+- Start all services (Bitcoin, btc-server, poa, cometbft)
+- Initialize Bitcoin regtest with 1000 blocks
 
 ### 3. Check Status
 
@@ -214,23 +211,23 @@ vim .env # Customize if needed
 
 #### Node Configuration
 
--   `NUM_NODES` - Number of federation validator nodes (default: 3)
--   `MIN_SIGNERS` - Minimum signers for FROST multisig (default: 2)
--   `MAX_SIGNERS` - Maximum signers for FROST multisig (default: 3)
+- `NUM_NODES` - Number of federation validator nodes (default: 3)
+- `MIN_SIGNERS` - Minimum signers for FROST multisig (default: 2)
+- `MAX_SIGNERS` - Maximum signers for FROST multisig (default: 3)
 
 #### Paths
 
--   `OUTPUT_PATH` - Output directory for generated files (default: `docker-local`)
--   `CONFIG_PATH` - Path for node configs (default: `docker-local/configs`)
+- `OUTPUT_PATH` - Output directory for generated files (default: `docker-local`)
+- `CONFIG_PATH` - Path for node configs (default: `docker-local/configs`)
 
 #### Docker
 
--   `DOCKER_SUBNET` - Docker network subnet (default: `172.22.0.0/16`)
--   `PROJECT_PREFIX` - Prefix for Docker resources (default: `botanix`)
+- `DOCKER_SUBNET` - Docker network subnet (default: `172.22.0.0/16`)
+- `PROJECT_PREFIX` - Prefix for Docker resources (default: `botanix`)
 
 #### Blockchain
 
--   `BLOCK_FEE_RECIPIENT_ADDRESS` - Address to receive block fees (default: `0xF27a6Ea4a1d5f7341Da7EDAaa47C5C933b738f4F`)
+- `BLOCK_FEE_RECIPIENT_ADDRESS` - Address to receive block fees (default: `0xF27a6Ea4a1d5f7341Da7EDAaa47C5C933b738f4F`)
 
 ## System Architecture
 
@@ -374,8 +371,8 @@ docker compose -f docker-local/docker-compose-generated.yml up -d
 
 ## Notes
 
--   All data is stored in `docker-local/` and is gitignored
--   Bitcoin operates in regtest mode (isolated test network)
--   Services are configured to restart automatically unless stopped
--   The first `start` command may take longer as it builds Docker images
--   `.env` file is gitignored - safe for local customization
+- All data is stored in `docker-local/` and is gitignored
+- Bitcoin operates in regtest mode (isolated test network)
+- Services are configured to restart automatically unless stopped
+- The first `start` command may take longer as it builds Docker images
+- `.env` file is gitignored - safe for local customization

@@ -12,9 +12,9 @@ This project aims to bring Reth's high-performance Ethereum client capabilities 
 
 ## Current Status
 
--   Historical Sync ✅
--   Pectra Support ✅
--   Live Sync ✅
+- Historical Sync ✅
+- Pectra Support ✅
+- Live Sync ✅
 
 ## Getting Started
 
