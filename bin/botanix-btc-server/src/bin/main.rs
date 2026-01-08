@@ -20,11 +20,12 @@ use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
 use botanix_configs::hash::verify_config_hash;
 use btc_server::btc_server_server::{BtcServer, BtcServerServer};
+use botanix_types::MultisigId;
 use btcserverlib::{
     badarg,
     config::{Config, Error as ConfigError, GrpcConfig, TomlConfig},
     coordinator::{self},
-    database::{self, MultisigId},
+    database::{self},
     dkg::{self, DkgNotification, DynafedSubscriptionMessage, MigrationEvent, MigrationNotification},
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -537,9 +538,9 @@ where
             ))
         })?;
 
-        let active_multisig_id = database::LEGACY_MULTISIG_ID;
+        let active_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
         let active_multisig = federation
-            .get_config_by_multisig_id(*active_multisig_id)
+            .get_config_by_multisig_id(active_multisig_id)
             .ok_or_else(|| {
                 dkg::Error::BadConfig(format!(
                     "missing multisig id {}",
@@ -678,7 +679,7 @@ where
 
         // Iterate through all multisig configurations
         for multisig_config in &federation.multisig {
-            let multisig_id = MultisigId::new(multisig_config.multisig_id);
+            let multisig_id = multisig_config.multisig_id;
             
             // Check if this node is a member of this multisig
             let is_member = multisig_config
@@ -3262,8 +3263,9 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use bitcoin::{secp256k1, OutPoint, Script, Txid};
     use botanix_configs::hash::compute_config_hash;
+    use botanix_types::LEGACY_MULTISIG_ID;
     use btcserverlib::{
-        database::LEGACY_MULTISIG_ID, dkg::DkgMessage, test_utils::pegout_requests_from_tx, wallet::address::generate_taproot_change_scriptpubkey
+        dkg::DkgMessage, test_utils::pegout_requests_from_tx, wallet::address::generate_taproot_change_scriptpubkey
     };
     use frost_secp256k1_tr::keys::dkg::round1;
     use rand::{thread_rng, Rng};

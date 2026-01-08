@@ -1,5 +1,5 @@
+use botanix_types::LEGACY_MULTISIG_ID;
 use crate::{
-    database::LEGACY_MULTISIG_ID,
     dkg::{Config, DkgMessage, DkgPayload, DkgStateMachine},
 };
 use bitcoin::secp256k1;

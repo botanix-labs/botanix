@@ -390,7 +390,8 @@ pub async fn finalize_signing(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{database::{MultisigId, Utxo}, test_utils::random_compute_txid};
+    use crate::{database::Utxo, test_utils::random_compute_txid};
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
     use bitcoin::{Amount, ScriptBuf, TxOut};
 
     #[test]
@@ -400,7 +401,7 @@ mod tests {
         let outpoint_to_filter = OutPoint::new(random_compute_txid(), 0);
         let eth_address = [0x12u8; 20]; // Simple test address
 
-        let multisig_id = MultisigId::new(1);
+        let multisig_id = TEST_LEGACY_MULTISIG_ID;
         let utxo_to_filter = Utxo::new(
             outpoint_to_filter,
             TxOut {

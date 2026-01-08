@@ -6,7 +6,7 @@ use crate::comet_node::{get_enode, TestSignal};
 use alloy_primitives::Address;
 use anyhow::{Context, Result as AnyResult};
 use botanix_configs::federation::{FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig};
-use btcserverlib::database::LEGACY_MULTISIG_ID;
+use botanix_types::LEGACY_MULTISIG_ID;
 use botanix_test_suite::suite::consensus::common::{
     comet_node::{self, updated_genesis_file, GenesisValidator, PrivValidator},
     poa_node::{ABCI_PORT_BASE, DISCOVERY_PORT_BASE},
@@ -307,7 +307,7 @@ fn create_federation_config(
         .collect::<Vec<_>>();
 
     let multisig_config = MultisigConfig {
-        multisig_id: LEGACY_MULTISIG_ID.as_u32(),
+        multisig_id: LEGACY_MULTISIG_ID,
         min_signers: 2,
         max_signers: Some(fed_pks.len() as u16),
         federation_member_public_key: fed_pks,

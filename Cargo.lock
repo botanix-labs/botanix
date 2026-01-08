@@ -2600,6 +2600,7 @@ dependencies = [
  "botanix-btc-server-client",
  "botanix-configs",
  "botanix-fs-util",
+ "botanix-types",
  "chacha20poly1305",
  "ciborium",
  "clap",
@@ -2810,6 +2811,7 @@ dependencies = [
  "alloy-primitives",
  "askama",
  "bitcoin 0.32.7",
+ "botanix-types",
  "displaydoc",
  "eyre",
  "reth-chainspec",
@@ -2853,6 +2855,7 @@ dependencies = [
  "bitcoin 0.32.7",
  "botanix-btc-server",
  "botanix-btc-server-client",
+ "botanix-types",
  "bytes 1.10.1",
  "displaydoc",
  "lazy_static",
@@ -2944,6 +2947,7 @@ dependencies = [
  "bitcoincore-rpc",
  "botanix-btc-server",
  "botanix-pegin-recovery-client",
+ "botanix-types",
  "chacha20poly1305",
  "ciborium",
  "clap",
@@ -3062,6 +3066,7 @@ dependencies = [
  "botanix-rpc-types",
  "botanix-storage",
  "botanix-storage-migrate",
+ "botanix-types",
  "botanix-utils",
  "bytes 1.10.1",
  "cfg-if 1.0.1",
@@ -3239,6 +3244,7 @@ dependencies = [
  "arbitrary",
  "auto_impl",
  "botanix-primitives",
+ "botanix-types",
  "bytes 1.10.1",
  "eyre",
  "itertools 0.10.5",
@@ -3316,6 +3322,7 @@ dependencies = [
  "botanix-pegin-recovery-client",
  "botanix-reth",
  "botanix-storage",
+ "botanix-types",
  "bytes 1.10.1",
  "ciborium",
  "clap",
@@ -3359,6 +3366,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "botanix-types"
+version = "1.5.4"
+dependencies = [
+ "arbitrary",
+ "bytes 1.10.1",
+ "reth-codecs",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "botanix-up"
 version = "1.5.4"
 dependencies = [
@@ -3368,6 +3386,7 @@ dependencies = [
  "botanix-cli-args",
  "botanix-configs",
  "botanix-test-suite",
+ "botanix-types",
  "clap",
  "hex 0.4.3",
  "rand 0.8.5",

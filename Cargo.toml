@@ -31,6 +31,7 @@ members = [
   "crates/botanix-rpc-types",
   "crates/botanix-storage",
   "crates/botanix-storage-migrate",
+  "crates/botanix-types",
   "crates/botanix-utils",
 ]
 default-members = ["bin/botanix-reth"]
@@ -192,6 +193,7 @@ botanix-pegin-recovery = { path = "bin/botanix-pegin-recovery" }
 botanix-pegin-recovery-client = { path = "bin/botanix-pegin-recovery/client" }
 botanix-primitives = { path = "crates/botanix-primitives" }
 botanix-reth = { path = "bin/botanix-reth" }
+botanix-types = { path = "crates/botanix-types" }
 botanix-rpc-client = { path = "crates/botanix-rpc-client" }
 botanix-rpc-config = { path = "crates/botanix-rpc-config" }
 botanix-rpc-types = { path = "crates/botanix-rpc-types" }

@@ -34,7 +34,7 @@ use botanix_storage::{
     StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
     WalletStateSyncWriter,
 };
-use btcserverlib::database::MultisigId;
+use botanix_types::MultisigId;
 use futures::{pin_mut, StreamExt};
 use reth_db::DatabaseEnv;
 use reth_network::{

@@ -23,8 +23,8 @@ use botanix_btc_server_client::{
     ScriptBuf, SigningPackage, TxOut, Utxo,
 };
 use botanix_storage::models;
+use botanix_types::MultisigId;
 use btcserverlib::{
-    database::MultisigId,
     pegout_id::PegoutId,
     wallet::psbt::{PsbtExt, PsbtOutputExt},
 };
@@ -990,8 +990,9 @@ mod tests {
         peg_contract::{PeginMeta, PegoutData, PegoutWithId},
     };
     use botanix_btc_server_client::{OutPoint, ScriptBuf, TxOut, Utxo};
+    use botanix_types::{MultisigId, TEST_LEGACY_MULTISIG_ID};
     use btcserverlib::{
-        database::{LEGACY_MULTISIG_ID, MultisigId}, pegout_id::PegoutId, test_utils::random_p2wpkh_script, wallet::psbt::{PsbtExt, PsbtOutputExt}
+        pegout_id::PegoutId, test_utils::random_p2wpkh_script, wallet::psbt::{PsbtExt, PsbtOutputExt}
     };
     use rand::{thread_rng, Rng, RngCore};
     use reth_primitives::Header;
@@ -2104,7 +2105,7 @@ String::from("60806040526004361061003f5760003560e01c80635fe03f45146100445780636f
         let (p1, _) = PeginMeta::deserialize(SAMPLE_PEGIN_DATA_1).unwrap();
         let (p2, _) = PeginMeta::deserialize(SAMPLE_PEGIN_DATA_2).unwrap();
 
-        let aggregate_public_keys: BTreeMap<MultisigId, secp256k1::PublicKey> = BTreeMap::from_iter([(LEGACY_MULTISIG_ID, p1.aggregate_publickey())]);
+        let aggregate_public_keys: BTreeMap<MultisigId, secp256k1::PublicKey> = BTreeMap::from_iter([(TEST_LEGACY_MULTISIG_ID, p1.aggregate_publickey())]);
 
         let pegins = vec![p1, p2];
 

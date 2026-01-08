@@ -17,7 +17,7 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::database::MultisigId;
+use botanix_types::MultisigId;
 
 mod encryption;
 #[cfg(test)]

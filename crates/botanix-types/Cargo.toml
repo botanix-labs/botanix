@@ -1,0 +1,32 @@
+[package]
+name = "botanix-types"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+description = "Shared primitive types for Botanix blockchain"
+
+[features]
+default = []
+compact = ["dep:reth-codecs", "dep:bytes"]
+arbitrary = ["dep:arbitrary"]
+
+[dependencies]
+# Always required
+serde = { workspace = true, features = ["derive"] }
+
+# Optional for compact encoding (storage)
+bytes = { workspace = true, optional = true }
+reth-codecs = { workspace = true, optional = true }
+
+# Optional for testing
+arbitrary = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
+
