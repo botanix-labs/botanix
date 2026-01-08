@@ -128,7 +128,7 @@ impl UpgradeTestFixture {
 
         let manager = ActivationManagerBuilder::new(db, ACTIVE_VERSION)
             .vote_retention_period(self.vote_retention_period)
-            .build_ignore_nework_upgrade();
+            .build_ignore_network_upgrade();
 
         self.managers[validator] = Some(manager);
         self.expected_votes[validator] = None;

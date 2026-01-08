@@ -748,7 +748,7 @@ where
 
         // If the proposer provided an explicit vote, we check whether the
         // version matches our upgrade version. If the version is mismatched or
-        // if no vote is provided at all, then we implicilty mark the vote as
+        // if no vote is provided at all, then we implicitly mark the vote as
         // abstained.
         let vote = if let Some(vote) = vote {
             if vote.version == upgrade.version {

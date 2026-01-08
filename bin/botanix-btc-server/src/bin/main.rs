@@ -451,10 +451,10 @@ where
 
         // Prepare our secret key.
         let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
-        let sanitzed_key =
+        let sanitized_key =
             raw.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>();
         let secret_key =
-            sanitzed_key.as_str().parse::<secp256k1::SecretKey>().map_err(
+            sanitized_key.as_str().parse::<secp256k1::SecretKey>().map_err(
                 |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
             )?;
 
@@ -964,12 +964,12 @@ where
         self.db.flush().to_status()?;
         info!("stored pegouts.len(): {:?}", pegouts.len());
         if let Some(telemetry) = self.telemetry.as_ref() {
-            let current_peding_pegouts =
+            let current_pending_pegouts =
                 self.db.get_pending_pegouts().to_status()?;
             telemetry.set_pending_pegouts(
                 self.btc_network,
                 self.config.identifier,
-                current_peding_pegouts.len() as i64,
+                current_pending_pegouts.len() as i64,
             );
         }
 
@@ -1489,12 +1489,12 @@ where
 
         // set the telemetry for pending pegout
         if let Some(telemetry) = self.telemetry.as_ref() {
-            let current_peding_pegouts =
+            let current_pending_pegouts =
                 self.db.get_pending_pegouts().to_status()?;
             telemetry.set_pending_pegouts(
                 self.btc_network,
                 self.config.identifier,
-                current_peding_pegouts.len() as i64,
+                current_pending_pegouts.len() as i64,
             );
         }
 
@@ -1609,12 +1609,12 @@ where
                 self.config.identifier,
                 pegout_ids.len() as u64,
             );
-            let current_peding_pegouts =
+            let current_pending_pegouts =
                 self.db.get_pending_pegouts().to_status()?;
             telemetry.set_pending_pegouts(
                 self.btc_network,
                 self.config.identifier,
-                current_peding_pegouts.len() as i64,
+                current_pending_pegouts.len() as i64,
             );
         }
         self.db.flush().to_status()?;

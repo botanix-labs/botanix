@@ -428,7 +428,7 @@ pub mod btc_server_server {
             &self,
             request: tonic::Request<super::Empty>,
         ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
-        /// only meant to be used by the cordinator
+        /// only meant to be used by the coordinator
         async fn new_round1_signing_package(
             &self,
             request: tonic::Request<super::SigningPackage>,

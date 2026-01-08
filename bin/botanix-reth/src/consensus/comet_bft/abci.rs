@@ -138,7 +138,7 @@ use crate::consensus::{
         ResponseLoadSnapshotChunkTruncatedDebug,
         ResponsePrepareProposalTruncatedDebug,
     },
-    excecution_utils::authority_execution_utils::build_and_execute,
+    execution_utils::authority_execution_utils::build_and_execute,
     snapshot_manager::{SnapshotManagerError, SnapshotManagerStateLock},
     utils::{
         get_staged_pegins_from_pegin_meta, get_staged_pegouts_from_pegout_data,
@@ -1756,7 +1756,7 @@ where
 
                         txs.insert(0, non_deterministic_data_bytes);
 
-                        self.metrics.commet_prepared_proposals.increment(1);
+                        self.metrics.comet_prepared_proposals.increment(1);
 
                         let txs_len = txs.len();
 
@@ -2217,7 +2217,7 @@ where
                             .cache
                             .insert(cbft_block_hash, block_with_context);
 
-                        self.metrics.commet_processed_proposals.increment(1);
+                        self.metrics.comet_processed_proposals.increment(1);
 
                         if tracing::enabled!(tracing::Level::INFO) {
                             let execution_time =
@@ -2632,7 +2632,7 @@ where
 
         let block_hash =
             block_with_context.sealed_block_with_peg.block().hash();
-        self.metrics.commet_finalized_blocks.increment(1);
+        self.metrics.comet_finalized_blocks.increment(1);
 
         let execution_time = std::time::Instant::now().elapsed().as_secs_f32();
 
@@ -2734,7 +2734,7 @@ where
             execution_time,
         );
 
-        self.metrics.commet_committed_blocks.increment(1);
+        self.metrics.comet_committed_blocks.increment(1);
 
         ResponseCommit::default()
     }
@@ -3222,7 +3222,7 @@ mod tests {
             VoteWatcher::default(),
             RUNTIME_VERSION_V1,
         )
-        .build_ignore_nework_upgrade();
+        .build_ignore_network_upgrade();
 
         let bitcoin_checkpoints_chain =
             BitcoinCheckpointsChain::try_new(1, 0, 0)

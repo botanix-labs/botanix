@@ -15,7 +15,7 @@ mod builder;
 
 /// Comet BFT abci and consensus driver
 pub mod comet_bft;
-mod excecution_utils;
+mod execution_utils;
 mod frost_task;
 mod signing;
 pub mod snapshot_manager;

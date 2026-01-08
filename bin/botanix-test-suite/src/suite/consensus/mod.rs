@@ -203,7 +203,7 @@ impl LocalContext {
     }
 
     pub fn get_poa_processes_discovery_ports(&self) -> Vec<u16> {
-        let disovery_ports = self
+        let discovery_ports = self
             .poa_processes
             .as_ref()
             .map(|poa_processes| {
@@ -214,7 +214,7 @@ impl LocalContext {
             })
             .unwrap_or_default();
 
-        let hs: HashSet<u16> = HashSet::from_iter(disovery_ports);
+        let hs: HashSet<u16> = HashSet::from_iter(discovery_ports);
         hs.into_iter().collect()
     }
 
@@ -292,7 +292,7 @@ impl LocalContext {
     }
 
     pub fn get_rpc_processes_discovery_ports(&self) -> Vec<u16> {
-        let disovery_ports = self
+        let discovery_ports = self
             .rpc_processes
             .as_ref()
             .map(|rpc_processes| {
@@ -303,7 +303,7 @@ impl LocalContext {
             })
             .unwrap_or_default();
 
-        let hs: HashSet<u16> = HashSet::from_iter(disovery_ports);
+        let hs: HashSet<u16> = HashSet::from_iter(discovery_ports);
         hs.into_iter().collect()
     }
 

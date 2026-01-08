@@ -43,8 +43,8 @@ contract Minting {
         require(txCost <= amount, "Tx cost exceeds pegin amount");
         amount -= txCost;
 
-        (bool succeesMint, ) = payable(destination).call{value: amount}("");
-        require(succeesMint, "Mint to destination failed");
+        (bool successMint, ) = payable(destination).call{value: amount}("");
+        require(successMint, "Mint to destination failed");
 
         (bool successRefund, ) = payable(refundAddress).call{value: txCost}("");
         require(successRefund, "Refund to refundAddress failed");
