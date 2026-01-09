@@ -2100,7 +2100,11 @@ where
                 secp_pk_serialized,
             );
 
-        info!("make_tx: creating psbt with {} outputs", outputs.len());
+        // TODO: During migration, this should be determined by the migration state.
+        // For now, we use LEGACY_MULTISIG_ID for backwards compatibility.
+        let active_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+
+        info!("make_tx: creating psbt with {} outputs (multisig_id={})", outputs.len(), active_multisig_id);
         let psbt = match coordinator::make_tx(
             outputs,
             fee_rate,
@@ -2109,6 +2113,7 @@ where
             self.min_signers,
             tracked_txs,
             &self.config,
+            active_multisig_id,
         )
         .to_status()
         {
