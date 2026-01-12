@@ -135,7 +135,7 @@ cmd_clean() {
 
     if [ -f "$COMPOSE_FILE" ]; then
         log_info "Stopping services..."
-        docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
+        docker compose -f "$COMPOSE_FILE" down -v 2> /dev/null || true
     fi
 
     if [ -d "$OUTPUT_PATH" ]; then
@@ -156,7 +156,7 @@ cmd_clean() {
     NETWORK_NAME="${PROJECT_PREFIX}-local"
     if docker network inspect "$NETWORK_NAME" > /dev/null 2>&1; then
         log_info "Removing docker network: $NETWORK_NAME..."
-        docker network rm "$NETWORK_NAME" 2>/dev/null || true
+        docker network rm "$NETWORK_NAME" 2> /dev/null || true
     fi
 
     log_success "Cleanup complete"
@@ -296,7 +296,7 @@ main() {
         clean)
             cmd_clean
             ;;
-        services|status|ps)
+        services | status | ps)
             cmd_services
             ;;
         logs)
@@ -307,11 +307,11 @@ main() {
             shift
             cmd_exec "$@"
             ;;
-        bitcoin|btc)
+        bitcoin | btc)
             shift
             cmd_bitcoin "$@"
             ;;
-        help|--help|-h)
+        help | --help | -h)
             cmd_help
             ;;
         *)

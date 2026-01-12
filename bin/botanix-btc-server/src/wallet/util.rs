@@ -117,7 +117,6 @@ pub fn max_number_of_psbt_inputs(num_outputs: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use botanix_types::TEST_LEGACY_MULTISIG_ID;
     use crate::{
         database::version::UtxoVersion,
         test_utils::{
@@ -130,6 +129,7 @@ mod tests {
             MAX_BITCOIN_TX_WEIGHT,
         },
     };
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
 
     use bitcoin::{Amount, OutPoint, TapSighashType, TxOut};
 

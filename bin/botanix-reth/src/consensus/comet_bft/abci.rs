@@ -6,13 +6,13 @@ use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
+use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use botanix_storage::models::RuntimeVersion;
-use botanix_types::{LEGACY_MULTISIG_ID, MultisigId};
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
 use reth_db::DatabaseEnv;
-use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_types::Block;
@@ -20,7 +20,10 @@ use reth_primitives_traits::Block as BlockTrait;
 use reth_trie::updates::TrieUpdates;
 use reth_trie_common::KeccakKeyHasher;
 use std::{
-    collections::BTreeMap, error::Error, io, sync::{Arc, RwLock}
+    collections::BTreeMap,
+    error::Error,
+    io,
+    sync::{Arc, RwLock},
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -35,7 +38,7 @@ use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
 use reth_chain_state::CanonStateNotification;
-use reth_consensus::{Consensus, InvalidAggregatedPublicKeyError};
+use reth_consensus::Consensus;
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
@@ -137,7 +140,7 @@ use crate::consensus::{
         ResponseLoadSnapshotChunkTruncatedDebug,
         ResponsePrepareProposalTruncatedDebug,
     },
-    excecution_utils::authority_execution_utils::build_and_execute,
+    execution_utils::authority_execution_utils::build_and_execute,
     snapshot_manager::{SnapshotManagerError, SnapshotManagerStateLock},
     utils::{
         get_staged_pegins_from_pegin_meta, get_staged_pegouts_from_pegout_data,
@@ -584,7 +587,8 @@ where
         network_upgrade_payload: Option<NetworkUpgradePayload>,
     ) -> Result<NonDeterministicData, ConsensusError> {
         // TODO: use the correct multisig_id
-        let aggregate_public_key = self.aggregate_public_key(LEGACY_MULTISIG_ID)?;
+        let aggregate_public_key =
+            self.aggregate_public_key(LEGACY_MULTISIG_ID)?;
         let block_fee_recipient_address = self
             .block_fee_recipient_address
             .ok_or(ConsensusError::MissingBlockFeeRecipientAddress)?;
@@ -668,16 +672,15 @@ where
     ) -> Result<secp256k1::PublicKey, ConsensusError> {
         match &self.storage.inner.blocking_read().aggregate_public_key {
             Some(pkeys) => {
-                pkeys.get(&multisig_id).cloned().ok_or(
-                    ConsensusError::InvalidAggregatedPublicKey(
-                        InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
-                            *multisig_id,
-                        ),
-                    ),
-                )
+                pkeys
+                    .get(&multisig_id)
+                    .cloned()
+                    .ok_or(ConsensusError::InvalidAggregatedPublicKey(
+                    InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+                ))
             }
             None => Err(ConsensusError::InvalidAggregatedPublicKey(
-                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(*multisig_id),
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
             )),
         }
     }
@@ -1707,7 +1710,7 @@ where
             max_tx_bytes: Some(max_tx_bytes),
         };
 
-        // TODO: is default config ok here?
+        // Note: this sets the block gas limit to 30 million
         let builder_config = EthereumBuilderConfig::default();
 
         match default_ethereum_payload(
@@ -1770,7 +1773,7 @@ where
 
                         txs.insert(0, non_deterministic_data_bytes);
 
-                        self.metrics.commet_prepared_proposals.increment(1);
+                        self.metrics.comet_prepared_proposals.increment(1);
 
                         let txs_len = txs.len();
 
@@ -2231,7 +2234,7 @@ where
                             .cache
                             .insert(cbft_block_hash, block_with_context);
 
-                        self.metrics.commet_processed_proposals.increment(1);
+                        self.metrics.comet_processed_proposals.increment(1);
 
                         if tracing::enabled!(tracing::Level::INFO) {
                             let execution_time =
@@ -2589,12 +2592,17 @@ where
 
             // TODO: use the correct multisig_id
             let mut storage = self.storage.inner.blocking_write();
-            if let Some(aggregate_public_keys) = storage.aggregate_public_key.as_mut() {
-                aggregate_public_keys.entry(LEGACY_MULTISIG_ID).or_insert(edh.aggregated_public_key);
+            if let Some(aggregate_public_keys) =
+                storage.aggregate_public_key.as_mut()
+            {
+                aggregate_public_keys
+                    .entry(LEGACY_MULTISIG_ID)
+                    .or_insert(edh.aggregated_public_key);
             } else {
-                storage.aggregate_public_key = Some(
-                    BTreeMap::from([(LEGACY_MULTISIG_ID, edh.aggregated_public_key)]),
-                );
+                storage.aggregate_public_key = Some(BTreeMap::from([(
+                    LEGACY_MULTISIG_ID,
+                    edh.aggregated_public_key,
+                )]));
             }
         }
 
@@ -2653,7 +2661,7 @@ where
 
         let block_hash =
             block_with_context.sealed_block_with_peg.block().hash();
-        self.metrics.commet_finalized_blocks.increment(1);
+        self.metrics.comet_finalized_blocks.increment(1);
 
         let execution_time = std::time::Instant::now().elapsed().as_secs_f32();
 
@@ -2755,7 +2763,7 @@ where
             execution_time,
         );
 
-        self.metrics.commet_committed_blocks.increment(1);
+        self.metrics.comet_committed_blocks.increment(1);
 
         ResponseCommit::default()
     }
@@ -2788,7 +2796,12 @@ pub struct ABCIDriver {
     blockchain_provider: BlockchainProvider<
         NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
     >,
-    storage: Storage<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>>
+    storage: Storage<
+        BlockchainProvider<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >,
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+    >,
 }
 
 impl ABCIDriver {
@@ -2806,7 +2819,12 @@ impl ABCIDriver {
         blockchain_provider: BlockchainProvider<
             NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
         >,
-        storage: Storage<BlockchainProvider<NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>>, BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>>
+        storage: Storage<
+            BlockchainProvider<
+                NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+            >,
+            BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+        >,
     ) -> Self {
         Self {
             driver_rx: Arc::new(Mutex::new(driver_rx)),
@@ -2826,6 +2844,19 @@ impl ABCIDriver {
                         sealed_block_with_context,
                         commit_tx,
                     )) => {
+                        // Read aggregate public keys FIRST, before entering tracing span
+                        // This avoids holding EnteredSpan (not Send) across .await
+                        let aggregate_public_keys = self
+                            .storage
+                            .inner
+                            .read()
+                            .await
+                            .aggregate_public_key
+                            .clone()
+                            .expect(
+                                "aggregate_public_keys must be set after DKG",
+                            );
+
                         let _span = tracing::trace_span!(
                             "ABCI driver commit block",
                             eth_block_height =
@@ -2875,43 +2906,45 @@ impl ABCIDriver {
                             .flat_map(|p| p.meta.clone())
                             .collect::<Vec<_>>();
                         // Serialize pegins to pass in Commit notification
-                        let pegin_bytes =
-                            if pegins.is_empty() {
-                                None
-                            } else {
-                                Some(
-                                    pegins
-                                        .iter()
-                                        .map(|p| {
-                                            Bytes::copy_from_slice(
-                                    p.serialize()
-                                        .expect("Pegins to be serialized")
-                                        .as_slice(),
-                                )
-                                        })
-                                        .collect::<Vec<Bytes>>(),
-                                )
-                            };
+                        let pegin_bytes = if pegins.is_empty() {
+                            None
+                        } else {
+                            Some(
+                                pegins
+                                    .iter()
+                                    .map(|p| {
+                                        Bytes::copy_from_slice(
+                                            p.serialize()
+                                                .expect(
+                                                    "Pegins to be serialized",
+                                                )
+                                                .as_slice(),
+                                        )
+                                    })
+                                    .collect::<Vec<Bytes>>(),
+                            )
+                        };
                         debug!("Pegin bytes: {:?}", pegin_bytes);
                         // Serialize pegouts to pass in Commit notification
                         let pegouts = sealed_block_with_peg.pegouts().to_vec();
-                        let pegout_bytes =
-                            if pegouts.is_empty() {
-                                None
-                            } else {
-                                Some(
-                                    pegouts
-                                        .iter()
-                                        .map(|p| {
-                                            Bytes::copy_from_slice(
-                                    p.serialize()
-                                        .expect("Pegouts to be serialized")
-                                        .as_slice(),
-                                )
-                                        })
-                                        .collect::<Vec<Bytes>>(),
-                                )
-                            };
+                        let pegout_bytes = if pegouts.is_empty() {
+                            None
+                        } else {
+                            Some(
+                                pegouts
+                                    .iter()
+                                    .map(|p| {
+                                        Bytes::copy_from_slice(
+                                            p.serialize()
+                                                .expect(
+                                                    "Pegouts to be serialized",
+                                                )
+                                                .as_slice(),
+                                        )
+                                    })
+                                    .collect::<Vec<Bytes>>(),
+                            )
+                        };
                         debug!("Pegout bytes: {:?}", pegout_bytes);
 
                         // Prepare the staged entries for insertion into the
@@ -2923,17 +2956,11 @@ impl ABCIDriver {
                         // once the Frost task has successfully initiated a new
                         // checkpoint on the btc-server.
 
-                        // Read aggregate public keys once for lookups
-                        let aggregate_public_keys = self
-                            .storage
-                            .inner
-                            .blocking_read()
-                            .aggregate_public_key
-                            .clone()
-                            .expect("aggregate_public_keys must be set after DKG");
-
                         let staged_pegins: Vec<PeginData> =
-                            get_staged_pegins_from_pegin_meta(&pegins, &aggregate_public_keys);
+                            get_staged_pegins_from_pegin_meta(
+                                &pegins,
+                                &aggregate_public_keys,
+                            );
                         let staged_pegouts: Vec<PegoutData> =
                             get_staged_pegouts_from_pegout_data(
                                 &sealed_block_with_peg.pegouts(),
@@ -3192,7 +3219,7 @@ mod tests {
 
         let evm_config = BotanixEvmConfig::new(spec.clone());
 
-        // Create a bitcoin header for testing 
+        // Create a bitcoin header for testing
         let bitcoin_header = Header {
             version: Version::default(),
             prev_blockhash: BlockHash::all_zeros(),
@@ -3253,17 +3280,17 @@ mod tests {
             VoteWatcher::default(),
             RUNTIME_VERSION_V1,
         )
-        .build_ignore_nework_upgrade();
+        .build_ignore_network_upgrade();
 
         let bitcoin_checkpoints_chain =
-            BitcoinCheckpointsChain::try_new(1, 0, 0).expect(
-                "create a valid chain",
-            );
+            BitcoinCheckpointsChain::try_new(1, 0, 0)
+                .expect("create a valid chain");
 
-        let bitcoin_checkpoint = BitcoinCheckpoint::new(bitcoin_header.clone(), 0);
-        bitcoin_checkpoints_chain.push(bitcoin_checkpoint).expect(
-            "push a checkpoint",
-        );
+        let bitcoin_checkpoint =
+            BitcoinCheckpoint::new(bitcoin_header.clone(), 0);
+        bitcoin_checkpoints_chain
+            .push(bitcoin_checkpoint)
+            .expect("push a checkpoint");
 
         let cometbft_rpc_factory = HttpCometBFTRpcClientFactory::default();
 
@@ -3367,23 +3394,16 @@ mod tests {
         let response = abci_client.prepare_proposal(request);
 
         let expected_ndd = NonDeterministicData::new_v2(
-            abci_client.bitcoin_blockhash().expect(
-                "to have bitcoin blockhash",
-            ),
-            abci_client.aggregate_public_key(LEGACY_MULTISIG_ID).expect(
-                "to have agg pk",
-            ),
+            abci_client.bitcoin_blockhash().expect("to have bitcoin blockhash"),
+            abci_client
+                .aggregate_public_key(LEGACY_MULTISIG_ID)
+                .expect("to have agg pk"),
             Address::ZERO,
             RUNTIME_VERSION_GENESIS,
             None,
         );
-        let response_ndd_bytes = response
-            .txs
-            .first()
-            .expect(
-                "to have tx",
-            )
-            .clone();
+        let response_ndd_bytes =
+            response.txs.first().expect("to have tx").clone();
         let reader_inner: Vec<u8> =
             vec![response_ndd_bytes].into_iter().flatten().collect();
         let reader = &mut io::Cursor::new(reader_inner);
@@ -3422,21 +3442,16 @@ mod tests {
         let response = abci_client.prepare_proposal(request);
 
         let expected_ndd = NonDeterministicData::new_v1(
-            abci_client.bitcoin_blockhash().expect(
-                "to have agg bitcoin blockhash",
-            ),
-            abci_client.aggregate_public_key(LEGACY_MULTISIG_ID).expect(
-                "to have agg pk",
-            ),
+            abci_client
+                .bitcoin_blockhash()
+                .expect("to have agg bitcoin blockhash"),
+            abci_client
+                .aggregate_public_key(LEGACY_MULTISIG_ID)
+                .expect("to have agg pk"),
             Address::ZERO,
         );
-        let response_ndd_bytes = response
-            .txs
-            .first()
-            .expect(
-                "to have tx",
-            )
-            .clone();
+        let response_ndd_bytes =
+            response.txs.first().expect("to have tx").clone();
         let reader_inner: Vec<u8> =
             vec![response_ndd_bytes].into_iter().flatten().collect();
         let reader = &mut io::Cursor::new(reader_inner);
@@ -3455,9 +3470,8 @@ mod tests {
 
         let mut request = RequestProcessProposal::default();
 
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         request.txs = vec![ndd_bytes];
 
@@ -3480,9 +3494,8 @@ mod tests {
         let abci_client = abci_client_builder();
 
         // first tx should be non-deterministic data
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         // second tx should be a signed transaction
         let mut tx_generator = TransactionGenerator::new(rand_09::rng());
@@ -3518,9 +3531,8 @@ mod tests {
 
         let mut request = RequestFinalizeBlock::default();
 
-        let ndd_bytes = non_deterministic_data_bytes(&abci_client).expect(
-            "to have ndd",
-        );
+        let ndd_bytes =
+            non_deterministic_data_bytes(&abci_client).expect("to have ndd");
 
         request.txs = vec![ndd_bytes.clone()];
 
@@ -3536,9 +3548,8 @@ mod tests {
         let response = abci_client.finalize_block(request);
 
         // get newly made block from cache to recreate expected app hash
-        let mut rw_lock = abci_client.block_cache.write().expect(
-            "should get lock",
-        );
+        let mut rw_lock =
+            abci_client.block_cache.write().expect("should get lock");
         let sealed_block_with_context =
             rw_lock.cache.pop_newest().expect("to have block").1;
         let expected_app_hash = prost::bytes::Bytes::copy_from_slice(
@@ -3572,10 +3583,9 @@ mod tests {
         let ndd = abci_client
             .non_deterministic_data(RUNTIME_VERSION_V1, None)
             .expect("to have ndd");
-        let ndd_bytes =
-            abci_client.serialize_non_deterministic_data_to_bytes(ndd).expect(
-                "to serialize ndd",
-            );
+        let ndd_bytes = abci_client
+            .serialize_non_deterministic_data_to_bytes(ndd)
+            .expect("to serialize ndd");
 
         // second tx should be a signed transaction
         let mut tx_generator = TransactionGenerator::new(rand_09::rng());

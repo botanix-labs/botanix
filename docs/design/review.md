@@ -5,7 +5,6 @@ This document contains some of our research in how other codebases designed vari
 ## P2P
 
 - [`Sentry`](https://github.com/vorot93/sentry), a pluggable p2p node following the [Erigon gRPC architecture](https://erigon.substack.com/p/current-status-of-silkworm-and-silkrpc):
-
     - [`vorot93`](https://github.com/vorot93/) first started by implementing a rust devp2p stack in [`devp2p`](https://github.com/vorot93/devp2p)
     - vorot93 then started work on sentry, using devp2p, to satisfy the erigon architecture of modular components connected with gRPC.
     - The code from rust-ethereum/devp2p was merged into sentry, and rust-ethereum/devp2p was archived
@@ -26,7 +25,6 @@ This document contains some of our research in how other codebases designed vari
 ## Header Downloaders
 
 - Erigon Header Downloader:
-
     - A header downloader algo was introduced in [`erigon#1016`](https://github.com/ledgerwatch/erigon/pull/1016) and finished in [`erigon#1145`](https://github.com/ledgerwatch/erigon/pull/1145). At a high level, the downloader concurrently requested headers by hash, then sorted, validated and fused the responses into chain segments. Smaller segments were fused into larger as the gaps between them were filled. The downloader is also used to maintain hardcoded hashes (later renamed to preverified) to bootstrap the sync.
     - The downloader was refactored multiple times: [`erigon#1471`](https://github.com/ledgerwatch/erigon/pull/1471), [`erigon#1559`](https://github.com/ledgerwatch/erigon/pull/1559) and [`erigon#2035`](https://github.com/ledgerwatch/erigon/pull/2035).
     - With PoS transition in [`erigon#3075`](https://github.com/ledgerwatch/erigon/pull/3075) terminal td was introduced to the algo to stop forward syncing. For the downward sync (post merge), the download was now delegated to [`EthBackendServer`](https://github.com/ledgerwatch/erigon/blob/3c95db00788dc740849c2207d886fe4db5a8c473/ethdb/privateapi/ethbackend.go#L245)

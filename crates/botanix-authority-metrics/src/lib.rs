@@ -30,17 +30,17 @@ pub struct AuthorityMetrics {
     /// Number of reset wallet states
     pub reset_wallet_states: Counter,
 
-    /// Number of commet finalized blocks
-    pub commet_finalized_blocks: Counter,
+    /// Number of comet finalized blocks
+    pub comet_finalized_blocks: Counter,
 
-    /// Number of commet committed blocks
-    pub commet_committed_blocks: Counter,
+    /// Number of comet committed blocks
+    pub comet_committed_blocks: Counter,
 
-    /// Number of commet prepared proposals
-    pub commet_prepared_proposals: Counter,
+    /// Number of comet prepared proposals
+    pub comet_prepared_proposals: Counter,
 
-    /// Number of commet processed proposals
-    pub commet_processed_proposals: Counter,
+    /// Number of comet processed proposals
+    pub comet_processed_proposals: Counter,
 
     /// Gauge for bitcoind connection status (0 - disconnected, 1 - connected)
     pub bitcoind_connection_status: Gauge,
@@ -166,10 +166,10 @@ mod tests {
             metrics.received_round2_signing_packages.increment(6);
             metrics.finalized_signings.increment(1);
             metrics.reset_wallet_states.increment(2);
-            metrics.commet_finalized_blocks.increment(3);
-            metrics.commet_committed_blocks.increment(1);
-            metrics.commet_prepared_proposals.increment(5);
-            metrics.commet_processed_proposals.increment(4);
+            metrics.comet_finalized_blocks.increment(3);
+            metrics.comet_committed_blocks.increment(1);
+            metrics.comet_prepared_proposals.increment(5);
+            metrics.comet_processed_proposals.increment(4);
 
             let snapshots = recorder.snapshotter().snapshot();
 
@@ -193,10 +193,10 @@ mod tests {
                 ("authority.received_round2_signing_packages", 6),
                 ("authority.finalized_signings", 1),
                 ("authority.reset_wallet_states", 2),
-                ("authority.commet_finalized_blocks", 3),
-                ("authority.commet_committed_blocks", 1),
-                ("authority.commet_prepared_proposals", 5),
-                ("authority.commet_processed_proposals", 4),
+                ("authority.comet_finalized_blocks", 3),
+                ("authority.comet_committed_blocks", 1),
+                ("authority.comet_prepared_proposals", 5),
+                ("authority.comet_processed_proposals", 4),
             ];
 
             for (counter_name, expected_value) in counters_to_check {

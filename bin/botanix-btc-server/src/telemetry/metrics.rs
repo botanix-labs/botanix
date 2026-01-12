@@ -308,7 +308,7 @@ impl BtcServerMetrics {
 
         let success_broadcasted_pegout_txs_count = register_int_gauge_vec!(
             "success_broadcasted_pegout_txs_count",
-            "A metric counting the scuccessful broadcasted pegout txs",
+            "A metric counting the successful broadcasted pegout txs",
             &["btc_chain", "self_id"],
         )
         .expect("metric must be created");

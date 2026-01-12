@@ -525,7 +525,7 @@ where
 
     // ====================================== 1 =========================================
     // Coordinator initiates a new signing session
-    pub(crate) async fn initate_signing_session(
+    pub(crate) async fn initiate_signing_session(
         &mut self,
         signing_session_id: FixedBytes<32>,
         psbt: Vec<u8>,
@@ -535,7 +535,7 @@ where
         // the coordinator is always expected to be us in this case, i.e. None
         let coordinator = self.get_coordinator_peer_data().await?;
         if coordinator.is_some() {
-            error!(target: "consensus::authority::signing::initate_signing_session", "A non-coordinator is trying to (re)initiate a signing process!");
+            error!(target: "consensus::authority::signing::initiate_signing_session", "A non-coordinator is trying to (re)initiate a signing process!");
             return Ok(());
         }
 
@@ -553,7 +553,7 @@ where
                     self.remove_signing_session(session_id).await;
                     self.metrics.signing_sessions.decrement(1);
 
-                    error!(target: "consensus::authority::signing::initate_signing_session", "A coordinator re-triggered an existing signing session!");
+                    error!(target: "consensus::authority::signing::initiate_signing_session", "A coordinator re-triggered an existing signing session!");
                     return Err(Error::CoordinatorRetriggeredSession);
                 }
             }
@@ -571,7 +571,7 @@ where
             }
         }
 
-        info!(target: "consensus::authority::signing::initate_signing_session", "starting signing session with id {:?}", session_id);
+        info!(target: "consensus::authority::signing::initiate_signing_session", "starting signing session with id {:?}", session_id);
 
         // As the cord we generate round 1 nonces and save them
         // then we send the psbt to other peers
@@ -595,7 +595,7 @@ where
             )
             .await
         {
-            error!(target: "consensus::authority::signing::initate_signing_session", "Error gossiping round 1 to peers {:?}", e);
+            error!(target: "consensus::authority::signing::initiate_signing_session", "Error gossiping round 1 to peers {:?}", e);
             self.update_signing_state(session_id, SigningState::Failed).await;
             return Err(e);
         }

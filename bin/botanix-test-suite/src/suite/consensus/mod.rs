@@ -204,7 +204,7 @@ impl LocalContext {
     }
 
     pub fn get_poa_processes_discovery_ports(&self) -> Vec<u16> {
-        let disovery_ports = self
+        let discovery_ports = self
             .poa_processes
             .as_ref()
             .map(|poa_processes| {
@@ -215,7 +215,7 @@ impl LocalContext {
             })
             .unwrap_or_default();
 
-        let hs: HashSet<u16> = HashSet::from_iter(disovery_ports);
+        let hs: HashSet<u16> = HashSet::from_iter(discovery_ports);
         hs.into_iter().collect()
     }
 
@@ -293,7 +293,7 @@ impl LocalContext {
     }
 
     pub fn get_rpc_processes_discovery_ports(&self) -> Vec<u16> {
-        let disovery_ports = self
+        let discovery_ports = self
             .rpc_processes
             .as_ref()
             .map(|rpc_processes| {
@@ -304,7 +304,7 @@ impl LocalContext {
             })
             .unwrap_or_default();
 
-        let hs: HashSet<u16> = HashSet::from_iter(disovery_ports);
+        let hs: HashSet<u16> = HashSet::from_iter(discovery_ports);
         hs.into_iter().collect()
     }
 
@@ -1093,10 +1093,14 @@ impl Suite for ConsensusIntegrationTestSuite {
                 .iter()
                 .filter(|(_, node)| node.is_rpc_node)
                 .collect::<Vec<_>>();
-            // add to cometbft nodes so they will be spawned
-            cometbft_nodes.extend(
-                cometbft_rpc_nodes.iter().map(|(&k, &ref v)| (k, v.clone())),
-            );
+            // add rpc cometbft nodes to be spawned only if create_rpc_nodes is true
+            if create_test_config.create_rpc_nodes {
+                cometbft_nodes.extend(
+                    cometbft_rpc_nodes
+                        .iter()
+                        .map(|(&k, &ref v)| (k, v.clone())),
+                );
+            }
             // remove rpc cometbft nodes
             cometbft_nodes_syncing_and_rpcs.retain(|_, node| !node.is_rpc_node);
             let cometbft_nodes_syncing = cometbft_nodes_syncing_and_rpcs;
@@ -1213,9 +1217,11 @@ impl Suite for ConsensusIntegrationTestSuite {
             let mut keys = HashSet::new();
             for client in btc_server_clients.to_vec().iter_mut() {
                 let key = client
-                    .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
-                        multisig_id: *LEGACY_MULTISIG_ID,
-                    })
+                    .get_public_key(
+                        botanix_btc_server_client::GetPublicKeyRequest {
+                            multisig_id: *LEGACY_MULTISIG_ID,
+                        },
+                    )
                     .await
                     .context("Error getting a pub key from btc-server")?
                     .into_inner()
@@ -1236,7 +1242,10 @@ impl Suite for ConsensusIntegrationTestSuite {
 
         // // =================== RPC NODES ================== //
         if create_test_config.create_rpc_nodes {
-            it_info_print!("Creating RPC nodes", self.global_context.rpc_instances);
+            it_info_print!(
+                "Creating RPC nodes",
+                self.global_context.rpc_instances
+            );
             let (mut rpc_nodes, tx) =
                 create_rpc_nodes(self.global_context.clone()).await?;
             let build_command_authorities_list =

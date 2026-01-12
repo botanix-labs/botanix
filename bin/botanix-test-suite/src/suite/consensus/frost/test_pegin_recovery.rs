@@ -8,6 +8,7 @@ use bitcoin::Amount;
 use bitcoincore_rpc::RpcApi;
 use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_pegin_recovery_client;
+use botanix_types::TEST_LEGACY_MULTISIG_ID;
 use btcserverlib;
 use ethers::{prelude::Provider, providers::Http};
 use frost_secp256k1_tr as frost;
@@ -174,7 +175,6 @@ pub async fn test_pegin_recovery(
         .await
         .map_err(Error::ServerConnect)?;
 
-
     //import keyshare packcage for each exported federation member key package
     for (index, db_path) in fed_key_package_paths.iter().enumerate() {
         let frost_identifier =
@@ -203,7 +203,7 @@ pub async fn test_pegin_recovery(
             .clone()
             .import_key_share(tonic::Request::new(
                 botanix_pegin_recovery_client::ImportKeyShareRequest {
-                    multisig_id: TEST_LEGACY_MULTISIG_ID,
+                    multisig_id: *TEST_LEGACY_MULTISIG_ID,
                     frost_identifier,
                     passphrase: "test_passphrase".to_string(),
                     export: Some(
@@ -232,7 +232,7 @@ pub async fn test_pegin_recovery(
             vout: vout as u32,
             eth_address: format!("0x{:x}", eth_destination),
             signature: "test_signature".to_string(),
-            multisig_id: TEST_LEGACY_MULTISIG_ID,
+            multisig_id: *TEST_LEGACY_MULTISIG_ID,
         }))
         .await
         .map_err(Error::Request)?;

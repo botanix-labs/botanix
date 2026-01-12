@@ -13,7 +13,17 @@ use reth_codecs::Compact;
 /// This type provides a type-safe wrapper around the raw `u32` multisig identifier,
 /// used to distinguish between different multisig federations in the Botanix network.
 #[derive(
-    Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct MultisigId(u32);
@@ -137,4 +147,3 @@ mod tests {
         assert_eq!(id, deserialized);
     }
 }
-

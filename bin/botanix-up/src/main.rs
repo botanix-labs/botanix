@@ -5,13 +5,15 @@ mod cli;
 use crate::comet_node::{get_enode, TestSignal};
 use alloy_primitives::Address;
 use anyhow::{Context, Result as AnyResult};
-use botanix_configs::federation::{FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig};
-use botanix_types::LEGACY_MULTISIG_ID;
+use botanix_configs::federation::{
+    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+};
 use botanix_test_suite::suite::consensus::common::{
     comet_node::{self, updated_genesis_file, GenesisValidator, PrivValidator},
     poa_node::{ABCI_PORT_BASE, DISCOVERY_PORT_BASE},
     MINTING_CONTRACT_BYTECODE,
 };
+use botanix_types::LEGACY_MULTISIG_ID;
 use clap::Parser;
 use cli::Cli;
 use secp256k1::SECP256K1;

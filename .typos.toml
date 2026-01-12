@@ -1,8 +1,21 @@
 [files]
 extend-exclude = [
-  "cluster",
-  "crates/monitoring/README.md",
-  "docker/chain-config",
-  "docker/monitoring",
-  "bun.lock",
+    "cluster",
+    "crates/monitoring/README.md",
+    "docker/chain-config",
+    "docker/monitoring",
+    "docker-local/monitoring",
+    "bun.lock",
+    # External libraries
+    "contracts/lib/forge-std",
 ]
+
+[default.extend-words]
+# Valid Bitcoin/crypto variable names
+ot = "ot"     # short for outpoint
+vout = "vout" # Bitcoin output index
+ots = "ots"   # outpoints plural
+# UPnP is a valid protocol name
+Pn = "Pn"
+# 2nd is valid
+nd = "nd"

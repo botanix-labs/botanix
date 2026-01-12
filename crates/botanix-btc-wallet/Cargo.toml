@@ -17,11 +17,11 @@ lazy_static = "1.4.0"
 miniscript = "11.0.0"
 rand = { version = "0.6", features = ["std"] }
 secp256k1 = { version = "0.28", features = [
-  "serde",
-  "global-context",
-  "rand",
-  "rand-std",
-  "recovery",
+    "serde",
+    "global-context",
+    "rand",
+    "rand-std",
+    "recovery",
 ] }
 serde = "1.0.171"
 thiserror = "1.0.43"
