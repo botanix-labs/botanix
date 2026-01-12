@@ -2844,6 +2844,19 @@ impl ABCIDriver {
                         sealed_block_with_context,
                         commit_tx,
                     )) => {
+                        // Read aggregate public keys FIRST, before entering tracing span
+                        // This avoids holding EnteredSpan (not Send) across .await
+                        let aggregate_public_keys = self
+                            .storage
+                            .inner
+                            .read()
+                            .await
+                            .aggregate_public_key
+                            .clone()
+                            .expect(
+                                "aggregate_public_keys must be set after DKG",
+                            );
+
                         let _span = tracing::trace_span!(
                             "ABCI driver commit block",
                             eth_block_height =
@@ -2942,17 +2955,6 @@ impl ABCIDriver {
                         // Those staged entries are removed from the database
                         // once the Frost task has successfully initiated a new
                         // checkpoint on the btc-server.
-
-                        // Read aggregate public keys once for lookups
-                        let aggregate_public_keys = self
-                            .storage
-                            .inner
-                            .blocking_read()
-                            .aggregate_public_key
-                            .clone()
-                            .expect(
-                                "aggregate_public_keys must be set after DKG",
-                            );
 
                         let staged_pegins: Vec<PeginData> =
                             get_staged_pegins_from_pegin_meta(

@@ -1093,10 +1093,14 @@ impl Suite for ConsensusIntegrationTestSuite {
                 .iter()
                 .filter(|(_, node)| node.is_rpc_node)
                 .collect::<Vec<_>>();
-            // add to cometbft nodes so they will be spawned
-            cometbft_nodes.extend(
-                cometbft_rpc_nodes.iter().map(|(&k, &ref v)| (k, v.clone())),
-            );
+            // add rpc cometbft nodes to be spawned only if create_rpc_nodes is true
+            if create_test_config.create_rpc_nodes {
+                cometbft_nodes.extend(
+                    cometbft_rpc_nodes
+                        .iter()
+                        .map(|(&k, &ref v)| (k, v.clone())),
+                );
+            }
             // remove rpc cometbft nodes
             cometbft_nodes_syncing_and_rpcs.retain(|_, node| !node.is_rpc_node);
             let cometbft_nodes_syncing = cometbft_nodes_syncing_and_rpcs;
