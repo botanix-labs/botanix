@@ -656,19 +656,6 @@ impl Suite for ConsensusIntegrationTestSuite {
                     invalid_transactions::test_invalid_pegout::invalid_pegout
                 )
             }
-            "test_parallel_dkg" => {
-                run_test!(
-                    self,
-                    CreateTestConfig {
-                        create_bitcoind_node: true,
-                        create_poa_nodes: true,
-                        create_btc_servers: true,
-                        create_cometbft_nodes: true,
-                        ..Default::default()
-                    },
-                    dynafed::test_parallelel_dkg::test_parallel_dkg
-                )
-            }
             "multi_pegin_revert_scenarios" => {
                 run_test!(
                     self,

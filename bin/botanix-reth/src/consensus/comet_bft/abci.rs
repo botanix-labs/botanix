@@ -6,13 +6,13 @@ use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
+use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use botanix_storage::models::RuntimeVersion;
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
 use reth_db::DatabaseEnv;
-use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_types::Block;
@@ -38,7 +38,7 @@ use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
 use reth_chain_state::CanonStateNotification;
-use reth_consensus::{Consensus, InvalidAggregatedPublicKeyError};
+use reth_consensus::Consensus;
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
@@ -676,15 +676,11 @@ where
                     .get(&multisig_id)
                     .cloned()
                     .ok_or(ConsensusError::InvalidAggregatedPublicKey(
-                    InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
-                        *multisig_id,
-                    ),
+                    InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
                 ))
             }
             None => Err(ConsensusError::InvalidAggregatedPublicKey(
-                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey(
-                    *multisig_id,
-                ),
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
             )),
         }
     }

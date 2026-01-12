@@ -3,7 +3,7 @@ use std::str::FromStr;
 use bitcoin::{consensus::Encodable, Address};
 use bitcoincore_rpc::RpcApi;
 use botanix_btc_server_client::BtcServerClient;
-use botanix_types::LEGACY_MULTISIG_ID;
+use botanix_types::{LEGACY_MULTISIG_ID, TEST_LEGACY_MULTISIG_ID};
 use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
@@ -19,7 +19,6 @@ use crate::{
     utils::{
         generate_blocks, get_checkpoint_block_hash, send_pegin_notification,
         send_pegout_notification, MIN_BLOCKS_COINBASE_MATURE,
-        TEST_LEGACY_MULTISIG_ID,
     },
 };
 
@@ -196,7 +195,7 @@ pub async fn test_utxo_recovery(
             botanix_btc_server_client::UtxoToRecover {
                 outpoint: utxo.outpoint.clone(), // note this is little endian
                 eth_address: utxo.eth_address.clone(),
-                multisig_id: TEST_LEGACY_MULTISIG_ID,
+                multisig_id: *TEST_LEGACY_MULTISIG_ID,
             }
         })
         .collect::<Vec<_>>();
@@ -230,7 +229,7 @@ pub async fn test_utxo_recovery(
                 vout: pegin.outpoint.vout,
             }),
             eth_address: hex_encode(pegin.eth_address),
-            multisig_id: TEST_LEGACY_MULTISIG_ID,
+            multisig_id: *TEST_LEGACY_MULTISIG_ID,
         })
         .collect::<Vec<_>>();
 
@@ -256,7 +255,7 @@ pub async fn test_utxo_recovery(
             vout: change_vout as u32,
         }),
         eth_address: "".to_string(), // no eth address for change output
-        multisig_id: TEST_LEGACY_MULTISIG_ID,
+        multisig_id: *TEST_LEGACY_MULTISIG_ID,
     }];
 
     let res = clients[COORDINATOR_INDEX]

@@ -3337,6 +3337,12 @@ mod tests {
         role = "continuing"
 
         [[multisig.federation-member-public-key]]
+        key = "038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140"
+        # Private key: 27eeb2264674f15f2bac84d84b5e8f0c40722f8327fe7354bf14c84e248f8838
+        socket-addr = "127.0.0.1:30304"
+        role = "continuing"
+
+        [[multisig.federation-member-public-key]]
         key = "02a7a1a9c37cd072f9752ef6b154876fe51f1ad2f7a6a627ef26e5075631af9f29"
         socket-addr = "127.0.0.1:30305"
         role = "continuing"
@@ -4279,7 +4285,7 @@ mod tests {
         let (app, key_package) = setup_app_with_keys().await;
         let agg_key = key_package.verifying_key();
         let mut rng = thread_rng();
-        let multisig_id = 2;
+        let multisig_id = *LEGACY_MULTISIG_ID;
 
         // add dummy utxo to db to prevent 'no utxo in db' error
         let (dummy_outpoint, dummy_amount, dummy_script_pubkey) =
@@ -4353,7 +4359,7 @@ mod tests {
         let (app, key_package) = setup_app_with_keys().await;
         let agg_key = key_package.verifying_key();
         let mut rng = thread_rng();
-        let multisig_id = 2;
+        let multisig_id = *LEGACY_MULTISIG_ID;
 
         // add existing utxo to db
         let (existing_outpoint, existing_amount, existing_script_pubkey) =
