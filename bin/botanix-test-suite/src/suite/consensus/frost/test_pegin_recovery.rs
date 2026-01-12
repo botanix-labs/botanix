@@ -8,7 +8,8 @@ use bitcoin::Amount;
 use bitcoincore_rpc::RpcApi;
 use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_pegin_recovery_client;
-use btcserverlib::{self, database::TEST_LEGACY_MULTISIG_ID};
+use botanix_types::TEST_LEGACY_MULTISIG_ID;
+use btcserverlib;
 use ethers::{prelude::Provider, providers::Http};
 use frost_secp256k1_tr as frost;
 use std::{fs, path::Path, process::Command, str::FromStr, time::Duration};
@@ -173,7 +174,6 @@ pub async fn test_pegin_recovery(
         )
         .await
         .map_err(Error::ServerConnect)?;
-
 
     //import keyshare packcage for each exported federation member key package
     for (index, db_path) in fed_key_package_paths.iter().enumerate() {

@@ -28,7 +28,6 @@ use btcserverlib::{
     pegout_id::PegoutId,
     wallet::psbt::{PsbtExt, PsbtOutputExt},
 };
-use std::collections::BTreeMap;
 use futures_util::Future;
 use reth_network::{NetworkHandle, NetworkInfo};
 use reth_node_types::Block;
@@ -38,6 +37,7 @@ use reth_provider::{
     BlockReaderIdExt, HeaderProvider, ReceiptProvider, TransactionsProvider,
 };
 use reth_revm::primitives::FixedBytes;
+use std::collections::BTreeMap;
 use std::{
     fmt::Debug,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -109,7 +109,7 @@ where
 /// not consensus critical
 pub type SigningSessionId = [u8; 32];
 
-/// Repersents an error related to frost operations
+/// Represents an error related to frost operations
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum FrostParseError {
     #[error("Invalid frost signing session id")]
@@ -570,7 +570,7 @@ pub(crate) async fn get_block_pegouts(
 
 /// Errors that can occur while generating a signing session ID
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum GenerateSigningSesssionIdError {
+pub(crate) enum GenerateSigningSessionIdError {
     #[error("Failed to generate hash")]
     HashError(#[from] std::io::Error),
 }
@@ -578,7 +578,7 @@ pub(crate) enum GenerateSigningSesssionIdError {
 /// Generates a signing session id using a uuid v4 generator
 #[allow(dead_code)]
 pub(crate) fn generate_signing_session_id(
-) -> Result<SigningSessionId, GenerateSigningSesssionIdError> {
+) -> Result<SigningSessionId, GenerateSigningSessionIdError> {
     let id = Uuid::new_v4();
     let hex_string = id.simple().to_string(); // Removing dashes, results in 32 hex digits
     let bytes: Vec<u8> = hex_string.bytes().collect();
@@ -587,7 +587,7 @@ pub(crate) fn generate_signing_session_id(
     Ok(bytes_array)
 }
 
-/// Repersents an error related to utxo operations
+/// Represents an error related to utxo operations
 #[derive(Debug, thiserror::Error)]
 #[allow(dead_code)]
 pub(crate) enum UtxoMerkelRootError {
@@ -992,14 +992,20 @@ mod tests {
     use botanix_btc_server_client::{OutPoint, ScriptBuf, TxOut, Utxo};
     use botanix_types::{MultisigId, TEST_LEGACY_MULTISIG_ID};
     use btcserverlib::{
-        pegout_id::PegoutId, test_utils::random_p2wpkh_script, wallet::psbt::{PsbtExt, PsbtOutputExt}
+        pegout_id::PegoutId,
+        test_utils::random_p2wpkh_script,
+        wallet::psbt::{PsbtExt, PsbtOutputExt},
     };
     use rand::{thread_rng, Rng, RngCore};
     use reth_primitives::Header;
     use std::{
-        collections::BTreeMap, str::FromStr, sync::{
-            Arc, atomic::{AtomicUsize, Ordering}
-        }, time::{Duration, SystemTime, UNIX_EPOCH}
+        collections::BTreeMap,
+        str::FromStr,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
     use crate::consensus::{
@@ -2105,11 +2111,16 @@ String::from("60806040526004361061003f5760003560e01c80635fe03f45146100445780636f
         let (p1, _) = PeginMeta::deserialize(SAMPLE_PEGIN_DATA_1).unwrap();
         let (p2, _) = PeginMeta::deserialize(SAMPLE_PEGIN_DATA_2).unwrap();
 
-        let aggregate_public_keys: BTreeMap<MultisigId, secp256k1::PublicKey> = BTreeMap::from_iter([(TEST_LEGACY_MULTISIG_ID, p1.aggregate_publickey())]);
+        let aggregate_public_keys: BTreeMap<MultisigId, secp256k1::PublicKey> =
+            BTreeMap::from_iter([(
+                TEST_LEGACY_MULTISIG_ID,
+                p1.aggregate_publickey(),
+            )]);
 
         let pegins = vec![p1, p2];
 
-        let staged = get_staged_pegins_from_pegin_meta(&pegins, &aggregate_public_keys);
+        let staged =
+            get_staged_pegins_from_pegin_meta(&pegins, &aggregate_public_keys);
         let utxos1 = get_utxos_from_staged_pegins(staged);
 
         let utxos2 = get_utxos_from_pegin_meta(&pegins, &aggregate_public_keys);

@@ -940,7 +940,7 @@ PROFILER_POA_SEVER_ARGS := \
 	--frost.max_signers ${PROFILER_FROST_MAX_SIGNERS} \
 	--p2p-secret-key ${PROFILER_NODE_DIR}/discovery-secret \
 	--port ${PROFILER_POA_RPC_PORT} \
-	--abci-port=${PROFILER_COMMET_ABCI_PORT}
+	--abci-port=${PROFILER_COMET_ABCI_PORT}
 
 profile-poa:
 	cargo build --profile profiling --bin reth && \

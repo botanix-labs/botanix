@@ -450,11 +450,11 @@ impl PegoutScheduler {
         self.db.store_pending_pegouts(&pegout_refs)?;
         self.db.flush()?;
         if let Some(telemetry) = self.telemetry.as_ref() {
-            let current_peding_pegouts = self.db.get_pending_pegouts()?;
+            let current_pending_pegouts = self.db.get_pending_pegouts()?;
             telemetry.set_pending_pegouts(
                 self.bitcoin_network,
                 self.identifier,
-                current_peding_pegouts.len() as i64,
+                current_pending_pegouts.len() as i64,
             );
         }
         Ok(())

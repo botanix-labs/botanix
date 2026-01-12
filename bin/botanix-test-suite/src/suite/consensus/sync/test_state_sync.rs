@@ -218,16 +218,16 @@ pub async fn test_state_sync(
         .to_vec();
     let mut snapshots_per_fed_member: HashMap<u16, usize> = HashMap::new();
     let expected_sync_height = 'outer: loop {
-        for memeber_id in member_ids.clone() {
+        for member_id in member_ids.clone() {
             let botanix_provider = suite
                 .local_context
                 .get_botanix_dbs()
-                .get(memeber_id as usize)
+                .get(member_id as usize)
                 .cloned()
                 .unwrap();
             let snapshots =
                 botanix_provider.get_snapshots().unwrap_or_default();
-            snapshots_per_fed_member.insert(memeber_id, snapshots.len());
+            snapshots_per_fed_member.insert(member_id, snapshots.len());
 
             let expected_sync_height = snapshots
                 .first()
@@ -235,10 +235,10 @@ pub async fn test_state_sync(
                 .map(|s| s.height())
                 .unwrap_or_default();
 
-            let insuficient_snapshots = snapshots_per_fed_member
+            let insufficient_snapshots = snapshots_per_fed_member
                 .iter()
                 .any(|(_, snapshots)| *snapshots < REQUIRED_SNAPSHOTS);
-            if !insuficient_snapshots {
+            if !insufficient_snapshots {
                 break 'outer expected_sync_height;
             }
         }

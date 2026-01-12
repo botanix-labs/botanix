@@ -81,7 +81,7 @@ where
     ///
     /// # Returns
     /// * An ActivationManager configured to ignore network upgrades
-    pub fn build_ignore_nework_upgrade(self) -> ActivationManager<DB, Auth> {
+    pub fn build_ignore_network_upgrade(self) -> ActivationManager<DB, Auth> {
         debug_assert!(self.upgrade.is_none());
         self._finalize()
     }

@@ -1,38 +1,37 @@
-
 [workspace]
 resolver = "3"
 members = [
-  "bin/botanix-cli",
-  "bin/botanix-db-cleaner",
-  "bin/botanix-reth",
-  "bin/botanix-up",
-  "bin/botanix-test-suite",
-  "bin/botanix-btc-server",
-  "bin/botanix-btc-server/client",
-  "bin/botanix-pegin-recovery",
-  "crates/botanix-activation-manager",
-  "crates/botanix-authority-edh",
-  "crates/botanix-authority-metrics",
-  "crates/botanix-authority-peg",
-  "crates/botanix-authority-rsp",
-  "crates/botanix-bitcoin-checkpoint",
-  "crates/botanix-btc-wallet",
-  "crates/botanix-chainspec",
-  "crates/botanix-cli-args",
-  "crates/botanix-cli-parsers",
-  "crates/botanix-comet-bft-rpc",
-  "crates/botanix-configs",
-  "crates/botanix-consensus-common",
-  "crates/botanix-data-parser",
-  "crates/botanix-fs-util",
-  "crates/botanix-primitives",
-  "crates/botanix-rpc-client",
-  "crates/botanix-rpc-config",
-  "crates/botanix-rpc-types",
-  "crates/botanix-storage",
-  "crates/botanix-storage-migrate",
-  "crates/botanix-types",
-  "crates/botanix-utils",
+    "bin/botanix-cli",
+    "bin/botanix-db-cleaner",
+    "bin/botanix-reth",
+    "bin/botanix-up",
+    "bin/botanix-test-suite",
+    "bin/botanix-btc-server",
+    "bin/botanix-btc-server/client",
+    "bin/botanix-pegin-recovery",
+    "crates/botanix-activation-manager",
+    "crates/botanix-authority-edh",
+    "crates/botanix-authority-metrics",
+    "crates/botanix-authority-peg",
+    "crates/botanix-authority-rsp",
+    "crates/botanix-bitcoin-checkpoint",
+    "crates/botanix-btc-wallet",
+    "crates/botanix-chainspec",
+    "crates/botanix-cli-args",
+    "crates/botanix-cli-parsers",
+    "crates/botanix-comet-bft-rpc",
+    "crates/botanix-configs",
+    "crates/botanix-consensus-common",
+    "crates/botanix-data-parser",
+    "crates/botanix-fs-util",
+    "crates/botanix-primitives",
+    "crates/botanix-rpc-client",
+    "crates/botanix-rpc-config",
+    "crates/botanix-rpc-types",
+    "crates/botanix-storage",
+    "crates/botanix-storage-migrate",
+    "crates/botanix-types",
+    "crates/botanix-utils",
 ]
 default-members = ["bin/botanix-reth"]
 [workspace.package]
@@ -140,14 +139,12 @@ alloy-hardforks = "0.2.7"
 alloy-json-abi = { version = "=1.3.0", default-features = false }
 alloy-network = "=1.0.23"
 alloy-primitives = { version = "=1.3.0", default-features = false, features = [
-  "map",
-  "map-foldhash",
-  "std",
-  "getrandom",
+    "map",
+    "map-foldhash",
+    "std",
+    "getrandom",
 ] }
-alloy-rlp = { version = "=0.3.10", default-features = false, features = [
-  "core-net",
-] }
+alloy-rlp = { version = "=0.3.10", default-features = false, features = ["core-net"] }
 alloy-rpc-types = { version = "=1.0.23", features = ["engine"] }
 alloy-rpc-types-engine = "=1.0.23"
 alloy-rpc-types-eth = "=1.0.23"
@@ -193,13 +190,13 @@ botanix-pegin-recovery = { path = "bin/botanix-pegin-recovery" }
 botanix-pegin-recovery-client = { path = "bin/botanix-pegin-recovery/client" }
 botanix-primitives = { path = "crates/botanix-primitives" }
 botanix-reth = { path = "bin/botanix-reth" }
-botanix-types = { path = "crates/botanix-types" }
 botanix-rpc-client = { path = "crates/botanix-rpc-client" }
 botanix-rpc-config = { path = "crates/botanix-rpc-config" }
 botanix-rpc-types = { path = "crates/botanix-rpc-types" }
 botanix-storage = { path = "crates/botanix-storage" }
 botanix-storage-migrate = { path = "crates/botanix-storage-migrate" }
 botanix-test-suite = { path = "bin/botanix-test-suite" }
+botanix-types = { path = "crates/botanix-types" }
 botanix-utils = { path = "crates/botanix-utils" }
 bytes = "1.5"
 cfg-if = { version = "1.0", default-features = false }
@@ -216,8 +213,8 @@ eyre = "0.6"
 
 # frost
 frost-secp256k1-tr = { git = "https://github.com/botanix-labs/frost", rev = "b4c5ab017bb0d182f3c56fd80b95d6375a4bfeea", features = [
-  "serde",
-  "serialization",
+    "serde",
+    "serialization",
 ] }
 futures = "0.3"
 futures-util = "0.3"
@@ -269,14 +266,12 @@ reth-codecs-derive = { git = "https://github.com/botanix-labs/reth", branch = "d
 reth-config = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-consensus = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-consensus-common = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
-reth-db = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "mdbx",
-] }
+reth-db = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = ["mdbx"] }
 reth-db-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-db-common = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-db-models = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-discv4 = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "test-utils",
+    "test-utils",
 ] }
 reth-engine-local = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
@@ -284,17 +279,17 @@ reth-engine-tree = { git = "https://github.com/botanix-labs/reth", branch = "dyn
 reth-eth-wire = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-eth-wire-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "test-utils",
-  "node",
-  "provider",
-  "pool",
-  "network",
-  "rpc",
+    "test-utils",
+    "node",
+    "provider",
+    "pool",
+    "network",
+    "rpc",
 ] }
 reth-ethereum-consensus = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-ethereum-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-ethereum-forks = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "serde",
+    "serde",
 ] }
 reth-ethereum-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-ethereum-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
@@ -304,7 +299,7 @@ reth-execution-errors = { git = "https://github.com/botanix-labs/reth", branch =
 reth-execution-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-metrics = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-network = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "test-utils",
+    "test-utils",
 ] }
 reth-network-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-network-p2p = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
@@ -312,22 +307,22 @@ reth-network-peers = { git = "https://github.com/botanix-labs/reth", branch = "d
 reth-node-builder = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-node-core = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-node-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "test-utils",
+    "test-utils",
 ] }
 reth-node-metrics = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-node-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-payload-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "secp256k1",
+    "secp256k1",
 ] }
 reth-primitives-traits = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-provider = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "test-utils",
+    "test-utils",
 ] }
 reth-prune = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-prune-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
-  "test-utils",
+    "test-utils",
 ] }
 reth-revm = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 reth-rpc-engine-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
@@ -348,31 +343,21 @@ revm = "=28.0.1"
 revm-database = { version = "7.0.5", default-features = false }
 revm-primitives = { version = "20.2.1", features = ["std"] }
 schnellru = "0.2"
-secp256k1 = { version = "0.30", features = [
-  "global-context",
-  "std",
-  "recovery",
-] }
-serde = { version = "1.0", features = [
-  "derive",
-  "std",
-], default-features = true }
+secp256k1 = { version = "0.30", features = ["global-context", "std", "recovery"] }
+serde = { version = "1.0", features = ["derive", "std"], default-features = true }
 serde_json = "1.0"
 serde_with = "3.3.0"
 sha2 = { version = "0.9.9" }
 shellexpand = "3.0.0"
 tempfile = "3.16"
 tendermint = { git = "https://github.com/bnb-chain/tendermint-rs-parlia", rev = "8c21ccbd58a174e07eed2c9343e63ccd00f0fbd5", features = [
-  "secp256k1",
+    "secp256k1",
 ] }
 
 # Tendermint
 # tendermint = { version = "0.40.1", features = ["clock"] }
 tendermint-abci = "0.40.1"
-tendermint-light-client = { version = "0.40.1", features = [
-  "secp256k1",
-  "rpc-client",
-] }
+tendermint-light-client = { version = "0.40.1", features = ["secp256k1", "rpc-client"] }
 tendermint-proto = "0.40.1"
 tendermint-rpc = { version = "0.40.1", features = ["http-client"] }
 test-fuzz = "7"

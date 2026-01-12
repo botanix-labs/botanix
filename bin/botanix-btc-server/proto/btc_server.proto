@@ -38,7 +38,7 @@ service BtcServer {
 
     rpc AbortSigning(Empty) returns (Empty) {}
 
-    // only meant to be used by the cordinator
+    // only meant to be used by the coordinator
     rpc NewRound1SigningPackage(SigningPackage) returns (Empty) {}
 
     rpc NewRound2SigningPackage(SigningPackage) returns (Empty) {}

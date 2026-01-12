@@ -51,7 +51,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-
 echo "Setting up local docker environment..."
 echo "  Nodes: $NUM_NODES"
 echo "  Output: $OUTPUT_PATH"
@@ -80,7 +79,6 @@ cargo run -p botanix-up -- \
 echo ""
 echo "Configuration generated successfully in $CONFIG_PATH"
 
-
 echo "Fixing genesis.json files..."
 MASTER_GENESIS="$CONFIG_PATH/node-1/cometbft/config/genesis.json"
 if [ -f "$MASTER_GENESIS" ]; then
@@ -103,7 +101,6 @@ for NODE_DIR in "$CONFIG_PATH"/node-*/cometbft/config; do
     fi
 done
 
-
 NETWORK_NAME="${PROJECT_PREFIX}-local"
 if ! docker network inspect "$NETWORK_NAME" > /dev/null 2>&1; then
     echo "Creating docker network: $NETWORK_NAME"
@@ -112,10 +109,8 @@ else
     echo "Docker network $NETWORK_NAME already exists"
 fi
 
-
 echo "Generating docker-compose.yml..."
 bash scripts/generate-compose.sh "$NUM_NODES" "$OUTPUT_PATH" "$CONFIG_PATH" "$PROJECT_PREFIX"
-
 
 echo "Generating bitcoin initialization script..."
 cat > "$OUTPUT_PATH/init-bitcoin.sh" << 'INIT_SCRIPT'

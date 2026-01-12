@@ -12,7 +12,8 @@ use bitcoin::{consensus::Encodable, hash_types::BlockHash, Address, Amount};
 use bitcoincore_rpc::RpcApi;
 use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_consensus_common::utils::unix_timestamp;
-use btcserverlib::{database::TEST_LEGACY_MULTISIG_ID, pegout_id::PegoutId};
+use botanix_types::TEST_LEGACY_MULTISIG_ID;
+use btcserverlib::pegout_id::PegoutId;
 use ethers::{
     providers::{JsonRpcClient, Provider, ProviderError},
     types::H256,

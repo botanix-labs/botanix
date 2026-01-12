@@ -77,7 +77,8 @@ pub async fn test_parallel_dkg(
         eth_destination.0.into(),
         3,
     )
-    .await.unwrap();
+    .await
+    .unwrap();
     it_info_print!("Gateway Address Response", gateway_address_response);
 
     // print balance

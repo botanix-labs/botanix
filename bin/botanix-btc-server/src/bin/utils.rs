@@ -193,7 +193,11 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
             let bytes = std::fs::read(&c.input)?;
             let import: database::ExportedKeyPackage =
                 ciborium::from_reader(bytes.as_slice())?;
-            db.import_key_package_by_id(c.multisig_id.into(), passphrase, import)?;
+            db.import_key_package_by_id(
+                c.multisig_id.into(),
+                passphrase,
+                import,
+            )?;
 
             println!("Successfully imported decrypted key package");
         }

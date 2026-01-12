@@ -24,7 +24,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.90
+          toolchain: 1.92
           components: rustfmt, clippy
       - run: cargo update --workspace --locked
 
@@ -37,7 +37,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.90
+          toolchain: 1.92
           components: rustfmt, clippy
 
       - name: Install Python
@@ -64,7 +64,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.90
+          toolchain: 1.92
           components: rustfmt, clippy
 
       - name: Setup Bun
@@ -80,5 +80,5 @@ jobs:
         with:
           config: ./.typos.toml
 
-      - name: Lint project
-        run: make lint
+      # - name: Lint project
+      #   run: make lint

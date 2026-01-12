@@ -633,13 +633,13 @@ pub fn has_conflicting_input(
 mod tests {
     use std::time::SystemTime;
 
-    use botanix_types::{MultisigId, TEST_LEGACY_MULTISIG_ID};
     use crate::{
-        database::{FinalizedPegout, version::UtxoVersion},
+        database::{version::UtxoVersion, FinalizedPegout},
         frost_id,
         wallet::psbt::{PsbtExt, PsbtInputExt, PsbtOutputExt},
     };
     use bitcoin::{psbt::Psbt, ScriptBuf, TxOut};
+    use botanix_types::{MultisigId, TEST_LEGACY_MULTISIG_ID};
     use rand::Rng;
 
     use crate::{

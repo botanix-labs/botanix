@@ -70,7 +70,7 @@ jobs:
         id: gate
         env:
           WIP: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          SA:  ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           GKE: ${{ secrets.GKE_WORKLOAD_KEY }}
         run: |
           set -euo pipefail
@@ -110,8 +110,8 @@ jobs:
       - name: Compile btc-server
         run: |
           set -eo pipefail
-          cd ./bin/botanix-btc-server 
-          cargo build --bin botanix-btc-server 
+          cd ./bin/botanix-btc-server
+          cargo build --bin botanix-btc-server
           echo "Bitcoin server compiled successfully!"
           sccache --show-stats
 
@@ -135,12 +135,12 @@ jobs:
         run: |
           set -eo pipefail
           cd ./bin/botanix-reth
-          cargo build --bin botanix-reth 
+          cargo build --bin botanix-reth
           echo "Reth botanix node compiled successfully!"
           sccache --show-stats
 
       - name: Compile test-suite
-        run: | 
+        run: |
           set -eo pipefail
           cd ./bin/botanix-test-suite
           cargo build --bin botanix-test-suite
@@ -163,7 +163,6 @@ jobs:
           path: /tmp/binaries
           retention-days: 1
 
-
   e2e-tests:
     name: test / ${{ matrix.test }}
     runs-on: ubuntu-latest
@@ -172,25 +171,26 @@ jobs:
     strategy:
       fail-fast: false  # Continue running other tests even if one fails
       matrix:
-        test: ["dkg_flow",
-          "utxo_commitment",
-          "signing_flow",
-          "test_mempool_gossip",
-          "utxo_sync",
-          "utxo_recovery",
-          "wallet_sync",
-          "frost_e2e_stable",
-          "test_pegin_v1",
-          "invalid_pegin",
-          "invalid_pegout",
-          "block_builder",
-          "test_prevent_resigning_pegout",
-          "test_round1_then_new_signing_session",
-          "test_track_mempool",
-          "tx_weight_limit",
-          "test_pegin_recovery",
-          "rpc_node",
-          "test_parallel_dkg"]
+        test:
+          - "dkg_flow"
+          - "utxo_commitment"
+          - "signing_flow"
+          - "test_mempool_gossip"
+          - "utxo_sync"
+          - "utxo_recovery"
+          - "wallet_sync"
+          - "frost_e2e_stable"
+          - "test_pegin_v1"
+          - "invalid_pegin"
+          - "invalid_pegout"
+          - "block_builder"
+          - "test_prevent_resigning_pegout"
+          - "test_round1_then_new_signing_session"
+          - "test_track_mempool"
+          - "tx_weight_limit"
+          - "test_pegin_recovery"
+          - "rpc_node"
+          - "test_parallel_dkg"
     env:
       RUST_BACKTRACE: 1
       TEST_TO_RUN: ${{ matrix.test }}
@@ -205,7 +205,7 @@ jobs:
 
       - name: Install killall
         run: sudo apt-get install psmisc
-        
+
       - name: Configure cache mode for forks
         run: |
           if [ "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}" = "true" ]; then
@@ -219,13 +219,13 @@ jobs:
         id: gate
         env:
           WIP: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          SA:  ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           GKE: ${{ secrets.GKE_WORKLOAD_KEY }}
         run: |
           set -euo pipefail
           if [[ -n "$WIP" && -n "$SA" ]]; then echo "has_gcp=true" >>"$GITHUB_OUTPUT"; else echo "has_gcp=false" >>"$GITHUB_OUTPUT"; fi
           if [[ -n "$GKE" ]]; then echo "has_gke_key=true" >>"$GITHUB_OUTPUT"; else echo "has_gke_key=false" >>"$GITHUB_OUTPUT"; fi
-          
+
       - name: gcloud auth
         if: ${{ steps.gate.outputs.has_gcp == 'true' }}
         uses: 'google-github-actions/auth@v3'
@@ -245,9 +245,9 @@ jobs:
         run: |
           mkdir -p target/debug
           mkdir -p ./bin/test-suite
-          
+
           if [ -f "/tmp/binaries/botanix-btc-server" ]; then
-            cp /tmp/binaries/botanix-btc-server target/debug/ 
+            cp /tmp/binaries/botanix-btc-server target/debug/
             chmod +x target/debug/botanix-btc-server
           fi
           if [ -f "/tmp/binaries/botanix-btc-utils" ]; then
@@ -273,7 +273,7 @@ jobs:
       - name: Run ${{ matrix.test }}
         run: |
           make start-test-suite-runners
-          
+
       - name: Cleanup resources
         if: always()
         run: |
@@ -284,7 +284,8 @@ jobs:
     name: integration summary
     runs-on: ubuntu-latest
     if: always()
-    needs: [e2e-tests]
+    needs:
+      - e2e-tests
     timeout-minutes: 15
     steps:
       - name: Decide whether the needed jobs succeeded or failed
@@ -294,7 +295,7 @@ jobs:
 
       - name: Generate test report
         if: always()
-        run: |
+        run: |-
           echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
           echo "✅ All tests completed with status: ${{ needs.e2e-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -207,10 +207,12 @@ impl NonFederationMemberTestConfig {
         federation_config
             .write_to_path(&federation_config_path)
             .context("Error writing federation config to path")?;
-        let federation_config_contents = std::fs::read_to_string(&federation_config_path)
-            .context("failed to read federation config for hashing")?;
+        let federation_config_contents =
+            std::fs::read_to_string(&federation_config_path)
+                .context("failed to read federation config for hashing")?;
         let federation_config_hash =
-            sha256::Hash::hash(federation_config_contents.as_bytes()).to_string();
+            sha256::Hash::hash(federation_config_contents.as_bytes())
+                .to_string();
 
         // point to the relevant working directory
         let mut working_directory = std::env::current_dir()
