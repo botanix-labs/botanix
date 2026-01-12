@@ -33,6 +33,8 @@ pub enum BitcoindError {
     BestBlockHashRetrievalFailed(bitcoincore_rpc::Error),
     #[error("Block info retrieval failed")]
     BlockInfoRetrievalFailed(bitcoincore_rpc::Error),
+    #[error("Block txs retrieval failed")]
+    BlockTxsRetrievalFailed(bitcoincore_rpc::Error),
     #[error("Smart estimate fee retrieval failed")]
     EstimateSmartFeeFailed(bitcoincore_rpc::Error),
     #[error("Block count failed")]

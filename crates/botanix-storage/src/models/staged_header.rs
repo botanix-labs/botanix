@@ -1,10 +1,9 @@
 //! Models for staged headers with their associated pegins and pegouts.
 
+use botanix_types::{default_multisig_id, MultisigId};
 use reth_codecs::{add_arbitrary_tests, Compact};
 use reth_primitives::Header;
 use serde::{Deserialize, Serialize};
-
-use botanix_types::MultisigId;
 
 /// A header with associated pegins and pegouts.
 ///
@@ -98,6 +97,7 @@ pub struct PeginData {
     /// Stored as raw bytes rather than hex-encoded string for efficiency.
     pub eth_address: Vec<u8>,
 
+    #[serde(default = "default_multisig_id")]
     /// The multisig_id (federation) that the pegin belongs to.
     pub multisig_id: MultisigId,
 }

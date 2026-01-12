@@ -58,7 +58,6 @@ if [[ "$CONFIG_PATH" == "$OUTPUT_PATH"* ]]; then
     RELATIVE_CONFIG_PATH=".${CONFIG_PATH#"$OUTPUT_PATH"}"
 else
     # Convert to absolute paths if needed
-    ABS_OUTPUT_PATH=$(cd "$OUTPUT_PATH" 2> /dev/null && pwd || echo "$OUTPUT_PATH")
     ABS_CONFIG_PATH=$(cd "$CONFIG_PATH" 2> /dev/null && pwd || echo "$CONFIG_PATH")
 
     RELATIVE_CONFIG_PATH="$ABS_CONFIG_PATH"
