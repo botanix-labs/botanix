@@ -436,8 +436,7 @@ where
         };
 
         let multisig_config = federation
-            .multisig
-            .get(*multisig_id as usize)
+            .get_config_by_multisig_id(multisig_id)
             .ok_or_else(|| {
                 dkg::Error::BadConfig(format!(
                     "missing multisig id {}",
@@ -682,7 +681,8 @@ where
 
         // Get the current node's public key to check membership
         let secp = secp256k1::Secp256k1::new();
-        let node_public_key = p2p_secret_key.public_key(&secp);
+        let node_public_key =
+            secp256k1::PublicKey::from_secret_key(&secp, &p2p_secret_key);
 
         let mut sessions = HashMap::new();
 
