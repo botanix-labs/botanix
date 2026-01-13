@@ -97,6 +97,7 @@ impl ExtraDataHeader {
     }
 
     /// Serialize the extra data header without the signature
+    /// Always serializes in V1 format (count + multiple public keys)
     pub fn encode_into_without_signature(
         &self,
         writer: &mut impl bitcoin::io::Write,
@@ -104,7 +105,20 @@ impl ExtraDataHeader {
         self.version.consensus_encode(writer)?;
         self.chain_version.consensus_encode(writer)?;
         self.bitcoin_block_hash.consensus_encode(writer)?;
-        self.aggregated_public_key.serialize().consensus_encode(writer)?;
+
+        // V1 format: count + multiple public keys
+        let num_keys = self.aggregated_public_keys.len() as u16;
+        num_keys.consensus_encode(writer)?;
+
+        // Serialize and sort keys for deterministic serialization
+        let mut serialized_keys: Vec<[u8; 33]> =
+            self.aggregated_public_keys.iter().map(|k| k.serialize()).collect();
+        serialized_keys.sort();
+
+        for key_bytes in serialized_keys {
+            key_bytes.consensus_encode(writer)?;
+        }
+
         let block_producer_address_bytes =
             self.block_fee_recipient_address.0 .0;
         let _ = writer.write(&block_producer_address_bytes)?;
