@@ -2086,21 +2086,37 @@ where
             })
             .collect::<Vec<(TxOut, PegoutId)>>();
 
-        let pk_package =
-            self.db.get_key_package().to_status()?.ok_or_else(|| {
-                internal!("missing key package, run the dkg process first")
+        // TODO: During migration, these should be determined by the migration state.
+        // - utxo_source_multisig_id: The multisig to select UTXOs from (current/source federation)
+        // - change_target_multisig_id: The multisig for the change address (target federation)
+        // Normally, these will be the same, but during the migration phase, the change target multisig
+        // will be the incoming multisig.
+
+        let utxo_source_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+        let change_target_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+
+        let change_pk_package = self
+            .db
+            .get_public_key_package_by_id(change_target_multisig_id)
+            .to_status()?
+            .ok_or_else(|| {
+                internal!("missing public key package for multisig_id {}, run the dkg process first", change_target_multisig_id)
             })?;
 
-        let secp_pk = pk_package.verifying_key().to_secp_pk().map_err(|e| {
-            internal!("Failed to generate tweaked public key: {}", e)
-        })?;
+        let secp_pk =
+            change_pk_package.verifying_key().to_secp_pk().map_err(|e| {
+                internal!("Failed to generate tweaked public key: {}", e)
+            })?;
         let secp_pk_serialized = secp_pk.serialize();
         let change_script =
             wallet::address::generate_taproot_change_scriptpubkey(
                 secp_pk_serialized,
             );
 
-        info!("make_tx: creating psbt with {} outputs", outputs.len());
+        info!(
+            "make_tx: creating psbt with {} outputs (utxo_source={}, change_target={})",
+            outputs.len(), utxo_source_multisig_id, change_target_multisig_id
+        );
         let psbt = match coordinator::make_tx(
             outputs,
             fee_rate,
@@ -2109,6 +2125,7 @@ where
             self.min_signers,
             tracked_txs,
             &self.config,
+            utxo_source_multisig_id,
         )
         .to_status()
         {

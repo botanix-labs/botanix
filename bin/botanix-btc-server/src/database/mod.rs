@@ -931,6 +931,17 @@ impl Db {
         })
     }
 
+    /// Iterates over UTXOs that belong to a specific multisig federation.
+    pub fn iter_utxos_by_multisig(
+        &self,
+        multisig_id: MultisigId,
+    ) -> impl Iterator<Item = Result<Utxo, Error>> + '_ {
+        self.iter_utxos().filter(move |result| match result {
+            Ok(utxo) => utxo.multisig_id == multisig_id,
+            Err(_) => true,
+        })
+    }
+
     pub fn store_utxos(&self, utxos: &[&Utxo]) -> Result<bool, Error> {
         match utxos.len() {
             0 => Ok(false),
@@ -2063,6 +2074,79 @@ mod tests {
         for utxo in utxos.iter() {
             assert!(retrieved_utxos.contains(utxo));
         }
+    }
+
+    #[test]
+    fn test_iter_utxos_by_multisig() {
+        let (db, _temp_dir) = setup_db();
+
+        let multisig_0 = MultisigId::new(0);
+        let multisig_1 = MultisigId::new(1);
+
+        // Create UTXOs for multisig 0
+        let mut utxos_multisig_0 = vec![];
+        for _ in 0..3 {
+            let tx = create_tx(2, 1, None);
+            let utxo = Utxo::new(
+                OutPoint::new(tx.compute_txid(), 0),
+                tx.output.get(0).expect("one output").clone(),
+                None,
+                None,
+                multisig_0,
+            );
+            utxos_multisig_0.push(utxo);
+        }
+
+        // Create UTXOs for multisig 1
+        let mut utxos_multisig_1 = vec![];
+        for _ in 0..2 {
+            let tx = create_tx(2, 1, None);
+            let utxo = Utxo::new(
+                OutPoint::new(tx.compute_txid(), 0),
+                tx.output.get(0).expect("one output").clone(),
+                None,
+                None,
+                multisig_1,
+            );
+            utxos_multisig_1.push(utxo);
+        }
+
+        // Store all UTXOs
+        let all_utxos: Vec<&Utxo> =
+            utxos_multisig_0.iter().chain(utxos_multisig_1.iter()).collect();
+        db.store_utxos(&all_utxos).unwrap();
+        db.flush().unwrap();
+
+        // Verify all UTXOs are stored
+        let all_retrieved = db.get_all_utxos().unwrap();
+        assert_eq!(all_retrieved.len(), 5);
+
+        // Test filtering by multisig 0
+        let filtered_0: Vec<Utxo> = db
+            .iter_utxos_by_multisig(multisig_0)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(filtered_0.len(), 3);
+        for utxo in &filtered_0 {
+            assert_eq!(utxo.multisig_id, multisig_0);
+        }
+
+        // Test filtering by multisig 1
+        let filtered_1: Vec<Utxo> = db
+            .iter_utxos_by_multisig(multisig_1)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(filtered_1.len(), 2);
+        for utxo in &filtered_1 {
+            assert_eq!(utxo.multisig_id, multisig_1);
+        }
+
+        // Test filtering by non-existent multisig
+        let filtered_empty: Vec<Utxo> = db
+            .iter_utxos_by_multisig(MultisigId::new(999))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(filtered_empty.len(), 0);
     }
 
     #[test]

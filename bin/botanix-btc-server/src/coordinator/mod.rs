@@ -15,6 +15,7 @@ use crate::{
     },
 };
 use bitcoin::{psbt::Psbt, FeeRate, OutPoint, ScriptBuf, TxOut};
+use botanix_types::MultisigId;
 use frost_secp256k1_tr::{self as frost, keys::Tweak, SigningParameters};
 use std::{
     collections::{HashMap, HashSet},
@@ -115,6 +116,7 @@ pub fn make_tx(
     min_signers: u16,
     tracked_txs: Vec<Tx>,
     config: &Config,
+    multisig_id: MultisigId,
 ) -> Result<Psbt, CoordinatorError> {
     let mut attempted_outputs = outputs.clone();
     loop {
@@ -126,6 +128,7 @@ pub fn make_tx(
             min_signers,
             &tracked_txs,
             config,
+            multisig_id,
         )?;
         let tx_weight = calculate_signed_tx_weight(&psbt)?;
         if tx_weight.to_wu() <= MAX_PEGOUT_TX_WEIGHT {
@@ -160,6 +163,7 @@ pub fn attempt_make_tx(
     min_signers: u16,
     tracked_txs: &[Tx],
     config: &Config,
+    multisig_id: MultisigId,
 ) -> Result<Psbt, CoordinatorError> {
     // TODO: re-enable this check
     // Ensure we are above the minimum relay fee rate
@@ -170,14 +174,17 @@ pub fn attempt_make_tx(
     //     fee_rate = min_relay_fee_rate;
     // }
 
-    // collect all database utxos in a hashmap
-    let utxos: HashMap<OutPoint, Utxo> =
-        db.iter_utxos().try_fold(HashMap::new(), |mut map, r| {
-            let utxo = r?; // Directly propagate the error with `?`
+    // Collect UTXOs belonging to the specified multisig federation.
+    // During migration, this ensures we only select UTXOs from the current/source
+    // multisig, not the target multisig being migrated to.
+    let utxos: HashMap<OutPoint, Utxo> = db
+        .iter_utxos_by_multisig(multisig_id)
+        .try_fold(HashMap::new(), |mut map, r| {
+            let utxo = r?;
             map.insert(utxo.outpoint, utxo);
             Ok::<HashMap<bitcoin::OutPoint, Utxo>, DbError>(map)
         })?;
-    debug!("utxos len = {:?}", utxos.len());
+    debug!("utxos len = {:?} (multisig_id={})", utxos.len(), multisig_id);
     debug!("utxos = {:?}", utxos);
 
     // Exclude UTXOs that have been specifically requested to not be included in the coin selection
