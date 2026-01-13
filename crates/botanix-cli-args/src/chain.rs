@@ -2,7 +2,9 @@ use alloy_primitives::Address;
 use askama::Template;
 use bitcoin::hashes::Hash;
 use botanix_authority_edh::{
-    extra_data_header::{ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION},
+    extra_data_header::{
+        ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION_V1,
+    },
     nums_secp256k1_pk,
 };
 use botanix_chainspec::{
@@ -81,11 +83,13 @@ pub fn get_botanix_chain(
     let lst_fee_receiver = genesis_toml_config.lst_fee_receiver;
     info!("LST fee receiver: {:?}", lst_fee_receiver);
 
+    let mut aggregated_public_keys = HashSet::new();
+    aggregated_public_keys.insert(nums_secp256k1_pk());
     let extra_data_header = ExtraDataHeader::new(
-        EXTRA_HEADER_VERSION,
+        EXTRA_HEADER_VERSION_V1,
         CHAIN_VERSION,
         bitcoin::hash_types::BlockHash::all_zeros(),
-        nums_secp256k1_pk(),
+        aggregated_public_keys,
         Address::ZERO,
     );
     let edh = hex::encode(extra_data_header.serialize());
