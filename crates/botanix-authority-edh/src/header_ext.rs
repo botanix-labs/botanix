@@ -144,7 +144,7 @@ impl HeaderExt for Header {
             let bitcoin_checkpoint = (default_header, 0u32);
             return Ok(BotanixConsensusPackage {
                 bitcoin_checkpoint,
-                aggregate_public_key: edh.aggregated_public_key,
+                aggregate_public_key: edh.aggregated_public_keys,
                 btc_network,
             });
         }
@@ -179,7 +179,7 @@ impl HeaderExt for Header {
 
         Ok(BotanixConsensusPackage {
             bitcoin_checkpoint,
-            aggregate_public_key: edh.aggregated_public_key,
+            aggregate_public_key: edh.aggregated_public_keys,
             btc_network,
         })
     }
@@ -189,7 +189,7 @@ impl HeaderExt for Header {
         &self,
     ) -> Result<secp256k1::PublicKey, ExtraDataHeaderDeserializeError> {
         let edh = self.deserialize_extra_data_header()?;
-        Ok(edh.aggregated_public_key)
+        Ok(edh.aggregated_public_keys)
     }
 }
 
@@ -249,7 +249,7 @@ mod tests {
 
         assert_eq!(bitcoin_checkpoint.0, expected_header);
         assert_eq!(bitcoin_checkpoint.1, 0);
-        assert_eq!(aggregate_public_key, edh.aggregated_public_key);
+        assert_eq!(aggregate_public_key, edh.aggregated_public_keys);
         assert_eq!(btc_network, bitcoin::Network::Testnet);
     }
 }

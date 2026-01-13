@@ -217,6 +217,7 @@ impl ExtraDataHeader {
 mod tests {
     use super::*;
     use bitcoin::BlockHash;
+    use bitcoin::consensus::encode::Encodable;
     use rand::rngs::OsRng;
     use revm_primitives::hex;
     use secp256k1::Secp256k1;
@@ -225,17 +226,20 @@ mod tests {
     #[test]
     fn test_create_new_header() {
         let mainchain = BlockHash::hash(&[1, 2, 3]);
+        let mut aggregated_public_keys = HashSet::new();
+        aggregated_public_keys.insert(nums_secp256k1_pk());
 
         let header = ExtraDataHeader::new(
-            EXTRA_HEADER_VERSION,
+            EXTRA_HEADER_VERSION_V1,
             CHAIN_VERSION,
             mainchain,
-            nums_secp256k1_pk(),
+            aggregated_public_keys.clone(),
             Address::ZERO,
         );
-        assert_eq!(header.version, EXTRA_HEADER_VERSION);
+        assert_eq!(header.version, EXTRA_HEADER_VERSION_V1);
         assert_eq!(header.chain_version, CHAIN_VERSION);
         assert_eq!(header.bitcoin_block_hash, mainchain);
+        assert_eq!(header.aggregated_public_keys, aggregated_public_keys);
     }
 
     // Test case for edh max size
@@ -254,11 +258,14 @@ mod tests {
         authority_signers.push(public_key);
         let address = Address::random();
 
+        let mut aggregated_public_keys = HashSet::new();
+        aggregated_public_keys.insert(nums_secp256k1_pk());
+
         let header = ExtraDataHeader::new(
-            EXTRA_HEADER_VERSION,
+            EXTRA_HEADER_VERSION_V1,
             CHAIN_VERSION,
             BlockHash::hash(&[1]),
-            nums_secp256k1_pk(),
+            aggregated_public_keys,
             address,
         );
         let mut buf: Vec<u8> = vec![];
@@ -271,24 +278,28 @@ mod tests {
 
     #[test]
     fn create_botanix_testnet_header() {
-        let _pk1 = secp256k1::PublicKey::from_slice(
+        let pk1 = secp256k1::PublicKey::from_slice(
             hex::decode("039bef292b80427d355cecb89eda8a50a7d2196a93d73dade5a0c4a07cd334815d")
                 .unwrap()
                 .as_slice(),
         )
         .unwrap();
-        let _pk2 = secp256k1::PublicKey::from_slice(
+        let pk2 = secp256k1::PublicKey::from_slice(
             hex::decode("02bdc272b244f717604fffe659d2d98205d1e6764fdf453d1631f42c2db4d8d710")
                 .unwrap()
                 .as_slice(),
         )
         .unwrap();
 
+        let mut aggregated_public_keys = HashSet::new();
+        aggregated_public_keys.insert(pk1);
+        aggregated_public_keys.insert(pk2);
+
         let extra_data_header = ExtraDataHeader::new(
-            EXTRA_HEADER_VERSION,
+            EXTRA_HEADER_VERSION_V1,
             CHAIN_VERSION,
             BlockHash::hash(&[1]),
-            nums_secp256k1_pk(),
+            aggregated_public_keys,
             Address::ZERO,
         );
 
@@ -297,4 +308,164 @@ mod tests {
             hex::encode(extra_data_header.serialize())
         );
     }
+
+    // Test EDH_V1 format with multiple keys
+    #[test]
+    fn test_v1_multiple_keys_roundtrip() {
+        let secp = Secp256k1::new();
+        let mut aggregated_public_keys = HashSet::new();
+
+        // Generate 3 different public keys
+        for _ in 0..3 {
+            let (_, public_key) = secp.generate_keypair(&mut OsRng);
+            aggregated_public_keys.insert(public_key);
+        }
+
+        let header = ExtraDataHeader::new(
+            EXTRA_HEADER_VERSION_V1,
+            CHAIN_VERSION,
+            BlockHash::hash(&[1, 2, 3]),
+            aggregated_public_keys.clone(),
+            Address::random(),
+        );
+
+        // Serialize
+        let mut buf = Vec::new();
+        header.encode_into(&mut buf).unwrap();
+
+        // Deserialize
+        let deserialized = ExtraDataHeader::deserialize(&mut buf.as_slice())
+            .expect("Deserialization failed");
+
+        // Verify
+        assert_eq!(deserialized.version, EXTRA_HEADER_VERSION_V1);
+        assert_eq!(deserialized.aggregated_public_keys.len(), 3);
+        assert_eq!(deserialized.aggregated_public_keys, aggregated_public_keys);
+        assert_eq!(deserialized, header);
+    }
+
+    // Test EDH_V1 format deterministic serialization
+    #[test]
+    fn test_v1_deterministic_serialization() {
+        let secp = Secp256k1::new();
+        let mut keys = Vec::new();
+
+        // Generate keys
+        for _ in 0..3 {
+            let (_, public_key) = secp.generate_keypair(&mut OsRng);
+            keys.push(public_key);
+        }
+
+        // Create two headers with same keys in different insertion order
+        let mut keys_set1 = HashSet::new();
+        keys_set1.insert(keys[0]);
+        keys_set1.insert(keys[1]);
+        keys_set1.insert(keys[2]);
+
+        let mut keys_set2 = HashSet::new();
+        keys_set2.insert(keys[2]);
+        keys_set2.insert(keys[0]);
+        keys_set2.insert(keys[1]);
+
+        let header1 = ExtraDataHeader::new(
+            EXTRA_HEADER_VERSION_V1,
+            CHAIN_VERSION,
+            BlockHash::hash(&[1]),
+            keys_set1,
+            Address::ZERO,
+        );
+
+        let header2 = ExtraDataHeader::new(
+            EXTRA_HEADER_VERSION_V1,
+            CHAIN_VERSION,
+            BlockHash::hash(&[1]),
+            keys_set2,
+            Address::ZERO,
+        );
+
+        // Both should serialize to the same bytes (deterministic)
+        let serialized1 = header1.serialize();
+        let serialized2 = header2.serialize();
+        assert_eq!(serialized1, serialized2);
+    }
+
+    // Test EDH_V0 backward compatibility - deserialize V0 format
+    #[test]
+    fn test_v0_backward_compatibility() {
+        
+
+        let mut buf = Vec::new();
+        let version_v0 = EXTRA_HEADER_VERSION_V0;
+        let chain_version = CHAIN_VERSION;
+        let bitcoin_block_hash = BlockHash::hash(&[1, 2, 3]);
+        let public_key = nums_secp256k1_pk();
+        let address = Address::ZERO;
+
+        // Manually serialize V0 format (version, chain_version, block_hash, single key, address)
+        version_v0.consensus_encode(&mut buf).unwrap();
+        chain_version.consensus_encode(&mut buf).unwrap();
+        bitcoin_block_hash.consensus_encode(&mut buf).unwrap();
+        public_key.serialize().consensus_encode(&mut buf).unwrap();
+        buf.extend_from_slice(&address.0.0);
+
+        // Deserialize as V0
+        let deserialized = ExtraDataHeader::deserialize(&mut buf.as_slice())
+            .expect("V0 deserialization failed");
+
+        // Verify it was parsed as V0 with single key converted to HashSet
+        assert_eq!(deserialized.version, EXTRA_HEADER_VERSION_V0);
+        assert_eq!(deserialized.aggregated_public_keys.len(), 1);
+        assert!(deserialized.aggregated_public_keys.contains(&public_key));
+        assert_eq!(deserialized.bitcoin_block_hash, bitcoin_block_hash);
+        assert_eq!(deserialized.block_fee_recipient_address, address);
+    }
+
+    #[test]
+    fn test_v1_single_key() {
+        let mut aggregated_public_keys = HashSet::new();
+        aggregated_public_keys.insert(nums_secp256k1_pk());
+
+        let header = ExtraDataHeader::new(
+            EXTRA_HEADER_VERSION_V1,
+            CHAIN_VERSION,
+            BlockHash::hash(&[5]),
+            aggregated_public_keys,
+            Address::ZERO,
+        );
+
+        // Serialize and deserialize
+        let serialized = header.serialize();
+        let deserialized = ExtraDataHeader::deserialize(&mut serialized.as_slice())
+            .expect("Deserialization failed");
+
+        assert_eq!(deserialized, header);
+        assert_eq!(deserialized.aggregated_public_keys.len(), 1);
+    }
+
+    // Test invalid version
+    #[test]
+    fn test_invalid_version() {
+        use bitcoin::consensus::encode::Encodable;
+
+        let mut buf = Vec::new();
+        let invalid_version = 999u32;
+        let chain_version = CHAIN_VERSION;
+        let bitcoin_block_hash = BlockHash::hash(&[1]);
+
+        // Write invalid version
+        invalid_version.consensus_encode(&mut buf).unwrap();
+        chain_version.consensus_encode(&mut buf).unwrap();
+        bitcoin_block_hash.consensus_encode(&mut buf).unwrap();
+
+        // Try to deserialize - should fail with InvalidVersion
+        let result = ExtraDataHeader::deserialize(&mut buf.as_slice());
+        assert!(result.is_err());
+        match result {
+            Err(ExtraDataHeaderDeserializeError::InvalidVersion) => {
+                // Expected error
+            }
+            _ => panic!("Expected InvalidVersion error"),
+        }
+    }
+
 }
