@@ -147,16 +147,46 @@ impl ExtraDataHeader {
         reader: &mut impl bitcoin::io::Read,
     ) -> Result<Self, ExtraDataHeaderDeserializeError> {
         let version = u32::consensus_decode(reader)?;
-        // in the future you can deserialize specific versions of edh based on the version
-
         let chain_version = u32::consensus_decode(reader)?;
         let bitcoin_block_hash = Decodable::consensus_decode(reader)?;
-        let pk_bytes = <[u8; 33]>::consensus_decode(reader)?;
-        let aggregated_public_key = secp256k1::PublicKey::from_slice(&pk_bytes)
-            .map_err(|e| {
-                println!("Error: {:?}", e);
-                encode::Error::ParseFailed("malformed aggregate public key")
-            })?;
+
+        // Deserialize specific versions of edh based on the version
+        let aggregated_public_keys = match version {
+            EXTRA_HEADER_VERSION_V0 => {
+                // V0 format: single public key (backward compatibility)
+                let pk_bytes = <[u8; 33]>::consensus_decode(reader)?;
+                let aggregated_public_key = secp256k1::PublicKey::from_slice(&pk_bytes)
+                    .map_err(|e| {
+                        println!("Error: {:?}", e);
+                        encode::Error::ParseFailed("malformed aggregate public key")
+                    })?;
+
+                let mut keys = HashSet::new();
+                keys.insert(aggregated_public_key);
+                keys
+            }
+            EXTRA_HEADER_VERSION_V1 => {
+                // V1 format: count + multiple public keys
+                let num_keys = u16::consensus_decode(reader)?;
+                let mut keys = HashSet::new();
+
+                for _ in 0..num_keys {
+                    let pk_bytes = <[u8; 33]>::consensus_decode(reader)?;
+                    let public_key = secp256k1::PublicKey::from_slice(&pk_bytes)
+                        .map_err(|e| {
+                            println!("Error: {:?}", e);
+                            encode::Error::ParseFailed("malformed aggregate public key")
+                        })?;
+                    keys.insert(public_key);
+                }
+
+                keys
+            }
+            _ => {
+                return Err(ExtraDataHeaderDeserializeError::InvalidVersion);
+            }
+        };
+
         let mut block_fee_recipient_address_bytes: [u8; 20] = [0; 20];
         reader.read_exact(&mut block_fee_recipient_address_bytes)?;
         let block_fee_recipient_address =
@@ -166,7 +196,7 @@ impl ExtraDataHeader {
             version,
             chain_version,
             bitcoin_block_hash,
-            aggregated_public_key,
+            aggregated_public_keys,
             block_fee_recipient_address,
         })
     }
