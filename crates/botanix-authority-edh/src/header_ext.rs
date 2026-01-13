@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use super::extra_data_header::{
     ExtraDataHeader, ExtraDataHeaderDeserializeError,
@@ -44,10 +44,10 @@ pub trait HeaderExt {
         bitcoind_factory: Arc<FallbackBitcoindClient>,
     ) -> Result<BotanixConsensusPackage, BotanixConsensusPackageError>;
 
-    /// Get aggregate public key
-    fn get_aggregate_public_key(
+    /// Get aggregated public keys
+    fn get_aggregated_public_keys(
         &self,
-    ) -> Result<secp256k1::PublicKey, ExtraDataHeaderDeserializeError>;
+    ) -> Result<HashSet<secp256k1::PublicKey>, ExtraDataHeaderDeserializeError>;
 
     /// Get the block producer address
     fn block_fee_recipient_address(
@@ -144,7 +144,7 @@ impl HeaderExt for Header {
             let bitcoin_checkpoint = (default_header, 0u32);
             return Ok(BotanixConsensusPackage {
                 bitcoin_checkpoint,
-                aggregate_public_key: edh.aggregated_public_keys,
+                aggregated_public_keys: edh.aggregated_public_keys,
                 btc_network,
             });
         }
@@ -179,15 +179,16 @@ impl HeaderExt for Header {
 
         Ok(BotanixConsensusPackage {
             bitcoin_checkpoint,
-            aggregate_public_key: edh.aggregated_public_keys,
+            aggregated_public_keys: edh.aggregated_public_keys,
             btc_network,
         })
     }
 
-    /// Get aggregate public key
-    fn get_aggregate_public_key(
+    /// Get aggregated public keys
+    fn get_aggregated_public_keys(
         &self,
-    ) -> Result<secp256k1::PublicKey, ExtraDataHeaderDeserializeError> {
+    ) -> Result<HashSet<secp256k1::PublicKey>, ExtraDataHeaderDeserializeError>
+    {
         let edh = self.deserialize_extra_data_header()?;
         Ok(edh.aggregated_public_keys)
     }
@@ -234,7 +235,7 @@ mod tests {
 
         let BotanixConsensusPackage {
             bitcoin_checkpoint,
-            aggregate_public_key,
+            aggregated_public_keys,
             btc_network,
         } = res.unwrap();
 
@@ -249,7 +250,7 @@ mod tests {
 
         assert_eq!(bitcoin_checkpoint.0, expected_header);
         assert_eq!(bitcoin_checkpoint.1, 0);
-        assert_eq!(aggregate_public_key, edh.aggregated_public_keys);
+        assert_eq!(aggregated_public_keys, edh.aggregated_public_keys);
         assert_eq!(btc_network, bitcoin::Network::Testnet);
     }
 }

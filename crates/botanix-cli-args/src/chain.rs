@@ -17,7 +17,7 @@ use botanix_chainspec::{
     BotanixChainSpec,
 };
 use botanix_configs::federation::FederationTomlConfig;
-use std::{fs, path::PathBuf, str::FromStr};
+use std::{collections::HashSet, fs, path::PathBuf, str::FromStr};
 use tracing::info;
 
 /// The Botanix network enum
