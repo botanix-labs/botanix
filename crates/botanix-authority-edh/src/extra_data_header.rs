@@ -4,13 +4,15 @@ use bitcoin::{
 };
 use revm_primitives::Address;
 use serde::{Deserialize, Serialize};
-use std::io;
+use std::{collections::HashSet, io};
 use thiserror::Error;
 
 use crate::nums_secp256k1_pk;
 
-/// The version of the extra data header
-pub const EXTRA_HEADER_VERSION: u32 = 0;
+/// Deprecated legacy version that supports only one aggregated public key
+pub const EXTRA_HEADER_VERSION_V0: u32 = 0;
+/// Version that supports multiple aggregated public keys
+pub const EXTRA_HEADER_VERSION_V1: u32 = 1;
 /// The version of the chain
 pub const CHAIN_VERSION: u32 = 0;
 
@@ -29,8 +31,8 @@ pub struct ExtraDataHeader {
     pub chain_version: u32,
     /// The hash of the bitcoin block that is sufficiently deep to prove pegins
     pub bitcoin_block_hash: bitcoin::hash_types::BlockHash,
-    /// Aggregated public key
-    pub aggregated_public_key: secp256k1::PublicKey,
+    /// Aggregated public keys
+    pub aggregated_public_keys: HashSet<secp256k1::PublicKey>,
     /// Block producer address
     pub block_fee_recipient_address: Address,
 }
@@ -38,11 +40,13 @@ pub struct ExtraDataHeader {
 impl Default for ExtraDataHeader {
     // Note: default should never be used outside of tests
     fn default() -> Self {
+        let mut aggregated_public_keys = HashSet::new();
+        aggregated_public_keys.insert(nums_secp256k1_pk());
         Self {
-            version: EXTRA_HEADER_VERSION,
+            version: EXTRA_HEADER_VERSION_V1,
             chain_version: CHAIN_VERSION,
             bitcoin_block_hash: bitcoin::hash_types::BlockHash::all_zeros(),
-            aggregated_public_key: nums_secp256k1_pk(),
+            aggregated_public_keys,
             block_fee_recipient_address: Address::ZERO,
         }
     }
@@ -78,8 +82,8 @@ impl ExtraDataHeader {
         chain_version: u32,
         // The hash of the bitcoin block that is sufficiently deep to prove pegins
         bitcoin_block_hash: bitcoin::hash_types::BlockHash,
-        // Aggregated public key
-        aggregated_public_key: secp256k1::PublicKey,
+        // Aggregated public keys
+        aggregated_public_keys: HashSet<secp256k1::PublicKey>,
         // Block producer address
         block_fee_recipient_address: Address,
     ) -> Self {
@@ -87,7 +91,7 @@ impl ExtraDataHeader {
             version,
             chain_version,
             bitcoin_block_hash,
-            aggregated_public_key,
+            aggregated_public_keys,
             block_fee_recipient_address,
         }
     }
