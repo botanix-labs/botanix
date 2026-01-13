@@ -1,4 +1,4 @@
 pub mod error;
 
 // tests
-pub mod test_parallelel_dkg;
+pub mod test_parallel_dkg;

@@ -15,9 +15,9 @@ pub enum Error {
     /// Public Key Mismatch
     PublicKeyMismatch,
     /// Round 1 Packages Expected Length Mismatch
-    Round1PackagesLenghtMismatch,
+    Round1PackagesLengthMismatch,
     /// Round 2 Packages Expected Length Mismatch
-    Round2PackagesLenghtMismatch,
+    Round2PackagesLengthMismatch,
     /// Pegin Notification Error
     PeginNotification,
     /// Pegout Notification Error

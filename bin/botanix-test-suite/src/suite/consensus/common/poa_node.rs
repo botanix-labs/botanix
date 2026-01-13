@@ -17,7 +17,7 @@ use botanix_authority_edh::extra_data_header::{
     ExtraDataHeader, CHAIN_VERSION, EXTRA_HEADER_VERSION,
 };
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest,
+    BtcServerExtendedApi, BtcServerExtendedClient, GetPublicKeyRequest,
     GetSessionIdsRequest, GetSigningStatusRequest, SigningStatus,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
@@ -245,6 +245,7 @@ impl FederationMemberTestConfig {
     pub fn spawn_service(
         &self,
         edh_authorities_list: Arc<Vec<PublicKey>>,
+        num_multisigs: u16,
     ) -> anyhow::Result<SpawnedPoaServerProcess> {
         // print secret key
         it_info_print!(format!("sk: {:?}", self.secret_key));
@@ -301,15 +302,21 @@ impl FederationMemberTestConfig {
             }
         }
 
-        // Need to create a federation.toml in the data dir
-        let multisig_current = MultisigConfig::new(
-            LEGACY_MULTISIG_ID,
-            self.frost_min_signers,
-            self.frost_max_signers,
-            edh_authorities,
-        );
+        // Need to create a federation.toml in the data dir with multiple multisig configs
+        let mut multisig_configs = vec![];
+        for offset in 0..num_multisigs {
+            let multisig_id = botanix_types::MultisigId::new(
+                LEGACY_MULTISIG_ID.as_u32() + offset as u32,
+            );
+            multisig_configs.push(MultisigConfig::new(
+                multisig_id,
+                self.frost_min_signers,
+                self.frost_max_signers,
+                edh_authorities.clone(),
+            ));
+        }
         let federation_config = FederationTomlConfig::new(
-            vec![multisig_current],
+            multisig_configs,
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
