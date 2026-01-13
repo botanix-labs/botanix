@@ -30,8 +30,8 @@ use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use botanix_types::MultisigId;
 use crate::{database, rpc};
+use botanix_types::MultisigId;
 
 pub const TX_NOT_FOUND_BITCOIND_ERROR: &str =
     "no such mempool or blockchain transaction";
@@ -550,7 +550,9 @@ impl PegoutScheduler {
             let mut change_utxos = vec![];
             for (outpoint, output) in tx.change() {
                 // Match the change output against known multisig change addresses
-                let multisig_id = match self.match_change_spk_to_multisig(&output.script_pubkey) {
+                let multisig_id = match self
+                    .match_change_spk_to_multisig(&output.script_pubkey)
+                {
                     Ok(Some(id)) => id,
                     Ok(None) => {
                         warn!(

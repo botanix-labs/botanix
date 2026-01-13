@@ -2112,10 +2112,8 @@ mod tests {
         }
 
         // Store all UTXOs
-        let all_utxos: Vec<&Utxo> = utxos_multisig_0
-            .iter()
-            .chain(utxos_multisig_1.iter())
-            .collect();
+        let all_utxos: Vec<&Utxo> =
+            utxos_multisig_0.iter().chain(utxos_multisig_1.iter()).collect();
         db.store_utxos(&all_utxos).unwrap();
         db.flush().unwrap();
 

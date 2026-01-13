@@ -2089,7 +2089,7 @@ where
         // TODO: During migration, these should be determined by the migration state.
         // - utxo_source_multisig_id: The multisig to select UTXOs from (current/source federation)
         // - change_target_multisig_id: The multisig for the change address (target federation)
-        // Normally, these will be the same, but during the migration phase, the change target multisig 
+        // Normally, these will be the same, but during the migration phase, the change target multisig
         // will be the incoming multisig.
 
         let utxo_source_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
@@ -2103,9 +2103,10 @@ where
                 internal!("missing public key package for multisig_id {}, run the dkg process first", change_target_multisig_id)
             })?;
 
-        let secp_pk = change_pk_package.verifying_key().to_secp_pk().map_err(|e| {
-            internal!("Failed to generate tweaked public key: {}", e)
-        })?;
+        let secp_pk =
+            change_pk_package.verifying_key().to_secp_pk().map_err(|e| {
+                internal!("Failed to generate tweaked public key: {}", e)
+            })?;
         let secp_pk_serialized = secp_pk.serialize();
         let change_script =
             wallet::address::generate_taproot_change_scriptpubkey(
