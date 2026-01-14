@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use bitcoin::{consensus::Encodable, Address};
 use bitcoincore_rpc::RpcApi;
 use botanix_btc_server_client::BtcServerClient;
@@ -7,7 +5,7 @@ use botanix_types::{LEGACY_MULTISIG_ID, TEST_LEGACY_MULTISIG_ID};
 use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
-use serde::Deserialize;
+use std::str::FromStr;
 use tonic::transport::Channel;
 
 use crate::{

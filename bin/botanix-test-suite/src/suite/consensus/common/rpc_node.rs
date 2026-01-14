@@ -144,6 +144,7 @@ impl NonFederationMemberTestConfig {
         &mut self,
         edh_authorities_list: Arc<Vec<PublicKey>>,
         poa_nodes: Vec<FederationMemberTestConfig>,
+        num_multisigs: u16,
     ) -> anyhow::Result<SpawnedRpcServerProcess> {
         it_info_print!(format!(
             "RPC Engine {} secret key = {:?}",
@@ -188,15 +189,21 @@ impl NonFederationMemberTestConfig {
             }
         }
 
-        // Need to create a federation.toml in the data dir
-        let multisig_current = MultisigConfig::new(
-            LEGACY_MULTISIG_ID,
-            self.frost_min_signers,
-            self.frost_max_signers,
-            edh_authorities,
-        );
+        // Need to create a federation.toml in the data dir with multiple multisig configs
+        let mut multisig_configs = vec![];
+        for offset in 0..num_multisigs {
+            let multisig_id = botanix_types::MultisigId::new(
+                LEGACY_MULTISIG_ID.as_u32() + offset as u32,
+            );
+            multisig_configs.push(MultisigConfig::new(
+                multisig_id,
+                self.frost_min_signers,
+                self.frost_max_signers,
+                edh_authorities.clone(),
+            ));
+        }
         let federation_config = FederationTomlConfig::new(
-            vec![multisig_current],
+            multisig_configs,
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
