@@ -385,7 +385,7 @@ mod tests {
         assert_eq!(fee, Amount::from_sat(1110));
 
         // Test 100 inputs at 10 sat/vB
-        // Expected weight: 23214 WU (5803.5 vB), fee = 5803 * 10 = 58030 sats (rounded down)
+        // Expected weight: 23214 WU (5803.5 vB), fee = 5803 * 10 = 58035 sats
         let inputs: Vec<InputDTO> =
             (0..100).map(|_| create_random_input(100_000)).collect();
         let fee = calculate_sweep_fee(&inputs, &output_script, fee_rate)
