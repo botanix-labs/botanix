@@ -2224,7 +2224,7 @@ where
         let _tx_lock = self.tx_lock.lock();
 
         // TODO: This overly conservative check is okay when we have a low volume of pegouts.
-        // It may be okay to relax this condition when we are confident that any broadcasted 
+        // It may be okay to relax this condition when we are confident that any broadcasted
         // pegouts that get dropped in the mempool will be safely re-submitted by the next multisig.
         let tracked_txs = self.db.get_tracked_txs().to_status()?;
         if !tracked_txs.is_empty() {
@@ -2265,12 +2265,14 @@ where
                     target_multisig_id
                 )
             })?;
-        let secp_pk = target_pk_package
-            .verifying_key()
-            .to_secp_pk()
-            .map_err(|e| internal!("Failed to convert verifying key to secp pk: {}", e))?;
+        let secp_pk =
+            target_pk_package.verifying_key().to_secp_pk().map_err(|e| {
+                internal!("Failed to convert verifying key to secp pk: {}", e)
+            })?;
         let output_script =
-            wallet::address::generate_taproot_change_scriptpubkey(secp_pk.serialize());
+            wallet::address::generate_taproot_change_scriptpubkey(
+                secp_pk.serialize(),
+            );
 
         // Create the sweep PSBT
         let psbt = coordinator::make_sweep_tx(
@@ -2292,8 +2294,9 @@ where
         self.db.update_psbt(&signing_session_id, &psbt).to_status()?;
         self.db.flush().to_status()?;
 
-        let psbt_bytes = hex::decode(psbt.serialize_hex())
-            .map_err(|e| tonic::Status::internal(format!("Failed to serialize psbt: {}", e)))?;
+        let psbt_bytes = hex::decode(psbt.serialize_hex()).map_err(|e| {
+            tonic::Status::internal(format!("Failed to serialize psbt: {}", e))
+        })?;
 
         let res = tonic::Response::new(rpc::SigningPackage {
             identifier: self.identifier.serialize().to_vec(),
