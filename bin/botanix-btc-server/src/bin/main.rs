@@ -1969,7 +1969,7 @@ where
         };
 
         // take a lock on the tx_lock
-        let _tx_lock = self.tx_lock.lock();
+        let _tx_lock = self.tx_lock.lock().await;
 
         info!(
             "Received make tx request for signing session id: {:?}",
@@ -2221,7 +2221,7 @@ where
         let target_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
 
         // take a lock on the tx_lock
-        let _tx_lock = self.tx_lock.lock();
+        let _tx_lock = self.tx_lock.lock().await;
 
         // TODO: This overly conservative check is okay when we have a low volume of pegouts.
         // It may be okay to relax this condition when we are confident that any broadcasted
