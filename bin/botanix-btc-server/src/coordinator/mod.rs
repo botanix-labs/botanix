@@ -3,14 +3,16 @@ use log::{debug, error, info, warn};
 use crate::{
     config::Config,
     coordinator::error::CoordinatorError,
-    database::{Db, Error as DbError, Utxo},
+    database::{version::UtxoVersion, Db, Error as DbError, Utxo},
     pegout_id::PegoutId,
     pegout_scheduler::Tx,
     util::{validate_psbt, NO_FLAGS, ROUND1, ROUND1_TRANSITION, ROUND2},
     wallet::{
         coin_selection,
-        psbt::{PsbtExt as BtcPsbtExt, PsbtInputExt},
-        util::calculate_signed_tx_weight,
+        psbt::{
+            create_sweep_psbt, InputDTO, PsbtExt as BtcPsbtExt, PsbtInputExt,
+        },
+        util::{calculate_signed_tx_weight, calculate_sweep_fee},
         MAX_PEGOUT_TX_WEIGHT,
     },
 };
@@ -273,6 +275,89 @@ pub fn attempt_make_tx(
 
     // Sanity check that we created a valid PSBT
     // This should not fail
+    validate_psbt(&psbt, NO_FLAGS, min_signers, db)?;
+
+    Ok(psbt)
+}
+
+/// Maximum number of UTXOs allowed in a sweep transaction.
+/// This limit prevents transactions from being too large to broadcast.
+const MAX_SWEEP_UTXOS: usize = 1000;
+
+/// Creates a sweep transaction that consolidates all available UTXOs into a single output.
+///
+/// Unlike `make_tx`, this function:
+/// - Does not perform coin selection - it uses ALL available UTXOs
+/// - Has a single output (no pegout destinations, just the sweep destination)
+///
+/// # Errors
+/// - `TooManyUtxos` - if UTXO count exceeds MAX_SWEEP_UTXOS
+/// - `NoUtxosAvailable` - if there are no UTXOs to sweep
+/// - `InsufficientValueForFees` - if total value doesn't cover the transaction fee
+pub fn make_sweep_tx(
+    fee_rate: FeeRate,
+    output_script: ScriptBuf,
+    db: &Db,
+    min_signers: u16,
+    multisig_id: MultisigId,
+) -> Result<Psbt, CoordinatorError> {
+    // Get all UTXOs for this multisig
+    let utxos: HashMap<OutPoint, Utxo> = db
+        .iter_utxos_by_multisig(multisig_id)
+        .try_fold(HashMap::new(), |mut map, r| {
+            let utxo = r?;
+            map.insert(utxo.outpoint, utxo);
+            Ok::<HashMap<OutPoint, Utxo>, DbError>(map)
+        })?;
+
+    // Validate UTXO count
+    if utxos.is_empty() {
+        return Err(CoordinatorError::NoUtxosAvailable);
+    }
+    if utxos.len() > MAX_SWEEP_UTXOS {
+        return Err(CoordinatorError::TooManyUtxos {
+            count: utxos.len(),
+            max: MAX_SWEEP_UTXOS,
+        });
+    }
+
+    info!(
+        "Creating sweep tx with {} UTXOs (multisig_id={})",
+        utxos.len(),
+        multisig_id
+    );
+
+    // Convert to InputDTO
+    let inputs: Vec<InputDTO> = utxos
+        .into_values()
+        .map(|utxo| InputDTO {
+            outpoint: utxo.outpoint,
+            output: utxo.output,
+            eth_address: utxo.eth_address,
+            version: UtxoVersion::try_from(utxo.version).unwrap_or_default(),
+            multisig_id: utxo.multisig_id,
+        })
+        .collect();
+
+    let absolute_fee = calculate_sweep_fee(&inputs, &output_script, fee_rate)?;
+
+    // Calculate output value
+    let total_value: bitcoin::Amount =
+        inputs.iter().map(|i| i.output.value).sum();
+    let output_value = total_value
+        .checked_sub(absolute_fee)
+        .ok_or(CoordinatorError::InsufficientValueForFees)?;
+
+    info!(
+        "Sweep tx: total_value={}, fee={}, output_value={}",
+        total_value, absolute_fee, output_value
+    );
+
+    // Create the sweep PSBT
+    let output = TxOut { value: output_value, script_pubkey: output_script };
+    let psbt = create_sweep_psbt(inputs, output);
+
+    // Sanity check
     validate_psbt(&psbt, NO_FLAGS, min_signers, db)?;
 
     Ok(psbt)
