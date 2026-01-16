@@ -19,7 +19,8 @@ use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
+    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest,
+    GrpcClientFactory, SubscribeToDynafedNotificationsStream,
 };
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
@@ -33,6 +34,8 @@ use botanix_storage::{
     StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
     WalletStateSyncWriter,
 };
+use botanix_types::MultisigId;
+use futures::{pin_mut, StreamExt};
 use reth_db::DatabaseEnv;
 use reth_network::{
     frost::manager::{FrostConfig, ToFrostManager},
@@ -48,6 +51,7 @@ use reth_storage_api::NodePrimitivesProvider;
 use reth_tasks::TaskExecutor;
 use std::{
     net::SocketAddr,
+    str::FromStr,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -293,7 +297,7 @@ where
         let parser = DataParser::default()
             .with_serialization_type(SerializationType::Postcard);
 
-        let btc_server_client: Option<BtcServerClient> = async {
+        let mut btc_server_client: Option<BtcServerClient> = async {
             if is_fed_node {
                 Some(
                     btc_server_factory
@@ -326,6 +330,10 @@ where
 
         // create frost and block production tasks if btc_server is available:
         // only federation nodes will have btc_server
+        let (dynafed_frost_notifications_tx, _) =
+            tokio::sync::broadcast::channel::<
+                SubscribeToDynafedNotificationsStream,
+            >(100);
         let mut frost_task = None;
         if is_fed_node {
             // frost task
@@ -340,6 +348,7 @@ where
                 random_source_provider,
                 Arc::clone(&metrics),
                 cometbft_rpc_factory.clone(),
+                dynafed_frost_notifications_tx.clone(),
             );
 
             frost_task = Some(task);
@@ -381,10 +390,52 @@ where
             None
         };
 
+        let mut btc_server_client_clone = btc_server_client.clone();
+        task_executor.spawn_critical(
+            "subscribe_to_dkg_notifications task",
+            Box::pin(async move {
+
+                let Some(btc) = btc_server_client_clone.as_mut() else {
+                    return;
+                };
+
+                let dynafed_notifications_stream = match btc.subscribe_to_dynafed_notifications(Empty {}).await {
+                    Ok(res) => {
+                        info!(target: "reth::authority", "Btc server is healthy");
+                        res
+                    }
+                    Err(e) => {
+                        tracing::error!(target: "reth::authority", "Btc server is unhealthy: {}", e);
+                        return;
+                    }
+                };
+
+                pin_mut!(dynafed_notifications_stream);
+                while let Some(msg) = dynafed_notifications_stream.next().await {
+                    match msg {
+                        Ok(msg) => {
+                            info!(target: "reth::authority", "Received Dynafed notification from btc server");
+                            match dynafed_frost_notifications_tx.send(msg) {
+                                Ok(_) => {
+                                    info!(target: "reth::authority", "Sent Dynafed notification to frost task");
+                                }
+                                Err(e) => {
+                                    tracing::error!(target: "reth::authority", "Error sending Dynafed notification to frost task: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(target: "reth::authority", "Error receiving Dynafed notification from btc server: {}", e);
+                        }
+                    }
+                }
+            })
+        );
+
         // run a background health monitoring task for the btc server, comet and
         // bitcoind
         if is_fed_node {
-            let mut btc_server_client = btc_server_client;
+            let mut btc_server_client = btc_server_client.clone();
             let cbft_rpc_provider =
                 cometbft_rpc_factory.build_and_connect().unwrap();
             let metrics = Arc::clone(&metrics);
@@ -432,6 +483,62 @@ where
                     }
                 })
             );
+        }
+
+        // load all multisig ids and aggregated public keys into the storage
+        if let Some(btc_server) = btc_server_client.as_mut() {
+            let multisig_ids = match btc_server.list_multisigs(Empty {}).await {
+                Ok(multisig_ids) => {
+                    info!(target: "reth::authority", "Found {} multisig ids", multisig_ids.ids.len());
+                    multisig_ids
+                }
+                Err(e) => {
+                    tracing::error!(target: "reth::authority", "Error getting multisig ids: {}", e);
+                    panic!("Error getting multisig ids: {}", e);
+                }
+            }
+            .ids;
+
+            let mut aggregated_pub_keys = vec![];
+            for multisig_id in multisig_ids {
+                match btc_server
+                    .get_public_key(GetPublicKeyRequest { multisig_id })
+                    .await
+                {
+                    Ok(resp) => {
+                        if let Ok(pk) =
+                            secp256k1::PublicKey::from_str(&resp.publickey)
+                        {
+                            let multisig_id: MultisigId = multisig_id.into();
+                            aggregated_pub_keys.push((multisig_id, pk));
+                        } else {
+                            tracing::error!(target: "reth::authority", "Error parsing public key for multisig id: {}", multisig_id);
+                            panic!(
+                                "Error parsing public key for multisig id: {}",
+                                multisig_id
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(target: "reth::authority", "Error retrieving public key for multisig id: {}, e = {}", multisig_id, e);
+                        panic!("Error retrieving public key for multisig id: {}, e = {}", multisig_id, e);
+                    }
+                }
+            }
+
+            if !aggregated_pub_keys.is_empty() {
+                let mut storage = storage.write().await;
+                match storage.aggregate_public_key.as_mut() {
+                    Some(storage_pub_keys) => {
+                        storage_pub_keys.extend(aggregated_pub_keys)
+                    }
+                    None => {
+                        storage.aggregate_public_key =
+                            Some(aggregated_pub_keys.into_iter().collect())
+                    }
+                }
+                drop(storage);
+            }
         }
 
         (

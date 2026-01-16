@@ -1,16 +1,17 @@
 //! Extended bitcoin server client with authentication
 use crate::{
     btc_server::{
-        ConsensusCheckpointRequest, DkgPayload, DkgPayloads, Empty,
-        FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
-        GetAllUtxosResponse, GetFinalizedPegoutIdsRequest,
-        GetFinalizedPegoutIdsResponse, GetGatewayAddressRequest,
-        GetGatewayAddressResponse, GetPendingPegoutsResponse,
-        GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
-        GetSigningStatusRequest, GetSigningStatusResponse,
-        GetTrackedTxsResponse, MakeTxRequest, RecoverMissingUtxosRequest,
-        RecoverMissingUtxosResponse, ResetAllUtxosRequest,
-        ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
+        AbortDkgRequest, ConsensusCheckpointRequest, DkgPayload, DkgPayloads,
+        Empty, FinalizeSignerRequest, FinalizeSigningRequest,
+        FinalizeSigningResponse, GetAllUtxosResponse, GetDkgPayloadsRequest,
+        GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
+        GetGatewayAddressRequest, GetGatewayAddressResponse,
+        GetPendingPegoutsResponse, GetPublicKeyRequest, GetPublicKeyResponse,
+        GetSessionIdsRequest, GetSessionIdsResponse, GetSigningStatusRequest,
+        GetSigningStatusResponse, GetTrackedTxsResponse, ListMultisigsResponse,
+        MakeTxRequest, RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
+        ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
+        SigningPackageRequest, SubscribeToDynafedNotificationsStream,
         ToSignRequest, WalletStateResponse,
     },
     jwt::{Claims, JwtSecret},
@@ -66,11 +67,11 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
     ) -> BoxFuture<'_, Result<GetGatewayAddressResponse, GrpcClientError>>;
     fn get_public_key(
         &mut self,
-        request: Empty,
+        request: GetPublicKeyRequest,
     ) -> BoxFuture<'_, Result<GetPublicKeyResponse, GrpcClientError>>;
     fn get_dkg_payloads(
         &mut self,
-        request: Empty,
+        request: GetDkgPayloadsRequest,
     ) -> BoxFuture<'_, Result<DkgPayloads, GrpcClientError>>;
     fn new_dkg_payload(
         &mut self,
@@ -116,6 +117,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn abort_dkg(
+        &mut self,
+        request: AbortDkgRequest,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn get_signing_status(
         &mut self,
         request: GetSigningStatusRequest,
@@ -144,6 +149,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<GetPendingPegoutsResponse, GrpcClientError>>;
+    fn list_multisigs(
+        &mut self,
+        request: Empty,
+    ) -> BoxFuture<'_, Result<ListMultisigsResponse, GrpcClientError>>;
     fn reset_wallet_state(
         &mut self,
         request: ResetWalletStateRequest,
@@ -160,6 +169,22 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         Result<
             impl tonic::codegen::tokio_stream::Stream<
                     Item = Result<GetFinalizedPegoutIdsResponse, tonic::Status>,
+                > + Send
+                + 'static,
+            GrpcClientError,
+        >,
+    >;
+    fn subscribe_to_dynafed_notifications(
+        &mut self,
+        request: Empty,
+    ) -> BoxFuture<
+        '_,
+        Result<
+            impl tonic::codegen::tokio_stream::Stream<
+                    Item = Result<
+                        SubscribeToDynafedNotificationsStream,
+                        tonic::Status,
+                    >,
                 > + Send
                 + 'static,
             GrpcClientError,
@@ -286,8 +311,9 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
         GetGatewayAddressRequest,
         GetGatewayAddressResponse
     );
-    generate_method!(get_public_key, Empty, GetPublicKeyResponse);
-    generate_method!(get_dkg_payloads, Empty, DkgPayloads);
+    generate_method!(get_public_key, GetPublicKeyRequest, GetPublicKeyResponse);
+    generate_method!(get_dkg_payloads, GetDkgPayloadsRequest, DkgPayloads);
+    generate_method!(list_multisigs, Empty, ListMultisigsResponse);
     generate_method!(new_dkg_payload, DkgPayload, DkgPayloads);
     generate_method!(
         get_round1_signing_package,
@@ -315,6 +341,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_wallet_state, Empty, WalletStateResponse);
     generate_method!(abort_signing, Empty, Empty);
+    generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(
         get_signing_status,
         GetSigningStatusRequest,
@@ -345,6 +372,12 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
         get_finalized_pegout_ids,
         GetFinalizedPegoutIdsRequest,
         GetFinalizedPegoutIdsResponse
+    );
+
+    generate_stream_method!(
+        subscribe_to_dynafed_notifications,
+        Empty,
+        SubscribeToDynafedNotificationsStream
     );
 }
 

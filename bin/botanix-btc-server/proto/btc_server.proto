@@ -15,11 +15,17 @@ service BtcServer {
 
     rpc GetGatewayAddress(GetGatewayAddressRequest) returns(GetGatewayAddressResponse){}
 
-    rpc GetPublicKey(Empty) returns(GetPublicKeyResponse) {}
+    rpc GetPublicKey(GetPublicKeyRequest) returns(GetPublicKeyResponse) {}
 
-    rpc GetDkgPayloads(Empty) returns(DkgPayloads) {}
+    rpc GetDkgPayloads(GetDkgPayloadsRequest) returns(DkgPayloads) {}
 
     rpc NewDkgPayload(DkgPayload) returns(DkgPayloads) {}
+
+    rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
+
+    rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
+
+    rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
     // Signing Endpoints
 
@@ -49,6 +55,8 @@ service BtcServer {
 
     rpc GetAllUtxos(Empty) returns (GetAllUtxosResponse) {}
 
+    rpc ListMultisigs(Empty) returns (ListMultisigsResponse) {}
+
     rpc GetWalletState(Empty) returns (WalletStateResponse) {}
 
     rpc ResetAllUtxos(ResetAllUtxosRequest) returns (Empty) {}
@@ -62,6 +70,8 @@ service BtcServer {
     rpc GetTrackedTxs(Empty) returns (GetTrackedTxsResponse) {}
 
     rpc ResetWalletState(ResetWalletStateRequest) returns (Empty) {}
+
+    rpc SweepToMultisig(Empty) returns (SigningPackage) {}
 
     rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
 }
@@ -93,6 +103,39 @@ message GetFinalizedPegoutIdsResponse {
     uint64 chunk_index = 2;
     uint64 total_chunks = 3;
     bool is_final = 4;
+}
+
+message SubscribeToDynafedNotificationsStream {
+    oneof notification {
+        DkgNotification dkg = 1;
+        MigrationNotification migration = 2;
+    }
+}
+
+enum DkgEvent {
+    DKG_EVENT_UNSPECIFIED = 0;
+    DKG_START = 1;
+    DKG_RESTART = 2;
+    DKG_ABORT = 3;
+}
+
+message DkgNotification {
+    DkgEvent event = 1;
+    uint32 multisig_id = 2;
+}
+
+message MigrationNotification {
+    MigrationEvent event = 1;
+    uint32 multisig_id_from = 2;  // The multisig being migrated FROM
+    uint32 multisig_id_to = 3;    // The multisig being migrated TO
+    string migration_id = 4;   // UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
+}
+
+enum MigrationEvent {
+    MIGRATION_EVENT_UNSPECIFIED = 0;
+    MIGRATION_START = 1;
+    MIGRATION_END = 2;
+    MIGRATION_ABORT = 3;
 }
 
 message FinalizeSignerRequest {
@@ -153,16 +196,22 @@ message Utxo {
     OutPoint outpoint = 1;
     TxOut output = 2;
     string eth_address = 3;
+    uint32 multisig_id = 4;
 }
 
 message UtxoToRecover {
     OutPoint outpoint = 1;
     // empty eth_address for change utxo
     string eth_address = 2;
+    uint32 multisig_id = 3;
 }
 
 message GetAllUtxosResponse {
     repeated Utxo utxos = 1;
+}
+
+message ListMultisigsResponse {
+    repeated uint32 ids = 1;
 }
 
 message GetGatewayAddressRequest {
@@ -173,6 +222,10 @@ message GetGatewayAddressRequest {
 message MakeTxResponse {
     string txid = 1;
     bytes tx = 2;
+}
+
+message GetPublicKeyRequest {
+    uint32 multisig_id = 1;
 }
 
 message GetPublicKeyResponse {
@@ -217,6 +270,18 @@ message GetTrackedTxsResponse {
 message Empty {}
 
 // Frost things
+message GetDkgPayloadsRequest {
+    uint32 multisig_id = 1;
+}
+
+message StartNewDkgRequest {
+    uint32 multisig_id = 1;
+}
+
+message AbortDkgRequest {
+    uint32 multisig_id = 1;
+}
+
 message DkgPayloads {
     uint64 timeout = 1;
     repeated DkgPayload payloads = 2;
@@ -226,6 +291,7 @@ message DkgPayload {
     bytes sender = 1;
     bytes recipient = 2;
     bytes payload = 3;
+    uint32 multisig_id = 4;
 }
 
 message SigningPackageRequest {

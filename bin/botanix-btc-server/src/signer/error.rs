@@ -19,6 +19,8 @@ pub enum SigningRound1Error {
     AlreadyInSigningSession,
     #[error("missing key package")]
     MissingKeyPackage,
+    #[error("missing multisig_id in PSBT input")]
+    MissingMultisigId,
     #[error("invalid number of signing nonces requested")]
     InvalidNumberOfNoncesRequested,
     #[error("invalid signing package: {0}")]
@@ -47,6 +49,8 @@ pub enum SigningRound1Error {
 pub enum SigningRound2Error {
     #[error("missing key package")]
     MissingKeyPackage,
+    #[error("missing multisig_id in PSBT input")]
+    MissingMultisigId,
     #[error("invalid signing package: {0}")]
     InvalidSigningPackage(&'static str),
     #[error("internal FROST error: {0}")]

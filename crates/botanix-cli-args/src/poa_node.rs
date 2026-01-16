@@ -33,6 +33,17 @@ pub struct PoaNodeArgs {
     )]
     pub federation_config_path: PathBuf,
 
+    /// Expected SHA256 hash of the federation config file contents.
+    ///
+    /// TODO (umegbewe): Once the multisig creation flow is wired up, make this argument mandatory
+    #[arg(
+        long = "config-hash",
+        value_name = "FEDERATION_CONFIG_HASH",
+        env = "RETH_FEDERATION_CONFIG_HASH",
+        verbatim_doc_comment
+    )]
+    pub federation_config_hash: Option<String>,
+
     /// Run in federation mode. Only the nodes in the federation will be able to produce blocks.
     /// Only nodes defined in chain.toml can enable this flag
     #[arg(

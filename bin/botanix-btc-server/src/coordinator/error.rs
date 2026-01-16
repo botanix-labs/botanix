@@ -13,6 +13,8 @@ use thiserror::Error;
 pub enum CoordinatorError {
     #[error("missing key package")]
     MissingKeyPackage,
+    #[error("missing multisig_id in PSBT input")]
+    MissingMultisigId,
     #[error("invalid frost peer id")]
     InvalidFrostPeerId,
     #[error("not enough signers")]
@@ -69,4 +71,10 @@ pub enum CoordinatorError {
     WalletCalculationError(#[from] crate::wallet::util::WalletCalculationError),
     #[error("Transaction exceeds maximum weight limit")]
     TransactionTooLarge,
+    #[error("Too many UTXOs for sweep: {count} exceeds maximum {max}")]
+    TooManyUtxos { count: usize, max: usize },
+    #[error("No UTXOs available for sweep")]
+    NoUtxosAvailable,
+    #[error("Insufficient value to cover fees")]
+    InsufficientValueForFees,
 }

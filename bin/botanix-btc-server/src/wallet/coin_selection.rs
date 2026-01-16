@@ -218,6 +218,7 @@ fn perform_coin_selection<T: CoinSelectionAlgorithm>(
             output: s.output.clone(),
             eth_address: s.eth_address,
             version: UtxoVersion::try_from(s.version).ok().unwrap_or_default(),
+            multisig_id: s.multisig_id,
         })
         .collect();
 
@@ -514,8 +515,6 @@ fn utxo_to_bdk(utxo: &Utxo) -> bdk_wallet::WeightedUtxo {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use crate::{
         database::Utxo,
         test_utils::{
@@ -532,6 +531,8 @@ mod tests {
     };
     use bdk_wallet::{coin_selection::InsufficientFunds, psbt::PsbtUtils};
     use bitcoin::{Amount, FeeRate, OutPoint, Psbt, TapSighashType, TxOut};
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
+    use std::collections::HashMap;
 
     use super::coin_selection;
 
@@ -627,6 +628,7 @@ mod tests {
             },
             None,
             None,
+            TEST_LEGACY_MULTISIG_ID,
         );
         optional_utxos.insert(utxo.outpoint, utxo);
 
@@ -682,6 +684,7 @@ mod tests {
             },
             None,
             None,
+            TEST_LEGACY_MULTISIG_ID,
         );
         optional_utxos.insert(utxo.outpoint, utxo);
 
@@ -954,6 +957,7 @@ mod tests {
                     },
                     None,
                     None,
+                    TEST_LEGACY_MULTISIG_ID,
                 );
                 (utxo.outpoint, utxo)
             })

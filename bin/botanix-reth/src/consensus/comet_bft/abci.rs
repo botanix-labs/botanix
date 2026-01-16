@@ -6,12 +6,13 @@ use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
+use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use botanix_storage::models::RuntimeVersion;
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
 use reth_db::DatabaseEnv;
-use reth_ethereum::consensus::ConsensusError;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_types::Block;
@@ -19,6 +20,7 @@ use reth_primitives_traits::Block as BlockTrait;
 use reth_trie::updates::TrieUpdates;
 use reth_trie_common::KeccakKeyHasher;
 use std::{
+    collections::BTreeMap,
     error::Error,
     io,
     sync::{Arc, RwLock},
@@ -36,7 +38,7 @@ use botanix_data_parser::DataParser;
 use botanix_evm::payload::default_ethereum_payload;
 use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
 use reth_chain_state::CanonStateNotification;
-use reth_consensus::{Consensus, InvalidAggregatedPublicKeyError};
+use reth_consensus::Consensus;
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
 use reth_provider::{
@@ -343,6 +345,10 @@ where
         }
     }
 
+    pub fn storage(&self) -> Storage<RDB, BDB> {
+        self.storage.clone()
+    }
+
     /// Starts the abci client server
     pub async fn start_server<
         Pool: TransactionPool<
@@ -580,7 +586,9 @@ where
         runtime_version: RuntimeVersion,
         network_upgrade_payload: Option<NetworkUpgradePayload>,
     ) -> Result<NonDeterministicData, ConsensusError> {
-        let aggregate_public_key = self.aggregate_public_key()?;
+        // TODO: use the correct multisig_id
+        let aggregate_public_key =
+            self.aggregate_public_key(LEGACY_MULTISIG_ID)?;
         let block_fee_recipient_address = self
             .block_fee_recipient_address
             .ok_or(ConsensusError::MissingBlockFeeRecipientAddress)?;
@@ -635,7 +643,8 @@ where
         }
 
         // poa validation
-        let agg_pk = match self.aggregate_public_key() {
+        // TODO: use the correct multisig_id
+        let agg_pk = match self.aggregate_public_key(LEGACY_MULTISIG_ID) {
             Ok(pk) => pk,
             Err(e) => {
                 error!("Error getting aggregate public key: {:?}", e);
@@ -659,9 +668,17 @@ where
 
     pub(crate) fn aggregate_public_key(
         &self,
+        multisig_id: MultisigId,
     ) -> Result<secp256k1::PublicKey, ConsensusError> {
-        match self.storage.inner.blocking_read().aggregate_public_key {
-            Some(pk) => Ok(pk),
+        match &self.storage.inner.blocking_read().aggregate_public_key {
+            Some(pkeys) => {
+                pkeys
+                    .get(&multisig_id)
+                    .cloned()
+                    .ok_or(ConsensusError::InvalidAggregatedPublicKey(
+                    InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+                ))
+            }
             None => Err(ConsensusError::InvalidAggregatedPublicKey(
                 InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
             )),
@@ -1815,8 +1832,8 @@ where
         trace!("request={:?}", RequestProcessProposalTruncatedDebug(&request));
 
         let txs_len = request.txs.len();
-
-        let agg_pk = match self.aggregate_public_key() {
+        // TODO: pass the exact multisig id
+        let agg_pk = match self.aggregate_public_key(LEGACY_MULTISIG_ID) {
             Ok(pk) => pk,
             Err(_) => {
                 // Fed nodes must always have an aggregate public key
@@ -2573,8 +2590,20 @@ where
                 }
             };
 
+            // TODO: use the correct multisig_id
             let mut storage = self.storage.inner.blocking_write();
-            storage.aggregate_public_key = Some(edh.aggregated_public_key);
+            if let Some(aggregate_public_keys) =
+                storage.aggregate_public_key.as_mut()
+            {
+                aggregate_public_keys
+                    .entry(LEGACY_MULTISIG_ID)
+                    .or_insert(edh.aggregated_public_key);
+            } else {
+                storage.aggregate_public_key = Some(BTreeMap::from([(
+                    LEGACY_MULTISIG_ID,
+                    edh.aggregated_public_key,
+                )]));
+            }
         }
 
         if matches!(
@@ -2767,6 +2796,12 @@ pub struct ABCIDriver {
     blockchain_provider: BlockchainProvider<
         NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
     >,
+    storage: Storage<
+        BlockchainProvider<
+            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+        >,
+        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+    >,
 }
 
 impl ABCIDriver {
@@ -2784,12 +2819,19 @@ impl ABCIDriver {
         blockchain_provider: BlockchainProvider<
             NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
         >,
+        storage: Storage<
+            BlockchainProvider<
+                NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
+            >,
+            BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
+        >,
     ) -> Self {
         Self {
             driver_rx: Arc::new(Mutex::new(driver_rx)),
             reth_database_provider_factory,
             botanix_database_provider_factory,
             blockchain_provider,
+            storage,
         }
     }
 
@@ -2802,6 +2844,19 @@ impl ABCIDriver {
                         sealed_block_with_context,
                         commit_tx,
                     )) => {
+                        // Read aggregate public keys FIRST, before entering tracing span
+                        // This avoids holding EnteredSpan (not Send) across .await
+                        let aggregate_public_keys = self
+                            .storage
+                            .inner
+                            .read()
+                            .await
+                            .aggregate_public_key
+                            .clone()
+                            .expect(
+                                "aggregate_public_keys must be set after DKG",
+                            );
+
                         let _span = tracing::trace_span!(
                             "ABCI driver commit block",
                             eth_block_height =
@@ -2902,7 +2957,10 @@ impl ABCIDriver {
                         // checkpoint on the btc-server.
 
                         let staged_pegins: Vec<PeginData> =
-                            get_staged_pegins_from_pegin_meta(&pegins);
+                            get_staged_pegins_from_pegin_meta(
+                                &pegins,
+                                &aggregate_public_keys,
+                            );
                         let staged_pegouts: Vec<PegoutData> =
                             get_staged_pegouts_from_pegout_data(
                                 &sealed_block_with_peg.pegouts(),
@@ -3337,7 +3395,9 @@ mod tests {
 
         let expected_ndd = NonDeterministicData::new_v2(
             abci_client.bitcoin_blockhash().expect("to have bitcoin blockhash"),
-            abci_client.aggregate_public_key().expect("to have agg pk"),
+            abci_client
+                .aggregate_public_key(LEGACY_MULTISIG_ID)
+                .expect("to have agg pk"),
             Address::ZERO,
             RUNTIME_VERSION_GENESIS,
             None,
@@ -3385,7 +3445,9 @@ mod tests {
             abci_client
                 .bitcoin_blockhash()
                 .expect("to have agg bitcoin blockhash"),
-            abci_client.aggregate_public_key().expect("to have agg pk"),
+            abci_client
+                .aggregate_public_key(LEGACY_MULTISIG_ID)
+                .expect("to have agg pk"),
             Address::ZERO,
         );
         let response_ndd_bytes =

@@ -11,12 +11,14 @@ use frost_secp256k1_tr as frost;
 use thiserror::Error;
 
 use crate::database::version::UtxoVersion;
+use botanix_types::MultisigId;
 
 // input keys
 const ETH_ADDRESS_KEY_TYPE: u8 = 1;
 const SIGNING_COMMITMENTS_KEY_TYPE: u8 = 2;
 const PARTIAL_SIGNATURE_KEY_TYPE: u8 = 3;
 const UTXO_VERSION_TYPE: u8 = 4;
+const MULTISIG_ID_KEY_TYPE: u8 = 5;
 
 // output keys
 const PEGOUT_ID_KEY_TYPE: u8 = 4;
@@ -42,6 +44,12 @@ lazy_static::lazy_static! {
     pub static ref UTXO_VERSION_TYPE_KEY: ProprietaryKey = ProprietaryKey {
         prefix: PROP_KEY_PREFIX.to_vec(),
         subtype: UTXO_VERSION_TYPE,
+        key: Vec::new(),
+    };
+
+    static ref MULTISIG_ID_KEY: ProprietaryKey = ProprietaryKey {
+        prefix: PROP_KEY_PREFIX.to_vec(),
+        subtype: MULTISIG_ID_KEY_TYPE,
         key: Vec::new(),
     };
 }
@@ -95,6 +103,24 @@ pub trait PsbtInputExt: BorrowMut<PsbtInput> {
                 let mut ret = [0u8; 20];
                 ret.copy_from_slice(&b[..]);
                 Some(ret)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn set_multisig_id(&mut self, multisig_id: MultisigId) {
+        self.borrow_mut().proprietary.insert(
+            MULTISIG_ID_KEY.clone(),
+            multisig_id.as_u32().to_le_bytes().to_vec(),
+        );
+    }
+
+    fn multisig_id(&self) -> Option<MultisigId> {
+        self.borrow().proprietary.get(&MULTISIG_ID_KEY).and_then(|b| {
+            if b.len() == 4 {
+                let raw = u32::from_le_bytes(b.as_slice().try_into().ok()?);
+                Some(MultisigId::new(raw))
             } else {
                 None
             }
@@ -333,6 +359,7 @@ pub(crate) struct InputDTO {
     pub output: TxOut,
     pub eth_address: Option<[u8; 20]>,
     pub version: UtxoVersion,
+    pub multisig_id: MultisigId,
 }
 
 /// Create psbt with proprietary tweak fields
@@ -370,6 +397,7 @@ pub(crate) fn create_psbt(
             psbt_input.set_eth_address(eth_addr);
         }
         psbt_input.add_version_to_psbt(utxo.version as u32);
+        psbt_input.set_multisig_id(utxo.multisig_id);
     }
 
     // add output meta
@@ -379,6 +407,41 @@ pub(crate) fn create_psbt(
         // Pegout ids are stored in the proprietary field to be checked and validated
         // by peers
         psbt_output.set_pegout_id(*pegout_id);
+    }
+
+    psbt
+}
+
+/// Create a sweep PSBT with a single output and no pegout IDs.
+///
+/// A sweep transaction consolidates multiple UTXOs into a single output,
+/// to the incoming multisig's change address. Unlike regular pegouts, the transaction
+/// does not have any associated pegout requests.
+pub(crate) fn create_sweep_psbt(inputs: Vec<InputDTO>, output: TxOut) -> Psbt {
+    let tx = bitcoin::Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::locktime::absolute::LockTime::ZERO,
+        input: inputs
+            .iter()
+            .map(|u| bitcoin::TxIn {
+                previous_output: u.outpoint,
+                sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+                script_sig: bitcoin::ScriptBuf::new(),
+                witness: Default::default(),
+            })
+            .collect(),
+        output: vec![output],
+    };
+
+    // Create PSBT and add input metadata
+    let mut psbt = Psbt::from_unsigned_tx(tx).expect("tx is unsigned");
+    for (psbt_input, utxo) in psbt.inputs.iter_mut().zip(inputs.iter()) {
+        psbt_input.witness_utxo = Some(utxo.output.clone());
+        if let Some(eth_addr) = utxo.eth_address {
+            psbt_input.set_eth_address(eth_addr);
+        }
+        psbt_input.add_version_to_psbt(utxo.version as u32);
+        psbt_input.set_multisig_id(utxo.multisig_id);
     }
 
     psbt

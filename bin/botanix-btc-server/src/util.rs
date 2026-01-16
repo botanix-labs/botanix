@@ -639,6 +639,7 @@ mod tests {
         wallet::psbt::{PsbtExt, PsbtInputExt, PsbtOutputExt},
     };
     use bitcoin::{psbt::Psbt, ScriptBuf, TxOut};
+    use botanix_types::{MultisigId, TEST_LEGACY_MULTISIG_ID};
     use rand::Rng;
 
     use crate::{
@@ -680,6 +681,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         db.store_utxos(&[&utxo]).unwrap();
@@ -728,6 +730,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         let utxo2 = database::Utxo {
@@ -735,6 +738,7 @@ mod tests {
             output: psbt.inputs[1].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
         db.store_utxos(&[&utxo1, &utxo2]).unwrap();
         db.flush().unwrap();
@@ -798,6 +802,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         let utxo2 = database::Utxo {
@@ -805,6 +810,7 @@ mod tests {
             output: psbt.inputs[1].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
         db.store_utxos(&[&utxo1, &utxo2]).unwrap();
         db.flush().unwrap();
@@ -882,6 +888,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         db.store_utxos(&[&utxo]).unwrap();
@@ -914,6 +921,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: Some(eth),
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         db.store_utxos(&[&utxo]).unwrap();
@@ -953,6 +961,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         psbt.inputs[0].witness_utxo = Some(TxOut {
@@ -989,6 +998,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         db.store_utxos(&[&utxo]).unwrap();
@@ -1075,6 +1085,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
         let rng = &mut rand::thread_rng();
 
@@ -1220,6 +1231,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
         db.store_utxos(&[&utxo]).unwrap();
         db.flush().unwrap();
@@ -1234,6 +1246,7 @@ mod tests {
             output: dup_psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
         db.store_utxos(&[&utxo]).unwrap();
         db.flush().unwrap();
@@ -1285,6 +1298,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         let utxo2 = database::Utxo {
@@ -1292,6 +1306,7 @@ mod tests {
             output: psbt.inputs[1].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
         db.store_utxos(&[&utxo1, &utxo2]).unwrap();
         db.flush().unwrap();
@@ -1340,6 +1355,7 @@ mod tests {
             output: psbt.inputs[0].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
 
         let utxo2 = database::Utxo {
@@ -1347,6 +1363,7 @@ mod tests {
             output: psbt.inputs[1].witness_utxo.clone().unwrap(),
             eth_address: None,
             version: UtxoVersion::default() as u32,
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         };
         db.store_utxos(&[&utxo1, &utxo2]).unwrap();
         db.flush().unwrap();

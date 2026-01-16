@@ -2492,7 +2492,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-activation-manager"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "botanix-activation-manager",
@@ -2502,7 +2502,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-edh"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "bitcoin 0.32.7",
@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-metrics"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "botanix-activation-manager",
  "botanix-storage",
@@ -2532,7 +2532,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-peg"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "assert_matches",
@@ -2556,14 +2556,14 @@ dependencies = [
 
 [[package]]
 name = "botanix-authority-rsp"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "reth-revm",
 ]
 
 [[package]]
 name = "botanix-bitcoin-checkpoint"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -2582,7 +2582,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-btc-server"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "actix-cors",
  "actix-server",
@@ -2600,6 +2600,7 @@ dependencies = [
  "botanix-btc-server-client",
  "botanix-configs",
  "botanix-fs-util",
+ "botanix-types",
  "chacha20poly1305",
  "ciborium",
  "clap",
@@ -2644,13 +2645,14 @@ dependencies = [
  "tonic-reflection",
  "tracing-actix-web",
  "url",
+ "uuid 1.17.0",
  "vergen 8.3.2",
  "zeroize",
 ]
 
 [[package]]
 name = "botanix-btc-server-client"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "assert_matches",
@@ -2671,7 +2673,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-btc-wallet"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2694,7 +2696,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-chainspec"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -2722,7 +2724,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-cli"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2733,7 +2735,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-cli-args"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "askama",
@@ -2763,7 +2765,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-cli-parsers"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-genesis",
  "alloy-primitives",
@@ -2788,7 +2790,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-comet-bft-rpc"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "bitcoin 0.32.7",
  "hex 0.4.3",
@@ -2804,11 +2806,12 @@ dependencies = [
 
 [[package]]
 name = "botanix-configs"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "askama",
  "bitcoin 0.32.7",
+ "botanix-types",
  "displaydoc",
  "eyre",
  "reth-chainspec",
@@ -2826,7 +2829,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-consensus-common"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -2844,13 +2847,15 @@ dependencies = [
 
 [[package]]
 name = "botanix-data-parser"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "async-compression",
  "async-trait",
  "bincode 1.3.3",
  "bitcoin 0.32.7",
+ "botanix-btc-server",
  "botanix-btc-server-client",
+ "botanix-types",
  "bytes 1.10.1",
  "displaydoc",
  "lazy_static",
@@ -2868,7 +2873,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-db-cleaner"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -2890,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-evm"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -2926,7 +2931,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-fs-util"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2935,13 +2940,14 @@ dependencies = [
 
 [[package]]
 name = "botanix-pegin-recovery"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "bitcoin 0.32.7",
  "bitcoincore-rpc",
  "botanix-btc-server",
  "botanix-pegin-recovery-client",
+ "botanix-types",
  "chacha20poly1305",
  "ciborium",
  "clap",
@@ -2971,7 +2977,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-pegin-recovery-client"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "assert_matches",
@@ -2991,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-primitives"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -3011,7 +3017,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-reth"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -3060,6 +3066,7 @@ dependencies = [
  "botanix-rpc-types",
  "botanix-storage",
  "botanix-storage-migrate",
+ "botanix-types",
  "botanix-utils",
  "bytes 1.10.1",
  "cfg-if 1.0.1",
@@ -3165,7 +3172,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-rpc-client"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "bitcoin 0.32.7",
@@ -3192,7 +3199,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-rpc-config"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -3221,7 +3228,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-rpc-types"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -3231,12 +3238,13 @@ dependencies = [
 
 [[package]]
 name = "botanix-storage"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
  "auto_impl",
  "botanix-primitives",
+ "botanix-types",
  "bytes 1.10.1",
  "eyre",
  "itertools 0.10.5",
@@ -3270,7 +3278,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-storage-migrate"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "botanix-storage",
@@ -3286,7 +3294,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-test-suite"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "ansi_term",
@@ -3314,6 +3322,7 @@ dependencies = [
  "botanix-pegin-recovery-client",
  "botanix-reth",
  "botanix-storage",
+ "botanix-types",
  "bytes 1.10.1",
  "ciborium",
  "clap",
@@ -3357,14 +3366,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "botanix-types"
+version = "1.6.0"
+dependencies = [
+ "arbitrary",
+ "bytes 1.10.1",
+ "reth-codecs",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "botanix-up"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "botanix-btc-server",
  "botanix-cli-args",
  "botanix-configs",
  "botanix-test-suite",
+ "botanix-types",
  "clap",
  "hex 0.4.3",
  "rand 0.8.5",
@@ -3381,7 +3403,7 @@ dependencies = [
 
 [[package]]
 name = "botanix-utils"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "tracing",
 ]
@@ -10187,7 +10209,7 @@ dependencies = [
 [[package]]
 name = "reth"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-rpc-types",
  "aquamarine",
@@ -10233,7 +10255,7 @@ dependencies = [
 [[package]]
 name = "reth-basic-payload-builder"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10257,7 +10279,7 @@ dependencies = [
 [[package]]
 name = "reth-chain-state"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10288,7 +10310,7 @@ dependencies = [
 [[package]]
 name = "reth-chainspec"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -10308,7 +10330,7 @@ dependencies = [
 [[package]]
 name = "reth-cli"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-genesis",
  "clap",
@@ -10322,7 +10344,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-commands"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "ahash 0.8.12",
  "alloy-chains",
@@ -10402,7 +10424,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-runner"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "reth-tasks",
  "tokio",
@@ -10412,7 +10434,7 @@ dependencies = [
 [[package]]
 name = "reth-cli-util"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -10430,7 +10452,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10450,7 +10472,7 @@ dependencies = [
 [[package]]
 name = "reth-codecs-derive"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "convert_case 0.7.1",
  "proc-macro2",
@@ -10461,7 +10483,7 @@ dependencies = [
 [[package]]
 name = "reth-config"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "eyre",
  "humantime-serde",
@@ -10476,7 +10498,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -10490,7 +10512,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-common"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10502,7 +10524,7 @@ dependencies = [
 [[package]]
 name = "reth-consensus-debug-client"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10527,7 +10549,7 @@ dependencies = [
 [[package]]
 name = "reth-db"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "derive_more 2.0.1",
@@ -10553,7 +10575,7 @@ dependencies = [
 [[package]]
 name = "reth-db-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -10581,7 +10603,7 @@ dependencies = [
 [[package]]
 name = "reth-db-common"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-genesis",
@@ -10611,7 +10633,7 @@ dependencies = [
 [[package]]
 name = "reth-db-models"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -10626,7 +10648,7 @@ dependencies = [
 [[package]]
 name = "reth-discv4"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -10652,7 +10674,7 @@ dependencies = [
 [[package]]
 name = "reth-discv5"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -10676,7 +10698,7 @@ dependencies = [
 [[package]]
 name = "reth-dns-discovery"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "data-encoding",
@@ -10700,7 +10722,7 @@ dependencies = [
 [[package]]
 name = "reth-downloaders"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10735,7 +10757,7 @@ dependencies = [
 [[package]]
 name = "reth-ecies"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "aes",
  "alloy-primitives",
@@ -10766,7 +10788,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-local"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -10788,7 +10810,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-primitives"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10813,7 +10835,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-service"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "futures",
  "pin-project",
@@ -10836,7 +10858,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-tree"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10888,7 +10910,7 @@ dependencies = [
 [[package]]
 name = "reth-engine-util"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -10916,7 +10938,7 @@ dependencies = [
 [[package]]
 name = "reth-era"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -10932,7 +10954,7 @@ dependencies = [
 [[package]]
 name = "reth-era-downloader"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "bytes 1.10.1",
@@ -10947,7 +10969,7 @@ dependencies = [
 [[package]]
 name = "reth-era-utils"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -10971,7 +10993,7 @@ dependencies = [
 [[package]]
 name = "reth-errors"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "reth-consensus",
  "reth-execution-errors",
@@ -10982,7 +11004,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-chains",
  "alloy-primitives",
@@ -11011,7 +11033,7 @@ dependencies = [
 [[package]]
 name = "reth-eth-wire-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -11035,7 +11057,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-rpc-types-engine",
  "alloy-rpc-types-eth",
@@ -11073,7 +11095,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-cli"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "clap",
  "eyre",
@@ -11094,7 +11116,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-consensus"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11110,7 +11132,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-engine-primitives"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -11128,7 +11150,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-forks"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eip2124",
  "alloy-hardforks",
@@ -11142,7 +11164,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-payload-builder"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11169,7 +11191,7 @@ dependencies = [
 [[package]]
 name = "reth-ethereum-primitives"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11187,7 +11209,7 @@ dependencies = [
 [[package]]
 name = "reth-etl"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "rayon",
  "reth-db-api",
@@ -11197,7 +11219,7 @@ dependencies = [
 [[package]]
 name = "reth-evm"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11220,7 +11242,7 @@ dependencies = [
 [[package]]
 name = "reth-evm-ethereum"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11242,7 +11264,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-errors"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-evm",
  "alloy-primitives",
@@ -11255,7 +11277,7 @@ dependencies = [
 [[package]]
 name = "reth-execution-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11273,7 +11295,7 @@ dependencies = [
 [[package]]
 name = "reth-exex"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11311,7 +11333,7 @@ dependencies = [
 [[package]]
 name = "reth-exex-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -11325,7 +11347,7 @@ dependencies = [
 [[package]]
 name = "reth-fs-util"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "serde",
  "serde_json",
@@ -11335,7 +11357,7 @@ dependencies = [
 [[package]]
 name = "reth-invalid-block-hooks"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -11363,7 +11385,7 @@ dependencies = [
 [[package]]
 name = "reth-ipc"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "bytes 1.10.1",
  "futures",
@@ -11383,7 +11405,7 @@ dependencies = [
 [[package]]
 name = "reth-libmdbx"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "bitflags 2.9.1",
  "byteorder",
@@ -11400,7 +11422,7 @@ dependencies = [
 [[package]]
 name = "reth-mdbx-sys"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "bindgen",
  "cc",
@@ -11409,7 +11431,7 @@ dependencies = [
 [[package]]
 name = "reth-metrics"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "futures",
  "metrics",
@@ -11421,7 +11443,7 @@ dependencies = [
 [[package]]
 name = "reth-net-banlist"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
 ]
@@ -11429,7 +11451,7 @@ dependencies = [
 [[package]]
 name = "reth-net-nat"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "futures-util",
  "if-addrs",
@@ -11443,7 +11465,7 @@ dependencies = [
 [[package]]
 name = "reth-network"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11500,7 +11522,7 @@ dependencies = [
 [[package]]
 name = "reth-network-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -11525,7 +11547,7 @@ dependencies = [
 [[package]]
 name = "reth-network-p2p"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11548,7 +11570,7 @@ dependencies = [
 [[package]]
 name = "reth-network-peers"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -11563,7 +11585,7 @@ dependencies = [
 [[package]]
 name = "reth-network-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eip2124",
  "humantime-serde",
@@ -11577,7 +11599,7 @@ dependencies = [
 [[package]]
 name = "reth-nippy-jar"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "anyhow",
  "bincode 1.3.3",
@@ -11594,7 +11616,7 @@ dependencies = [
 [[package]]
 name = "reth-node-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-rpc-types-engine",
  "eyre",
@@ -11618,7 +11640,7 @@ dependencies = [
 [[package]]
 name = "reth-node-builder"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11686,7 +11708,7 @@ dependencies = [
 [[package]]
 name = "reth-node-core"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11738,7 +11760,7 @@ dependencies = [
 [[package]]
 name = "reth-node-ethereum"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-network",
@@ -11777,7 +11799,7 @@ dependencies = [
 [[package]]
 name = "reth-node-ethstats"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -11801,7 +11823,7 @@ dependencies = [
 [[package]]
 name = "reth-node-events"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11825,7 +11847,7 @@ dependencies = [
 [[package]]
 name = "reth-node-metrics"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "eyre",
  "http 1.3.1",
@@ -11846,7 +11868,7 @@ dependencies = [
 [[package]]
 name = "reth-node-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "reth-chainspec",
  "reth-db-api",
@@ -11859,7 +11881,7 @@ dependencies = [
 [[package]]
 name = "reth-optimism-primitives"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11878,7 +11900,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-builder"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -11899,7 +11921,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-builder-primitives"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "pin-project",
  "reth-payload-primitives",
@@ -11911,7 +11933,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-primitives"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -11930,7 +11952,7 @@ dependencies = [
 [[package]]
 name = "reth-payload-validator"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-rpc-types-engine",
@@ -11940,7 +11962,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "c-kzg",
@@ -11954,7 +11976,7 @@ dependencies = [
 [[package]]
 name = "reth-primitives-traits"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -11987,7 +12009,7 @@ dependencies = [
 [[package]]
 name = "reth-provider"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12032,7 +12054,7 @@ dependencies = [
 [[package]]
 name = "reth-prune"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12060,7 +12082,7 @@ dependencies = [
 [[package]]
 name = "reth-prune-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -12074,7 +12096,7 @@ dependencies = [
 [[package]]
 name = "reth-ress-protocol"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -12093,7 +12115,7 @@ dependencies = [
 [[package]]
 name = "reth-ress-provider"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -12120,7 +12142,7 @@ dependencies = [
 [[package]]
 name = "reth-revm"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "reth-primitives-traits",
@@ -12133,7 +12155,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -12209,7 +12231,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-genesis",
@@ -12237,7 +12259,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-builder"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-network",
  "alloy-provider",
@@ -12275,7 +12297,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-convert"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-json-rpc",
@@ -12294,7 +12316,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-engine-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -12324,7 +12346,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-dyn-abi",
@@ -12368,7 +12390,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-eth-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12412,7 +12434,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-layer"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-rpc-types-engine",
  "http 1.3.1",
@@ -12426,7 +12448,7 @@ dependencies = [
 [[package]]
 name = "reth-rpc-server-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -12442,7 +12464,7 @@ dependencies = [
 [[package]]
 name = "reth-stages"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12490,7 +12512,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -12517,7 +12539,7 @@ dependencies = [
 [[package]]
 name = "reth-stages-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "arbitrary",
@@ -12531,7 +12553,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "parking_lot 0.12.4",
@@ -12551,7 +12573,7 @@ dependencies = [
 [[package]]
 name = "reth-static-file-types"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "clap",
@@ -12563,7 +12585,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-api"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12587,7 +12609,7 @@ dependencies = [
 [[package]]
 name = "reth-storage-errors"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-eips",
  "alloy-primitives",
@@ -12603,7 +12625,7 @@ dependencies = [
 [[package]]
 name = "reth-tasks"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -12621,7 +12643,7 @@ dependencies = [
 [[package]]
 name = "reth-testing-utils"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12637,7 +12659,7 @@ dependencies = [
 [[package]]
 name = "reth-tokio-util"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "tokio",
  "tokio-stream",
@@ -12647,7 +12669,7 @@ dependencies = [
 [[package]]
 name = "reth-tracing"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "clap",
  "eyre",
@@ -12662,7 +12684,7 @@ dependencies = [
 [[package]]
 name = "reth-transaction-pool"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12703,7 +12725,7 @@ dependencies = [
 [[package]]
 name = "reth-trie"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
@@ -12728,7 +12750,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-common"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -12754,7 +12776,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-db"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "reth-db-api",
@@ -12767,7 +12789,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-parallel"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -12792,7 +12814,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-sparse"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -12811,7 +12833,7 @@ dependencies = [
 [[package]]
 name = "reth-trie-sparse-parallel"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -12829,7 +12851,7 @@ dependencies = [
 [[package]]
 name = "reth-zstd-compressors"
 version = "1.6.0"
-source = "git+https://github.com/botanix-labs/reth?branch=botanix#0547a0ebaf361301b2b063a766f3010016eb4118"
+source = "git+https://github.com/botanix-labs/reth?branch=dynafed#0cbff46fd7882c06cc5e40eff353da9253de6bb0"
 dependencies = [
  "zstd 0.13.3",
 ]

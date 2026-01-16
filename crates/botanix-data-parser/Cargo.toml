@@ -20,7 +20,9 @@ bincode = "1.3"
 bitcoin = { workspace = true }
 
 # Botanix deps
+botanix-btc-server = { workspace = true }
 botanix-btc-server-client = { workspace = true }
+botanix-types = { workspace = true }
 bytes = "1.6.0"
 displaydoc = "0.2"
 lazy_static = "1.5"

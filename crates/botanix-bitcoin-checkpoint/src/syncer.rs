@@ -1111,7 +1111,7 @@ mod tests {
             h: &bitcoin::BlockHash,
         ) -> Result<Vec<bitcoin::Txid>, BitcoindError> {
             Self::get_txids_rpc(self, h).map_err(|e| {
-                BitcoindError::BlockHeaderRetrievalFailed(
+                BitcoindError::BlockTxsRetrievalFailed(
                     bitcoincore_rpc::Error::JsonRpc(
                         bitcoincore_rpc::jsonrpc::error::Error::Transport(
                             format!("{:?}", e).into(),

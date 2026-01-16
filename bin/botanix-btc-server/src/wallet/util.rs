@@ -1,9 +1,10 @@
 use bdk_wallet::psbt::PsbtUtils;
-use bitcoin::{secp256k1, FeeRate, Psbt, Weight};
+use bitcoin::{secp256k1, Amount, FeeRate, Psbt, ScriptBuf, TxOut, Weight};
 use frost_secp256k1_tr as frost;
 use thiserror::Error;
 
 use crate::wallet::{
+    psbt::{create_sweep_psbt, InputDTO},
     MAX_BASE_TX_WEIGHT, MAX_BITCOIN_TX_WEIGHT, PER_OUTPUT_MAX_WEIGHT,
     PER_P2TR_KEYSPEND_WEIGHT, SEGWIT_FLAG_WEIGHT, SEGWIT_MARKER_WEIGHT,
     TAPROOT_KEYSPEND_SIGHASH_DEFAULT_WEIGHT,
@@ -114,6 +115,25 @@ pub fn max_number_of_psbt_inputs(num_outputs: u64) -> u64 {
     max_number_of_inputs
 }
 
+/// Calculates the fee for a sweep transaction given the inputs, output script, and fee rate.
+///
+/// Creates a dummy PSBT with zero output value to calculate the signed transaction weight,
+/// then computes the absolute fee based on the fee rate.
+pub(crate) fn calculate_sweep_fee(
+    inputs: &[InputDTO],
+    output_script: &ScriptBuf,
+    fee_rate: FeeRate,
+) -> Result<Amount, WalletCalculationError> {
+    let dummy_output =
+        TxOut { value: Amount::ZERO, script_pubkey: output_script.clone() };
+    let psbt = create_sweep_psbt(inputs.to_vec(), dummy_output);
+    let total_weight = calculate_signed_tx_weight(&psbt)?;
+    let absolute_fee = fee_rate
+        .fee_wu(total_weight)
+        .ok_or(WalletCalculationError::WeightOverflow)?;
+    Ok(absolute_fee)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +149,7 @@ mod tests {
             MAX_BITCOIN_TX_WEIGHT,
         },
     };
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
 
     use bitcoin::{Amount, OutPoint, TapSighashType, TxOut};
 
@@ -185,6 +206,7 @@ mod tests {
             },
             eth_address: None,
             version: UtxoVersion::default(),
+            multisig_id: TEST_LEGACY_MULTISIG_ID,
         }
     }
 
@@ -348,5 +370,34 @@ mod tests {
             "tx weight: {}",
             tx_weight.to_wu()
         );
+    }
+
+    #[test]
+    fn test_calculate_sweep_fee() {
+        let output_script = random_p2tr_keyspend_script();
+
+        // Test 1 input at 10 sat/vB
+        // Expected weight: 444 WU (111 vB), fee = 111 * 10 = 1110 sats
+        let inputs: Vec<InputDTO> = vec![create_random_input(100_000)];
+        let fee_rate = FeeRate::from_sat_per_vb(10).unwrap();
+        let fee = calculate_sweep_fee(&inputs, &output_script, fee_rate)
+            .expect("should calculate fee");
+        assert_eq!(fee, Amount::from_sat(1110));
+
+        // Test 100 inputs at 10 sat/vB
+        // Expected weight: 23214 WU (5803.5 vB), fee = 5803 * 10 = 58035 sats
+        let inputs: Vec<InputDTO> =
+            (0..100).map(|_| create_random_input(100_000)).collect();
+        let fee = calculate_sweep_fee(&inputs, &output_script, fee_rate)
+            .expect("should calculate fee");
+        assert_eq!(fee, Amount::from_sat(58035));
+
+        // Test different fee rate: 1 input at 50 sat/vB
+        // Expected weight: 444 WU (111 vB), fee = 111 * 50 = 5550 sats
+        let inputs: Vec<InputDTO> = vec![create_random_input(100_000)];
+        let fee_rate = FeeRate::from_sat_per_vb(50).unwrap();
+        let fee = calculate_sweep_fee(&inputs, &output_script, fee_rate)
+            .expect("should calculate fee");
+        assert_eq!(fee, Amount::from_sat(5550));
     }
 }

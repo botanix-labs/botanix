@@ -5,8 +5,10 @@ extern crate log;
 
 use bitcoin::{psbt::Psbt, Amount, FeeRate, OutPoint, ScriptBuf, TxOut};
 use bitcoincore_rpc::RpcApi;
+use botanix_types::MultisigId;
 use btcserverlib::{
-    badarg, database,
+    badarg,
+    database::{self},
     util::parse_eth_address,
     wallet::{
         address::{generate_taproot_scriptpubkey, generate_tweaked_public_key},
@@ -542,6 +544,7 @@ impl PeginRecoveryService for PeginRecoveryServiceImpl {
             },
             eth_address: Some(eth_address),
             version: 1,
+            multisig_id: MultisigId::new(req.multisig_id),
         };
         let utxos = vec![utxo];
 

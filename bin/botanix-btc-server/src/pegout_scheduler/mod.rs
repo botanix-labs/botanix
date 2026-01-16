@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{database, rpc};
+use botanix_types::MultisigId;
 
 pub const TX_NOT_FOUND_BITCOIND_ERROR: &str =
     "no such mempool or blockchain transaction";
@@ -280,11 +281,14 @@ impl PegoutScheduler {
         ret
     }
 
-    /// internal util to get change spk from db
-    fn get_change_spk(&self) -> Result<ScriptBuf, ChangeOutputError> {
+    /// Internal util to get change script pubkey for a specific multisig federation.
+    fn get_change_spk(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<ScriptBuf, ChangeOutputError> {
         let agg_pk = self
             .db
-            .get_public_key_package()?
+            .get_public_key_package_by_id(multisig_id)?
             .expect("pk key package should exist")
             .verifying_key()
             .to_secp_pk()?;
@@ -292,6 +296,40 @@ impl PegoutScheduler {
         let change_spk =
             generate_taproot_change_scriptpubkey(serialized_agg_pkey);
         Ok(change_spk)
+    }
+
+    /// Attempts to match a script pubkey against known multisig change addresses.
+    /// Checks the current multisig first, then falls back to the previous multisig
+    /// (for transactions created before/during migration).
+    ///
+    /// Returns:
+    /// - `Ok(Some(multisig_id))` if the script matches a known multisig change address
+    /// - `Ok(None)` if the script doesn't match any known multisig
+    /// - `Err(e)` if there was an error fetching the change SPK (e.g., db error)
+    fn match_change_spk_to_multisig(
+        &self,
+        script_pubkey: &ScriptBuf,
+    ) -> Result<Option<MultisigId>, ChangeOutputError> {
+        // TODO: Query current_multisig_id and previous_multisig_id from migration state in db.
+        let current_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+        let previous_multisig_id: Option<MultisigId> = None; // TODO: Query from db
+
+        // Try current multisig first (most common case)
+        let current_spk = self.get_change_spk(current_multisig_id)?;
+        if script_pubkey == &current_spk {
+            return Ok(Some(current_multisig_id));
+        }
+
+        // Fallback: check previous multisig (for txs created before/during migration)
+        if let Some(prev_id) = previous_multisig_id {
+            let prev_spk = self.get_change_spk(prev_id)?;
+            if script_pubkey == &prev_spk {
+                return Ok(Some(prev_id));
+            }
+        }
+
+        // No match found
+        Ok(None)
     }
 
     /// Get the last finalized block hash.
@@ -348,18 +386,26 @@ impl PegoutScheduler {
                 if pegout_idxs.contains(&i) {
                     continue;
                 }
-                // sanity check that the change output spk is correct
-                if txout.script_pubkey
-                    != self.get_change_spk().expect("change spk should exist")
-                {
-                    warn!(
-                        "PegoutScheduler::add_tx: Change output spk in tx {} is not correct: {:?}",
-                        tx.compute_txid(),
-                        txout.script_pubkey
-                    );
-                    continue;
+                // Check if this output matches a known multisig change address
+                match self.match_change_spk_to_multisig(&txout.script_pubkey) {
+                    Ok(Some(_multisig_id)) => {
+                        ret.push(i);
+                    }
+                    Ok(None) => {
+                        warn!(
+                            "PegoutScheduler::add_tx: Change output spk in tx {} does not match any known multisig: {:?}",
+                            tx.compute_txid(),
+                            txout.script_pubkey
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            "PegoutScheduler::add_tx: Error getting change SPK for tx {}: {:?}",
+                            tx.compute_txid(),
+                            e
+                        );
+                    }
                 }
-                ret.push(i);
             }
             ret
         };
@@ -490,11 +536,6 @@ impl PegoutScheduler {
             "PegoutScheduler::finalize_block: Finalizing block {}",
             block.hash
         );
-        let change_spk_res = self.get_change_spk(); // Get result first
-        info!(
-            "PegoutScheduler::finalize_block: Expected change SPK result: {:?}",
-            change_spk_res
-        );
 
         // To make sure we only update the index when the db is also synced,
         // first try store the new finalized UTXOs to the db, then update the index.
@@ -507,41 +548,46 @@ impl PegoutScheduler {
                 .ok_or(database::Error::TrackedTxNotFoundInPegoutScheduler)?;
             // Add back the change to the utxo set
             let mut change_utxos = vec![];
-            if let Ok(ref change_spk) = change_spk_res {
-                // Check if we got the SPK successfully
-                for (outpoint, output) in tx.change() {
-                    if &output.script_pubkey != change_spk {
+            for (outpoint, output) in tx.change() {
+                // Match the change output against known multisig change addresses
+                let multisig_id = match self
+                    .match_change_spk_to_multisig(&output.script_pubkey)
+                {
+                    Ok(Some(id)) => id,
+                    Ok(None) => {
                         warn!(
-                            "Finalizing block {}: Change output in tx {} being tracked is not the expected p2tr: {:?} != {:?}",
+                            "Finalizing block {}: Change output in tx {} does not match any known multisig: {:?}",
                             block.hash,
                             txid,
-                            output.script_pubkey,
-                            change_spk
+                            output.script_pubkey
                         );
                         continue;
                     }
-                    let utxo_version = self
-                        .db
-                        .get_utxo(outpoint)
-                        .ok()
-                        .flatten()
-                        .map(|utxo| utxo.version)
-                        .unwrap_or_default();
-                    change_utxos.push(database::Utxo {
-                        outpoint,
-                        output: output.clone(),
-                        eth_address: None,
-                        version: utxo_version,
-                    });
-                }
-            } else {
-                // Log if we couldn't get the expected change SPK
-                error!(
-                    "Finalizing block {}: Could not get expected change SPK to verify change outputs for tx {}. Error: {:?}",
-                    block.hash,
-                    txid,
-                    change_spk_res.as_ref().err()
-                );
+                    Err(e) => {
+                        error!(
+                            "Finalizing block {}: Error getting change SPK for tx {}: {:?}",
+                            block.hash,
+                            txid,
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                let utxo_version = self
+                    .db
+                    .get_utxo(outpoint)
+                    .ok()
+                    .flatten()
+                    .map(|utxo| utxo.version)
+                    .unwrap_or_default();
+                change_utxos.push(database::Utxo {
+                    outpoint,
+                    output: output.clone(),
+                    eth_address: None,
+                    version: utxo_version,
+                    multisig_id,
+                });
             }
             self.db.store_utxos(
                 change_utxos.iter().collect::<Vec<_>>().as_slice(),

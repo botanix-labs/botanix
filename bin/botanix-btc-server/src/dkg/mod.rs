@@ -11,9 +11,13 @@ use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, VecDeque},
+    fmt::Display,
     time::{Duration, Instant},
 };
 use thiserror::Error;
+use uuid::Uuid;
+
+use botanix_types::MultisigId;
 
 mod encryption;
 #[cfg(test)]
@@ -116,6 +120,91 @@ mod sealed_pkg {
         ) -> Result<secp256k1::ecdsa::Signature, encryption::Error> {
             auth.validate_round3(initiator, self.0)?;
             Ok(self.0)
+        }
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DynafedSubscriptionMessage {
+    /// DKG-related notifications
+    Dkg(DkgNotification),
+    /// Migration-related notifications
+    Migration(MigrationNotification),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DkgNotification {
+    /// Start a new DKG session
+    Start { multisig_id: MultisigId },
+    /// Restart a DKG session
+    Restart { multisig_id: MultisigId },
+    /// Abort a DKG session
+    Abort { multisig_id: MultisigId },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MigrationNotification {
+    pub event: MigrationEvent,
+    pub multisig_id_from: MultisigId,
+    pub multisig_id_to: MultisigId,
+    pub migration_id: Uuid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MigrationEvent {
+    Start,
+    End,
+    Abort,
+}
+
+// Helper methods
+impl DkgNotification {
+    pub fn multisig_id(&self) -> MultisigId {
+        match self {
+            DkgNotification::Start { multisig_id } => *multisig_id,
+            DkgNotification::Restart { multisig_id } => *multisig_id,
+            DkgNotification::Abort { multisig_id } => *multisig_id,
+        }
+    }
+}
+
+impl Display for DkgNotification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DkgNotification::Start { multisig_id } => {
+                write!(f, "DKG Started {{ multisig_id: {} }}", multisig_id)
+            }
+            DkgNotification::Restart { multisig_id } => {
+                write!(f, "DKG Restart {{ multisig_id: {} }}", multisig_id)
+            }
+            DkgNotification::Abort { multisig_id } => {
+                write!(f, "DKG Aborted {{ multisig_id: {} }}", multisig_id)
+            }
+        }
+    }
+}
+
+impl Display for MigrationNotification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Migration {:?} {{ from: {}, to: {}, id: {} }}",
+            self.event,
+            self.multisig_id_from,
+            self.multisig_id_to,
+            self.migration_id
+        )
+    }
+}
+
+impl Display for DynafedSubscriptionMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DynafedSubscriptionMessage::Dkg(dkg) => write!(f, "{}", dkg),
+            DynafedSubscriptionMessage::Migration(migration) => {
+                write!(f, "{}", migration)
+            }
         }
     }
 }
@@ -425,6 +514,7 @@ pub struct DkgStateMachine {
     config: Config,
     my_frost_id: frost::Identifier,
     my_static_sec: secp256k1::SecretKey,
+    multisig_id: MultisigId,
     coordinator: frost::Identifier,
     members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
     queue: Queue,
@@ -464,6 +554,7 @@ impl DkgStateMachine {
     pub fn new(
         my_frost_id: frost::Identifier,
         my_static_sec: secp256k1::SecretKey,
+        multisig_id: MultisigId,
         coordinator: frost::Identifier,
         members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         config: Config,
@@ -506,6 +597,7 @@ impl DkgStateMachine {
             config,
             my_frost_id,
             my_static_sec,
+            multisig_id,
             coordinator,
             members,
             queue,
@@ -645,6 +737,10 @@ impl DkgStateMachine {
     /// Returns the FROST identifier of this participant.
     pub fn frost_id(&self) -> frost::Identifier {
         self.my_frost_id
+    }
+    /// Returns the multisig identifier for this DKG session.
+    pub fn multisig_id(&self) -> MultisigId {
+        self.multisig_id
     }
     /// Checks if this participant is the coordinator of the DKG process.
     pub fn is_coordinator(&self) -> bool {

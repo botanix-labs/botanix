@@ -43,6 +43,47 @@ pub struct GetFinalizedPegoutIdsResponse {
     pub is_final: bool,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubscribeToDynafedNotificationsStream {
+    #[prost(
+        oneof = "subscribe_to_dynafed_notifications_stream::Notification",
+        tags = "1, 2"
+    )]
+    pub notification: ::core::option::Option<
+        subscribe_to_dynafed_notifications_stream::Notification,
+    >,
+}
+/// Nested message and enum types in `SubscribeToDynafedNotificationsStream`.
+pub mod subscribe_to_dynafed_notifications_stream {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Notification {
+        #[prost(message, tag = "1")]
+        Dkg(super::DkgNotification),
+        #[prost(message, tag = "2")]
+        Migration(super::MigrationNotification),
+    }
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct DkgNotification {
+    #[prost(enumeration = "DkgEvent", tag = "1")]
+    pub event: i32,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MigrationNotification {
+    #[prost(enumeration = "MigrationEvent", tag = "1")]
+    pub event: i32,
+    /// The multisig being migrated FROM
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    /// The multisig being migrated TO
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
+    /// UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
+    #[prost(string, tag = "4")]
+    pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
     #[prost(bytes = "vec", tag = "1")]
     pub psbt: ::prost::alloc::vec::Vec<u8>,
@@ -123,6 +164,8 @@ pub struct Utxo {
     pub output: ::core::option::Option<TxOut>,
     #[prost(string, tag = "3")]
     pub eth_address: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "4")]
+    pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UtxoToRecover {
@@ -131,11 +174,18 @@ pub struct UtxoToRecover {
     /// empty eth_address for change utxo
     #[prost(string, tag = "2")]
     pub eth_address: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetAllUtxosResponse {
     #[prost(message, repeated, tag = "1")]
     pub utxos: ::prost::alloc::vec::Vec<Utxo>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListMultisigsResponse {
+    #[prost(uint32, repeated, tag = "1")]
+    pub ids: ::prost::alloc::vec::Vec<u32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetGatewayAddressRequest {
@@ -149,6 +199,11 @@ pub struct MakeTxResponse {
     pub txid: ::prost::alloc::string::String,
     #[prost(bytes = "vec", tag = "2")]
     pub tx: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetPublicKeyRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetPublicKeyResponse {
@@ -211,6 +266,21 @@ pub struct GetTrackedTxsResponse {
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Empty {}
 /// Frost things
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetDkgPayloadsRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct StartNewDkgRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct AbortDkgRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
     #[prost(uint64, tag = "1")]
@@ -226,6 +296,8 @@ pub struct DkgPayload {
     pub recipient: ::prost::alloc::vec::Vec<u8>,
     #[prost(bytes = "vec", tag = "3")]
     pub payload: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "4")]
+    pub multisig_id: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SigningPackageRequest {
@@ -293,6 +365,90 @@ pub struct GetSessionIdsRequest {
 pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    ::prost::Enumeration,
+)]
+#[repr(i32)]
+pub enum DkgEvent {
+    Unspecified = 0,
+    DkgStart = 1,
+    DkgRestart = 2,
+    DkgAbort = 3,
+}
+impl DkgEvent {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "DKG_EVENT_UNSPECIFIED",
+            Self::DkgStart => "DKG_START",
+            Self::DkgRestart => "DKG_RESTART",
+            Self::DkgAbort => "DKG_ABORT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "DKG_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
+            "DKG_START" => Some(Self::DkgStart),
+            "DKG_RESTART" => Some(Self::DkgRestart),
+            "DKG_ABORT" => Some(Self::DkgAbort),
+            _ => None,
+        }
+    }
+}
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    ::prost::Enumeration,
+)]
+#[repr(i32)]
+pub enum MigrationEvent {
+    Unspecified = 0,
+    MigrationStart = 1,
+    MigrationEnd = 2,
+    MigrationAbort = 3,
+}
+impl MigrationEvent {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MIGRATION_EVENT_UNSPECIFIED",
+            Self::MigrationStart => "MIGRATION_START",
+            Self::MigrationEnd => "MIGRATION_END",
+            Self::MigrationAbort => "MIGRATION_ABORT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MIGRATION_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
+            "MIGRATION_START" => Some(Self::MigrationStart),
+            "MIGRATION_END" => Some(Self::MigrationEnd),
+            "MIGRATION_ABORT" => Some(Self::MigrationAbort),
+            _ => None,
+        }
+    }
 }
 #[derive(
     Clone,
@@ -529,7 +685,7 @@ pub mod btc_server_client {
         }
         pub async fn get_public_key(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<super::GetPublicKeyRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetPublicKeyResponse>,
             tonic::Status,
@@ -553,7 +709,7 @@ pub mod btc_server_client {
         }
         pub async fn get_dkg_payloads(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<super::GetDkgPayloadsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DkgPayloads>,
             tonic::Status,
@@ -598,6 +754,74 @@ pub mod btc_server_client {
                 "NewDkgPayload",
             ));
             self.inner.unary(req, path, codec).await
+        }
+        pub async fn start_new_dkg(
+            &mut self,
+            request: impl tonic::IntoRequest<super::StartNewDkgRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/StartNewDkg",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("btc_server.BtcServer", "StartNewDkg"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn abort_dkg(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AbortDkgRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/AbortDkg",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("btc_server.BtcServer", "AbortDkg"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn subscribe_to_dynafed_notifications(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<
+                tonic::codec::Streaming<
+                    super::SubscribeToDynafedNotificationsStream,
+                >,
+            >,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/SubscribeToDynafedNotifications",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "SubscribeToDynafedNotifications",
+            ));
+            self.inner.server_streaming(req, path, codec).await
         }
         pub async fn get_round1_signing_package(
             &mut self,
@@ -833,6 +1057,30 @@ pub mod btc_server_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("btc_server.BtcServer", "GetAllUtxos"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_multisigs(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListMultisigsResponse>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/ListMultisigs",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "ListMultisigs",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_wallet_state(

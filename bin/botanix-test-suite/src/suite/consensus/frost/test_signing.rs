@@ -6,6 +6,7 @@ use botanix_btc_server_client::{
     BtcServerClient, SigningPackage, SigningPackageRequest,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
+use botanix_types::LEGACY_MULTISIG_ID;
 use btcserverlib::pegout_id::PegoutId;
 use hex::{self, encode as hex_encode};
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
@@ -185,7 +186,9 @@ pub async fn test_many_inputs_signing(
     for client in &mut clients {
         let pk = client
             .get_public_key(tonic::Request::new(
-                botanix_btc_server_client::Empty {},
+                botanix_btc_server_client::GetPublicKeyRequest {
+                    multisig_id: *LEGACY_MULTISIG_ID,
+                },
             ))
             .await;
         assert!(pk.is_err());

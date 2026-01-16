@@ -154,7 +154,7 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
 
             // Create the encrypted export.
             let Some(export) =
-                db.export_key_package_by_id(c.multisig_id, passphrase)?
+                db.export_key_package_by_id(c.multisig_id.into(), passphrase)?
             else {
                 anyhow::bail!("No key package found - correct database path?");
             };
@@ -173,7 +173,7 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
             // NOTE: This creates a new database if it does not already exist...
             let db = database::Db::open(&c.db).expect("failed to open db");
 
-            if db.get_key_package_by_id(c.multisig_id)?.is_some()
+            if db.get_key_package_by_id(c.multisig_id.into())?.is_some()
                 && !c.force_overwrite
             {
                 anyhow::bail!(
@@ -193,7 +193,11 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
             let bytes = std::fs::read(&c.input)?;
             let import: database::ExportedKeyPackage =
                 ciborium::from_reader(bytes.as_slice())?;
-            db.import_key_package_by_id(c.multisig_id, passphrase, import)?;
+            db.import_key_package_by_id(
+                c.multisig_id.into(),
+                passphrase,
+                import,
+            )?;
 
             println!("Successfully imported decrypted key package");
         }

@@ -112,6 +112,7 @@ botanix-rpc-types.workspace = true
 botanix-btc-server.workspace = true
 botanix-storage.workspace = true
 botanix-storage-migrate.workspace = true
+botanix-types.workspace = true
 botanix-utils.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true

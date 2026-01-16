@@ -5,12 +5,15 @@ mod cli;
 use crate::comet_node::{get_enode, TestSignal};
 use alloy_primitives::Address;
 use anyhow::{Context, Result as AnyResult};
-use botanix_configs::federation::{FedMemberPubKey, FederationTomlConfig};
+use botanix_configs::federation::{
+    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+};
 use botanix_test_suite::suite::consensus::common::{
     comet_node::{self, updated_genesis_file, GenesisValidator, PrivValidator},
     poa_node::{ABCI_PORT_BASE, DISCOVERY_PORT_BASE},
     MINTING_CONTRACT_BYTECODE,
 };
+use botanix_types::LEGACY_MULTISIG_ID;
 use clap::Parser;
 use cli::Cli;
 use secp256k1::SECP256K1;
@@ -299,13 +302,21 @@ fn create_federation_config(
     let fed_pks = members
         .iter()
         .map(|member| FedMemberPubKey {
+            role: FederationRole::Continuing,
             key: member.public_key.to_string(),
             socket_addr: member.socket_address.to_string(),
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    let multisig_config = MultisigConfig {
+        multisig_id: LEGACY_MULTISIG_ID,
+        min_signers: 2,
+        max_signers: Some(fed_pks.len() as u16),
+        federation_member_public_key: fed_pks,
+    };
 
     let config = FederationTomlConfig {
-        federation_member_public_key: fed_pks,
+        multisig: vec![multisig_config],
         botanix_fee_recipient: random_fee_recipient.to_string(),
         minting_contract_bytecode: String::from(MINTING_CONTRACT_BYTECODE),
         lst_fee_receiver: random_lst_fee_receiver.to_string(),

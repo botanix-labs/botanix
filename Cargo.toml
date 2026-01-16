@@ -30,11 +30,12 @@ members = [
     "crates/botanix-rpc-types",
     "crates/botanix-storage",
     "crates/botanix-storage-migrate",
+    "crates/botanix-types",
     "crates/botanix-utils",
 ]
 default-members = ["bin/botanix-reth"]
 [workspace.package]
-version = "1.5.4"
+version = "1.6.0"
 edition = "2021"
 rust-version = "1.90"
 license = "MIT OR Apache-2.0"
@@ -195,6 +196,7 @@ botanix-rpc-types = { path = "crates/botanix-rpc-types" }
 botanix-storage = { path = "crates/botanix-storage" }
 botanix-storage-migrate = { path = "crates/botanix-storage-migrate" }
 botanix-test-suite = { path = "bin/botanix-test-suite" }
+botanix-types = { path = "crates/botanix-types" }
 botanix-utils = { path = "crates/botanix-utils" }
 bytes = "1.5"
 cfg-if = { version = "1.0", default-features = false }
@@ -249,34 +251,34 @@ rand = "0.8.5"
 rand_09 = { package = "rand", version = "0.9" }
 
 # reth dependencies - using botanix fork
-reth = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-basic-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-basic-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 
 # Botanix deps
-reth-chain-state = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-chainspec = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-cli = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-cli-commands = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-cli-runner = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-cli-util = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-codecs = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-codecs-derive = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-config = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-consensus = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-consensus-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = ["mdbx"] }
-reth-db-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-db-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-db-models = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-discv4 = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-chain-state = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-chainspec = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-cli = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-cli-commands = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-cli-runner = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-cli-util = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-codecs = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-codecs-derive = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-config = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-consensus = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-consensus-common = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-db = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = ["mdbx"] }
+reth-db-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-db-common = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-db-models = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-discv4 = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "test-utils",
 ] }
-reth-engine-local = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-engine-tree = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-eth-wire = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-eth-wire-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-engine-local = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-engine-tree = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-eth-wire = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-eth-wire-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "test-utils",
     "node",
     "provider",
@@ -284,57 +286,57 @@ reth-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "botani
     "network",
     "rpc",
 ] }
-reth-ethereum-consensus = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-ethereum-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-ethereum-forks = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-ethereum-consensus = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-ethereum-engine-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-ethereum-forks = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "serde",
 ] }
-reth-ethereum-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-ethereum-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-evm = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-evm-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-execution-errors = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-execution-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-metrics = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-network = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-ethereum-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-ethereum-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-evm = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-evm-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-execution-errors = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-execution-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-metrics = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-network = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "test-utils",
 ] }
-reth-network-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-network-p2p = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-network-peers = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-node-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-node-core = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-node-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-network-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-network-p2p = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-network-peers = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-node-builder = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-node-core = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-node-ethereum = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "test-utils",
 ] }
-reth-node-metrics = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-node-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-payload-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-primitives = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-node-metrics = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-node-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-payload-builder = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-payload-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-primitives = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "secp256k1",
 ] }
-reth-primitives-traits = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-provider = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-primitives-traits = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-provider = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "test-utils",
 ] }
-reth-prune = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-prune-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix", features = [
+reth-prune = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-prune-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed", features = [
     "test-utils",
 ] }
-reth-revm = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-rpc-engine-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-rpc-eth-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-rpc-server-types = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-stages = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-storage-api = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-storage-errors = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-tasks = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-tracing = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-transaction-pool = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-trie = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-trie-common = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
-reth-trie-db = { git = "https://github.com/botanix-labs/reth", branch = "botanix" }
+reth-revm = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-rpc-engine-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-rpc-eth-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-rpc-server-types = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-stages = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-storage-api = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-storage-errors = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-tasks = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-tracing = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-transaction-pool = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-trie = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-trie-common = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
+reth-trie-db = { git = "https://github.com/botanix-labs/reth", branch = "dynafed" }
 
 # revm - exact version to match fork
 revm = "=28.0.1"

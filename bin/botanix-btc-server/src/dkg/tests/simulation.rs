@@ -1,6 +1,7 @@
 use super::*;
 use crate::dkg::Stage;
 use bitcoin::secp256k1;
+use botanix_types::LEGACY_MULTISIG_ID;
 use frost::keys::PublicKeyPackage;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::collections::BTreeMap;
@@ -108,6 +109,7 @@ async fn setup_tasks(num_members: u16, config: Config, absent_nodes: &[u16]) {
         let machine = DkgStateMachine::new(
             id,
             static_sec,
+            LEGACY_MULTISIG_ID,
             coordinator,
             members.clone(),
             config,

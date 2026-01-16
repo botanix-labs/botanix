@@ -40,7 +40,7 @@ use botanix_reth::{
         network_builder::{lookup_head, setup_network_builder},
         provider::create_blockchain_provider,
         recover_utxos::recover_missing_utxos,
-        reth::load_reth_config,
+        reth::{load_reth_config, verify_federation_config_hash},
         rpc::rpc::setup_and_run_rpc,
     },
 };
@@ -125,6 +125,8 @@ fn main() -> eyre::Result<()> {
 
             // POA Config
             let poa_cfg = args.poa.clone();
+
+            verify_federation_config_hash(&poa_cfg)?;
 
             // State Sync Config
             let state_sync_cfg = args.poa.state_sync.clone();
@@ -299,18 +301,11 @@ fn main() -> eyre::Result<()> {
                 None
             };
 
-            let (driver_tx, driver_rx) = tokio::sync::mpsc::channel(1);
-            let mut abci_driver = ABCIDriver::new(
-                driver_rx,
-                reth_db_provider_factory.clone(),
-                botanix_db_provider_factory.clone(),
-                blockchain_provider.clone(),
-            );
-
             let botanix_evm_config = BotanixEvmConfig::new(chain_spec_arc.clone());
             let cometbft_rpc_factory = create_cometbft_factory(&poa_cfg);
             let btc_server_factory = btc_server_client.unzip().0;
             let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
+            let (driver_tx, driver_rx) = tokio::sync::mpsc::channel(1);
 
             let (frost_task, abci_client_builder, snapshot_manager, wallet_sync, consensus) =
                 match AuthorityConsensusBuilder::try_new(
@@ -333,7 +328,7 @@ fn main() -> eyre::Result<()> {
                     driver_tx,
                     state_sync_cfg.clone(),
                     reth_provider_factory.clone(),
-                    botanix_db_provider_factory,
+                    botanix_db_provider_factory.clone(),
                     poa_cfg.block_fee_recipient_address,
                     bitcoind_client,
                 ) {
@@ -342,6 +337,20 @@ fn main() -> eyre::Result<()> {
                         return Err(eyre::eyre!("AuthorityConsensusBuilderError : {:?}", e));
                     }
                 };
+
+                let storage = if let Some(abci_client_builder) = abci_client_builder.as_ref() {
+                    abci_client_builder.storage().clone()
+                } else {
+                    panic!("ABCI client builder should exist in authority mode");
+                };
+
+                let mut abci_driver = ABCIDriver::new(
+                    driver_rx,
+                    reth_db_provider_factory.clone(),
+                    botanix_db_provider_factory,
+                    blockchain_provider.clone(),
+                    storage,
+                );
 
                 // Setup and launch RPC server
                 let _rpc_handle = setup_and_run_rpc(

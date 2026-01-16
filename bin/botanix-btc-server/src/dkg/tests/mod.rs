@@ -1,5 +1,6 @@
 use crate::dkg::{Config, DkgMessage, DkgPayload, DkgStateMachine};
 use bitcoin::secp256k1;
+use botanix_types::LEGACY_MULTISIG_ID;
 use frost_secp256k1_tr as frost;
 use std::{
     collections::BTreeMap,
@@ -65,6 +66,7 @@ fn setup(
     let alice = DkgStateMachine::new(
         alice_addr,
         alice_sec,
+        LEGACY_MULTISIG_ID,
         alice_addr,
         members.clone(),
         config,
@@ -75,6 +77,7 @@ fn setup(
     let bob = DkgStateMachine::new(
         bob_addr,
         bob_sec,
+        LEGACY_MULTISIG_ID,
         alice_addr,
         members.clone(),
         config,
@@ -85,6 +88,7 @@ fn setup(
     let eve = DkgStateMachine::new(
         eve_addr,
         eve_sec,
+        LEGACY_MULTISIG_ID,
         alice_addr,
         members.clone(),
         config,
