@@ -3013,12 +3013,23 @@ where
             )));
         }
 
+        let multisig_id_from: MultisigId = inner.multisig_id_from.into();
+        let multisig_id_to: MultisigId = inner.multisig_id_to.into();
+
+        if multisig_id_from == multisig_id_to {
+            return Err(tonic::Status::invalid_argument(
+                "multisig_id_from and multisig_id_to must be different",
+            ));
+        }
+
         // Check no existing migration is active for these multisig_ids
         let mut migrations = self.migrations.lock().await;
         for (_, state) in migrations.iter() {
-            if state.multisig_id_from == multisig_id_from
-                || state.multisig_id_to == multisig_id_to
-            {
+            let overlaps = state.multisig_id_from == multisig_id_from
+                || state.multisig_id_to == multisig_id_from
+                || state.multisig_id_from == multisig_id_to
+                || state.multisig_id_to == multisig_id_to;
+            if overlaps {
                 return Err(already_exists!(
                     "Migration already active involving multisig {} or {}",
                     multisig_id_from,
