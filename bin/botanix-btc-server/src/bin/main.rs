@@ -70,6 +70,7 @@ use tonic::{
     codegen::CompressionEncoding, metadata::BinaryMetadataKey,
     transport::Server,
 };
+use uuid::Uuid;
 
 const JWT_HEADER_KEY: &str = "trace-proto-bin";
 const DEFAULT_COORDINATOR_ID: u16 = 0;
@@ -260,6 +261,14 @@ struct DkgState {
     session_nonce: Option<u64>,
 }
 
+/// Migration state tracking for active migrations.
+struct MigrationState {
+    multisig_id_from: MultisigId,
+    multisig_id_to: MultisigId,
+    #[allow(dead_code)]
+    started_at: Instant,
+}
+
 struct App<BitcoinRpcApi> {
     start_time: Instant,
     db: database::Db,
@@ -293,6 +302,8 @@ struct App<BitcoinRpcApi> {
     /// dynafed notifications sender
     dynafed_notifications_tx:
         Arc<tokio::sync::broadcast::Sender<DynafedSubscriptionMessage>>,
+    /// Active migrations: migration_id -> MigrationState
+    migrations: Arc<Mutex<HashMap<Uuid, MigrationState>>>,
 }
 
 impl<BitcoindClient> App<BitcoindClient>
@@ -791,6 +802,7 @@ where
             fall_back_fee_rate,
             telemetry,
             dynafed_notifications_tx: Arc::new(dynafed_notifications_tx),
+            migrations: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -2962,6 +2974,202 @@ where
             warn!(
                 "No subscribers to receive DKG started notification for multisig_id {}: {}",
                 multisig_id, e
+            );
+        }
+
+        Ok(tonic::Response::new(rpc::Empty {}))
+    }
+
+    async fn start_migration(
+        &self,
+        req: tonic::Request<rpc::StartMigrationRequest>,
+    ) -> Result<tonic::Response<rpc::StartMigrationResponse>, tonic::Status>
+    {
+        self.validate_jwt(&req)?;
+
+        let inner = req.into_inner();
+        let multisig_id_from: MultisigId = inner.multisig_id_from.into();
+        let multisig_id_to: MultisigId = inner.multisig_id_to.into();
+
+        // Check source multisig has a key package (required)
+        if self
+            .db
+            .get_key_package_by_id(multisig_id_from)
+            .to_status()?
+            .is_none()
+        {
+            return Err(tonic::Status::not_found(format!(
+                "Source multisig {} does not have a key package",
+                multisig_id_from
+            )));
+        }
+
+        // Check target multisig does NOT have a key package yet
+        if self.db.get_key_package_by_id(multisig_id_to).to_status()?.is_some()
+        {
+            return Err(tonic::Status::failed_precondition(format!(
+                "Target multisig {} already has a key package",
+                multisig_id_to
+            )));
+        }
+
+        // Check no existing migration is active for these multisig_ids
+        let mut migrations = self.migrations.lock().await;
+        for (_, state) in migrations.iter() {
+            if state.multisig_id_from == multisig_id_from
+                || state.multisig_id_to == multisig_id_to
+            {
+                return Err(already_exists!(
+                    "Migration already active involving multisig {} or {}",
+                    multisig_id_from,
+                    multisig_id_to
+                ));
+            }
+        }
+
+        // Generate UUID for migration_id
+        let migration_id = Uuid::new_v4();
+
+        // Store migration state
+        migrations.insert(
+            migration_id,
+            MigrationState {
+                multisig_id_from,
+                multisig_id_to,
+                started_at: Instant::now(),
+            },
+        );
+
+        info!(
+            "Started migration {} from multisig {} to multisig {}",
+            migration_id, multisig_id_from, multisig_id_to
+        );
+
+        // Send migration notification
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Migration(MigrationNotification {
+                event: MigrationEvent::Start,
+                multisig_id_from,
+                multisig_id_to,
+                migration_id,
+            }),
+        ) {
+            warn!(
+                "No subscribers to receive migration start notification for {}: {}",
+                migration_id, e
+            );
+        }
+
+        Ok(tonic::Response::new(rpc::StartMigrationResponse {
+            migration_id: migration_id.to_string(),
+        }))
+    }
+
+    async fn end_migration(
+        &self,
+        req: tonic::Request<rpc::EndMigrationRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let migration_id_str = req.into_inner().migration_id;
+        let migration_id = Uuid::parse_str(&migration_id_str).map_err(|e| {
+            tonic::Status::invalid_argument(format!(
+                "Invalid migration_id UUID: {}",
+                e
+            ))
+        })?;
+
+        let mut migrations = self.migrations.lock().await;
+        let state = migrations.get(&migration_id).ok_or_else(|| {
+            tonic::Status::not_found(format!(
+                "Migration {} not found",
+                migration_id
+            ))
+        })?;
+
+        let multisig_id_from = state.multisig_id_from;
+        let multisig_id_to = state.multisig_id_to;
+
+        // Verify target multisig now has a key package (DKG completed)
+        if self.db.get_key_package_by_id(multisig_id_to).to_status()?.is_none()
+        {
+            return Err(tonic::Status::failed_precondition(format!(
+                "Target multisig {} does not have a key package yet (DKG not completed)",
+                multisig_id_to
+            )));
+        }
+
+        // Remove from migrations map
+        migrations.remove(&migration_id);
+
+        info!(
+            "Ended migration {} from multisig {} to multisig {}",
+            migration_id, multisig_id_from, multisig_id_to
+        );
+
+        // Send migration notification
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Migration(MigrationNotification {
+                event: MigrationEvent::End,
+                multisig_id_from,
+                multisig_id_to,
+                migration_id,
+            }),
+        ) {
+            warn!(
+                "No subscribers to receive migration end notification for {}: {}",
+                migration_id, e
+            );
+        }
+
+        Ok(tonic::Response::new(rpc::Empty {}))
+    }
+
+    async fn abort_migration(
+        &self,
+        req: tonic::Request<rpc::AbortMigrationRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let migration_id_str = req.into_inner().migration_id;
+        let migration_id = Uuid::parse_str(&migration_id_str).map_err(|e| {
+            tonic::Status::invalid_argument(format!(
+                "Invalid migration_id UUID: {}",
+                e
+            ))
+        })?;
+
+        let mut migrations = self.migrations.lock().await;
+        let state = migrations.get(&migration_id).ok_or_else(|| {
+            tonic::Status::not_found(format!(
+                "Migration {} not found",
+                migration_id
+            ))
+        })?;
+
+        let multisig_id_from = state.multisig_id_from;
+        let multisig_id_to = state.multisig_id_to;
+
+        // Remove from migrations map
+        migrations.remove(&migration_id);
+
+        info!(
+            "Aborted migration {} from multisig {} to multisig {}",
+            migration_id, multisig_id_from, multisig_id_to
+        );
+
+        // Send migration notification
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Migration(MigrationNotification {
+                event: MigrationEvent::Abort,
+                multisig_id_from,
+                multisig_id_to,
+                migration_id,
+            }),
+        ) {
+            warn!(
+                "No subscribers to receive migration abort notification for {}: {}",
+                migration_id, e
             );
         }
 

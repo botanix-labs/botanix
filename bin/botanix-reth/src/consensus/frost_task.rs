@@ -619,9 +619,26 @@ where
                 info!(target: "consensus::authority::frost_task::start_task", "Received dynafed frost notification from btc-server: {:?}", payload);
                 let dynafed_sub_message = match payload.notification {
                     Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Dkg(dkg)) => {
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Start {
-                            multisig_id: dkg.multisig_id.into(),
-                        })
+                        let dkg_notification = match btcserverlib::rpc::DkgEvent::try_from(dkg.event) {
+                            Ok(btcserverlib::rpc::DkgEvent::Unspecified) => {
+                                warn!(target: "consensus::authority::frost_task::start_task", "Unspecified DKG event received");
+                                continue;
+                            }
+                            Ok(btcserverlib::rpc::DkgEvent::DkgStart) => DkgNotification::Start {
+                                multisig_id: dkg.multisig_id.into(),
+                            },
+                            Ok(btcserverlib::rpc::DkgEvent::DkgRestart) => DkgNotification::Restart {
+                                multisig_id: dkg.multisig_id.into(),
+                            },
+                            Ok(btcserverlib::rpc::DkgEvent::DkgAbort) => DkgNotification::Abort {
+                                multisig_id: dkg.multisig_id.into(),
+                            },
+                            Err(e) => {
+                                error!(target: "consensus::authority::frost_task::start_task", "Invalid DKG event value {}: {:?}", dkg.event, e);
+                                continue;
+                            }
+                        };
+                        DynafedSubscriptionMessage::Dkg(dkg_notification)
                     }
                     Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Migration(migration)) => {
                         let event = match btcserverlib::rpc::MigrationEvent::try_from(migration.event) {
