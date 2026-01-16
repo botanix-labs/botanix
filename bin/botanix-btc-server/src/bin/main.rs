@@ -428,9 +428,11 @@ where
             // NOTE: We set a very conservative timeout for the DKG process
             // to resend messages. For direct connections this could be set
             // to a lower millisecond range, technically.
+            // TODO: We should simplify this and use the same timeout for all rounds.
             round1_package_timeout: Duration::from_secs(3),
             round2_package_timeout: Duration::from_secs(3),
             round3_package_timeout: Duration::from_secs(3),
+            round4_package_timeout: Duration::from_secs(3),
             // Start a new DKG session if not completed in 5 minutes.
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
@@ -2521,10 +2523,14 @@ where
         // Set any timers, and retrieve next timeout event.
         let timeout = dkg.machine.timeout(Instant::now());
 
+        // TODO: Get and set attestations here as well?
+        // TODO: Should we maybe also set the produced key packages here as well?
+
         let resp = rpc::DkgPayloads {
             // TODO (lamafab): Option?
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
             payloads,
+            attestation: None,
         };
 
         Ok(tonic::Response::new(resp))
@@ -2597,12 +2603,8 @@ where
 
         match &payload.msg {
             dkg::DkgMessage::Round1 {
-                initiator: _,
-                context: _,
-                nonce: _,
-                ephemeral_pub: _,
-                signature: _,
                 package,
+                ..
             } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     let mut bytes = vec![];
@@ -2617,10 +2619,8 @@ where
                 }
             }
             dkg::DkgMessage::Round2 {
-                initiator: _,
-                target: _,
-                nonce: _,
                 package,
+                ..
             } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     let mut bytes = vec![];
@@ -2634,9 +2634,18 @@ where
                     );
                 }
             }
-            dkg::DkgMessage::Round3 { initiator: _, signature: _ } => {
+            dkg::DkgMessage::Round3 { .. } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_round3_dkg_metrics(
+                        self.btc_network,
+                        self.config.identifier,
+                        start.elapsed().as_millis(),
+                    );
+                }
+            }
+            dkg::DkgMessage::Round4 { .. } => {
+                if let Some(telemetry) = self.telemetry.as_ref() {
+                    telemetry.update_round4_dkg_metrics(
                         self.btc_network,
                         self.config.identifier,
                         start.elapsed().as_millis(),
@@ -2688,7 +2697,7 @@ where
             payloads.push(rpc::DkgPayload {
                 sender: p.sender.serialize(),
                 recipient: p.recipient.serialize(),
-                payload: bytes.clone(),
+                payload: bytes,
                 multisig_id: *multisig_id,
             });
         }
@@ -2727,6 +2736,7 @@ where
                     }
                     return Err(e);
                 }
+
                 if let Err(e) = self.db.flush().to_status() {
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
@@ -2737,25 +2747,25 @@ where
                     }
                     return Err(e);
                 }
-
-                // Note that we keep the dkg machine running, in case the
-                // coordinator does not receive the final acknowledgment and we need
-                // to issue a response.
-                //
-                // TODO (lamafab): we could technically shut it down once we receive
-                // the first signing request, since that indicates that the Dkg
-                // process has completed successfully. But there are no downsides of
-                // keeping it running as of now.
             }
         }
 
+        let attestation: Option<rpc::DkgAttestation> = dkg
+            .machine
+            .attestation()
+            .map(|att| att.try_into().expect("attestation format must be valid"));
+
         // Set any timers, and retrieve next timeout event.
         let timeout = dkg.machine.timeout(Instant::now());
+
+        // TODO: The DKG state machine should be deleted once the attestations
+        // are confirmed on-chain.
 
         let resp = rpc::DkgPayloads {
             // TODO (lamafab): Option?
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
             payloads,
+            attestation,
         };
 
         Ok(tonic::Response::new(resp))

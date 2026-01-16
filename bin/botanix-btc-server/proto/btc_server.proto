@@ -283,6 +283,20 @@ message AbortDkgRequest {
 message DkgPayloads {
     uint64 timeout = 1;
     repeated DkgPayload payloads = 2;
+    optional DkgAttestation attestation = 3;
+}
+
+message DkgAttestation {
+    bytes public_key_package = 1;
+    bytes signing_package = 2;
+    repeated DkgSignatureEntry signatures = 3;
+    bytes aggregated_signature = 4;
+}
+
+message DkgSignatureEntry {
+    bytes frost_id = 1;
+    bytes signature_share = 2;
+    bytes attestation_signature = 3;
 }
 
 message DkgPayload {

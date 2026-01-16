@@ -3089,6 +3089,7 @@ dependencies = [
  "jsonrpsee-types",
  "lazy_static",
  "libc",
+ "merlin",
  "once_cell",
  "parity-bytes",
  "parking_lot 0.12.4",

@@ -228,6 +228,9 @@ tonic = { workspace = true }
 tracing.workspace = true
 uuid = { version = "1.8.0", features = ["v4"] }
 
+# migration manager
+merlin = "3.0.0"
+
 [dev-dependencies]
 botanix-storage = { workspace = true, features = ["test-utils"] }
 rand = { workspace = true }

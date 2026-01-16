@@ -12,6 +12,10 @@ pub fn complete_stage_one(
     //
     now: Instant,
 ) -> (DkgStateMachine, DkgStateMachine, DkgStateMachine) {
+    assert_eq!(alice.stage(), Stage::RoundOne);
+    assert_eq!(bob.stage(), Stage::AwaitingInit);
+    assert_eq!(eve.stage(), Stage::AwaitingInit);
+
     // Bob and Eve are waiting for Alice to send the initial message.
     assert!(bob.send(now).is_none());
     assert!(eve.send(now).is_none());
@@ -116,13 +120,19 @@ fn dkg_complete_stage_one() {
     let (alice_addr, bob_addr, eve_addr, alice, bob, eve) =
         setup(test_config());
 
-    assert_eq!(alice.stage(), Stage::RoundOne);
-    assert_eq!(bob.stage(), Stage::AwaitingInit);
-    assert_eq!(eve.stage(), Stage::AwaitingInit);
-
     let now = Instant::now();
 
-    let (_alice, _bob, _eve) = complete_stage_one(
+    let (alice, bob, eve) = complete_stage_one(
         alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
     );
+
+    // Key packages are not ready yet.
+    assert!(alice.aggregate_key_packages().is_none());
+    assert!(bob.aggregate_key_packages().is_none());
+    assert!(eve.aggregate_key_packages().is_none());
+
+    // Attestations are not ready yet.
+    assert!(alice.attestation().is_none());
+    assert!(bob.attestation().is_none());
+    assert!(eve.attestation().is_none());
 }

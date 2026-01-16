@@ -667,36 +667,25 @@ where
                         match notification {
                             btcserverlib::dkg::DkgNotification::Start { multisig_id } => {
                                 info!(target: "consensus::authority::frost_task::start_task", "Starting DKG for multisig id {}", multisig_id);
-                                // The returned tx needs to be stored with a mapping to the multisig_id
-                                if let Some(tasks) = self.dkg_tasks.as_mut() {
-                                    if tasks.contains_key(&multisig_id) {
-                                        warn!(target: "consensus::authority::frost_task::start_task", "DKG task for multisig id {} already exists, skipping...", multisig_id);
-                                        continue;
-                                    }
-                                    // Start the dkg state machine task runner for that multisig id
-                                    let tx = DkgRunnerTask::new(
-                                        frost_handle_clone.clone(),
-                                        frost_config_clone.authorities.as_ref(),
-                                        storage_clone.clone(),
-                                        btc_server_clone.clone(),
-                                        Arc::clone(&metrics_clone),
-                                        multisig_id,
-                                    );
-                                    tasks.insert(multisig_id, tx.clone());
-                                } else {
-                                    let mut tasks = BTreeMap::new();
-                                    // Start the dkg state machine task runner for that multisig id
-                                    let tx = DkgRunnerTask::new(
-                                        frost_handle_clone.clone(),
-                                        frost_config_clone.authorities.as_ref(),
-                                        storage_clone.clone(),
-                                        btc_server_clone.clone(),
-                                        Arc::clone(&metrics_clone),
-                                        multisig_id,
-                                    );
-                                    tasks.insert(multisig_id, tx.clone());
-                                    self.dkg_tasks = Some(tasks);
+
+                                let tasks = self
+                                    .dkg_tasks
+                                    .get_or_insert_with(BTreeMap::new);
+
+                                if tasks.contains_key(&multisig_id) {
+                                    warn!(target: "consensus::authority::frost_task::start_task", "DKG task for multisig id {} already exists, skipping...", multisig_id);
+                                    continue;
                                 }
+
+                                let tx = DkgRunnerTask::new(
+                                    frost_handle_clone.clone(),
+                                    frost_config_clone.authorities.as_ref(),
+                                    storage_clone.clone(),
+                                    btc_server_clone.clone(),
+                                    Arc::clone(&metrics_clone),
+                                    multisig_id,
+                                );
+                                tasks.insert(multisig_id, tx);
                             }
                             btcserverlib::dkg::DkgNotification::Restart { multisig_id } => {
                                 if let Some(tasks) = self.dkg_tasks.as_mut() {
@@ -742,32 +731,30 @@ where
 
                         match notification.event {
                             MigrationEvent::Start => {
-                                // Initialize migration tracking
-                                if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
-                                    if dkg_migrations.contains_key(&notification.migration_id) {
-                                        warn!(target: "consensus::authority::frost_task::start_task", "Migration with uuid {} already exists, skipping...", notification.migration_id);
-                                        continue;
-                                    }
-                                    let migration = MsigMigration {
-                                        status: MsigMigrationStatus::STARTED,
-                                        multisig_id_from: notification.multisig_id_from,
-                                        multisig_id_to: notification.multisig_id_to,
-                                        migration_id: notification.migration_id,
-                                    };
-                                    dkg_migrations.insert(notification.migration_id, migration);
-                                } else {
-                                    let migration = MsigMigration {
-                                        status: MsigMigrationStatus::STARTED,
-                                        multisig_id_from: notification.multisig_id_from,
-                                        multisig_id_to: notification.multisig_id_to,
-                                        migration_id: notification.migration_id,
-                                    };
-                                    let mut migrations = BTreeMap::new();
-                                    migrations.insert(notification.migration_id, migration);
-                                    self.dkg_migrations = Some(migrations);
+                                let migrations = self
+                                    .dkg_migrations
+                                    .get_or_insert_with(BTreeMap::new);
+
+                                if migrations.contains_key(&notification.migration_id) {
+                                    warn!(target: "consensus::authority::frost_task::start_task", "Migration with uuid {} already exists, skipping...", notification.migration_id);
+                                    continue;
                                 }
 
+                                let migration = MsigMigration {
+                                    status: MsigMigrationStatus::STARTED,
+                                    multisig_id_from: notification.multisig_id_from,
+                                    multisig_id_to: notification.multisig_id_to,
+                                    migration_id: notification.migration_id,
+                                };
+
+                                migrations.insert(notification.migration_id, migration);
+
                                 // Check if DKG tasks are already running for these multisig IDs
+                                //
+                                // TODO (lamafab): When can such a scenario
+                                // actually happen? And shouldn't this check be
+                                // done *before* (re-)inserting into the
+                                // `migrations` map?
                                 if let Some(tasks) = self.dkg_tasks.as_ref() {
                                     if tasks.contains_key(&notification.multisig_id_from) {
                                         error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration source multisig {} is already running, aborting migration...", notification.multisig_id_from);
@@ -793,13 +780,9 @@ where
                                     notification.multisig_id_to,
                                 );
 
-                                if let Some(tasks) = self.dkg_tasks.as_mut() {
-                                    tasks.insert(notification.multisig_id_to, tx);
-                                } else {
-                                    let mut tasks = BTreeMap::new();
-                                    tasks.insert(notification.multisig_id_to, tx);
-                                    self.dkg_tasks = Some(tasks);
-                                }
+                                self.dkg_tasks
+                                    .get_or_insert_with(BTreeMap::new)
+                                    .insert(notification.multisig_id_to, tx);
 
                                 // Update migration status
                                 if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
@@ -1288,18 +1271,10 @@ where
                                 .expect("invalid aggregated public key");
 
                         let mut storage = self.storage.write().await;
-                        if let Some(agg_pks) =
-                            storage.aggregate_public_key.as_mut()
-                        {
-                            agg_pks
-                                .insert(self.multisig_id, public_key_package);
-                        } else {
-                            storage.aggregate_public_key =
-                                Some(BTreeMap::from([(
-                                    self.multisig_id,
-                                    public_key_package,
-                                )]));
-                        }
+                        storage
+                            .aggregate_public_key
+                            .get_or_insert_with(BTreeMap::new)
+                            .insert(self.multisig_id, public_key_package);
                     }
 
                     // Update timeout at which point the btc-server should be
@@ -1310,6 +1285,15 @@ where
                     if self.gossip_payloads(resp.payloads).await.is_err() {
                         error!(target: "consensus::authority::frost_task::DkgRunnerTask", "Failed to gossip payloads. Wait for the next message");
                         continue;
+                    }
+
+                    // Check for any attestations; if present, this indicates
+                    // that the DKG setup successfully produced the multi-round
+                    // signing process and that each member attests to their
+                    // produced signature share. This information is published
+                    // on-chain.
+                    if let Some(attestation) = resp.attestation {
+                        todo!();
                     }
                 }
                 // Frost task dropped the handle, exiting...

@@ -1,7 +1,9 @@
 use crate::{
+    dkg::Attestation,
     pegout_scheduler::{PegoutRequest, Tx},
     rpc::{
-        OutPoint, PendingPegout, ScriptBuf, TrackedTx, Transaction, TxIn, TxOut,
+        DkgAttestation, DkgSignatureEntry, OutPoint, PendingPegout, ScriptBuf,
+        TrackedTx, Transaction, TxIn, TxOut,
     },
 };
 use bitcoin::{
@@ -110,6 +112,35 @@ impl TrackedTx {
             return Err("created field is required".to_string());
         }
         Ok(())
+    }
+}
+
+impl TryFrom<Attestation> for DkgAttestation {
+    type Error = TryFromError;
+
+    fn try_from(att: Attestation) -> Result<Self, Self::Error> {
+        Ok(DkgAttestation {
+            public_key_package: att
+                .public_key_package
+                .serialize()
+                .expect("valid public key package"),
+            signing_package: att
+                .signing_package
+                .serialize()
+                .expect("valid signing package"),
+            signatures: att
+                .signatures
+                .into_iter()
+                .map(|(id, (sig_share, att_sig))| DkgSignatureEntry {
+                    frost_id: id.serialize(),
+                    signature_share: sig_share.serialize(),
+                    attestation_signature: att_sig
+                        .serialize_compact()
+                        .to_vec(),
+                })
+                .collect(),
+            aggregated_signature: att.aggregated_signature.serialize().map_err(|_| TryFromError::ConversionError { variant: "invalid aggregated signature" })?,
+        })
     }
 }
 

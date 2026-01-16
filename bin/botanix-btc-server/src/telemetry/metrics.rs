@@ -136,12 +136,15 @@ pub struct BtcServerMetrics {
     pub total_received_round1_dkg_packages: IntCounterVec,
     pub total_received_round2_dkg_packages: IntCounterVec,
     pub total_received_round3_dkg_packages: IntCounterVec,
+    pub total_received_round4_dkg_packages: IntCounterVec,
     pub round1_dkg_throughput: IntCounterVec,
     pub round2_dkg_throughput: IntCounterVec,
     pub round3_dkg_throughput: IntCounterVec,
+    pub round4_dkg_throughput: IntCounterVec,
     pub round1_dkg_latency_histogram: HistogramVec,
     pub round2_dkg_latency_histogram: HistogramVec,
     pub round3_dkg_latency_histogram: HistogramVec,
+    pub round4_dkg_latency_histogram: HistogramVec,
     pub round1_dkg_package_size_histogram: HistogramVec,
     pub round2_dkg_package_size_histogram: HistogramVec,
     pub dkg_error_rates: IntCounterVec,
@@ -403,6 +406,13 @@ impl BtcServerMetrics {
         )
         .expect("metric must be created");
 
+        let total_received_round4_dkg_packages = register_int_counter_vec!(
+            "total_received_round4_dkg_packages",
+            "A metric counting the number of received round 4 dkg packages",
+            &["btc_chain", "self_id"],
+        )
+        .expect("metric must be created");
+
         // ---
         let round1_dkg_throughput = register_int_counter_vec!(
             "round1_dkg_throughput",
@@ -420,7 +430,14 @@ impl BtcServerMetrics {
 
         let round3_dkg_throughput = register_int_counter_vec!(
             "round3_dkg_throughput",
-            "A metric counting the number of gossiped round2 dkg messages per id",
+            "A metric counting the number of gossiped round3 dkg messages per id",
+            &["btc_chain", "self_id"],
+        )
+        .expect("metric must be created");
+
+        let round4_dkg_throughput = register_int_counter_vec!(
+            "round4_dkg_throughput",
+            "A metric counting the number of gossiped round4 dkg messages per id",
             &["btc_chain", "self_id"],
         )
         .expect("metric must be created");
@@ -429,7 +446,7 @@ impl BtcServerMetrics {
         // New histogram metric for package latency
         let round1_dkg_latency_histogram = register_histogram_vec!(
             "round1_dkg_latency_secs",
-            "Histogram of latencies between receiving and writing dkg package to db",
+            "Histogram of latencies between receiving and writing round1 dkg package to db",
             &["btc_chain", "self_id"],
             // buckets for latency measurement (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
             vec![10.0, 50.0, 100.0, 500.0, 1000.0],
@@ -447,7 +464,16 @@ impl BtcServerMetrics {
 
         let round3_dkg_latency_histogram = register_histogram_vec!(
             "round3_dkg_latency_secs",
-            "Histogram of latencies between receiving and writing round2 dkg package to db",
+            "Histogram of latencies between receiving and writing round3 dkg package to db",
+            &["btc_chain", "self_id"],
+            // buckets for latency measurement (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
+            vec![10.0, 50.0, 100.0, 500.0, 1000.0],
+        )
+        .expect("metric must be created");
+
+        let round4_dkg_latency_histogram = register_histogram_vec!(
+            "round4_dkg_latency_secs",
+            "Histogram of latencies between receiving and writing round4 dkg package to db",
             &["btc_chain", "self_id"],
             // buckets for latency measurement (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
             vec![10.0, 50.0, 100.0, 500.0, 1000.0],
@@ -616,12 +642,16 @@ impl BtcServerMetrics {
             .register(Box::new(total_received_round2_dkg_packages.clone()))?;
         registry
             .register(Box::new(total_received_round3_dkg_packages.clone()))?;
+        registry
+            .register(Box::new(total_received_round4_dkg_packages.clone()))?;
         registry.register(Box::new(round1_dkg_throughput.clone()))?;
         registry.register(Box::new(round2_dkg_throughput.clone()))?;
         registry.register(Box::new(round3_dkg_throughput.clone()))?;
+        registry.register(Box::new(round4_dkg_throughput.clone()))?;
         registry.register(Box::new(round1_dkg_latency_histogram.clone()))?;
         registry.register(Box::new(round2_dkg_latency_histogram.clone()))?;
         registry.register(Box::new(round3_dkg_latency_histogram.clone()))?;
+        registry.register(Box::new(round4_dkg_latency_histogram.clone()))?;
         registry
             .register(Box::new(round1_dkg_package_size_histogram.clone()))?;
         registry
@@ -687,12 +717,15 @@ impl BtcServerMetrics {
             total_received_round1_dkg_packages,
             total_received_round2_dkg_packages,
             total_received_round3_dkg_packages,
+            total_received_round4_dkg_packages,
             round1_dkg_throughput,
             round2_dkg_throughput,
             round3_dkg_throughput,
+            round4_dkg_throughput,
             round1_dkg_latency_histogram,
             round2_dkg_latency_histogram,
             round3_dkg_latency_histogram,
+            round4_dkg_latency_histogram,
             round1_dkg_package_size_histogram,
             round2_dkg_package_size_histogram,
             dkg_error_rates,

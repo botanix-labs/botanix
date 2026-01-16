@@ -18,6 +18,7 @@ mod builder;
 pub mod comet_bft;
 mod execution_utils;
 mod frost_task;
+mod multisig_manager;
 mod signing;
 pub mod snapshot_manager;
 pub mod utils;
