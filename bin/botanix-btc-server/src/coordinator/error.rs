@@ -71,4 +71,10 @@ pub enum CoordinatorError {
     WalletCalculationError(#[from] crate::wallet::util::WalletCalculationError),
     #[error("Transaction exceeds maximum weight limit")]
     TransactionTooLarge,
+    #[error("Too many UTXOs for sweep: {count} exceeds maximum {max}")]
+    TooManyUtxos { count: usize, max: usize },
+    #[error("No UTXOs available for sweep")]
+    NoUtxosAvailable,
+    #[error("Insufficient value to cover fees")]
+    InsufficientValueForFees,
 }

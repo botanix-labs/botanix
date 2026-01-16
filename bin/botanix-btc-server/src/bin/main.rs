@@ -1969,7 +1969,7 @@ where
         };
 
         // take a lock on the tx_lock
-        let _tx_lock = self.tx_lock.lock();
+        let _tx_lock = self.tx_lock.lock().await;
 
         info!(
             "Received make tx request for signing session id: {:?}",
@@ -2200,6 +2200,109 @@ where
                 self.config.identifier,
             );
         }
+
+        Ok(res)
+    }
+
+    async fn sweep_to_multisig(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<tonic::Response<rpc::SigningPackage>, tonic::Status> {
+        self.validate_jwt(&req)?;
+        let _req = req.into_inner();
+
+        info!("Received sweep_to_multisig request");
+
+        // Generate signing session ID
+        let signing_session_id: [u8; 32] = rand::random();
+
+        // TODO: Get source/target multisig_id from migration state machine
+        let source_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+        let target_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+
+        // take a lock on the tx_lock
+        let _tx_lock = self.tx_lock.lock().await;
+
+        // TODO: This overly conservative check is okay when we have a low volume of pegouts.
+        // It may be okay to relax this condition when we are confident that any broadcasted
+        // pegouts that get dropped in the mempool will be safely re-submitted by the next multisig.
+        let tracked_txs = self.db.get_tracked_txs().to_status()?;
+        if !tracked_txs.is_empty() {
+            return Err(tonic::Status::failed_precondition(
+                "Cannot sweep while pegouts spending from the current multisig are in flight",
+            ));
+        }
+
+        // Estimate fee rate from bitcoind
+        let fee_res = measure_rpc_latency!(
+            &self.telemetry,
+            self.btc_network,
+            self.config.identifier,
+            "estimate_smart_fee",
+            self.bitcoind_client.estimate_smart_fee(
+                1,
+                Some(bitcoincore_rpc::json::EstimateMode::Conservative)
+            )
+        );
+
+        let mut fee_rate = self.fall_back_fee_rate;
+        if let Ok(fee) = fee_res {
+            if let Some(f) = fee.fee_rate {
+                fee_rate = btc_per_kb_to_sat_per_vb(f);
+            }
+        }
+
+        info!("Sweep fee rate: {:?}", fee_rate);
+
+        // Set the output script to the target multisig's change address
+        let target_pk_package = self
+            .db
+            .get_public_key_package_by_id(target_multisig_id)
+            .to_status()?
+            .ok_or_else(|| {
+                internal!(
+                    "missing public key package for target multisig_id {}, run the dkg process first",
+                    target_multisig_id
+                )
+            })?;
+        let secp_pk =
+            target_pk_package.verifying_key().to_secp_pk().map_err(|e| {
+                internal!("Failed to convert verifying key to secp pk: {}", e)
+            })?;
+        let output_script =
+            wallet::address::generate_taproot_change_scriptpubkey(
+                secp_pk.serialize(),
+            );
+
+        // Create the sweep PSBT
+        let psbt = coordinator::make_sweep_tx(
+            fee_rate,
+            output_script,
+            &self.db,
+            self.min_signers,
+            source_multisig_id,
+        )
+        .to_status()?;
+
+        info!(
+            "Created sweep PSBT with {} inputs, signing_session_id: {}",
+            psbt.inputs.len(),
+            hex::encode(signing_session_id)
+        );
+
+        // Save psbt to db
+        self.db.update_psbt(&signing_session_id, &psbt).to_status()?;
+        self.db.flush().to_status()?;
+
+        let psbt_bytes = hex::decode(psbt.serialize_hex()).map_err(|e| {
+            tonic::Status::internal(format!("Failed to serialize psbt: {}", e))
+        })?;
+
+        let res = tonic::Response::new(rpc::SigningPackage {
+            identifier: self.identifier.serialize().to_vec(),
+            psbt: psbt_bytes,
+            signing_session_id: signing_session_id.to_vec(),
+        });
 
         Ok(res)
     }
