@@ -7,12 +7,14 @@ use crate::{
         GetAllUtxosResponse, GetDkgPayloadsRequest,
         GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
         GetGatewayAddressRequest, GetGatewayAddressResponse,
-        GetPendingPegoutsResponse, GetPublicKeyRequest, GetPublicKeyResponse,
-        GetSessionIdsRequest, GetSessionIdsResponse, GetSigningStatusRequest,
-        GetSigningStatusResponse, GetTrackedTxsResponse, ListMultisigsResponse,
-        MakeTxRequest, RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
-        ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
-        SigningPackageRequest, StartMigrationRequest, StartMigrationResponse,
+        GetMigrationRequest, GetPendingPegoutsResponse, GetPublicKeyRequest,
+        GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
+        GetSigningStatusRequest, GetSigningStatusResponse,
+        GetTrackedTxsResponse, ListMigrationsResponse, ListMultisigsResponse,
+        MakeTxRequest, MigrationInfo, RecoverMissingUtxosRequest,
+        RecoverMissingUtxosResponse, ResetAllUtxosRequest,
+        ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
+        StartMigrationRequest, StartMigrationResponse,
         SubscribeToDynafedNotificationsStream, ToSignRequest,
         WalletStateResponse,
     },
@@ -208,6 +210,14 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: AbortMigrationRequest,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn get_migration(
+        &mut self,
+        request: GetMigrationRequest,
+    ) -> BoxFuture<'_, Result<MigrationInfo, GrpcClientError>>;
+    fn list_migrations(
+        &mut self,
+        request: Empty,
+    ) -> BoxFuture<'_, Result<ListMigrationsResponse, GrpcClientError>>;
 }
 
 /// Macros for generating grpc methods implementation
@@ -389,6 +399,8 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(end_migration, EndMigrationRequest, Empty);
     generate_method!(abort_migration, AbortMigrationRequest, Empty);
+    generate_method!(get_migration, GetMigrationRequest, MigrationInfo);
+    generate_method!(list_migrations, Empty, ListMigrationsResponse);
     generate_stream_method!(
         get_finalized_pegout_ids,
         GetFinalizedPegoutIdsRequest,

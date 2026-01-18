@@ -268,8 +268,7 @@ struct DkgState {
 struct MigrationState {
     multisig_id_from: MultisigId,
     multisig_id_to: MultisigId,
-    #[allow(dead_code)]
-    started_at: Instant,
+    started_at: std::time::SystemTime,
 }
 
 struct App<BitcoinRpcApi> {
@@ -3027,12 +3026,12 @@ where
 
         // Check no existing migration is active for these multisig_ids
         let mut migrations = self.migrations.lock().await;
+        let new_ids = [multisig_id_from, multisig_id_to];
+
         for (_, state) in migrations.iter() {
-            let overlaps = state.multisig_id_from == multisig_id_from
-                || state.multisig_id_to == multisig_id_from
-                || state.multisig_id_from == multisig_id_to
-                || state.multisig_id_to == multisig_id_to;
-            if overlaps {
+            let existing_ids = [state.multisig_id_from, state.multisig_id_to];
+
+            if new_ids.iter().any(|id| existing_ids.contains(id)) {
                 return Err(already_exists!(
                     "Migration already active involving multisig {} or {}",
                     multisig_id_from,
@@ -3050,7 +3049,7 @@ where
             MigrationState {
                 multisig_id_from,
                 multisig_id_to,
-                started_at: Instant::now(),
+                started_at: std::time::SystemTime::now(),
             },
         );
 
@@ -3251,6 +3250,73 @@ where
         }
 
         Ok(tonic::Response::new(rpc::Empty {}))
+    }
+
+    async fn get_migration(
+        &self,
+        req: tonic::Request<rpc::GetMigrationRequest>,
+    ) -> Result<tonic::Response<rpc::MigrationInfo>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let migration_id_str = req.into_inner().migration_id;
+        let migration_id = Uuid::parse_str(&migration_id_str).map_err(|e| {
+            tonic::Status::invalid_argument(format!(
+                "Invalid migration_id UUID: {}",
+                e
+            ))
+        })?;
+
+        let migrations = self.migrations.lock().await;
+        let state = migrations.get(&migration_id).ok_or_else(|| {
+            tonic::Status::not_found(format!(
+                "Migration {} not found",
+                migration_id
+            ))
+        })?;
+
+        let started_at_unix_secs = state
+            .started_at
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        Ok(tonic::Response::new(rpc::MigrationInfo {
+            migration_id: migration_id.to_string(),
+            multisig_id_from: *state.multisig_id_from,
+            multisig_id_to: *state.multisig_id_to,
+            started_at_unix_secs,
+        }))
+    }
+
+    async fn list_migrations(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<tonic::Response<rpc::ListMigrationsResponse>, tonic::Status>
+    {
+        self.validate_jwt(&req)?;
+
+        let migrations = self.migrations.lock().await;
+        let migration_infos: Vec<rpc::MigrationInfo> = migrations
+            .iter()
+            .map(|(id, state)| {
+                let started_at_unix_secs = state
+                    .started_at
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+
+                rpc::MigrationInfo {
+                    migration_id: id.to_string(),
+                    multisig_id_from: *state.multisig_id_from,
+                    multisig_id_to: *state.multisig_id_to,
+                    started_at_unix_secs,
+                }
+            })
+            .collect();
+
+        Ok(tonic::Response::new(rpc::ListMigrationsResponse {
+            migrations: migration_infos,
+        }))
     }
 
     // Currently not used

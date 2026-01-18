@@ -392,6 +392,28 @@ pub struct AbortMigrationRequest {
     #[prost(string, tag = "1")]
     pub migration_id: ::prost::alloc::string::String,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetMigrationRequest {
+    #[prost(string, tag = "1")]
+    pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MigrationInfo {
+    #[prost(string, tag = "1")]
+    pub migration_id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
+    /// Unix timestamp when migration started
+    #[prost(uint64, tag = "4")]
+    pub started_at_unix_secs: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListMigrationsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub migrations: ::prost::alloc::vec::Vec<MigrationInfo>,
+}
 #[derive(
     Clone,
     Copy,
@@ -752,6 +774,20 @@ pub mod btc_server_server {
             &self,
             request: tonic::Request<super::AbortMigrationRequest>,
         ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
+        async fn get_migration(
+            &self,
+            request: tonic::Request<super::GetMigrationRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MigrationInfo>,
+            tonic::Status,
+        >;
+        async fn list_migrations(
+            &self,
+            request: tonic::Request<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListMigrationsResponse>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
     pub struct BtcServerServer<T> {
@@ -2564,6 +2600,107 @@ pub mod btc_server_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = AbortMigrationSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/GetMigration" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetMigrationSvc<T: BtcServer>(pub Arc<T>);
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::GetMigrationRequest>
+                        for GetMigrationSvc<T>
+                    {
+                        type Response = super::MigrationInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetMigrationRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::get_migration(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetMigrationSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/ListMigrations" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListMigrationsSvc<T: BtcServer>(pub Arc<T>);
+                    impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
+                        for ListMigrationsSvc<T>
+                    {
+                        type Response = super::ListMigrationsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Empty>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::list_migrations(
+                                    &inner, request,
+                                )
+                                .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListMigrationsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
