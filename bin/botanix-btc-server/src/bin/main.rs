@@ -2602,10 +2602,7 @@ where
         let payload = dkg::DkgPayload { sender, recipient, msg };
 
         match &payload.msg {
-            dkg::DkgMessage::Round1 {
-                package,
-                ..
-            } => {
+            dkg::DkgMessage::Round1 { package, .. } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     let mut bytes = vec![];
                     ciborium::into_writer(&package, &mut bytes)
@@ -2618,10 +2615,7 @@ where
                     );
                 }
             }
-            dkg::DkgMessage::Round2 {
-                package,
-                ..
-            } => {
+            dkg::DkgMessage::Round2 { package, .. } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     let mut bytes = vec![];
                     ciborium::into_writer(&package, &mut bytes)
@@ -2750,10 +2744,10 @@ where
             }
         }
 
-        let attestation: Option<rpc::DkgAttestation> = dkg
-            .machine
-            .attestation()
-            .map(|att| att.try_into().expect("attestation format must be valid"));
+        let attestation: Option<rpc::DkgAttestation> =
+            dkg.machine.attestation().map(|att| {
+                att.try_into().expect("attestation format must be valid")
+            });
 
         // Set any timers, and retrieve next timeout event.
         let timeout = dkg.machine.timeout(Instant::now());

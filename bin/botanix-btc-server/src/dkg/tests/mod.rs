@@ -7,18 +7,18 @@ use std::{
     time::{Duration, Instant},
 };
 
-use stage_one::complete_stage_one;
-use stage_two::complete_stage_two;
-use stage_three::complete_stage_three;
 use stage_four::complete_stage_four;
+use stage_one::complete_stage_one;
+use stage_three::complete_stage_three;
+use stage_two::complete_stage_two;
 
 //mod encryption;
 mod reset;
 //mod simulation;
-mod stage_one;
-mod stage_two;
-mod stage_three;
 mod stage_four;
+mod stage_one;
+mod stage_three;
+mod stage_two;
 mod timeout;
 
 fn test_config() -> Config {
@@ -125,7 +125,11 @@ impl CheckedSend {
     }
     /// Like [`CheckedSend::new`], but only reads up to `max` messages generated
     /// by the DKG state machine.
-    pub fn new_max_msg(machine: &mut DkgStateMachine, now: Instant, max: usize) -> Self {
+    pub fn new_max_msg(
+        machine: &mut DkgStateMachine,
+        now: Instant,
+        max: usize,
+    ) -> Self {
         let sender = machine.frost_id();
 
         let mut payloads = vec![];

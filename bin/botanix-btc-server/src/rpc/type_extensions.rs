@@ -134,12 +134,15 @@ impl TryFrom<Attestation> for DkgAttestation {
                 .map(|(id, (sig_share, att_sig))| DkgSignatureEntry {
                     frost_id: id.serialize(),
                     signature_share: sig_share.serialize(),
-                    attestation_signature: att_sig
-                        .serialize_compact()
-                        .to_vec(),
+                    attestation_signature: att_sig.serialize_compact().to_vec(),
                 })
                 .collect(),
-            aggregated_signature: att.aggregated_signature.serialize().map_err(|_| TryFromError::ConversionError { variant: "invalid aggregated signature" })?,
+            aggregated_signature: att
+                .aggregated_signature
+                .serialize()
+                .map_err(|_| TryFromError::ConversionError {
+                    variant: "invalid aggregated signature",
+                })?,
         })
     }
 }

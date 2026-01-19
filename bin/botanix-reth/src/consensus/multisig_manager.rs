@@ -2,9 +2,8 @@ use botanix_types::MultisigId;
 use frost_secp256k1_tr::{self as frost, keys::PublicKeyPackage};
 use merlin::Transcript;
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    future::Future,
-    sync::mpsc,
+    collections::BTreeMap,
+    sync::{mpsc, Arc, Mutex, MutexGuard},
 };
 use tokio::sync::oneshot;
 
@@ -259,6 +258,7 @@ impl std::future::Future for SubmissionCallback {
 /// Supports submitting attestations (to activate staged multisigs) and
 /// expirations (to remove sunset multisigs). Messages are validated before
 /// being proposed to consensus.
+#[derive(Debug, Clone)]
 pub struct MultisigSubmitter {
     queue: mpsc::Sender<ChannelPayload>,
 }
@@ -328,7 +328,7 @@ impl MultisigSubmitter {
 ///    coordinator.
 ///
 /// After expiration, the multisig is removed entirely from the manager.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum Lifecycle {
     /// Awaiting attestation from all federation members before activation.
     Staged {
@@ -377,10 +377,12 @@ enum Lifecycle {
 ///     // Propose message to consensus
 /// }
 /// ```
+#[derive(Debug, Clone)]
 pub struct MultisigManager {
     // TODO: Consider using a sync/bounded channel?
-    queue: mpsc::Receiver<ChannelPayload>,
-    multisigs: BTreeMap<MultisigId, Lifecycle>,
+    queue: Arc<Mutex<mpsc::Receiver<ChannelPayload>>>,
+    submitter: MultisigSubmitter,
+    multisigs: Arc<Mutex<BTreeMap<MultisigId, Lifecycle>>>,
 }
 
 // TODO: Those `set_*` methods should only be available during building.
@@ -389,10 +391,18 @@ impl MultisigManager {
     pub fn new() -> (Self, MultisigSubmitter) {
         let (tx, rx) = mpsc::channel();
 
-        let this = MultisigManager { queue: rx, multisigs: BTreeMap::new() };
         let submitter = MultisigSubmitter { queue: tx };
+        let this = MultisigManager {
+            queue: Arc::new(Mutex::new(rx)),
+            submitter: submitter.clone(),
+            multisigs: Default::default(),
+        };
 
         (this, submitter)
+    }
+    /// Returns a cloned handle to the [`MultisigSubmitter`] for this manager.
+    pub fn submitter(&self) -> MultisigSubmitter {
+        self.submitter.clone()
     }
     /// Registers a new multisig in the _Staged_ state.
     ///
@@ -404,10 +414,8 @@ impl MultisigManager {
         coordinator: frost::Identifier,
         fed_members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
     ) {
-        self.multisigs.insert(
-            multisig_id,
-            Lifecycle::Staged { coordinator, fed_members },
-        );
+        let mut l = self.multisigs.lock().expect("poisoned lock");
+        l.insert(multisig_id, Lifecycle::Staged { coordinator, fed_members });
     }
     /// Transitions a multisig to the _Active_ state.
     ///
@@ -420,7 +428,8 @@ impl MultisigManager {
         fed_members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         public_key_package: PublicKeyPackage,
     ) {
-        self.multisigs.insert(
+        let mut l = self.multisigs.lock().expect("poisoned lock");
+        l.insert(
             multisig_id,
             Lifecycle::Active { coordinator, fed_members, public_key_package },
         );
@@ -436,10 +445,25 @@ impl MultisigManager {
         fed_members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         public_key_package: PublicKeyPackage,
     ) {
-        self.multisigs.insert(
+        let mut l = self.multisigs.lock().expect("poisoned lock");
+        l.insert(
             multisig_id,
             Lifecycle::Sunset { coordinator, fed_members, public_key_package },
         );
+    }
+    /// Returns all multisigs currently in the _Active_ state.
+    ///
+    /// Each entry contains the multisig ID and its associated public key package.
+    pub fn get_active(&self) -> Vec<(MultisigId, PublicKeyPackage)> {
+        let l = self.multisigs.lock().expect("poisoned lock");
+        l.iter()
+            .filter_map(|(id, lifecycle)| match lifecycle {
+                Lifecycle::Active { public_key_package, .. } => {
+                    Some((*id, public_key_package.clone()))
+                }
+                _ => None,
+            })
+            .collect()
     }
     /// Polls for a pending message to propose to consensus.
     ///
@@ -449,31 +473,36 @@ impl MultisigManager {
     /// `None` if the queue is empty or validation failed.
     ///
     /// This is the "outbound" half of the consensus interface.
-    pub fn send(&mut self) -> Option<Message> {
-        let Ok(payload) = self.queue.try_recv() else {
+    pub fn send(&self) -> Option<Message> {
+        let l = self.queue.lock().expect("poisoned lock");
+        let Ok(payload) = l.try_recv() else {
             return None;
         };
+        std::mem::drop(l);
 
         // Do a dry-run on the message payloads. This ensures that we don't
         // accidently propose invalid messages to the conensus layer.
-        let validate_messages = || match payload.message.clone() {
+        let mut l = self.multisigs.lock().expect("poisoned lock");
+        let mut validate_messages = || match payload.message.clone() {
             Message::Attestation {
                 multisig_id,
                 public_key_package,
                 signing_package,
                 signatures,
-            } => self.validate_attestation_dry_run(
+            } => Self::validate_attestation_dry_run(
                 multisig_id,
                 public_key_package,
                 signing_package,
                 signatures,
+                &mut l,
             ),
             Message::Expiration {
                 multisig_id, //
                 coordinator_signature,
-            } => self.validate_expiration_dry_run(
+            } => Self::validate_expiration_dry_run(
                 &multisig_id,
                 &coordinator_signature,
+                &mut l,
             ),
         };
 
@@ -496,25 +525,29 @@ impl MultisigManager {
     /// from Staged to Active, expirations remove Sunset multisigs entirely.
     ///
     /// This is the "inbound" half of the consensus interface.
-    pub fn recv(&mut self, msg: Message) -> Result<(), Error> {
+    pub fn recv(&self, msg: Message) -> Result<(), Error> {
+        let mut l = self.multisigs.lock().expect("poisoned lock");
+
         match msg {
             Message::Attestation {
                 multisig_id,
                 public_key_package,
                 signing_package,
                 signatures,
-            } => self.validate_attestation(
+            } => Self::validate_attestation(
                 multisig_id,
                 public_key_package,
                 signing_package,
                 signatures,
+                &mut l,
             ),
             Message::Expiration {
                 multisig_id, //
                 coordinator_signature,
-            } => self.validate_expiration(
+            } => Self::validate_expiration(
                 &multisig_id, //
                 &coordinator_signature,
+                &mut l,
             ),
         }
     }
@@ -524,7 +557,6 @@ impl MultisigManager {
     /// ceremony by checking each member's FROST signature share and attestation
     /// signature, then aggregating into the final group signature.
     fn validate_attestation_dry_run(
-        &self,
         multisig_id: MultisigId,
         public_key_package: PublicKeyPackage,
         signing_package: frost::SigningPackage,
@@ -532,10 +564,10 @@ impl MultisigManager {
             frost::Identifier,
             (frost::round2::SignatureShare, secp256k1::ecdsa::Signature),
         >,
+        multisigs: &mut MutexGuard<'_, BTreeMap<MultisigId, Lifecycle>>,
     ) -> Result<(), Error> {
         // Only Staged multisigs can be attested.
-        let Lifecycle::Staged { coordinator, fed_members } = self
-            .multisigs
+        let Lifecycle::Staged { coordinator, fed_members } = multisigs
             .get(&multisig_id)
             .cloned()
             .ok_or(Error::MultisigIdNotExist)?
@@ -569,7 +601,6 @@ impl MultisigManager {
     /// ceremony, then promotes the multisig from Staged to Active with the
     /// verified public key package.
     fn validate_attestation(
-        &mut self,
         multisig_id: MultisigId,
         public_key_package: PublicKeyPackage,
         signing_package: frost::SigningPackage,
@@ -577,17 +608,19 @@ impl MultisigManager {
             frost::Identifier,
             (frost::round2::SignatureShare, secp256k1::ecdsa::Signature),
         >,
+        multisigs: &mut MutexGuard<'_, BTreeMap<MultisigId, Lifecycle>>,
     ) -> Result<(), Error> {
-        self.validate_attestation_dry_run(
+        Self::validate_attestation_dry_run(
             multisig_id,
             public_key_package.clone(),
             signing_package,
             signatures,
+            multisigs,
         )?;
 
         // Transition the multisig from Staged to Active.
         let Lifecycle::Staged { coordinator, fed_members } =
-            self.multisigs.remove(&multisig_id).unwrap()
+            multisigs.remove(&multisig_id).unwrap()
         else {
             unreachable!("dry-run verified lifecycle is Staged")
         };
@@ -597,8 +630,7 @@ impl MultisigManager {
         // TODO: Consider simplifying the `self.multisigs` structure by
         // mandating that there can only be one staged, one active and multiple
         // sunset multisigs--instead of keeping it all in one single list.
-        let active_ids: Vec<_> = self
-            .multisigs
+        let active_ids: Vec<_> = multisigs
             .iter()
             .filter(|(id, lc)| {
                 **id != multisig_id && matches!(lc, Lifecycle::Active { .. })
@@ -607,18 +639,27 @@ impl MultisigManager {
             .collect();
 
         for id in active_ids {
-            let Lifecycle::Active { coordinator, fed_members, public_key_package } =
-                self.multisigs.remove(&id).unwrap()
+            let Lifecycle::Active {
+                coordinator,
+                fed_members,
+                public_key_package,
+            } = multisigs.remove(&id).unwrap()
             else {
                 unreachable!("lifecycles filtered beforehand")
             };
 
-            self.multisigs
-                .insert(id, Lifecycle::Sunset { coordinator, fed_members, public_key_package });
+            multisigs.insert(
+                id,
+                Lifecycle::Sunset {
+                    coordinator,
+                    fed_members,
+                    public_key_package,
+                },
+            );
         }
 
         // Set new multisig as Active.
-        self.multisigs.insert(
+        multisigs.insert(
             multisig_id,
             Lifecycle::Active { coordinator, public_key_package, fed_members },
         );
@@ -630,13 +671,13 @@ impl MultisigManager {
     /// Verifies the coordinator's signature over a commitment binding the
     /// multisig ID and public key package.
     fn validate_expiration_dry_run(
-        &self,
         multisig_id: &MultisigId,
         coordinator_signature: &secp256k1::ecdsa::Signature,
+        multisigs: &mut MutexGuard<'_, BTreeMap<MultisigId, Lifecycle>>,
     ) -> Result<(), Error> {
         // Only Sunset multisigs can be expired.
         let Lifecycle::Sunset { coordinator, fed_members, public_key_package } =
-            self.multisigs.get(multisig_id).ok_or(Error::MultisigIdNotExist)?
+            multisigs.get(multisig_id).ok_or(Error::MultisigIdNotExist)?
         else {
             return Err(Error::LifecycleMustBeSunset);
         };
@@ -678,14 +719,18 @@ impl MultisigManager {
     /// then removing the multisig entirely. Only the designated coordinator can
     /// authorize expiration, and only for multisigs in the Sunset state.
     fn validate_expiration(
-        &mut self,
         multisig_id: &MultisigId,
         coordinator_signature: &secp256k1::ecdsa::Signature,
+        multisigs: &mut MutexGuard<'_, BTreeMap<MultisigId, Lifecycle>>,
     ) -> Result<(), Error> {
-        self.validate_expiration_dry_run(multisig_id, coordinator_signature)?;
+        Self::validate_expiration_dry_run(
+            multisig_id,
+            coordinator_signature,
+            multisigs,
+        )?;
 
         // Safe to unwrap: dry_run verified the multisig exists.
-        let prev = self.multisigs.remove(multisig_id);
+        let prev = multisigs.remove(multisig_id);
         debug_assert!(prev.is_some());
 
         Ok(())

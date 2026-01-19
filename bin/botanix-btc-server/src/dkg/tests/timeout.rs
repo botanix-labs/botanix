@@ -340,36 +340,32 @@ fn stage_three_resend_round3_packages_on_timeout() {
     let t = forward_to_timeout(&mut alice, &mut bob, &mut eve, &mut now);
     assert_eq!(t, config.round3_package_timeout);
 
-    // *** Alice sends an ack to Bob, resends her round3 package, and sends
-    // Bobs' forwarded round3 package to Eve
+    // *** Alice sends an ack to Bob and resends her round3 package to Eve.
     {
-        let [a1, a2, a3] = CheckedSend::new(&mut alice, now)
+        let [a1, a2] = CheckedSend::new(&mut alice, now)
             // ack3(Bob) -> Bob
             .ack_round3(bob_addr, bob_addr)
-            // round3(Bob) -> Eve (forwarded)
-            .round3(bob_addr, eve_addr)
             // round3(Alice) -> Eve
             .round3(alice_addr, eve_addr)
             .msgs();
 
-        // Bob processes the message, Eve drops them.
+        // Bob processes the message, Eve drops it.
         bob.recv(a1).unwrap();
-        let _ = (a2, a3);
+        let _ = a2;
     }
 
     // Trigger timeout.
     let t = forward_to_timeout(&mut alice, &mut bob, &mut eve, &mut now);
     assert_eq!(t, config.round3_package_timeout);
 
-    // *** Alice resends her and Bobs' forwarded round3 package to Eve
+    // *** Alice resends her round3 package to Eve
     {
-        let [a1, a2] = CheckedSend::new(&mut alice, now)
-            // round3(Bob) -> Eve (forwarded)
-            .round3(bob_addr, eve_addr)
+        let [a1] = CheckedSend::new(&mut alice, now)
             // round3(Alice) -> Eve
             .round3(alice_addr, eve_addr)
             .msgs();
 
-        let _ = (a1, a2);
+        // Eve drops the message.
+        let _ = a1;
     }
 }

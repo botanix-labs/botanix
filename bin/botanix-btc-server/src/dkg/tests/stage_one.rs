@@ -12,9 +12,9 @@ pub fn complete_stage_one(
     //
     now: Instant,
 ) -> (DkgStateMachine, DkgStateMachine, DkgStateMachine) {
+    // Note: only the coordinator must be one RoundOne; others might not be in
+    // case of a session reset.
     assert_eq!(alice.stage(), Stage::RoundOne);
-    assert_eq!(bob.stage(), Stage::AwaitingInit);
-    assert_eq!(eve.stage(), Stage::AwaitingInit);
 
     // Bob and Eve are waiting for Alice to send the initial message.
     assert!(bob.send(now).is_none());
@@ -121,6 +121,10 @@ fn dkg_complete_stage_one() {
         setup(test_config());
 
     let now = Instant::now();
+
+    assert_eq!(alice.stage(), Stage::RoundOne);
+    assert_eq!(bob.stage(), Stage::AwaitingInit);
+    assert_eq!(eve.stage(), Stage::AwaitingInit);
 
     let (alice, bob, eve) = complete_stage_one(
         alice_addr, bob_addr, eve_addr, alice, bob, eve, now,

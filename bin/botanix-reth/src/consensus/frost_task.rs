@@ -1,5 +1,6 @@
 use crate::{
     consensus::{
+        multisig_manager::MultisigSubmitter,
         signing::SigningStateMachine,
         utils::{
             get_pending_pegouts_from_pegout_data,
@@ -126,6 +127,7 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     dkg_tasks: Option<BTreeMap<MultisigId, mpsc::Sender<DkgResponse>>>,
     /// Multisig Migrations
     dkg_migrations: Option<BTreeMap<uuid::Uuid, MsigMigration>>,
+    multisig_submitter: MultisigSubmitter,
     /// Pre-configured data-parser
     compressor: DataParser,
     /// btc server client
@@ -169,6 +171,7 @@ where
         btc_server: BtcServerClient,
         network_handle: NetworkHandle<BotanixNetworkPrimitives>,
         frost_handle: ToFrostMan,
+        multisig_submitter: MultisigSubmitter,
         config: FrostConfig,
         storage: Storage<RDB, BDB>,
         compressor: DataParser,
@@ -201,6 +204,7 @@ where
             check_staged_headers: true,
             dkg_tasks: None,
             dkg_migrations: None,
+            multisig_submitter,
             compressor,
             metrics,
             cbft_rpc_provider,
@@ -528,6 +532,7 @@ where
                 self.frost_handle.clone(),
                 self.frost_config.authorities.as_ref(),
                 self.storage.clone(),
+                self.multisig_submitter.clone(),
                 self.btc_server.clone(),
                 Arc::clone(&self.metrics),
                 LEGACY_MULTISIG_ID,
@@ -550,6 +555,7 @@ where
         let frost_config_clone = self.frost_config.clone();
         let storage_clone = self.storage.clone();
         let btc_server_clone = self.btc_server.clone();
+        let multisig_submitter_clone = self.multisig_submitter.clone();
         let metrics_clone = Arc::clone(&self.metrics);
 
         loop {
@@ -681,6 +687,7 @@ where
                                     frost_handle_clone.clone(),
                                     frost_config_clone.authorities.as_ref(),
                                     storage_clone.clone(),
+                                    multisig_submitter_clone.clone(),
                                     btc_server_clone.clone(),
                                     Arc::clone(&metrics_clone),
                                     multisig_id,
@@ -698,6 +705,7 @@ where
                                             frost_handle_clone.clone(),
                                             frost_config_clone.authorities.as_ref(),
                                             storage_clone.clone(),
+                                            multisig_submitter_clone.clone(),
                                             btc_server_clone.clone(),
                                             Arc::clone(&metrics_clone),
                                             multisig_id,
@@ -775,6 +783,7 @@ where
                                     frost_handle_clone.clone(),
                                     frost_config_clone.authorities.as_ref(),
                                     storage_clone.clone(),
+                                    multisig_submitter_clone.clone(),
                                     btc_server_clone.clone(),
                                     Arc::clone(&metrics_clone),
                                     notification.multisig_id_to,
@@ -1162,6 +1171,7 @@ struct DkgRunnerTask<RDB, BDB, ToFrostMan, BtcServerClient> {
     frost_handle: ToFrostMan,
     // Frost Id lookup table
     frost_ids: HashMap<frost_secp256k1_tr::Identifier, secp256k1::PublicKey>,
+    multisig_submitter: MultisigSubmitter,
     // Shared storage to insert aggregate public key
     storage: Storage<RDB, BDB>,
     // btc-server client
@@ -1191,6 +1201,7 @@ where
         frost_handle: ToFrostMan,
         authorities: &[secp256k1::PublicKey],
         storage: Storage<RDB, BDB>,
+        multisig_submitter: MultisigSubmitter,
         btc_server: BtcServerClient,
         metrics: Arc<AuthorityMetrics>,
         multisig_id: MultisigId,
@@ -1213,6 +1224,7 @@ where
             frost_ids,
             storage,
             btc_server,
+            multisig_submitter,
             metrics,
             multisig_id,
         };

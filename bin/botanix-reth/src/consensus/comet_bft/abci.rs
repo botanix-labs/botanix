@@ -9,6 +9,7 @@ use botanix_chainspec::{
 use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
 use botanix_storage::models::RuntimeVersion;
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
+use frost_secp256k1_tr::keys::PublicKeyPackage;
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
@@ -68,8 +69,11 @@ use tendermint_proto::{
 };
 
 use crate::{
-    consensus::comet_bft::non_deterministic_data::{
-        NonDeterministicData, RUNTIME_VERSION_GENESIS,
+    consensus::{
+        comet_bft::non_deterministic_data::{
+            NonDeterministicData, RUNTIME_VERSION_GENESIS,
+        },
+        multisig_manager::{self, MultisigManager},
     },
     node::{
         consensus::BotanixConsensus, primitives::BotanixBlock, BotanixNode,
@@ -261,6 +265,7 @@ type BotanixNodeTypes = NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>;
 pub struct ABCIClientBuilder<RDB, BDB> {
     storage: Storage<RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
+    multisig_manager: MultisigManager,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     botanix_consensus: BotanixConsensus<BotanixChainSpec>,
     cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
@@ -294,6 +299,7 @@ where
     pub(crate) fn new(
         storage: Storage<RDB, BDB>,
         activation_manager: ActivationManager<VoteWatcher, Address>,
+        multisig_manager: MultisigManager,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         botanix_consensus: BotanixConsensus<BotanixChainSpec>,
         cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
@@ -326,6 +332,7 @@ where
         Self {
             storage,
             activation_manager,
+            multisig_manager,
             bitcoin_checkpoints,
             botanix_consensus,
             cbft_rpc_client_factory,
@@ -370,6 +377,7 @@ where
             self.storage.clone(),
             tx_pool,
             self.activation_manager.clone(),
+            self.multisig_manager.clone(),
             self.bitcoin_checkpoints.clone(),
             self.abci_driver_tx.clone(),
             self.cbft_rpc_client_factory.clone(),
@@ -447,6 +455,7 @@ pub(crate) struct ABCIClient<RDB, DBD, Pool> {
     storage: Storage<RDB, DBD>,
     pool: Pool,
     activation_manager: ActivationManager<VoteWatcher, Address>,
+    multisig_manager: MultisigManager,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     block_cache: Arc<RwLock<BlockCache>>,
     driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
@@ -487,6 +496,7 @@ where
         storage: Storage<RDB, DBD>,
         pool: Pool,
         activation_manager: ActivationManager<VoteWatcher, Address>,
+        multisig_manager: MultisigManager,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
         cbft_rpc_provider: HttpCometBFTRpcClientFactory,
@@ -514,6 +524,7 @@ where
             storage: storage.clone(),
             pool,
             activation_manager,
+            multisig_manager,
             bitcoin_checkpoints,
             // Saving the last 5 blocks that were proposed
             block_cache,
@@ -585,6 +596,7 @@ where
         &self,
         runtime_version: RuntimeVersion,
         network_upgrade_payload: Option<NetworkUpgradePayload>,
+        multisig_message: Option<multisig_manager::Message>,
     ) -> Result<NonDeterministicData, ConsensusError> {
         // TODO: use the correct multisig_id
         let aggregate_public_key =
@@ -1601,13 +1613,19 @@ where
             .expect("db cannot fail");
 
         let use_version = decision.version;
-        let upgrade_vote = decision.vote;
+        let upgrade_vote: Option<_> = decision.vote;
 
-        // Construct the NDD version 2 with a runtime version indicator
-        // and an (optional) network upgrade payload.
-        let non_deterministic_data = match self
-            .non_deterministic_data(use_version, upgrade_vote)
-        {
+        // Multisig Manager: Retrieve the multisig-related consensus message, if
+        // available.
+        let multisig_msg: Option<_> = self.multisig_manager.send();
+
+        // Construct the NDD version 2 with a runtime version indicator, an
+        // optional network upgrade payload and an optional multisig message.
+        let non_deterministic_data = match self.non_deterministic_data(
+            use_version,
+            upgrade_vote,
+            multisig_msg,
+        ) {
             Ok(ndd) => ndd,
             Err(e) => {
                 panic!(
@@ -1712,6 +1730,11 @@ where
 
         // Note: this sets the block gas limit to 30 million
         let builder_config = EthereumBuilderConfig::default();
+
+        // Multisig Manager (TODO): EVM payload builder must validate pegins
+        // against active multisigs.
+        let active_multisigs: Vec<(MultisigId, PublicKeyPackage)> =
+            self.multisig_manager.get_active();
 
         match default_ethereum_payload(
             self.storage.evm_config.clone(),
@@ -2157,6 +2180,11 @@ where
             }
         }
 
+        // Multisig Manager (TODO): EVM block execution logic must validate
+        // pegins against active multisigs.
+        let active_multisigs: Vec<(MultisigId, PublicKeyPackage)> =
+            self.multisig_manager.get_active();
+
         // Validation done as a result of this call:
         // - botanix consensus package created on the fly and compared to the
         //   incoming block EDH
@@ -2468,6 +2496,19 @@ where
                                                         // change.
                     }
                 };
+
+                // Multisig Manager: finalize the multisig-related consensus
+                // message, if available.
+                if let Some(msg) = non_deterministic_data.multisig_message() {
+                    self.multisig_manager
+                        .recv(msg)
+                        .expect("finalized invalid multisig message");
+                }
+
+                // TODO: EVM block execution logic must validate pegins against active
+                // multisigs.
+                let active_multisigs: Vec<(MultisigId, PublicKeyPackage)> =
+                    self.multisig_manager.get_active();
 
                 match build_and_execute(
                     txs,
@@ -3282,6 +3323,8 @@ mod tests {
         )
         .build_ignore_network_upgrade();
 
+        let (multisig_manager, _handle) = MultisigManager::new();
+
         let bitcoin_checkpoints_chain =
             BitcoinCheckpointsChain::try_new(1, 0, 0)
                 .expect("create a valid chain");
@@ -3302,6 +3345,7 @@ mod tests {
             storage,
             transaction_pool,
             activation_manager,
+            multisig_manager,
             Arc::new(bitcoin_checkpoints_chain),
             driver_tx,
             cometbft_rpc_factory,
@@ -3322,7 +3366,7 @@ mod tests {
     fn non_deterministic_data_bytes(
         client: &ABCIClientType,
     ) -> Result<prost::bytes::Bytes, ConsensusError> {
-        client.non_deterministic_data(RUNTIME_VERSION_V1, None).and_then(
+        client.non_deterministic_data(RUNTIME_VERSION_V1, None, None).and_then(
             |ndd| client.serialize_non_deterministic_data_to_bytes(ndd),
         )
     }
@@ -3581,7 +3625,7 @@ mod tests {
 
         // first tx should be non-deterministic data
         let ndd = abci_client
-            .non_deterministic_data(RUNTIME_VERSION_V1, None)
+            .non_deterministic_data(RUNTIME_VERSION_V1, None, None)
             .expect("to have ndd");
         let ndd_bytes = abci_client
             .serialize_non_deterministic_data_to_bytes(ndd)

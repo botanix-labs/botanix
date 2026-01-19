@@ -112,7 +112,7 @@ pub fn complete_stage_four(
     assert_eq!(bob.stage(), Stage::Finalized);
     assert_eq!(eve.stage(), Stage::Finalized);
 
-	(alice, bob, eve)
+    (alice, bob, eve)
 }
 
 #[test]

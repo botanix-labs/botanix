@@ -9,6 +9,8 @@ use botanix_storage::models::{
 use std::io::{self, Write};
 use thiserror::Error;
 
+use crate::consensus::multisig_manager;
+
 /// Errors that can occur when deserializing NonDeterministicData
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -80,6 +82,12 @@ impl NonDeterministicData {
     /// The block fee recipient, only available in version 1.
     pub(crate) fn block_fee_recipient_address(&self) -> Option<Address> {
         self.block_fee_recipient_address
+    }
+
+    /// The optional multisig message.
+    pub(crate) fn multisig_message(&self) -> Option<multisig_manager::Message> {
+        // TODO
+        None
     }
 
     /// The optional network upgrade payload.

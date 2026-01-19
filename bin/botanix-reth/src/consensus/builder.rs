@@ -2,6 +2,7 @@ use crate::{
     consensus::{
         comet_bft::abci::{ABCIClientBuilder, ABCIDriverMessage},
         frost_task::FrostTask,
+        multisig_manager::MultisigManager,
         snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},
         utils::{is_poa_epoch, seal_slow},
         wallet_state_sync::WalletStateSyncEngine,
@@ -63,6 +64,7 @@ pub struct AuthorityConsensusBuilder<RDB, BDB, ToFrostMan, Source> {
     consensus: BotanixConsensus<BotanixChainSpec>,
     storage: Storage<RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
+    multisig_manager: MultisigManager,
     btc_server_factory: Option<GrpcClientFactory>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     network_handle: NetworkHandle<BotanixNetworkPrimitives>,
@@ -157,6 +159,8 @@ where
             }
         }
 
+        let (multisig_manager, _submitter) = MultisigManager::new();
+
         let mut latest_header = reth_provider
             .latest_header()
             .ok()
@@ -237,6 +241,7 @@ where
         Ok(Self {
             storage,
             activation_manager,
+            multisig_manager,
             consensus: BotanixConsensus::new(chain_spec),
             btc_server_factory,
             bitcoin_checkpoints,
@@ -277,6 +282,7 @@ where
             consensus,
             storage,
             activation_manager,
+            multisig_manager,
             bitcoin_checkpoints,
             network_handle,
             frost_handle,
@@ -342,6 +348,7 @@ where
                 btc_server_client.clone().expect("btc_server is available"),
                 network_handle.clone(),
                 frost_handle.clone().expect("Requires frost handle"),
+                multisig_manager.submitter(),
                 frost_config.clone().expect("frost config exists"),
                 storage.clone(),
                 parser.clone(),
@@ -361,6 +368,7 @@ where
         let abci_client_builder = Some(ABCIClientBuilder::new(
             storage.clone(),
             activation_manager,
+            multisig_manager,
             bitcoin_checkpoints,
             consensus.clone(),
             cometbft_rpc_factory.clone(),
