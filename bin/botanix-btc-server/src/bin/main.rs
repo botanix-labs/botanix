@@ -3112,17 +3112,6 @@ where
             )));
         }
 
-        // Validation 1: Check no pending pegouts waiting to be processed
-        // We want a clean slate before ending migration - no in-flight pegouts.
-        let pending_pegouts = self.db.get_pending_pegouts().to_status()?;
-        if !pending_pegouts.is_empty() {
-            return Err(tonic::Status::failed_precondition(format!(
-                "Cannot end migration: {} pending pegout(s) still waiting to be processed. \
-                Wait for all pending pegouts to be included in transactions.",
-                pending_pegouts.len()
-            )));
-        }
-
         // Validation 2: Check no tracked transactions have change outputs going to source multisig (m1)
         // During migration, change SPK should be set to target multisig (m2).
         // If any tracked transactions still have change going to m1, we must wait for them to clear.
