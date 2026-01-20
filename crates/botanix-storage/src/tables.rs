@@ -110,6 +110,16 @@ tables! {
         type Key = SnapshotSyncId;
         type Value = SnapshotSync;
     }
+
+    /// Store active multisig migrations.
+    ///
+    /// This table tracks active migrations during the dynafed transition
+    /// process. Each migration represents a transfer of funds from one
+    /// multisig federation to another.
+    table Migrations {
+        type Key = MigrationId;
+        type Value = MigrationRecord;
+    }
 }
 
 /// Creates all the Botanix-specific tables as defined in [`Tables`], if

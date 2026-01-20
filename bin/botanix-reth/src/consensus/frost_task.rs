@@ -30,7 +30,10 @@ use botanix_data_parser::{
     prost_parser::{ProstError, ProstMessageSerdelizer},
     DataParser, Error as DataParserError,
 };
-use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
+use botanix_storage::{
+    models::{uuid_to_migration_id, MigrationRecord, MigrationStatus},
+    MigrationReader, MigrationWriter, StagedHeaderReader, StagedHeaderWriter,
+};
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use btcserverlib::{
     dkg::{
@@ -92,20 +95,7 @@ pub(crate) enum FinalizedPegoutIdsSyncSerializationError {
     DataParser(#[from] DataParserError),
 }
 
-#[derive(Debug)]
-pub enum MsigMigrationStatus {
-    STARTED,
-    RUNNING,
-    FINISHED,
-}
-
-#[derive(Debug)]
-pub struct MsigMigration {
-    pub status: MsigMigrationStatus,
-    pub multisig_id_from: MultisigId,
-    pub multisig_id_to: MultisigId,
-    pub migration_id: Uuid,
-}
+// Migration types are now in botanix_storage::models
 
 #[allow(dead_code)]
 pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
@@ -124,8 +114,6 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     /// aggregate public key is available, and the `start_task` method has
     /// hence started the DKG process.
     dkg_tasks: Option<BTreeMap<MultisigId, mpsc::Sender<DkgResponse>>>,
-    /// Multisig Migrations
-    dkg_migrations: Option<BTreeMap<uuid::Uuid, MsigMigration>>,
     /// Pre-configured data-parser
     compressor: DataParser,
     /// btc server client
@@ -158,7 +146,7 @@ where
     RDB: BlockReaderIdExt + StateProviderFactory + CanonStateSubscriptions + Clone + 'static,
     <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader:
         HeaderExt + Sealable,
-    BDB: StagedHeaderReader + StagedHeaderWriter + Clone + 'static,
+    BDB: StagedHeaderReader + StagedHeaderWriter + MigrationReader + MigrationWriter + Clone + 'static,
     Source: RandomSource,
     BtcServerClient: BtcServerExtendedApi + Clone,
 {
@@ -200,7 +188,6 @@ where
             btc_server,
             check_staged_headers: true,
             dkg_tasks: None,
-            dkg_migrations: None,
             compressor,
             metrics,
             cbft_rpc_provider,
@@ -759,29 +746,33 @@ where
 
                         match notification.event {
                             MigrationEvent::Start => {
-                                // Initialize migration tracking
-                                if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
-                                    if dkg_migrations.contains_key(&notification.migration_id) {
+                                let migration_id = uuid_to_migration_id(notification.migration_id);
+
+                                // Check if migration already exists in database
+                                match self.storage.botanix_database_factory.get_migration(migration_id) {
+                                    Ok(Some(_)) => {
                                         warn!(target: "consensus::authority::frost_task::start_task", "Migration with uuid {} already exists, skipping...", notification.migration_id);
                                         continue;
                                     }
-                                    let migration = MsigMigration {
-                                        status: MsigMigrationStatus::STARTED,
-                                        multisig_id_from: notification.multisig_id_from,
-                                        multisig_id_to: notification.multisig_id_to,
-                                        migration_id: notification.migration_id,
-                                    };
-                                    dkg_migrations.insert(notification.migration_id, migration);
-                                } else {
-                                    let migration = MsigMigration {
-                                        status: MsigMigrationStatus::STARTED,
-                                        multisig_id_from: notification.multisig_id_from,
-                                        multisig_id_to: notification.multisig_id_to,
-                                        migration_id: notification.migration_id,
-                                    };
-                                    let mut migrations = BTreeMap::new();
-                                    migrations.insert(notification.migration_id, migration);
-                                    self.dkg_migrations = Some(migrations);
+                                    Ok(None) => {
+                                        // Migration doesn't exist, proceed
+                                    }
+                                    Err(e) => {
+                                        error!(target: "consensus::authority::frost_task::start_task", "Error checking migration in database: {:?}", e);
+                                        continue;
+                                    }
+                                }
+
+                                // Store migration with STARTED status
+                                let record = MigrationRecord::new(
+                                    migration_id,
+                                    *notification.multisig_id_from,
+                                    *notification.multisig_id_to,
+                                    MigrationStatus::Started,
+                                );
+                                if let Err(e) = self.storage.botanix_database_factory.store_migration(&record) {
+                                    error!(target: "consensus::authority::frost_task::start_task", "Failed to store migration in database: {:?}", e);
+                                    continue;
                                 }
 
                                 // Check if DKG tasks are already running for these multisig IDs
@@ -795,9 +786,9 @@ where
                                         }).await {
                                             error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
                                         }
-                                        // Remove from local tracking
-                                        if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
-                                            dkg_migrations.remove(&notification.migration_id);
+                                        // Remove from database
+                                        if let Err(e) = self.storage.botanix_database_factory.remove_migration(migration_id) {
+                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
                                         }
                                         continue;
                                     }
@@ -810,9 +801,9 @@ where
                                         }).await {
                                             error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
                                         }
-                                        // Remove from local tracking
-                                        if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
-                                            dkg_migrations.remove(&notification.migration_id);
+                                        // Remove from database
+                                        if let Err(e) = self.storage.botanix_database_factory.remove_migration(migration_id) {
+                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
                                         }
                                         continue;
                                     }
@@ -838,16 +829,16 @@ where
                                     self.dkg_tasks = Some(tasks);
                                 }
 
-                                // Update migration status
-                                if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
-                                    if let Some(migration) = dkg_migrations.get_mut(&notification.migration_id) {
-                                        migration.status = MsigMigrationStatus::RUNNING;
-                                        info!(target: "consensus::authority::frost_task::start_task", "Migration {} status updated to RUNNING", notification.migration_id);
-                                    }
+                                // Update migration status to RUNNING in database
+                                if let Err(e) = self.storage.botanix_database_factory.update_migration_status(migration_id, MigrationStatus::Running) {
+                                    error!(target: "consensus::authority::frost_task::start_task", "Failed to update migration status in database: {:?}", e);
+                                } else {
+                                    info!(target: "consensus::authority::frost_task::start_task", "Migration {} status updated to RUNNING", notification.migration_id);
                                 }
                             }
                             MigrationEvent::End => {
                                 info!(target: "consensus::authority::frost_task::start_task", "Ending migration {}", notification.migration_id);
+                                let migration_id = uuid_to_migration_id(notification.migration_id);
 
                                 // Verify the new multisig has an aggregate public key (is operational)
                                 let has_new_multisig_key = {
@@ -864,11 +855,15 @@ where
                                         notification.multisig_id_to, notification.migration_id);
                                 }
 
-                                // Update migration status to FINISHED
-                                if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
-                                    if let Some(migration) = dkg_migrations.get_mut(&notification.migration_id) {
-                                        migration.status = MsigMigrationStatus::FINISHED;
-                                        info!(target: "consensus::authority::frost_task::start_task", "Migration {} status updated to FINISHED", notification.migration_id);
+                                // Check if migration exists in database
+                                match self.storage.botanix_database_factory.get_migration(migration_id) {
+                                    Ok(Some(_)) => {
+                                        // Update migration status to FINISHED
+                                        if let Err(e) = self.storage.botanix_database_factory.update_migration_status(migration_id, MigrationStatus::Finished) {
+                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to update migration status in database: {:?}", e);
+                                        } else {
+                                            info!(target: "consensus::authority::frost_task::start_task", "Migration {} status updated to FINISHED", notification.migration_id);
+                                        }
 
                                         // Clean up the old (source) multisig DKG task if it exists
                                         if let Some(tasks) = self.dkg_tasks.as_mut() {
@@ -876,22 +871,29 @@ where
                                                 info!(target: "consensus::authority::frost_task::start_task", "Removed DKG task for old multisig {}", notification.multisig_id_from);
                                             }
                                         }
-                                    } else {
+                                    }
+                                    Ok(None) => {
                                         warn!(target: "consensus::authority::frost_task::start_task", "Migration {} not found when trying to end it", notification.migration_id);
                                     }
-                                } else {
-                                    warn!(target: "consensus::authority::frost_task::start_task", "No migrations tracked when trying to end migration {}", notification.migration_id);
+                                    Err(e) => {
+                                        error!(target: "consensus::authority::frost_task::start_task", "Error getting migration from database: {:?}", e);
+                                    }
                                 }
                             }
                             MigrationEvent::Abort => {
                                 info!(target: "consensus::authority::frost_task::start_task", "Aborting migration {}", notification.migration_id);
+                                let migration_id = uuid_to_migration_id(notification.migration_id);
 
-                                // Clean up migration tracking
-                                if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
-                                    if dkg_migrations.remove(&notification.migration_id).is_some() {
-                                        info!(target: "consensus::authority::frost_task::start_task", "Removed migration {} from tracking", notification.migration_id);
-                                    } else {
+                                // Remove migration from database
+                                match self.storage.botanix_database_factory.remove_migration(migration_id) {
+                                    Ok(true) => {
+                                        info!(target: "consensus::authority::frost_task::start_task", "Removed migration {} from database", notification.migration_id);
+                                    }
+                                    Ok(false) => {
                                         warn!(target: "consensus::authority::frost_task::start_task", "Migration {} not found when trying to abort", notification.migration_id);
+                                    }
+                                    Err(e) => {
+                                        error!(target: "consensus::authority::frost_task::start_task", "Error removing migration from database: {:?}", e);
                                     }
                                 }
 
