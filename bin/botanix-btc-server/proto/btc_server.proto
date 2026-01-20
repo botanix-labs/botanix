@@ -74,6 +74,13 @@ service BtcServer {
     rpc SweepToMultisig(Empty) returns (SigningPackage) {}
 
     rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
+
+    // Migration endpoints
+    rpc StartMigration(StartMigrationRequest) returns (StartMigrationResponse) {}
+    rpc EndMigration(EndMigrationRequest) returns (Empty) {}
+    rpc AbortMigration(AbortMigrationRequest) returns (Empty) {}
+    rpc GetMigration(GetMigrationRequest) returns (MigrationInfo) {}
+    rpc ListMigrations(Empty) returns (ListMigrationsResponse) {}
 }
 
 message PendingPegout {
@@ -349,4 +356,37 @@ enum SigningStatus {
     RUNNING = 0;
     FINALIZED = 1;
     FAILED = 2;
+}
+
+// Migration messages
+message StartMigrationRequest {
+    uint32 multisig_id_from = 1;  // Source multisig (must have key package)
+    uint32 multisig_id_to = 2;    // Target multisig (will run DKG)
+}
+
+message StartMigrationResponse {
+    string migration_id = 1;  // UUIDv4 for tracking
+}
+
+message EndMigrationRequest {
+    string migration_id = 1;
+}
+
+message AbortMigrationRequest {
+    string migration_id = 1;
+}
+
+message GetMigrationRequest {
+    string migration_id = 1;
+}
+
+message MigrationInfo {
+    string migration_id = 1;
+    uint32 multisig_id_from = 2;
+    uint32 multisig_id_to = 3;
+    uint64 started_at_unix_secs = 4;  // Unix timestamp when migration started
+}
+
+message ListMigrationsResponse {
+    repeated MigrationInfo migrations = 1;
 }

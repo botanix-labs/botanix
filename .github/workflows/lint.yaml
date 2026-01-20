@@ -72,7 +72,7 @@ jobs:
 
       - name: Install required tools
         run: |
-          cargo install cargo-binstall --force
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --force --no-confirm taplo-cli cargo-machete
 
       - name: Check for typos

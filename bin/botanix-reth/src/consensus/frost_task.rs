@@ -619,9 +619,26 @@ where
                 info!(target: "consensus::authority::frost_task::start_task", "Received dynafed frost notification from btc-server: {:?}", payload);
                 let dynafed_sub_message = match payload.notification {
                     Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Dkg(dkg)) => {
-                        DynafedSubscriptionMessage::Dkg(DkgNotification::Start {
-                            multisig_id: dkg.multisig_id.into(),
-                        })
+                        let dkg_notification = match btcserverlib::rpc::DkgEvent::try_from(dkg.event) {
+                            Ok(btcserverlib::rpc::DkgEvent::Unspecified) => {
+                                warn!(target: "consensus::authority::frost_task::start_task", "Unspecified DKG event received");
+                                continue;
+                            }
+                            Ok(btcserverlib::rpc::DkgEvent::DkgStart) => DkgNotification::Start {
+                                multisig_id: dkg.multisig_id.into(),
+                            },
+                            Ok(btcserverlib::rpc::DkgEvent::DkgRestart) => DkgNotification::Restart {
+                                multisig_id: dkg.multisig_id.into(),
+                            },
+                            Ok(btcserverlib::rpc::DkgEvent::DkgAbort) => DkgNotification::Abort {
+                                multisig_id: dkg.multisig_id.into(),
+                            },
+                            Err(e) => {
+                                error!(target: "consensus::authority::frost_task::start_task", "Invalid DKG event value {}: {:?}", dkg.event, e);
+                                continue;
+                            }
+                        };
+                        DynafedSubscriptionMessage::Dkg(dkg_notification)
                     }
                     Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Migration(migration)) => {
                         let event = match btcserverlib::rpc::MigrationEvent::try_from(migration.event) {
@@ -771,12 +788,32 @@ where
                                 if let Some(tasks) = self.dkg_tasks.as_ref() {
                                     if tasks.contains_key(&notification.multisig_id_from) {
                                         error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration source multisig {} is already running, aborting migration...", notification.multisig_id_from);
-                                        // TODO: Send abort notification to btc-server
+                                        // Send abort notification to btc-server
+                                        let mut btc_server = btc_server_clone.clone();
+                                        if let Err(e) = btc_server.abort_migration(botanix_btc_server_client::AbortMigrationRequest {
+                                            migration_id: notification.migration_id.to_string(),
+                                        }).await {
+                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
+                                        }
+                                        // Remove from local tracking
+                                        if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
+                                            dkg_migrations.remove(&notification.migration_id);
+                                        }
                                         continue;
                                     }
                                     if tasks.contains_key(&notification.multisig_id_to) {
                                         error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration target multisig {} is already running, aborting migration...", notification.multisig_id_to);
-                                        // TODO: Send abort notification to btc-server
+                                        // Send abort notification to btc-server
+                                        let mut btc_server = btc_server_clone.clone();
+                                        if let Err(e) = btc_server.abort_migration(botanix_btc_server_client::AbortMigrationRequest {
+                                            migration_id: notification.migration_id.to_string(),
+                                        }).await {
+                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
+                                        }
+                                        // Remove from local tracking
+                                        if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
+                                            dkg_migrations.remove(&notification.migration_id);
+                                        }
                                         continue;
                                     }
                                 }
@@ -812,6 +849,21 @@ where
                             MigrationEvent::End => {
                                 info!(target: "consensus::authority::frost_task::start_task", "Ending migration {}", notification.migration_id);
 
+                                // Verify the new multisig has an aggregate public key (is operational)
+                                let has_new_multisig_key = {
+                                    let storage = self.storage.inner.read().await;
+                                    storage.aggregate_public_key
+                                        .as_ref()
+                                        .map(|keys| keys.contains_key(&notification.multisig_id_to))
+                                        .unwrap_or(false)
+                                };
+
+                                if !has_new_multisig_key {
+                                    warn!(target: "consensus::authority::frost_task::start_task",
+                                        "New multisig {} does not have an aggregate public key yet, migration {} may not be fully operational",
+                                        notification.multisig_id_to, notification.migration_id);
+                                }
+
                                 // Update migration status to FINISHED
                                 if let Some(dkg_migrations) = self.dkg_migrations.as_mut() {
                                     if let Some(migration) = dkg_migrations.get_mut(&notification.migration_id) {
@@ -830,8 +882,6 @@ where
                                 } else {
                                     warn!(target: "consensus::authority::frost_task::start_task", "No migrations tracked when trying to end migration {}", notification.migration_id);
                                 }
-
-                                // TODO: Verify the new multisig is fully operational before finalizing the migration
                             }
                             MigrationEvent::Abort => {
                                 info!(target: "consensus::authority::frost_task::start_task", "Aborting migration {}", notification.migration_id);

@@ -366,6 +366,54 @@ pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
+/// Migration messages
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct StartMigrationRequest {
+    /// Source multisig (must have key package)
+    #[prost(uint32, tag = "1")]
+    pub multisig_id_from: u32,
+    /// Target multisig (will run DKG)
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StartMigrationResponse {
+    /// UUIDv4 for tracking
+    #[prost(string, tag = "1")]
+    pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EndMigrationRequest {
+    #[prost(string, tag = "1")]
+    pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AbortMigrationRequest {
+    #[prost(string, tag = "1")]
+    pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetMigrationRequest {
+    #[prost(string, tag = "1")]
+    pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MigrationInfo {
+    #[prost(string, tag = "1")]
+    pub migration_id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
+    /// Unix timestamp when migration started
+    #[prost(uint64, tag = "4")]
+    pub started_at_unix_secs: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListMigrationsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub migrations: ::prost::alloc::vec::Vec<MigrationInfo>,
+}
 #[derive(
     Clone,
     Copy,
@@ -1247,6 +1295,30 @@ pub mod btc_server_client {
             ));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn sweep_to_multisig(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<super::SigningPackage>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/SweepToMultisig",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "SweepToMultisig",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn new_consensus_checkpoint(
             &mut self,
             request: impl tonic::IntoRequest<super::ConsensusCheckpointRequest>,
@@ -1266,6 +1338,123 @@ pub mod btc_server_client {
             req.extensions_mut().insert(GrpcMethod::new(
                 "btc_server.BtcServer",
                 "NewConsensusCheckpoint",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Migration endpoints
+        pub async fn start_migration(
+            &mut self,
+            request: impl tonic::IntoRequest<super::StartMigrationRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::StartMigrationResponse>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/StartMigration",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "StartMigration",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn end_migration(
+            &mut self,
+            request: impl tonic::IntoRequest<super::EndMigrationRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/EndMigration",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "EndMigration",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn abort_migration(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AbortMigrationRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/AbortMigration",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "AbortMigration",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_migration(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetMigrationRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MigrationInfo>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/GetMigration",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "GetMigration",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_migrations(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListMigrationsResponse>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/ListMigrations",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "ListMigrations",
             ));
             self.inner.unary(req, path, codec).await
         }
