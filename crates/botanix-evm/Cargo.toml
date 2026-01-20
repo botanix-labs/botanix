@@ -42,6 +42,7 @@ botanix-authority-peg = { workspace = true }
 botanix-btc-wallet = { workspace = true }
 botanix-chainspec = { workspace = true }
 botanix-consensus-common = { workspace = true }
+botanix-primitives = { workspace = true }
 
 # Bitcoin
 bitcoin = { workspace = true }

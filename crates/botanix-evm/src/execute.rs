@@ -1,6 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
-use alloy_consensus::transaction::{Recovered, Transaction};
+use alloy_consensus::{transaction::{Recovered, Transaction}, Header};
 use alloy_eips::eip7685::Requests;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_peg::{
@@ -12,6 +12,8 @@ use botanix_authority_peg::{
 };
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
+use botanix_primitives::BotanixBlock;
+use reth_primitives::TransactionSigned;
 use btcserverlib::pegout_id::PegoutId;
 use reth_chainspec::EthereumHardforks;
 use reth_evm::{
@@ -23,7 +25,7 @@ use reth_node_types::NodePrimitives;
 use reth_primitives::{Receipt, RecoveredBlock, SealedHeader};
 
 use reth_primitives_traits::{
-    AlloyBlockHeader, Block, BlockBody, SignedTransaction,
+    AlloyBlockHeader, Block, BlockBody,
 };
 use reth_provider::{
     BlockExecutionResult, BlockReader, DatabaseProviderRO, ProviderError,
@@ -185,6 +187,12 @@ where
     DB: RethDatabase<Error: Into<ProviderError> + Display>,
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
+    N::Primitives: NodePrimitives<
+        Block = BotanixBlock,
+        BlockHeader = Header,
+        SignedTx = TransactionSigned,
+    >,
+    Header: HeaderExt,
 {
     /// Execute a single block and apply the state changes to the internal state.
     ///
@@ -194,18 +202,18 @@ where
     /// Returns an error if execution fails.
     fn execute_without_verification(
         &mut self,
-        block: &RecoveredBlock<<N::Primitives as NodePrimitives>::Block>,
+        block: &RecoveredBlock<BotanixBlock>,
     ) -> Result<EthExecuteOutput, BlockExecutionError>
     where
+        EvmConfig::Primitives: NodePrimitives<BlockHeader = Header>,
         <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
         N: reth_provider::providers::NodeTypesForProvider,
+        BotanixBlock: Block<Header = Header>,
     {
         // 1. prepare state on new block
         self.on_new_block(block.number());
 
-        let header: &SealedHeader<
-            <N::Primitives as NodePrimitives>::BlockHeader,
-        > = block.sealed_header();
+        let header: &SealedHeader<Header> = block.sealed_header();
         let edh = header.deserialize_extra_data_header().map_err(|_| {
             BlockExecutionError::Validation(
                 BlockValidationError::ExtraDataSerializeError,
@@ -278,6 +286,12 @@ where
     EvmConfig: ConfigureEvm<Primitives = N::Primitives>,
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes,
+    N::Primitives: NodePrimitives<
+        Block = BotanixBlock,
+        BlockHeader = Header,
+        SignedTx = TransactionSigned,
+    >,
+    Header: HeaderExt,
 {
     /// Executes the transactions in the block and returns the receipts of the transactions in the
     /// block, the total gas used and the list of EIP-7685 [requests](Request).
@@ -292,7 +306,7 @@ where
     /// [`EthBlockExecutor::post_execution`].
     fn execute_state_transitions<E>(
         &self,
-        block: &RecoveredBlock<<N::Primitives as NodePrimitives>::Block>,
+        block: &RecoveredBlock<BotanixBlock>,
         mut evm: E,
         botanix_consensus_pkg: BotanixConsensusPackage,
         provider: Arc<DatabaseProviderRO<RethDB, N>>,
@@ -303,7 +317,7 @@ where
         E::Tx: reth_evm::FromRecoveredTx<
             <N::Primitives as NodePrimitives>::SignedTx,
         >,
-        <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
+        BotanixBlock: Block<Header = Header>,
         N: reth_provider::providers::NodeTypesForProvider,
     {
         // Apply pre execution changes
@@ -716,8 +730,13 @@ where
     RethDB: reth_db::Database,
     N: reth_node_types::NodeTypes
         + reth_provider::providers::NodeTypesForProvider,
-    <N::Primitives as NodePrimitives>::BlockHeader: HeaderExt,
+    N::Primitives: NodePrimitives<
+        Block = BotanixBlock,
+        BlockHeader = Header,
+        SignedTx = TransactionSigned,
+    >,
     <N::Primitives as NodePrimitives>::Receipt: From<Receipt>,
+    Header: HeaderExt,
 {
     /// Executes the block and commits the changes to the internal state.
     ///
@@ -726,11 +745,14 @@ where
     /// Returns an error if the block could not be executed or failed verification.
     pub fn execute(
         mut self,
-        block: &RecoveredBlock<<N::Primitives as NodePrimitives>::Block>,
+        block: &RecoveredBlock<BotanixBlock>,
     ) -> Result<
         BotanixBlockExecutionOutput<<N::Primitives as NodePrimitives>::Receipt>,
         BlockExecutionError,
-    > {
+    >
+    where
+        BotanixBlock: Block,
+    {
         let EthExecuteOutput {
             receipts,
             requests,

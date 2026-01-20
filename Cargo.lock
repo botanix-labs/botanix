@@ -2906,6 +2906,7 @@ dependencies = [
  "botanix-btc-wallet",
  "botanix-chainspec",
  "botanix-consensus-common",
+ "botanix-primitives",
  "derive_more 2.0.1",
  "reth-basic-payload-builder",
  "reth-chainspec",
