@@ -3005,6 +3005,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-rpc-types",
+ "botanix-types",
  "bytes 1.10.1",
  "derive_more 2.0.1",
  "reth-db",

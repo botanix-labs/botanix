@@ -329,7 +329,7 @@ impl MultisigSubmitter {
 ///
 /// After expiration, the multisig is removed entirely from the manager.
 #[derive(Debug, Clone)]
-enum Lifecycle {
+pub enum Lifecycle {
     /// Awaiting attestation from all federation members before activation.
     Staged {
         coordinator: frost::Identifier,

@@ -139,6 +139,7 @@ where
                 },
                 sidecars: None,
             },
+            unused_field_for_compiler_test: 0,
         }
     }
 

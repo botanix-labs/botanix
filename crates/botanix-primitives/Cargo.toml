@@ -11,6 +11,7 @@ alloy-eips = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-rlp = { workspace = true }
 alloy-rpc-types = { workspace = true }
+botanix-types = { workspace = true }
 bytes = { workspace = true }
 derive_more = { workspace = true }
 reth-db = { workspace = true, features = ["mdbx"] }

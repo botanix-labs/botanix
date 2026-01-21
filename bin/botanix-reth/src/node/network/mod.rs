@@ -68,7 +68,9 @@ mod rlp {
                                     BlockBody { transactions, ommers, withdrawals },
                                 sidecars,
                             },
+                        unused_field_for_compiler_test,
                     },
+
                 td,
             }) = value;
 
@@ -114,6 +116,7 @@ mod rlp {
                         },
                         sidecars: sidecars.map(|s| s.into_owned()),
                     },
+                    unused_field_for_compiler_test: 0,
                 },
                 td,
             }))

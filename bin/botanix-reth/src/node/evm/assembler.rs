@@ -27,6 +27,7 @@ impl BlockAssembler<BotanixBlockExecutorFactory> for BotanixEvmConfig {
                 // Payload building is out of scope of botanix-reth for now, so this is not critical
                 sidecars: None,
             },
+            unused_field_for_compiler_test: 0,
         })
     }
 }

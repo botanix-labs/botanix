@@ -121,6 +121,7 @@ pub(crate) mod authority_execution_utils {
                 },
                 sidecars: None,
             },
+            unused_field_for_compiler_test: 0,
         };
 
         let recovered_block =

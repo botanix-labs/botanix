@@ -4,13 +4,18 @@
 use alloy_consensus::{BlobTransactionSidecar, Header};
 use alloy_primitives::B256;
 use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
+use botanix_types::MultisigId;
 use reth_ethereum_primitives::{BlockBody, Receipt};
 use reth_primitives::{NodePrimitives, TransactionSigned};
 use reth_primitives_traits::{
     Block, BlockBody as BlockBodyTrait, InMemorySize,
 };
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 /// Primitive types for Botanix.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -107,6 +112,10 @@ pub struct BotanixBlock {
     pub header: Header,
     /// The block body.
     pub body: BotanixBlockBody,
+    /// The active multisigs to validate pegins and pegouts against.
+    /// Needs to be pub enum Lifecycle which is causing cyclic dependency issues
+    // pub multisigs: Arc<Mutex<BTreeMap<MultisigId, Lifecycle>>>,
+    pub unused_field_for_compiler_test: u8,
 }
 
 impl InMemorySize for BotanixBlock {
@@ -120,7 +129,7 @@ impl Block for BotanixBlock {
     type Body = BotanixBlockBody;
 
     fn new(header: Self::Header, body: Self::Body) -> Self {
-        Self { header, body }
+        Self { header, body, unused_field_for_compiler_test: 0 }
     }
 
     fn header(&self) -> &Self::Header {
@@ -197,6 +206,7 @@ mod rlp {
                         inner: BlockBody { transactions, ommers, withdrawals },
                         sidecars,
                     },
+                unused_field_for_compiler_test,
             } = value;
 
             Self {
@@ -263,6 +273,7 @@ mod rlp {
                     },
                     sidecars: sidecars.map(|s| s.into_owned()),
                 },
+                unused_field_for_compiler_test: 0,
             })
         }
     }
@@ -320,6 +331,7 @@ pub mod serde_bincode_compat {
             Self {
                 header: Header::from_repr(header),
                 body: BotanixBlockBody::from_repr(body),
+                unused_field_for_compiler_test: 0,
             }
         }
     }
