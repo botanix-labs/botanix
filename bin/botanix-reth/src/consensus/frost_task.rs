@@ -472,6 +472,34 @@ where
         );
     }
 
+    fn validate_sweep_psbt(
+        &self,
+        psbt_bytes: &[u8],
+        _multisig_id_from: MultisigId,
+        _multisig_id_to: MultisigId,
+    ) -> Result<bitcoin::Psbt, String> {
+        // Deserialize and validate PSBT is well-formed
+        let psbt = bitcoin::Psbt::deserialize(psbt_bytes)
+            .map_err(|e| format!("Failed to deserialize sweep PSBT: {:?}", e))?;
+
+        // Basic sanity checks
+        if psbt.inputs.is_empty() {
+            return Err("Sweep PSBT has no inputs".to_string());
+        }
+
+        if psbt.unsigned_tx.output.len() != 1 {
+            return Err(format!(
+                "Sweep PSBT should have exactly 1 output, got {}",
+                psbt.unsigned_tx.output.len()
+            ));
+        }
+
+        // TODO: other validations. Max number of inputs, output address,
+        // fee rate, amounts
+
+        Ok(psbt)
+    }
+
     pub async fn start_task(&mut self, mut abci_started_rx: tokio::sync::oneshot::Receiver<()>) {
         // before we start get a proper event receiver
         let (peer_messages_tx, peer_messages_rx) = tokio::sync::oneshot::channel();
@@ -934,7 +962,7 @@ where
                         let signing_session_id = FixedBytes::<32>::random();
 
                         // Get sweep PSBT from btc-server
-                        let psbt_payload = match get_sweep_psbt(
+                        let sweep_psbt_payload = match get_sweep_psbt(
                             &mut self.btc_server,
                             &signing_session_id,
                             notification.multisig_id_from,
@@ -952,12 +980,44 @@ where
                             }
                         };
 
+                        let sweep_psbt = match self.validate_sweep_psbt(
+                            &sweep_psbt_payload.psbt,
+                            notification.multisig_id_from,
+                            notification.multisig_id_to,
+                        ) {
+                            Ok(psbt) => psbt,
+                            Err(e) => {
+                                error!(
+                                    target: "consensus::authority::frost_task::start_task",
+                                    "Sweep PSBT validation failed: {}", e
+                                );
+                                continue;
+                            }
+                        };
+
                         info!(
                             target: "consensus::authority::frost_task::start_task",
-                            "Got sweep PSBT successfully"
+                            "Validated sweep PSBT with {} inputs",
+                            sweep_psbt.inputs.len()
                         );
 
-                        // TODO: Validate PSBT and initiate signing session
+                        // Initiate signing session
+                        if let Err(e) = self
+                            .signing_state_machine
+                            .initiate_signing_session(signing_session_id, sweep_psbt_payload.psbt)
+                            .await
+                        {
+                            error!(
+                                target: "consensus::authority::frost_task::start_task",
+                                "Error starting sweep signing session: {:?}", e
+                            );
+                            continue;
+                        }
+
+                        info!(
+                            target: "consensus::authority::frost_task::start_task",
+                            "Started sweep signing session successfully"
+                        );
                     }
                 }
             }
