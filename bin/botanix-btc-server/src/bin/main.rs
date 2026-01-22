@@ -2240,19 +2240,21 @@ where
 
     async fn get_sweep_psbt(
         &self,
-        req: tonic::Request<rpc::Empty>,
+        req: tonic::Request<rpc::GetSweepPsbtRequest>,
     ) -> Result<tonic::Response<rpc::SigningPackage>, tonic::Status> {
         self.validate_jwt(&req)?;
-        let _req = req.into_inner();
+        let req = req.into_inner();
 
-        info!("Received get_sweep_psbt request");
+        let source_multisig_id = MultisigId::from(req.multisig_id_from);
+        let target_multisig_id = MultisigId::from(req.multisig_id_to);
+
+        info!(
+            "Received get_sweep_psbt request: {} -> {}",
+            source_multisig_id, target_multisig_id
+        );
 
         // Generate signing session ID
         let signing_session_id: [u8; 32] = rand::random();
-
-        // TODO: Get source/target multisig_id from migration state machine
-        let source_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let target_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
 
         // take a lock on the tx_lock
         let _tx_lock = self.tx_lock.lock().await;

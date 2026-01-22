@@ -71,7 +71,7 @@ service BtcServer {
 
     rpc ResetWalletState(ResetWalletStateRequest) returns (Empty) {}
 
-    rpc GetSweepPsbt(Empty) returns (SigningPackage) {}
+    rpc GetSweepPsbt(GetSweepPsbtRequest) returns (SigningPackage) {}
 
     rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
 
@@ -402,6 +402,11 @@ message ListMigrationsResponse {
 
 // Sweep messages
 message InitiateSweepRequest {
+    uint32 multisig_id_from = 1;
+    uint32 multisig_id_to = 2;
+}
+
+message GetSweepPsbtRequest {
     uint32 multisig_id_from = 1;
     uint32 multisig_id_to = 2;
 }
