@@ -267,6 +267,12 @@ pub trait PsbtExt: BorrowMut<Psbt> {
         self.borrow().outputs.iter().filter_map(|o| o.pegout_id()).collect()
     }
 
+    /// Returns true if this PSBT represents a sweep transaction (structurally).
+    /// A sweep has no pegout outputs and exactly one output (the change to the target multisig).
+    fn is_sweep(&self) -> bool {
+        self.pegout_ids().is_empty() && self.borrow().outputs.len() == 1
+    }
+
     /// Converts this PSBT into a vector of Frost signing packages.
     ///
     /// This function takes a PSBT as input and processes each input to generate the necessary

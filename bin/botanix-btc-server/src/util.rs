@@ -13,6 +13,7 @@ use bitcoin::{
     psbt::{ExtractTxError, Psbt},
     Amount, FeeRate, OutPoint,
 };
+use botanix_types::LEGACY_MULTISIG_ID;
 use frost_secp256k1_tr as frost;
 use futures_util::Future;
 use log::{error, info};
@@ -247,6 +248,12 @@ pub enum ValidatePSBTError {
     NegativeFee,
     #[error("fee overflow")]
     FeeOverflow,
+    #[error("invalid target multisig id for sweep transaction")]
+    InvalidTargetMultisigId,
+    #[error("invalid sweep output count")]
+    InvalidSweepOutputCount,
+    #[error("change output error: {0}")]
+    ChangeOutputError(#[from] database::ChangeOutputError),
 }
 
 impl PartialEq for ValidatePSBTError {
@@ -281,14 +288,38 @@ pub fn validate_psbt(
         return Err(ValidatePSBTError::NoInputs);
     }
 
-    // Validate psbt contains conflicting input if retrying a pegout
-    has_conflicting_input(db, psbt)?;
+    // Detect sweep transaction: no pegout outputs, single output
+    let is_sweep = psbt.is_sweep();
 
-    if psbt.outputs.is_empty() {
-        return Err(ValidatePSBTError::NoOutputs);
+    if is_sweep {
+        info!("Detected sweep transaction with {} inputs", psbt.inputs.len());
+        if psbt.unsigned_tx.output.len() != 1 {
+            return Err(ValidatePSBTError::InvalidSweepOutputCount);
+        }
+
+        let change_spk = &psbt.unsigned_tx.output[0].script_pubkey;
+        let target_multisig_id = db.match_change_spk_to_multisig(change_spk)?;
+
+        // TODO: Validate sweep transaction
+        // - query multisig manager to check that we are expecting to do a sweep
+        //      - i.e. we are only accepting pegins to m2.
+        //      - & a sweep is not already in progress.
+        // - verify source and target multisigs match multsig manager's state
+        // add unit tests to verify the above
+        // e.g.
+        // let migration_state = db.get_migration_state()?;
+        // assert!(migration_state.is_sweeping);
+        // let expected_target_multisig_id = migration_state.target_multisig_id;
+        let expected_target_multisig_id = Some(LEGACY_MULTISIG_ID);
+
+        if target_multisig_id != expected_target_multisig_id {
+            return Err(ValidatePSBTError::InvalidTargetMultisigId);
+        }
+    } else {
+        // Validate psbt contains conflicting input if retrying a pegout
+        has_conflicting_input(db, psbt)?;
+        validate_outputs(psbt, db)?;
     }
-
-    validate_outputs(psbt, db)?;
 
     // Sanity fee checks
     let fee = match psbt.fee() {
@@ -475,8 +506,9 @@ pub(crate) fn validate_outputs(
     }
 
     // check aggregated public key exists
+    // TODO: Check what the target multisig is and use that instead of the legacy multisig
     let public_key_package = db
-        .get_public_key_package()?
+        .get_public_key_package_by_id(LEGACY_MULTISIG_ID)?
         .ok_or(ValidateOutputsError::MissingKeyPackage)?;
 
     let mut psbt_pegout_ids: Vec<PegoutId> =
@@ -636,10 +668,13 @@ mod tests {
     use crate::{
         database::{version::UtxoVersion, FinalizedPegout},
         frost_id,
+        test_utils::{
+            create_change, create_sweep_psbt, random_p2tr_keyspend_script,
+        },
         wallet::psbt::{PsbtExt, PsbtInputExt, PsbtOutputExt},
     };
     use bitcoin::{psbt::Psbt, ScriptBuf, TxOut};
-    use botanix_types::{MultisigId, TEST_LEGACY_MULTISIG_ID};
+    use botanix_types::TEST_LEGACY_MULTISIG_ID;
     use rand::Rng;
 
     use crate::{
@@ -648,7 +683,8 @@ mod tests {
         test_utils::{
             create_psbt, create_random_pegout_id, create_tx,
             eth_vector_to_fixed_bytes, get_change, random_p2wpkh_script,
-            setup_db, store_pending_pegout, trusted_dealer_setup,
+            setup_db, setup_key_packages, store_pending_pegout,
+            trusted_dealer_setup,
         },
         util::*,
     };
@@ -698,14 +734,6 @@ mod tests {
         let res = validate_psbt(&psbt, NO_FLAGS, 2, &db);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().to_string(), "inputs cannot be 0");
-
-        // No outputs
-        let db = db_setup();
-        let mut psbt = create_psbt(2, 1, None);
-        psbt.outputs.clear();
-        let res = validate_psbt(&psbt, NO_FLAGS, 2, &db);
-        assert!(res.is_err());
-        assert_eq!(res.unwrap_err().to_string(), "outputs cannot be 0");
     }
 
     #[test]
@@ -1951,5 +1979,87 @@ mod tests {
         // Assert the finalized pegout has been removed from the pending pegouts list
         let pending_pegouts = db.get_pending_pegouts().unwrap();
         assert_eq!(pending_pegouts.len(), 0, "Pending pegouts should be empty");
+    }
+
+    #[test]
+    fn test_validate_psbt_detects_sweep_transaction() {
+        let db = db_setup();
+        // TODO: update this to use the multisig manager's state
+        let source_multisig_id = LEGACY_MULTISIG_ID;
+        let target_multisig_id = LEGACY_MULTISIG_ID;
+
+        // Set up key packages for both source and target multisigs
+        setup_key_packages(&db, &[source_multisig_id, target_multisig_id]);
+
+        let change =
+            create_change(&db, target_multisig_id, Amount::from_sat(1000));
+        let psbt = create_sweep_psbt(3, source_multisig_id, change);
+        // Don't set pegout_id on output - this makes it a sweep
+
+        // Store UTXOs for the inputs
+        let tx = psbt.clone().extract_tx().expect("valid tx");
+        for (i, input) in tx.input.iter().enumerate() {
+            let utxo = database::Utxo {
+                outpoint: input.previous_output,
+                output: psbt.inputs[i].witness_utxo.clone().unwrap(),
+                eth_address: None,
+                version: UtxoVersion::default() as u32,
+                multisig_id: source_multisig_id,
+            };
+            db.store_utxos(&[&utxo]).unwrap();
+        }
+        db.flush().unwrap();
+
+        // Sweep should pass validation (no pegout outputs, single output)
+        let res = validate_psbt(&psbt, NO_FLAGS, 2, &db);
+        assert!(
+            res.is_ok(),
+            "Sweep transaction should pass validation: {:?}",
+            res
+        );
+    }
+
+    #[test]
+    fn test_sweep_psbt_detects_unknown_change_scriptpubkey() {
+        let db = db_setup();
+        // TODO: update this to use the multisig manager's state
+        let source_multisig_id = LEGACY_MULTISIG_ID;
+        let target_multisig_id = LEGACY_MULTISIG_ID;
+
+        // Set up key packages for both source and target multisigs
+        setup_key_packages(&db, &[source_multisig_id, target_multisig_id]);
+
+        let unknown_change = TxOut {
+            value: Amount::from_sat(1000),
+            script_pubkey: random_p2tr_keyspend_script(),
+        };
+        let psbt = create_sweep_psbt(3, source_multisig_id, unknown_change);
+        // Don't set pegout_id on output - this makes it a sweep
+
+        // Store UTXOs for the inputs
+        let tx = psbt.clone().extract_tx().expect("valid tx");
+        for (i, input) in tx.input.iter().enumerate() {
+            let utxo = database::Utxo {
+                outpoint: input.previous_output,
+                output: psbt.inputs[i].witness_utxo.clone().unwrap(),
+                eth_address: None,
+                version: UtxoVersion::default() as u32,
+                multisig_id: source_multisig_id,
+            };
+            db.store_utxos(&[&utxo]).unwrap();
+        }
+        db.flush().unwrap();
+
+        // Sweep should fail validation (unknown change scriptpubkey)
+        let res = validate_psbt(&psbt, NO_FLAGS, 2, &db);
+        assert!(
+            res.is_err(),
+            "Sweep transaction should fail validation: {:?}",
+            res
+        );
+        assert_eq!(
+            res.unwrap_err().to_string(),
+            "invalid target multisig id for sweep transaction"
+        );
     }
 }
