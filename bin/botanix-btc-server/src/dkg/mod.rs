@@ -131,6 +131,8 @@ pub enum DynafedSubscriptionMessage {
     Dkg(DkgNotification),
     /// Migration-related notifications
     Migration(MigrationNotification),
+    /// Sweep-related notifications
+    Sweep(SweepNotification),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -156,6 +158,12 @@ pub enum MigrationEvent {
     Start,
     End,
     Abort,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SweepNotification {
+    pub multisig_id_from: MultisigId,
+    pub multisig_id_to: MultisigId,
 }
 
 // Helper methods
@@ -198,12 +206,25 @@ impl Display for MigrationNotification {
     }
 }
 
+impl Display for SweepNotification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Sweep {{ from: {}, to: {} }}",
+            self.multisig_id_from, self.multisig_id_to,
+        )
+    }
+}
+
 impl Display for DynafedSubscriptionMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DynafedSubscriptionMessage::Dkg(dkg) => write!(f, "{}", dkg),
             DynafedSubscriptionMessage::Migration(migration) => {
                 write!(f, "{}", migration)
+            }
+            DynafedSubscriptionMessage::Sweep(sweep) => {
+                write!(f, "{}", sweep)
             }
         }
     }

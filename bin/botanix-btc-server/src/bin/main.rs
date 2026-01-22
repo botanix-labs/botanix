@@ -28,7 +28,7 @@ use btcserverlib::{
     database::{self},
     dkg::{
         self, DkgNotification, DynafedSubscriptionMessage, MigrationEvent,
-        MigrationNotification,
+        MigrationNotification, SweepNotification,
     },
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -1409,6 +1409,26 @@ where
                                     );
                                 }
                             }
+                            tx.send(Ok(payload)).await
+                        }
+                        DynafedSubscriptionMessage::Sweep(sweep) => {
+                            let SweepNotification {
+                                multisig_id_from,
+                                multisig_id_to,
+                            } = sweep;
+
+                            trace!(
+                                "Sweep notification: {} -> {}",
+                                multisig_id_from,
+                                multisig_id_to
+                            );
+
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Sweep(rpc::SweepNotification {
+                                    multisig_id_from: multisig_id_from.as_u32(),
+                                    multisig_id_to: multisig_id_to.as_u32(),
+                                })),
+                            };
                             tx.send(Ok(payload)).await
                         }
                     }
@@ -3306,6 +3326,56 @@ where
         Ok(tonic::Response::new(rpc::ListMigrationsResponse {
             migrations: migration_infos,
         }))
+    }
+
+    async fn initiate_sweep(
+        &self,
+        req: tonic::Request<rpc::InitiateSweepRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+        let req = req.into_inner();
+
+        let multisig_id_from = MultisigId::from(req.multisig_id_from);
+        let multisig_id_to = MultisigId::from(req.multisig_id_to);
+
+        info!(
+            "Received initiate_sweep request: {} -> {}",
+            multisig_id_from, multisig_id_to
+        );
+
+        // Validate source multisig has public key package
+        self.db
+            .get_public_key_package_by_id(multisig_id_from)
+            .to_status()?
+            .ok_or_else(|| {
+                internal!(
+                    "Missing public key package for source multisig {}",
+                    multisig_id_from
+                )
+            })?;
+
+        // Validate target multisig has public key package
+        self.db
+            .get_public_key_package_by_id(multisig_id_to)
+            .to_status()?
+            .ok_or_else(|| {
+                internal!(
+                    "Missing public key package for target multisig {}",
+                    multisig_id_to
+                )
+            })?;
+
+        // Send sweep notification
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Sweep(SweepNotification {
+                multisig_id_from,
+                multisig_id_to,
+            }),
+        ) {
+            warn!("No subscribers for sweep notification: {}", e);
+        }
+
+        Ok(tonic::Response::new(rpc::Empty {}))
     }
 
     // Currently not used
