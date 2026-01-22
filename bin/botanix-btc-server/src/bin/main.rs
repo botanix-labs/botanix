@@ -2245,16 +2245,18 @@ where
         self.validate_jwt(&req)?;
         let req = req.into_inner();
 
+        let signing_session_id =
+            parse_signing_session_id(&req.signing_session_id)
+                .map_err(|e| internal!("Invalid signing_session_id: {}", e))?;
         let source_multisig_id = MultisigId::from(req.multisig_id_from);
         let target_multisig_id = MultisigId::from(req.multisig_id_to);
 
         info!(
-            "Received get_sweep_psbt request: {} -> {}",
-            source_multisig_id, target_multisig_id
+            "Received get_sweep_psbt request: {} -> {}, session: {}",
+            source_multisig_id,
+            target_multisig_id,
+            hex::encode(signing_session_id)
         );
-
-        // Generate signing session ID
-        let signing_session_id: [u8; 32] = rand::random();
 
         // take a lock on the tx_lock
         let _tx_lock = self.tx_lock.lock().await;

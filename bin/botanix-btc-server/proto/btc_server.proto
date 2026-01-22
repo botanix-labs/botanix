@@ -407,6 +407,7 @@ message InitiateSweepRequest {
 }
 
 message GetSweepPsbtRequest {
-    uint32 multisig_id_from = 1;
-    uint32 multisig_id_to = 2;
+    bytes signing_session_id = 1;
+    uint32 multisig_id_from = 2;
+    uint32 multisig_id_to = 3;
 }

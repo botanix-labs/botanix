@@ -9,7 +9,7 @@ use crate::{
         GetGatewayAddressRequest, GetGatewayAddressResponse,
         GetMigrationRequest, GetPendingPegoutsResponse, GetPublicKeyRequest,
         GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
-        GetSigningStatusRequest, GetSigningStatusResponse,
+        GetSigningStatusRequest, GetSigningStatusResponse, GetSweepPsbtRequest,
         GetTrackedTxsResponse, ListMigrationsResponse, ListMultisigsResponse,
         MakeTxRequest, MigrationInfo, RecoverMissingUtxosRequest,
         RecoverMissingUtxosResponse, ResetAllUtxosRequest,
@@ -96,6 +96,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
     fn get_psbt(
         &mut self,
         request: MakeTxRequest,
+    ) -> BoxFuture<'_, Result<SigningPackage, GrpcClientError>>;
+    fn get_sweep_psbt(
+        &mut self,
+        request: GetSweepPsbtRequest,
     ) -> BoxFuture<'_, Result<SigningPackage, GrpcClientError>>;
     fn get_to_sign_package(
         &mut self,
@@ -351,6 +355,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(new_round1_signing_package, SigningPackage, Empty);
     generate_method!(get_psbt, MakeTxRequest, SigningPackage);
+    generate_method!(get_sweep_psbt, GetSweepPsbtRequest, SigningPackage);
     generate_method!(get_to_sign_package, ToSignRequest, SigningPackage);
     generate_method!(new_round2_signing_package, SigningPackage, Empty);
     generate_method!(

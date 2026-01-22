@@ -3,9 +3,9 @@ use crate::{
         signing::SigningStateMachine,
         utils::{
             get_pending_pegouts_from_pegout_data,
-            get_pending_pegouts_from_staged_pegouts, get_utxos_from_pegin_meta,
-            get_utxos_from_staged_pegins, is_poa_epoch, retry_exec,
-            validate_psbt_by_ids,
+            get_pending_pegouts_from_staged_pegouts, get_sweep_psbt,
+            get_utxos_from_pegin_meta, get_utxos_from_staged_pegins,
+            is_poa_epoch, retry_exec, validate_psbt_by_ids,
         },
         Storage,
     },
@@ -35,7 +35,7 @@ use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use btcserverlib::{
     dkg::{
         DkgNotification, DynafedSubscriptionMessage, MigrationEvent,
-        MigrationNotification,
+        MigrationNotification, SweepNotification,
     },
     wallet::psbt::frost_id_from_bytes,
 };
@@ -670,6 +670,16 @@ where
                             migration_id,
                         })
                     }
+                    Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Sweep(sweep)) => {
+                        info!(target: "consensus::authority::frost_task::start_task",
+                            "Received sweep notification: {} -> {}",
+                            sweep.multisig_id_from, sweep.multisig_id_to);
+
+                        DynafedSubscriptionMessage::Sweep(SweepNotification {
+                            multisig_id_from: sweep.multisig_id_from.into(),
+                            multisig_id_to: sweep.multisig_id_to.into(),
+                        })
+                    }
                     None => {
                         warn!(target: "consensus::authority::frost_task::start_task", "Received dynafed frost notification with no payload");
                         continue;
@@ -903,6 +913,51 @@ where
                                 }
                             }
                         }
+                    }
+                    DynafedSubscriptionMessage::Sweep(notification) => {
+                        info!(target: "consensus::authority::frost_task::start_task",
+                            "Handling Sweep notification: {} -> {}",
+                            notification.multisig_id_from, notification.multisig_id_to);
+
+                        if !self.signing_state_machine.is_coordinator() {
+                            info!(
+                                target: "consensus::authority::frost_task::start_task",
+                                "Received sweep notification but we're not the coordinator"
+                            );
+                            continue;
+                        }
+
+                        // TODO: verify with migration state machine that the multisig ids
+                        // are valid and in the expected state for a sweep
+
+                        // Generate signing session ID
+                        let signing_session_id = FixedBytes::<32>::random();
+
+                        // Get sweep PSBT from btc-server
+                        let psbt_payload = match get_sweep_psbt(
+                            &mut self.btc_server,
+                            &signing_session_id,
+                            notification.multisig_id_from,
+                            notification.multisig_id_to,
+                        )
+                        .await
+                        {
+                            Ok(p) => p,
+                            Err(e) => {
+                                error!(
+                                    target: "consensus::authority::frost_task::start_task",
+                                    "Failed to get sweep psbt: {:?}", e
+                                );
+                                continue;
+                            }
+                        };
+
+                        info!(
+                            target: "consensus::authority::frost_task::start_task",
+                            "Got sweep PSBT successfully"
+                        );
+
+                        // TODO: Validate PSBT and initiate signing session
                     }
                 }
             }
