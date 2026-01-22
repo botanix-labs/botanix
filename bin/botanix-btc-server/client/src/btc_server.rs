@@ -426,11 +426,18 @@ pub struct ListMigrationsResponse {
 /// Sweep messages
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct InitiateSweepRequest {
-    /// Source multisig to sweep from
     #[prost(uint32, tag = "1")]
     pub multisig_id_from: u32,
-    /// Target multisig to sweep to
     #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSweepPsbtRequest {
+    #[prost(bytes = "vec", tag = "1")]
+    pub signing_session_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "3")]
     pub multisig_id_to: u32,
 }
 #[derive(
@@ -1316,7 +1323,7 @@ pub mod btc_server_client {
         }
         pub async fn get_sweep_psbt(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<super::GetSweepPsbtRequest>,
         ) -> std::result::Result<
             tonic::Response<super::SigningPackage>,
             tonic::Status,

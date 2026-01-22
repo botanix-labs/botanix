@@ -426,11 +426,18 @@ pub struct ListMigrationsResponse {
 /// Sweep messages
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct InitiateSweepRequest {
-    /// Source multisig to sweep from
     #[prost(uint32, tag = "1")]
     pub multisig_id_from: u32,
-    /// Target multisig to sweep to
     #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSweepPsbtRequest {
+    #[prost(bytes = "vec", tag = "1")]
+    pub signing_session_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "3")]
     pub multisig_id_to: u32,
 }
 #[derive(
@@ -768,7 +775,7 @@ pub mod btc_server_server {
         ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
         async fn get_sweep_psbt(
             &self,
-            request: tonic::Request<super::Empty>,
+            request: tonic::Request<super::GetSweepPsbtRequest>,
         ) -> std::result::Result<
             tonic::Response<super::SigningPackage>,
             tonic::Status,
@@ -2376,7 +2383,8 @@ pub mod btc_server_server {
                 "/btc_server.BtcServer/GetSweepPsbt" => {
                     #[allow(non_camel_case_types)]
                     struct GetSweepPsbtSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::GetSweepPsbtRequest>
                         for GetSweepPsbtSvc<T>
                     {
                         type Response = super::SigningPackage;
@@ -2386,7 +2394,7 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::Empty>,
+                            request: tonic::Request<super::GetSweepPsbtRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
