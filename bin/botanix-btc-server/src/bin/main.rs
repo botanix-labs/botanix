@@ -2238,14 +2238,14 @@ where
         Ok(res)
     }
 
-    async fn sweep_to_multisig(
+    async fn get_sweep_psbt(
         &self,
         req: tonic::Request<rpc::Empty>,
     ) -> Result<tonic::Response<rpc::SigningPackage>, tonic::Status> {
         self.validate_jwt(&req)?;
         let _req = req.into_inner();
 
-        info!("Received sweep_to_multisig request");
+        info!("Received get_sweep_psbt request");
 
         // Generate signing session ID
         let signing_session_id: [u8; 32] = rand::random();

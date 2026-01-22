@@ -71,7 +71,7 @@ service BtcServer {
 
     rpc ResetWalletState(ResetWalletStateRequest) returns (Empty) {}
 
-    rpc SweepToMultisig(Empty) returns (SigningPackage) {}
+    rpc GetSweepPsbt(Empty) returns (SigningPackage) {}
 
     rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
 
