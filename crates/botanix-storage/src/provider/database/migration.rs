@@ -40,9 +40,7 @@ impl<TX: DbTx + 'static, N: NodeTypes> MigrationReader
             .inner
             .tx_ref()
             .cursor_read::<Migrations>()?
-            .seek_exact(migration_id)
-            .ok()
-            .flatten()
+            .seek_exact(migration_id)?
             .map(|x| x.1))
     }
 

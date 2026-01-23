@@ -781,14 +781,24 @@ where
                                         error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration source multisig {} is already running, aborting migration...", notification.multisig_id_from);
                                         // Send abort notification to btc-server
                                         let mut btc_server = btc_server_clone.clone();
-                                        if let Err(e) = btc_server.abort_migration(botanix_btc_server_client::AbortMigrationRequest {
-                                            migration_id: notification.migration_id.to_string(),
-                                        }).await {
-                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
-                                        }
-                                        // Remove from database
-                                        if let Err(e) = self.storage.botanix_database_factory.remove_migration(migration_id) {
-                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
+                                        match btc_server.abort_migration(
+                                            botanix_btc_server_client::AbortMigrationRequest {
+                                                migration_id: notification.migration_id.to_string(),
+                                            }
+                                        ).await {
+                                            Ok(_) => {
+                                                if let Err(e) = self
+                                                    .storage
+                                                    .botanix_database_factory
+                                                    .remove_migration(migration_id)
+                                                {
+                                                    error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
+                                                // Keep local migration record for retry/consistency.
+                                            }
                                         }
                                         continue;
                                     }
@@ -796,14 +806,24 @@ where
                                         error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration target multisig {} is already running, aborting migration...", notification.multisig_id_to);
                                         // Send abort notification to btc-server
                                         let mut btc_server = btc_server_clone.clone();
-                                        if let Err(e) = btc_server.abort_migration(botanix_btc_server_client::AbortMigrationRequest {
-                                            migration_id: notification.migration_id.to_string(),
-                                        }).await {
-                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
-                                        }
-                                        // Remove from database
-                                        if let Err(e) = self.storage.botanix_database_factory.remove_migration(migration_id) {
-                                            error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
+                                        match btc_server.abort_migration(
+                                            botanix_btc_server_client::AbortMigrationRequest {
+                                                migration_id: notification.migration_id.to_string(),
+                                            }
+                                        ).await {
+                                            Ok(_) => {
+                                                if let Err(e) = self
+                                                    .storage
+                                                    .botanix_database_factory
+                                                    .remove_migration(migration_id)
+                                                {
+                                                    error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
+                                                // Keep local migration record for retry/consistency.
+                                            }
                                         }
                                         continue;
                                     }
@@ -853,6 +873,7 @@ where
                                     warn!(target: "consensus::authority::frost_task::start_task",
                                         "New multisig {} does not have an aggregate public key yet, migration {} may not be fully operational",
                                         notification.multisig_id_to, notification.migration_id);
+                                    continue;
                                 }
 
                                 // Check if migration exists in database

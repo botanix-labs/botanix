@@ -3070,7 +3070,7 @@ where
                 migration_id,
             }),
         ) {
-            warn!(
+            error!(
                 "No subscribers to receive migration start notification for {}: {}",
                 migration_id, e
             );
@@ -3241,7 +3241,7 @@ where
                 migration_id,
             }),
         ) {
-            warn!(
+            error!(
                 "No subscribers to receive migration abort notification for {}: {}",
                 migration_id, e
             );
