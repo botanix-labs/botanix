@@ -1732,10 +1732,11 @@ impl Db {
         &self,
         migration_id: &Uuid,
     ) -> Result<Option<Migration>, Error> {
-        Ok(self.migrations.get(migration_id.as_bytes())?.map(|b| {
-            ciborium::de::from_reader(b.as_ref())
-                .expect("corrupt db: migration")
-        }))
+        Ok(self
+            .migrations
+            .get(migration_id.as_bytes())?
+            .map(|b| ciborium::de::from_reader(b.as_ref()))
+            .transpose()?)
     }
 
     /// Get all active migrations.

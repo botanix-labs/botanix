@@ -777,54 +777,37 @@ where
 
                                 // Check if DKG tasks are already running for these multisig IDs
                                 if let Some(tasks) = self.dkg_tasks.as_ref() {
-                                    if tasks.contains_key(&notification.multisig_id_from) {
-                                        error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration source multisig {} is already running, aborting migration...", notification.multisig_id_from);
-                                        // Send abort notification to btc-server
-                                        let mut btc_server = btc_server_clone.clone();
-                                        match btc_server.abort_migration(
-                                            botanix_btc_server_client::AbortMigrationRequest {
-                                                migration_id: notification.migration_id.to_string(),
-                                            }
-                                        ).await {
-                                            Ok(_) => {
-                                                if let Err(e) = self
-                                                    .storage
-                                                    .botanix_database_factory
-                                                    .remove_migration(migration_id)
-                                                {
-                                                    error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
+
+                                    let tasks_contains_key = async |multisig_id: &MultisigId| -> bool {
+                                        if tasks.contains_key(multisig_id) {
+                                            error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration source multisig {:?} is already running, aborting migration...", multisig_id);
+                                            // Send abort notification to btc-server
+                                            let mut btc_server = btc_server_clone.clone();
+                                            match btc_server.abort_migration(
+                                                botanix_btc_server_client::AbortMigrationRequest {
+                                                    migration_id: migration_id.to_string(),
+                                                }
+                                            ).await {
+                                                Ok(_) => {
+                                                    if let Err(e) = self
+                                                        .storage
+                                                        .botanix_database_factory
+                                                        .remove_migration(migration_id)
+                                                    {
+                                                        error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
+                                                    // Keep local migration record for retry/consistency.
                                                 }
                                             }
-                                            Err(e) => {
-                                                error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
-                                                // Keep local migration record for retry/consistency.
-                                            }
+                                            return true
                                         }
-                                        continue;
-                                    }
-                                    if tasks.contains_key(&notification.multisig_id_to) {
-                                        error!(target: "consensus::authority::frost_task::start_task", "DKG task for migration target multisig {} is already running, aborting migration...", notification.multisig_id_to);
-                                        // Send abort notification to btc-server
-                                        let mut btc_server = btc_server_clone.clone();
-                                        match btc_server.abort_migration(
-                                            botanix_btc_server_client::AbortMigrationRequest {
-                                                migration_id: notification.migration_id.to_string(),
-                                            }
-                                        ).await {
-                                            Ok(_) => {
-                                                if let Err(e) = self
-                                                    .storage
-                                                    .botanix_database_factory
-                                                    .remove_migration(migration_id)
-                                                {
-                                                    error!(target: "consensus::authority::frost_task::start_task", "Failed to remove migration from database: {:?}", e);
-                                                }
-                                            }
-                                            Err(e) => {
-                                                error!(target: "consensus::authority::frost_task::start_task", "Failed to abort migration on btc-server: {:?}", e);
-                                                // Keep local migration record for retry/consistency.
-                                            }
-                                        }
+                                        false
+                                    };
+
+                                    if tasks_contains_key(&notification.multisig_id_from).await || tasks_contains_key(&notification.multisig_id_to).await {
                                         continue;
                                     }
                                 }
