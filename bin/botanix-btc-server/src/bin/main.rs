@@ -264,13 +264,6 @@ struct DkgState {
     session_nonce: Option<u64>,
 }
 
-/// Migration state tracking for active migrations.
-struct MigrationState {
-    multisig_id_from: MultisigId,
-    multisig_id_to: MultisigId,
-    started_at: std::time::SystemTime,
-}
-
 struct App<BitcoinRpcApi> {
     start_time: Instant,
     db: database::Db,
@@ -304,8 +297,6 @@ struct App<BitcoinRpcApi> {
     /// dynafed notifications sender
     dynafed_notifications_tx:
         Arc<tokio::sync::broadcast::Sender<DynafedSubscriptionMessage>>,
-    /// Active migrations: migration_id -> MigrationState
-    migrations: Arc<Mutex<HashMap<Uuid, MigrationState>>>,
 }
 
 impl<BitcoindClient> App<BitcoindClient>
@@ -804,7 +795,6 @@ where
             fall_back_fee_rate,
             telemetry,
             dynafed_notifications_tx: Arc::new(dynafed_notifications_tx),
-            migrations: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -3025,33 +3015,46 @@ where
         }
 
         // Check no existing migration is active for these multisig_ids
-        let mut migrations = self.migrations.lock().await;
-        let new_ids = [multisig_id_from, multisig_id_to];
-
-        for (_, state) in migrations.iter() {
-            let existing_ids = [state.multisig_id_from, state.multisig_id_to];
-
-            if new_ids.iter().any(|id| existing_ids.contains(id)) {
-                return Err(already_exists!(
-                    "Migration already active involving multisig {} or {}",
-                    multisig_id_from,
-                    multisig_id_to
-                ));
-            }
+        if let Some(existing_id) = self
+            .db
+            .migration_exists_for_multisig(multisig_id_from)
+            .to_status()?
+        {
+            return Err(already_exists!(
+                "Migration {} already active involving source multisig {}",
+                existing_id,
+                multisig_id_from
+            ));
+        }
+        if let Some(existing_id) =
+            self.db.migration_exists_for_multisig(multisig_id_to).to_status()?
+        {
+            return Err(already_exists!(
+                "Migration {} already active involving target multisig {}",
+                existing_id,
+                multisig_id_to
+            ));
         }
 
         // Generate UUID for migration_id
         let migration_id = Uuid::new_v4();
 
-        // Store migration state
-        migrations.insert(
-            migration_id,
-            MigrationState {
+        // Get current timestamp
+        let started_at_unix_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        // Store migration state in database
+        self.db
+            .store_migration(&database::Migration {
+                migration_id,
                 multisig_id_from,
                 multisig_id_to,
-                started_at: std::time::SystemTime::now(),
-            },
-        );
+                started_at_unix_secs,
+            })
+            .to_status()?;
+        self.db.flush().to_status()?;
 
         info!(
             "Started migration {} from multisig {} to multisig {}",
@@ -3067,7 +3070,7 @@ where
                 migration_id,
             }),
         ) {
-            warn!(
+            error!(
                 "No subscribers to receive migration start notification for {}: {}",
                 migration_id, e
             );
@@ -3092,16 +3095,18 @@ where
             ))
         })?;
 
-        let mut migrations = self.migrations.lock().await;
-        let state = migrations.get(&migration_id).ok_or_else(|| {
-            tonic::Status::not_found(format!(
-                "Migration {} not found",
-                migration_id
-            ))
-        })?;
+        let migration =
+            self.db.get_migration(&migration_id).to_status()?.ok_or_else(
+                || {
+                    tonic::Status::not_found(format!(
+                        "Migration {} not found",
+                        migration_id
+                    ))
+                },
+            )?;
 
-        let multisig_id_from = state.multisig_id_from;
-        let multisig_id_to = state.multisig_id_to;
+        let multisig_id_from = migration.multisig_id_from;
+        let multisig_id_to = migration.multisig_id_to;
 
         // Verify target multisig now has a key package (DKG completed)
         if self.db.get_key_package_by_id(multisig_id_to).to_status()?.is_none()
@@ -3164,8 +3169,9 @@ where
             migration_id, multisig_id_from, source_utxo_count, MAX_UTXOS_FOR_MIGRATION_END
         );
 
-        // Remove from migrations map
-        migrations.remove(&migration_id);
+        // Remove migration from database
+        self.db.remove_migration(&migration_id).to_status()?;
+        self.db.flush().to_status()?;
 
         info!(
             "Ended migration {} from multisig {} to multisig {}",
@@ -3181,7 +3187,7 @@ where
                 migration_id,
             }),
         ) {
-            warn!(
+            error!(
                 "No subscribers to receive migration end notification for {}: {}",
                 migration_id, e
             );
@@ -3204,19 +3210,22 @@ where
             ))
         })?;
 
-        let mut migrations = self.migrations.lock().await;
-        let state = migrations.get(&migration_id).ok_or_else(|| {
-            tonic::Status::not_found(format!(
-                "Migration {} not found",
-                migration_id
-            ))
-        })?;
+        let migration =
+            self.db.get_migration(&migration_id).to_status()?.ok_or_else(
+                || {
+                    tonic::Status::not_found(format!(
+                        "Migration {} not found",
+                        migration_id
+                    ))
+                },
+            )?;
 
-        let multisig_id_from = state.multisig_id_from;
-        let multisig_id_to = state.multisig_id_to;
+        let multisig_id_from = migration.multisig_id_from;
+        let multisig_id_to = migration.multisig_id_to;
 
-        // Remove from migrations map
-        migrations.remove(&migration_id);
+        // Remove migration from database
+        self.db.remove_migration(&migration_id).to_status()?;
+        self.db.flush().to_status()?;
 
         info!(
             "Aborted migration {} from multisig {} to multisig {}",
@@ -3232,7 +3241,7 @@ where
                 migration_id,
             }),
         ) {
-            warn!(
+            error!(
                 "No subscribers to receive migration abort notification for {}: {}",
                 migration_id, e
             );
@@ -3255,25 +3264,21 @@ where
             ))
         })?;
 
-        let migrations = self.migrations.lock().await;
-        let state = migrations.get(&migration_id).ok_or_else(|| {
-            tonic::Status::not_found(format!(
-                "Migration {} not found",
-                migration_id
-            ))
-        })?;
-
-        let started_at_unix_secs = state
-            .started_at
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let migration =
+            self.db.get_migration(&migration_id).to_status()?.ok_or_else(
+                || {
+                    tonic::Status::not_found(format!(
+                        "Migration {} not found",
+                        migration_id
+                    ))
+                },
+            )?;
 
         Ok(tonic::Response::new(rpc::MigrationInfo {
-            migration_id: migration_id.to_string(),
-            multisig_id_from: *state.multisig_id_from,
-            multisig_id_to: *state.multisig_id_to,
-            started_at_unix_secs,
+            migration_id: migration.migration_id.to_string(),
+            multisig_id_from: *migration.multisig_id_from,
+            multisig_id_to: *migration.multisig_id_to,
+            started_at_unix_secs: migration.started_at_unix_secs,
         }))
     }
 
@@ -3284,22 +3289,14 @@ where
     {
         self.validate_jwt(&req)?;
 
-        let migrations = self.migrations.lock().await;
+        let migrations = self.db.get_all_migrations().to_status()?;
         let migration_infos: Vec<rpc::MigrationInfo> = migrations
-            .iter()
-            .map(|(id, state)| {
-                let started_at_unix_secs = state
-                    .started_at
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-
-                rpc::MigrationInfo {
-                    migration_id: id.to_string(),
-                    multisig_id_from: *state.multisig_id_from,
-                    multisig_id_to: *state.multisig_id_to,
-                    started_at_unix_secs,
-                }
+            .into_iter()
+            .map(|m| rpc::MigrationInfo {
+                migration_id: m.migration_id.to_string(),
+                multisig_id_from: *m.multisig_id_from,
+                multisig_id_to: *m.multisig_id_to,
+                started_at_unix_secs: m.started_at_unix_secs,
             })
             .collect();
 

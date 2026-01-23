@@ -30,9 +30,9 @@ use botanix_comet_bft_rpc::{
 };
 use botanix_data_parser::{DataParser, SerializationType};
 use botanix_storage::{
-    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
-    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
-    WalletStateSyncWriter,
+    MigrationReader, MigrationWriter, RuntimeTransitionsReadWrite,
+    SnapshotReader, SnapshotWriter, StagedHeaderReader, StagedHeaderWriter,
+    WalletStateSyncReader, WalletStateSyncWriter,
 };
 use botanix_types::MultisigId;
 use futures::{pin_mut, StreamExt};
@@ -109,6 +109,8 @@ where
         + StagedHeaderReader
         + StagedHeaderWriter
         + RuntimeTransitionsReadWrite
+        + MigrationReader
+        + MigrationWriter
         + Clone
         + 'static,
     Source: RandomSource,
