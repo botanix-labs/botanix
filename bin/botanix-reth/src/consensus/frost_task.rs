@@ -3,9 +3,9 @@ use crate::{
         signing::SigningStateMachine,
         utils::{
             get_pending_pegouts_from_pegout_data,
-            get_pending_pegouts_from_staged_pegouts, get_utxos_from_pegin_meta,
-            get_utxos_from_staged_pegins, is_poa_epoch, retry_exec,
-            validate_psbt_by_ids,
+            get_pending_pegouts_from_staged_pegouts, get_sweep_psbt,
+            get_utxos_from_pegin_meta, get_utxos_from_staged_pegins,
+            is_poa_epoch, retry_exec, validate_psbt_by_ids,
         },
         Storage,
     },
@@ -38,7 +38,7 @@ use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use btcserverlib::{
     dkg::{
         DkgNotification, DynafedSubscriptionMessage, MigrationEvent,
-        MigrationNotification,
+        MigrationNotification, SweepNotification,
     },
     wallet::psbt::frost_id_from_bytes,
 };
@@ -459,6 +459,34 @@ where
         );
     }
 
+    fn validate_sweep_psbt(
+        &self,
+        psbt_bytes: &[u8],
+        _multisig_id_from: MultisigId,
+        _multisig_id_to: MultisigId,
+    ) -> Result<bitcoin::Psbt, String> {
+        // Deserialize and validate PSBT is well-formed
+        let psbt = bitcoin::Psbt::deserialize(psbt_bytes)
+            .map_err(|e| format!("Failed to deserialize sweep PSBT: {:?}", e))?;
+
+        // Basic sanity checks
+        if psbt.inputs.is_empty() {
+            return Err("Sweep PSBT has no inputs".to_string());
+        }
+
+        if psbt.unsigned_tx.output.len() != 1 {
+            return Err(format!(
+                "Sweep PSBT should have exactly 1 output, got {}",
+                psbt.unsigned_tx.output.len()
+            ));
+        }
+
+        // TODO: other validations. Max number of inputs, output address,
+        // fee rate, amounts
+
+        Ok(psbt)
+    }
+
     pub async fn start_task(&mut self, mut abci_started_rx: tokio::sync::oneshot::Receiver<()>) {
         // before we start get a proper event receiver
         let (peer_messages_tx, peer_messages_rx) = tokio::sync::oneshot::channel();
@@ -655,6 +683,16 @@ where
                             multisig_id_from: migration.multisig_id_from.into(),
                             multisig_id_to: migration.multisig_id_to.into(),
                             migration_id,
+                        })
+                    }
+                    Some(botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Sweep(sweep)) => {
+                        info!(target: "consensus::authority::frost_task::start_task",
+                            "Received sweep notification: {} -> {}",
+                            sweep.multisig_id_from, sweep.multisig_id_to);
+
+                        DynafedSubscriptionMessage::Sweep(SweepNotification {
+                            multisig_id_from: sweep.multisig_id_from.into(),
+                            multisig_id_to: sweep.multisig_id_to.into(),
                         })
                     }
                     None => {
@@ -909,6 +947,83 @@ where
                                 }
                             }
                         }
+                    }
+                    DynafedSubscriptionMessage::Sweep(notification) => {
+                        info!(target: "consensus::authority::frost_task::start_task",
+                            "Handling Sweep notification: {} -> {}",
+                            notification.multisig_id_from, notification.multisig_id_to);
+
+                        if !self.signing_state_machine.is_coordinator() {
+                            info!(
+                                target: "consensus::authority::frost_task::start_task",
+                                "Received sweep notification but we're not the coordinator"
+                            );
+                            continue;
+                        }
+
+                        // TODO: verify with migration state machine that the multisig ids
+                        // are valid and in the expected state for a sweep
+
+                        // Generate signing session ID
+                        let signing_session_id = FixedBytes::<32>::random();
+
+                        // Get sweep PSBT from btc-server
+                        let sweep_psbt_payload = match get_sweep_psbt(
+                            &mut self.btc_server,
+                            &signing_session_id,
+                            notification.multisig_id_from,
+                            notification.multisig_id_to,
+                        )
+                        .await
+                        {
+                            Ok(p) => p,
+                            Err(e) => {
+                                error!(
+                                    target: "consensus::authority::frost_task::start_task",
+                                    "Failed to get sweep psbt: {:?}", e
+                                );
+                                continue;
+                            }
+                        };
+
+                        let sweep_psbt = match self.validate_sweep_psbt(
+                            &sweep_psbt_payload.psbt,
+                            notification.multisig_id_from,
+                            notification.multisig_id_to,
+                        ) {
+                            Ok(psbt) => psbt,
+                            Err(e) => {
+                                error!(
+                                    target: "consensus::authority::frost_task::start_task",
+                                    "Sweep PSBT validation failed: {}", e
+                                );
+                                continue;
+                            }
+                        };
+
+                        info!(
+                            target: "consensus::authority::frost_task::start_task",
+                            "Validated sweep PSBT with {} inputs",
+                            sweep_psbt.inputs.len()
+                        );
+
+                        // Initiate signing session
+                        if let Err(e) = self
+                            .signing_state_machine
+                            .initiate_signing_session(signing_session_id, sweep_psbt_payload.psbt)
+                            .await
+                        {
+                            error!(
+                                target: "consensus::authority::frost_task::start_task",
+                                "Error starting sweep signing session: {:?}", e
+                            );
+                            continue;
+                        }
+
+                        info!(
+                            target: "consensus::authority::frost_task::start_task",
+                            "Started sweep signing session successfully"
+                        );
                     }
                 }
             }

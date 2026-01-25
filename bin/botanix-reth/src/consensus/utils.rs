@@ -19,8 +19,8 @@ use botanix_authority_peg::{
     peg_contract::{PeginMeta, PegoutData, PegoutWithId},
 };
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, GrpcClientError, MakeTxRequest, PendingPegout,
-    ScriptBuf, SigningPackage, TxOut, Utxo,
+    BtcServerExtendedApi, GetSweepPsbtRequest, GrpcClientError, MakeTxRequest,
+    PendingPegout, ScriptBuf, SigningPackage, TxOut, Utxo,
 };
 use botanix_storage::models;
 use botanix_types::MultisigId;
@@ -128,6 +128,24 @@ pub(crate) async fn get_psbt<BtcServerClient: BtcServerExtendedApi + Clone>(
     };
 
     btc_server.get_psbt(req).await
+}
+
+/// receive a psbt for sweeping utxos from one multisig to another
+pub(crate) async fn get_sweep_psbt<
+    BtcServerClient: BtcServerExtendedApi + Clone,
+>(
+    btc_server: &mut BtcServerClient,
+    signing_session_id: &SigningSessionId,
+    multisig_id_from: MultisigId,
+    multisig_id_to: MultisigId,
+) -> Result<SigningPackage, GrpcClientError> {
+    let req = GetSweepPsbtRequest {
+        signing_session_id: signing_session_id.to_vec(),
+        multisig_id_from: multisig_id_from.as_u32(),
+        multisig_id_to: multisig_id_to.as_u32(),
+    };
+
+    btc_server.get_sweep_psbt(req).await
 }
 
 /// Look up the multisig ID from an aggregate public key.

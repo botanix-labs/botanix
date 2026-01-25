@@ -46,7 +46,7 @@ pub struct GetFinalizedPegoutIdsResponse {
 pub struct SubscribeToDynafedNotificationsStream {
     #[prost(
         oneof = "subscribe_to_dynafed_notifications_stream::Notification",
-        tags = "1, 2"
+        tags = "1, 2, 3"
     )]
     pub notification: ::core::option::Option<
         subscribe_to_dynafed_notifications_stream::Notification,
@@ -60,6 +60,8 @@ pub mod subscribe_to_dynafed_notifications_stream {
         Dkg(super::DkgNotification),
         #[prost(message, tag = "2")]
         Migration(super::MigrationNotification),
+        #[prost(message, tag = "3")]
+        Sweep(super::SweepNotification),
     }
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
@@ -82,6 +84,13 @@ pub struct MigrationNotification {
     /// UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
     #[prost(string, tag = "4")]
     pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SweepNotification {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
@@ -413,6 +422,23 @@ pub struct MigrationInfo {
 pub struct ListMigrationsResponse {
     #[prost(message, repeated, tag = "1")]
     pub migrations: ::prost::alloc::vec::Vec<MigrationInfo>,
+}
+/// Sweep messages
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct InitiateSweepRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSweepPsbtRequest {
+    #[prost(bytes = "vec", tag = "1")]
+    pub signing_session_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
 }
 #[derive(
     Clone,
@@ -747,9 +773,9 @@ pub mod btc_server_server {
             &self,
             request: tonic::Request<super::ResetWalletStateRequest>,
         ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
-        async fn sweep_to_multisig(
+        async fn get_sweep_psbt(
             &self,
-            request: tonic::Request<super::Empty>,
+            request: tonic::Request<super::GetSweepPsbtRequest>,
         ) -> std::result::Result<
             tonic::Response<super::SigningPackage>,
             tonic::Status,
@@ -788,6 +814,11 @@ pub mod btc_server_server {
             tonic::Response<super::ListMigrationsResponse>,
             tonic::Status,
         >;
+        /// Sweep endpoint
+        async fn initiate_sweep(
+            &self,
+            request: tonic::Request<super::InitiateSweepRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct BtcServerServer<T> {
@@ -2349,11 +2380,12 @@ pub mod btc_server_server {
                     };
                     Box::pin(fut)
                 }
-                "/btc_server.BtcServer/SweepToMultisig" => {
+                "/btc_server.BtcServer/GetSweepPsbt" => {
                     #[allow(non_camel_case_types)]
-                    struct SweepToMultisigSvc<T: BtcServer>(pub Arc<T>);
-                    impl<T: BtcServer> tonic::server::UnaryService<super::Empty>
-                        for SweepToMultisigSvc<T>
+                    struct GetSweepPsbtSvc<T: BtcServer>(pub Arc<T>);
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::GetSweepPsbtRequest>
+                        for GetSweepPsbtSvc<T>
                     {
                         type Response = super::SigningPackage;
                         type Future = BoxFuture<
@@ -2362,11 +2394,11 @@ pub mod btc_server_server {
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::Empty>,
+                            request: tonic::Request<super::GetSweepPsbtRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as BtcServer>::sweep_to_multisig(
+                                <T as BtcServer>::get_sweep_psbt(
                                     &inner, request,
                                 )
                                 .await
@@ -2384,7 +2416,7 @@ pub mod btc_server_server {
                         self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = SweepToMultisigSvc(inner);
+                        let method = GetSweepPsbtSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -2701,6 +2733,60 @@ pub mod btc_server_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListMigrationsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/btc_server.BtcServer/InitiateSweep" => {
+                    #[allow(non_camel_case_types)]
+                    struct InitiateSweepSvc<T: BtcServer>(pub Arc<T>);
+                    impl<T: BtcServer>
+                        tonic::server::UnaryService<super::InitiateSweepRequest>
+                        for InitiateSweepSvc<T>
+                    {
+                        type Response = super::Empty;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::InitiateSweepRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BtcServer>::initiate_sweep(
+                                    &inner, request,
+                                )
+                                .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings =
+                        self.accept_compression_encodings;
+                    let send_compression_encodings =
+                        self.send_compression_encodings;
+                    let max_decoding_message_size =
+                        self.max_decoding_message_size;
+                    let max_encoding_message_size =
+                        self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = InitiateSweepSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

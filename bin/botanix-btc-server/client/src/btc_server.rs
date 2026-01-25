@@ -46,7 +46,7 @@ pub struct GetFinalizedPegoutIdsResponse {
 pub struct SubscribeToDynafedNotificationsStream {
     #[prost(
         oneof = "subscribe_to_dynafed_notifications_stream::Notification",
-        tags = "1, 2"
+        tags = "1, 2, 3"
     )]
     pub notification: ::core::option::Option<
         subscribe_to_dynafed_notifications_stream::Notification,
@@ -60,6 +60,8 @@ pub mod subscribe_to_dynafed_notifications_stream {
         Dkg(super::DkgNotification),
         #[prost(message, tag = "2")]
         Migration(super::MigrationNotification),
+        #[prost(message, tag = "3")]
+        Sweep(super::SweepNotification),
     }
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
@@ -82,6 +84,13 @@ pub struct MigrationNotification {
     /// UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
     #[prost(string, tag = "4")]
     pub migration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SweepNotification {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
@@ -413,6 +422,23 @@ pub struct MigrationInfo {
 pub struct ListMigrationsResponse {
     #[prost(message, repeated, tag = "1")]
     pub migrations: ::prost::alloc::vec::Vec<MigrationInfo>,
+}
+/// Sweep messages
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct InitiateSweepRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSweepPsbtRequest {
+    #[prost(bytes = "vec", tag = "1")]
+    pub signing_session_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
 }
 #[derive(
     Clone,
@@ -1295,9 +1321,9 @@ pub mod btc_server_client {
             ));
             self.inner.unary(req, path, codec).await
         }
-        pub async fn sweep_to_multisig(
+        pub async fn get_sweep_psbt(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<super::GetSweepPsbtRequest>,
         ) -> std::result::Result<
             tonic::Response<super::SigningPackage>,
             tonic::Status,
@@ -1310,12 +1336,12 @@ pub mod btc_server_client {
             })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/SweepToMultisig",
+                "/btc_server.BtcServer/GetSweepPsbt",
             );
             let mut req = request.into_request();
             req.extensions_mut().insert(GrpcMethod::new(
                 "btc_server.BtcServer",
-                "SweepToMultisig",
+                "GetSweepPsbt",
             ));
             self.inner.unary(req, path, codec).await
         }
@@ -1455,6 +1481,29 @@ pub mod btc_server_client {
             req.extensions_mut().insert(GrpcMethod::new(
                 "btc_server.BtcServer",
                 "ListMigrations",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Sweep endpoint
+        pub async fn initiate_sweep(
+            &mut self,
+            request: impl tonic::IntoRequest<super::InitiateSweepRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/InitiateSweep",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "InitiateSweep",
             ));
             self.inner.unary(req, path, codec).await
         }

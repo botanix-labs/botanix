@@ -71,7 +71,7 @@ service BtcServer {
 
     rpc ResetWalletState(ResetWalletStateRequest) returns (Empty) {}
 
-    rpc SweepToMultisig(Empty) returns (SigningPackage) {}
+    rpc GetSweepPsbt(GetSweepPsbtRequest) returns (SigningPackage) {}
 
     rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
 
@@ -81,6 +81,9 @@ service BtcServer {
     rpc AbortMigration(AbortMigrationRequest) returns (Empty) {}
     rpc GetMigration(GetMigrationRequest) returns (MigrationInfo) {}
     rpc ListMigrations(Empty) returns (ListMigrationsResponse) {}
+
+    // Sweep endpoint
+    rpc InitiateSweep(InitiateSweepRequest) returns (Empty) {}
 }
 
 message PendingPegout {
@@ -116,6 +119,7 @@ message SubscribeToDynafedNotificationsStream {
     oneof notification {
         DkgNotification dkg = 1;
         MigrationNotification migration = 2;
+        SweepNotification sweep = 3;
     }
 }
 
@@ -143,6 +147,11 @@ enum MigrationEvent {
     MIGRATION_START = 1;
     MIGRATION_END = 2;
     MIGRATION_ABORT = 3;
+}
+
+message SweepNotification {
+    uint32 multisig_id_from = 1;
+    uint32 multisig_id_to = 2;
 }
 
 message FinalizeSignerRequest {
@@ -389,4 +398,16 @@ message MigrationInfo {
 
 message ListMigrationsResponse {
     repeated MigrationInfo migrations = 1;
+}
+
+// Sweep messages
+message InitiateSweepRequest {
+    uint32 multisig_id_from = 1;
+    uint32 multisig_id_to = 2;
+}
+
+message GetSweepPsbtRequest {
+    bytes signing_session_id = 1;
+    uint32 multisig_id_from = 2;
+    uint32 multisig_id_to = 3;
 }

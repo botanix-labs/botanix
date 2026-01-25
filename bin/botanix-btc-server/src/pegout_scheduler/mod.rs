@@ -12,15 +12,8 @@ use std::{
 };
 
 use crate::{
-    database::FinalizedPegout,
-    measure_rpc_latency,
-    pegout_id::PegoutId,
-    telemetry::Telemetry,
-    update_pegout_scheduler_error_metrics,
-    wallet::{
-        address::generate_taproot_change_scriptpubkey,
-        util::{VerifyingKeyExt, VerifyingKeyExtError},
-    },
+    database::FinalizedPegout, measure_rpc_latency, pegout_id::PegoutId,
+    telemetry::Telemetry, update_pegout_scheduler_error_metrics,
 };
 use bitcoin::{
     Amount, Block, BlockHash, OutPoint, ScriptBuf, Transaction, TxOut, Txid,
@@ -31,7 +24,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{database, rpc};
-use botanix_types::MultisigId;
 
 pub const TX_NOT_FOUND_BITCOIND_ERROR: &str =
     "no such mempool or blockchain transaction";
@@ -200,13 +192,7 @@ impl OutputMeta {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum ChangeOutputError {
-    #[error("key conversion error {0}")]
-    KeyConversion(#[from] VerifyingKeyExtError),
-    #[error("db error {0}")]
-    Db(#[from] database::Error),
-}
+pub use database::ChangeOutputError;
 
 pub struct PegoutScheduler {
     /// The number of blocks to track txs for.
@@ -281,57 +267,6 @@ impl PegoutScheduler {
         ret
     }
 
-    /// Internal util to get change script pubkey for a specific multisig federation.
-    fn get_change_spk(
-        &self,
-        multisig_id: MultisigId,
-    ) -> Result<ScriptBuf, ChangeOutputError> {
-        let agg_pk = self
-            .db
-            .get_public_key_package_by_id(multisig_id)?
-            .expect("pk key package should exist")
-            .verifying_key()
-            .to_secp_pk()?;
-        let serialized_agg_pkey = agg_pk.serialize();
-        let change_spk =
-            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
-        Ok(change_spk)
-    }
-
-    /// Attempts to match a script pubkey against known multisig change addresses.
-    /// Checks the current multisig first, then falls back to the previous multisig
-    /// (for transactions created before/during migration).
-    ///
-    /// Returns:
-    /// - `Ok(Some(multisig_id))` if the script matches a known multisig change address
-    /// - `Ok(None)` if the script doesn't match any known multisig
-    /// - `Err(e)` if there was an error fetching the change SPK (e.g., db error)
-    fn match_change_spk_to_multisig(
-        &self,
-        script_pubkey: &ScriptBuf,
-    ) -> Result<Option<MultisigId>, ChangeOutputError> {
-        // TODO: Query current_multisig_id and previous_multisig_id from migration state in db.
-        let current_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let previous_multisig_id: Option<MultisigId> = None; // TODO: Query from db
-
-        // Try current multisig first (most common case)
-        let current_spk = self.get_change_spk(current_multisig_id)?;
-        if script_pubkey == &current_spk {
-            return Ok(Some(current_multisig_id));
-        }
-
-        // Fallback: check previous multisig (for txs created before/during migration)
-        if let Some(prev_id) = previous_multisig_id {
-            let prev_spk = self.get_change_spk(prev_id)?;
-            if script_pubkey == &prev_spk {
-                return Ok(Some(prev_id));
-            }
-        }
-
-        // No match found
-        Ok(None)
-    }
-
     /// Get the last finalized block hash.
     pub fn last_finalized(&self) -> BlockHash {
         self.last_finalized
@@ -387,7 +322,8 @@ impl PegoutScheduler {
                     continue;
                 }
                 // Check if this output matches a known multisig change address
-                match self.match_change_spk_to_multisig(&txout.script_pubkey) {
+                match self.db.match_change_spk_to_multisig(&txout.script_pubkey)
+                {
                     Ok(Some(_multisig_id)) => {
                         ret.push(i);
                     }
@@ -551,6 +487,7 @@ impl PegoutScheduler {
             for (outpoint, output) in tx.change() {
                 // Match the change output against known multisig change addresses
                 let multisig_id = match self
+                    .db
                     .match_change_spk_to_multisig(&output.script_pubkey)
                 {
                     Ok(Some(id)) => id,
@@ -1388,6 +1325,10 @@ mod tests {
             create_block, create_random_pegout_id, create_tx,
             pegout_requests_from_tx, random_p2wpkh_script, setup_db,
             trusted_dealer_setup, MockBitcoind,
+        },
+        wallet::{
+            address::generate_taproot_change_scriptpubkey,
+            util::VerifyingKeyExt,
         },
     };
 
