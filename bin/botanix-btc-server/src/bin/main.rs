@@ -55,7 +55,7 @@ use btcserverlib::{
             generate_taproot_address, generate_taproot_change_scriptpubkey,
             generate_taproot_scriptpubkey, generate_tweaked_public_key,
         },
-        psbt::{PsbtExt, PsbtInputExt, PsbtOutputExt},
+        psbt::{PsbtExt, PsbtInputExt, PsbtMultisigIdExt, PsbtOutputExt},
         util::VerifyingKeyExt,
     },
 };
@@ -1650,11 +1650,7 @@ where
             }
         };
 
-        let multisig_id = psbt
-            .inputs
-            .first()
-            .and_then(|i| i.multisig_id())
-            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
         let min_signers = self.get_min_signers(multisig_id).to_status()?;
 
         let nonces = signer::get_round1_signing_package(
@@ -1723,11 +1719,7 @@ where
             }
         };
 
-        let multisig_id = psbt
-            .inputs
-            .first()
-            .and_then(|i| i.multisig_id())
-            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
         let min_signers = self.get_min_signers(multisig_id).to_status()?;
 
         signer::get_round2_signing_package(
@@ -2385,11 +2377,8 @@ where
             self.db.get_psbt(&signing_session_id).to_status()?.ok_or_else(
                 || internal!("PSBT not found for signing session"),
             )?;
-        let multisig_id = stored_psbt
-            .inputs
-            .first()
-            .and_then(|i| i.multisig_id())
-            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let multisig_id =
+            stored_psbt.multisig_id().map_err(|e| internal!("{}", e))?;
         let min_signers = self.get_min_signers(multisig_id).to_status()?;
 
         let psbt = match coordinator::get_to_sign(
@@ -2484,11 +2473,7 @@ where
             }
         };
 
-        let multisig_id = psbt
-            .inputs
-            .first()
-            .and_then(|i| i.multisig_id())
-            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
         let min_signers = self.get_min_signers(multisig_id).to_status()?;
 
         if let Err(e) = coordinator::add_round1_signing(
@@ -2568,11 +2553,7 @@ where
             }
         };
 
-        let multisig_id = psbt
-            .inputs
-            .first()
-            .and_then(|i| i.multisig_id())
-            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
         let min_signers = self.get_min_signers(multisig_id).to_status()?;
 
         if let Err(e) = coordinator::add_round2_signing(
