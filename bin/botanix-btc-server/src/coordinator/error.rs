@@ -1,7 +1,10 @@
 use crate::{
     database::Error as DbError,
     util::ValidatePSBTError,
-    wallet::{psbt::CalculateSighashError, util::VerifyingKeyExtError},
+    wallet::{
+        psbt::{CalculateSighashError, PsbtMultisigIdError},
+        util::VerifyingKeyExtError,
+    },
 };
 use bitcoin::{hashes::sha256, psbt::ExtractTxError};
 use frost_secp256k1_tr::{self as frost};
@@ -77,4 +80,6 @@ pub enum CoordinatorError {
     NoUtxosAvailable,
     #[error("Insufficient value to cover fees")]
     InsufficientValueForFees,
+    #[error("PSBT multisig_id error: {0}")]
+    PsbtMultisigIdError(#[from] PsbtMultisigIdError),
 }

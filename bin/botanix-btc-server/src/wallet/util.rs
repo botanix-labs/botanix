@@ -4,7 +4,7 @@ use frost_secp256k1_tr as frost;
 use thiserror::Error;
 
 use crate::wallet::{
-    psbt::{create_sweep_psbt, InputDTO},
+    psbt::{create_sweep_psbt, InputDTO, PsbtMultisigIdError},
     MAX_BASE_TX_WEIGHT, MAX_BITCOIN_TX_WEIGHT, PER_OUTPUT_MAX_WEIGHT,
     PER_P2TR_KEYSPEND_WEIGHT, SEGWIT_FLAG_WEIGHT, SEGWIT_MARKER_WEIGHT,
     TAPROOT_KEYSPEND_SIGHASH_DEFAULT_WEIGHT,
@@ -36,6 +36,8 @@ pub enum WalletCalculationError {
     WeightOverflow,
     #[error("Invalid parameters")]
     InvalidParameters,
+    #[error("PSBT multisig_id error: {0}")]
+    PsbtMultisigIdError(#[from] PsbtMultisigIdError),
 }
 
 /// Extension trait for Frost verifying key (aggregate key)
@@ -126,7 +128,7 @@ pub(crate) fn calculate_sweep_fee(
 ) -> Result<Amount, WalletCalculationError> {
     let dummy_output =
         TxOut { value: Amount::ZERO, script_pubkey: output_script.clone() };
-    let psbt = create_sweep_psbt(inputs.to_vec(), dummy_output);
+    let psbt = create_sweep_psbt(inputs.to_vec(), dummy_output)?;
     let total_weight = calculate_signed_tx_weight(&psbt)?;
     let absolute_fee = fee_rate
         .fee_wu(total_weight)
@@ -234,6 +236,7 @@ mod tests {
         });
 
         create_psbt(inputs, outputs, change)
+            .expect("test inputs should be valid")
     }
 
     // Example based on mainnet pegout tx https://mempool.space/tx/a8a7197d99fedc6b366671a22d9312f7e5ed9869f53e61359995ee96ee65fed8
@@ -264,6 +267,7 @@ mod tests {
         });
 
         create_psbt(inputs, outputs, change)
+            .expect("test inputs should be valid")
     }
 
     fn psbt_1_input_1_output() -> Psbt {
@@ -282,7 +286,7 @@ mod tests {
         );
         outputs.push(output1);
 
-        create_psbt(inputs, outputs, None)
+        create_psbt(inputs, outputs, None).expect("test inputs should be valid")
     }
 
     fn create_signed_tx(num_inputs: u64, num_outputs: u64) -> Psbt {
@@ -304,7 +308,8 @@ mod tests {
             outputs.push(output);
         }
 
-        let mut psbt = create_psbt(inputs, outputs, None);
+        let mut psbt = create_psbt(inputs, outputs, None)
+            .expect("test inputs should be valid");
         add_dummy_signatures_to_psbt(&mut psbt, TapSighashType::Default);
         psbt // with signatures
     }
