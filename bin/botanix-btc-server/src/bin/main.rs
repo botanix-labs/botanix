@@ -2381,11 +2381,10 @@ where
         );
 
         // Fetch PSBT to extract multisig_id for min_signers lookup
-        let stored_psbt = self
-            .db
-            .get_psbt(&signing_session_id)
-            .to_status()?
-            .ok_or_else(|| internal!("PSBT not found for signing session"))?;
+        let stored_psbt =
+            self.db.get_psbt(&signing_session_id).to_status()?.ok_or_else(
+                || internal!("PSBT not found for signing session"),
+            )?;
         let multisig_id = stored_psbt
             .inputs
             .first()
@@ -4312,10 +4311,11 @@ mod tests {
     #[tokio::test]
     async fn new_consensus_checkpoint() {
         let app = setup().await;
-        let multisig_id = MultisigId::new(1);
+        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
         let min_signers = app.get_min_signers(multisig_id).unwrap();
         let max_signers = app.get_max_signers(multisig_id).unwrap();
-        let (shares, pk_package) = trusted_dealer_setup(min_signers, max_signers);
+        let (shares, pk_package) =
+            trusted_dealer_setup(min_signers, max_signers);
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
@@ -4429,10 +4429,11 @@ mod tests {
     #[tokio::test]
     async fn test_new_consensus_checkpoint_no_finalized_pegouts_stored() {
         let app = setup().await;
-        let multisig_id = MultisigId::new(1);
+        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
         let min_signers = app.get_min_signers(multisig_id).unwrap();
         let max_signers = app.get_max_signers(multisig_id).unwrap();
-        let (shares, pk_package) = trusted_dealer_setup(min_signers, max_signers);
+        let (shares, pk_package) =
+            trusted_dealer_setup(min_signers, max_signers);
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
@@ -4814,7 +4815,8 @@ mod tests {
         let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
         let min_signers = app.get_min_signers(multisig_id).unwrap();
         let max_signers = app.get_max_signers(multisig_id).unwrap();
-        let (shares, pk_package) = trusted_dealer_setup(min_signers, max_signers);
+        let (shares, pk_package) =
+            trusted_dealer_setup(min_signers, max_signers);
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
