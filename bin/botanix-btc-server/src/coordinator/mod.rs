@@ -355,7 +355,7 @@ pub fn make_sweep_tx(
 
     // Create the sweep PSBT
     let output = TxOut { value: output_value, script_pubkey: output_script };
-    let psbt = create_sweep_psbt(inputs, output);
+    let psbt = create_sweep_psbt(inputs, output)?;
 
     // Sanity check
     validate_psbt(&psbt, NO_FLAGS, min_signers, db)?;
