@@ -126,6 +126,8 @@ pub enum Error {
     DkgStateMachine(#[from] dkg::Error),
     #[error("Dkg deserialization error: {0}")]
     DkgDeserialization(#[from] ciborium::de::Error<std::io::Error>),
+    #[error("Multisig not found: {0}")]
+    MultisigNotFound(MultisigId),
 }
 
 // To status util to convert Results with top level errors to tonic::Status
@@ -172,6 +174,9 @@ impl<T, S: Into<Error> + Debug> ToStatus<T> for Result<T, S> {
                 }
                 Error::DkgDeserialization(de) => {
                     Err(internal!("Dkg deserialization error: {}", de))
+                }
+                Error::MultisigNotFound(multisig_id) => {
+                    Err(internal!("Multisig not found: {}", multisig_id))
                 }
             },
         }
@@ -366,6 +371,22 @@ where
             }
         }
         Ok(())
+    }
+
+    /// Get the minimum number of signers required for the given multisig.
+    fn get_min_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
+        self.federation
+            .get_config_by_multisig_id(multisig_id)
+            .map(|c| c.min_signers)
+            .ok_or(Error::MultisigNotFound(multisig_id))
+    }
+
+    /// Get the maximum number of signers for the given multisig.
+    fn get_max_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
+        self.federation
+            .get_config_by_multisig_id(multisig_id)
+            .map(|c| c.effective_max_signers())
+            .ok_or(Error::MultisigNotFound(multisig_id))
     }
 
     fn load_pegout_scheduler(
