@@ -55,7 +55,7 @@ use btcserverlib::{
             generate_taproot_address, generate_taproot_change_scriptpubkey,
             generate_taproot_scriptpubkey, generate_tweaked_public_key,
         },
-        psbt::{PsbtExt, PsbtOutputExt},
+        psbt::{PsbtExt, PsbtInputExt, PsbtOutputExt},
         util::VerifyingKeyExt,
     },
 };
@@ -126,6 +126,8 @@ pub enum Error {
     DkgStateMachine(#[from] dkg::Error),
     #[error("Dkg deserialization error: {0}")]
     DkgDeserialization(#[from] ciborium::de::Error<std::io::Error>),
+    #[error("Multisig not found: {0}")]
+    MultisigNotFound(MultisigId),
 }
 
 // To status util to convert Results with top level errors to tonic::Status
@@ -172,6 +174,9 @@ impl<T, S: Into<Error> + Debug> ToStatus<T> for Result<T, S> {
                 }
                 Error::DkgDeserialization(de) => {
                     Err(internal!("Dkg deserialization error: {}", de))
+                }
+                Error::MultisigNotFound(multisig_id) => {
+                    Err(internal!("Multisig not found: {}", multisig_id))
                 }
             },
         }
@@ -273,8 +278,6 @@ struct App<BitcoinRpcApi> {
     /// spend the same operations twice.
     tx_lock: Arc<Mutex<()>>,
     identifier: frost::Identifier,
-    max_signers: u16,
-    min_signers: u16,
     /// Secret key for P2P communication during DKG
     p2p_secret_key: secp256k1::SecretKey,
     /// Federation config for DKG
@@ -366,6 +369,22 @@ where
             }
         }
         Ok(())
+    }
+
+    /// Get the minimum number of signers required for the given multisig.
+    fn get_min_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
+        self.federation
+            .get_config_by_multisig_id(multisig_id)
+            .map(|c| c.min_signers)
+            .ok_or(Error::MultisigNotFound(multisig_id))
+    }
+
+    /// Get the maximum number of signers for the given multisig.
+    fn get_max_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
+        self.federation
+            .get_config_by_multisig_id(multisig_id)
+            .map(|c| c.effective_max_signers())
+            .ok_or(Error::MultisigNotFound(multisig_id))
     }
 
     fn load_pegout_scheduler(
@@ -561,8 +580,6 @@ where
             })?;
 
         let member_count = active_multisig.federation_member_public_key.len();
-        let max_signers = active_multisig.effective_max_signers();
-        let min_signers = active_multisig.min_signers;
 
         info!(
             "Using multisig {} with {} members",
@@ -789,8 +806,6 @@ where
             frost_round1_nonces: Arc::new(Mutex::new(None)),
             config,
             btc_signing_server_jwt_secret,
-            min_signers,
-            max_signers,
             bitcoind_client,
             fall_back_fee_rate,
             telemetry,
@@ -1635,9 +1650,16 @@ where
             }
         };
 
+        let multisig_id = psbt
+            .inputs
+            .first()
+            .and_then(|i| i.multisig_id())
+            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+
         let nonces = signer::get_round1_signing_package(
             &mut psbt,
-            self.min_signers,
+            min_signers,
             &self.db,
             &self.identifier,
         )
@@ -1701,9 +1723,16 @@ where
             }
         };
 
+        let multisig_id = psbt
+            .inputs
+            .first()
+            .and_then(|i| i.multisig_id())
+            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+
         signer::get_round2_signing_package(
             &mut psbt,
-            self.min_signers,
+            min_signers,
             &self.db,
             &self.identifier,
             &signing_nonces,
@@ -2146,7 +2175,7 @@ where
             fee_rate,
             change_script,
             &self.db,
-            self.min_signers,
+            self.get_min_signers(utxo_source_multisig_id).to_status()?,
             tracked_txs,
             &self.config,
             utxo_source_multisig_id,
@@ -2307,7 +2336,7 @@ where
             fee_rate,
             output_script,
             &self.db,
-            self.min_signers,
+            self.get_min_signers(source_multisig_id).to_status()?,
             source_multisig_id,
         )
         .to_status()?;
@@ -2351,10 +2380,22 @@ where
             parse_signing_session_id(&req.signing_session_id)
         );
 
+        // Fetch PSBT to extract multisig_id for min_signers lookup
+        let stored_psbt =
+            self.db.get_psbt(&signing_session_id).to_status()?.ok_or_else(
+                || internal!("PSBT not found for signing session"),
+            )?;
+        let multisig_id = stored_psbt
+            .inputs
+            .first()
+            .and_then(|i| i.multisig_id())
+            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+
         let psbt = match coordinator::get_to_sign(
             &signing_session_id,
             &self.db,
-            self.min_signers,
+            min_signers,
         )
         .to_status()
         {
@@ -2443,12 +2484,19 @@ where
             }
         };
 
+        let multisig_id = psbt
+            .inputs
+            .first()
+            .and_then(|i| i.multisig_id())
+            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+
         if let Err(e) = coordinator::add_round1_signing(
             &signing_session_id,
             frost_id,
             &psbt,
             &self.db,
-            self.min_signers,
+            min_signers,
         )
         .to_status()
         {
@@ -2520,12 +2568,19 @@ where
             }
         };
 
+        let multisig_id = psbt
+            .inputs
+            .first()
+            .and_then(|i| i.multisig_id())
+            .ok_or_else(|| internal!("PSBT input missing multisig_id"))?;
+        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+
         if let Err(e) = coordinator::add_round2_signing(
             &signing_session_id,
             frost_id,
             &psbt,
             &self.db,
-            self.min_signers,
+            min_signers,
         )
         .to_status()
         {
@@ -2925,8 +2980,8 @@ where
             multisig_id,
             coordinator,
             &self.federation,
-            self.min_signers,
-            self.max_signers,
+            self.get_min_signers(multisig_id).to_status()?,
+            self.get_max_signers(multisig_id).to_status()?,
             self.is_coordinator(),
         )
         .map_err(|e| {
@@ -3722,11 +3777,13 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
         App::new(config.clone(), bitcoind_client, telemetry.clone())?;
 
     if let Some(metrics) = telemetry.as_ref() {
+        // TODO: Update to report metrics per multisig
+        // https://github.com/botanix-labs/botanix-issues/issues/1146
         metrics.set_config_metrics(
             btc_server.btc_network,
             btc_server.config.identifier,
-            btc_server.min_signers,
-            btc_server.max_signers,
+            0, // placeholder until per-multisig metrics implemented
+            0, // placeholder until per-multisig metrics implemented
         );
     }
 
@@ -4254,13 +4311,14 @@ mod tests {
     #[tokio::test]
     async fn new_consensus_checkpoint() {
         let app = setup().await;
+        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+        let min_signers = app.get_min_signers(multisig_id).unwrap();
+        let max_signers = app.get_max_signers(multisig_id).unwrap();
         let (shares, pk_package) =
-            trusted_dealer_setup(app.min_signers, app.max_signers);
+            trusted_dealer_setup(min_signers, max_signers);
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
-
-        let multisig_id = MultisigId::new(1);
 
         // Add the key packages
         app.db
@@ -4371,13 +4429,14 @@ mod tests {
     #[tokio::test]
     async fn test_new_consensus_checkpoint_no_finalized_pegouts_stored() {
         let app = setup().await;
+        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+        let min_signers = app.get_min_signers(multisig_id).unwrap();
+        let max_signers = app.get_max_signers(multisig_id).unwrap();
         let (shares, pk_package) =
-            trusted_dealer_setup(app.min_signers, app.max_signers);
+            trusted_dealer_setup(min_signers, max_signers);
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
-
-        let multisig_id = MultisigId::new(1);
 
         // Add the key packages
         app.db
@@ -4753,8 +4812,11 @@ mod tests {
     async fn setup_app_with_keys(
     ) -> (App<MockBitcoind>, frost::keys::KeyPackage) {
         let app = setup().await;
+        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+        let min_signers = app.get_min_signers(multisig_id).unwrap();
+        let max_signers = app.get_max_signers(multisig_id).unwrap();
         let (shares, pk_package) =
-            trusted_dealer_setup(app.min_signers, app.max_signers);
+            trusted_dealer_setup(min_signers, max_signers);
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");

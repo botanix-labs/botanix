@@ -31,6 +31,10 @@ mod integration_tests {
         util::{has_conflicting_input, validate_outputs},
     };
 
+    // Test constants for min/max signers (matches test federation config)
+    const TEST_MIN_SIGNERS: u16 = 2;
+    const TEST_MAX_SIGNERS: u16 = 3;
+
     // NOTE: reminder for the tests that frost identifiers start indexing at 1
     /**
      * Round 2 DKG Tests
@@ -47,12 +51,12 @@ mod integration_tests {
         let mut app3 = setup();
         let mut round1_dkgs = vec![];
         // Reminder that frost ids index at 1
-        for index in 1..(app1.max_signers + 1) {
+        for index in 1..(TEST_MAX_SIGNERS + 1) {
             round1_dkgs.push(
                 frost::keys::dkg::part1(
                     frost::Identifier::try_from(index).expect("valid id"),
-                    app1.max_signers,
-                    app1.min_signers,
+                    TEST_MAX_SIGNERS,
+                    TEST_MIN_SIGNERS,
                     rng.clone(),
                 )
                 .unwrap(),
@@ -93,7 +97,7 @@ mod integration_tests {
 
         // Now lets re-generate the round 1 package for the first participant
         let new_round1_pkg =
-            frost::keys::dkg::part1(frost_id!(1), app1.max_signers, app1.min_signers, rng.clone())
+            frost::keys::dkg::part1(frost_id!(1), TEST_MAX_SIGNERS, TEST_MIN_SIGNERS, rng.clone())
                 .unwrap();
         app1.frost_round1_dkg = Arc::new(Mutex::new(Some(new_round1_pkg)));
 
@@ -133,7 +137,7 @@ mod integration_tests {
     // async fn should_fail_when_requesting_too_many_nonces() {
     //     let app = setup();
     //     let signing_session_id = [0u8; 32];
-    //     let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+    //     let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
     //     let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
     //         .expect("valid key package");
     //     app.db.set_pubkey_package(pk_package).expect("set public key package");
@@ -155,7 +159,7 @@ mod integration_tests {
     async fn should_get_round1_nonce_commitments() {
         let mut app = setup();
         let signing_session_id = [0u8; 32];
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
 
@@ -220,7 +224,7 @@ mod integration_tests {
         let app_coordinator = setup();
         let signing_session_id = [0u8; 32];
         let (shares, pk_package) =
-            trusted_dealer_setup(app_signer.min_signers, app_signer.max_signers);
+            trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app_signer.identifier].clone())
             .expect("valid key package");
 
@@ -279,7 +283,7 @@ mod integration_tests {
     // #[test]
     // fn should_not_sign_if_signer_is_not_in_signing_set() {
     //     let app = setup();
-    //     let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+    //     let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
     //     let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
     //         .expect("valid key package");
 
@@ -300,7 +304,7 @@ mod integration_tests {
     async fn test_should_abort_signing() {
         let app = setup();
         let signing_session_id = [0u8; 32];
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
 
@@ -339,7 +343,7 @@ mod integration_tests {
     fn validate_outputs_should_validate() {
         let app = setup();
 
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
         // Add the key packages
@@ -361,7 +365,7 @@ mod integration_tests {
     fn validate_outputs_should_validate_with_change_output() {
         // store agg_pk
         let app = setup();
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
 
@@ -406,7 +410,7 @@ mod integration_tests {
     fn validate_outputs_should_fail_with_invalid_change_output() {
         // store agg_pk
         let app = setup();
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
 
@@ -442,7 +446,7 @@ mod integration_tests {
     // pegout(s)
     async fn test_conflicting_input() {
         let app = setup();
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
 
@@ -534,7 +538,7 @@ mod integration_tests {
     async fn test_multiple_conflicting_inputs_for_multiple_pegouts() {
         let mut rng = thread_rng();
         let app = setup();
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
 
@@ -666,7 +670,7 @@ mod integration_tests {
     // tests db can determine if a conflicting input is present in a psbt
     async fn test_has_conflicting_input() {
         let app = setup();
-        let (shares, pk_package) = trusted_dealer_setup(app.min_signers, app.max_signers);
+        let (shares, pk_package) = trusted_dealer_setup(TEST_MIN_SIGNERS, TEST_MAX_SIGNERS);
         let key_package = frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
             .expect("valid key package");
 
