@@ -1809,6 +1809,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.store_tracked_tx(&tracked_tx).unwrap();
         db.flush().unwrap();
@@ -1843,6 +1844,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.store_tracked_tx(&tracked_tx).unwrap();
         db.flush().unwrap();

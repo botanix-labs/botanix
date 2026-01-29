@@ -79,6 +79,10 @@ pub struct Tx {
     pub change_idxs: Vec<usize>,
     /// When this transaction was created
     pub created: SystemTime,
+    /// Sweep metadata - present if this is a sweep tx (not a pegout).
+    /// Sweeps have no pegout_requests, only change outputs to target federation.
+    #[serde(default)]
+    pub sweep_metadata: Option<database::SweepMetadata>,
 }
 
 impl Tx {
@@ -357,6 +361,37 @@ impl PegoutScheduler {
             tx,
             pegout_idxs,
             pegout_requests: pegouts.to_vec(),
+            sweep_metadata: None,
+        });
+        self.txs.get(&txid).expect("just put it in")
+    }
+
+    /// Add a sweep transaction for tracking.
+    /// Called from get_round2_signing_package() when is_sweep() is true.
+    /// Unlike pegouts, sweeps have no pegout_requests but have sweep_metadata.
+    pub fn add_sweep_tx(
+        &mut self,
+        tx: Transaction,
+        sweep_metadata: database::SweepMetadata,
+        timestamp: SystemTime,
+    ) -> &Tx {
+        let txid = tx.compute_txid();
+        // For sweeps, all outputs go to target federation (treated as change)
+        let change_idxs: Vec<usize> = (0..tx.output.len()).collect();
+
+        info!(
+            "PegoutScheduler::add_sweep_tx: Tracking sweep txid={}, from={}, to={}",
+            txid, sweep_metadata.source_multisig_id, sweep_metadata.target_multisig_id
+        );
+
+        self.track_tx(Tx {
+            created: timestamp,
+            change_idxs,
+            txid,
+            tx,
+            pegout_idxs: vec![],
+            pegout_requests: vec![],
+            sweep_metadata: Some(sweep_metadata),
         });
         self.txs.get(&txid).expect("just put it in")
     }
@@ -587,6 +622,13 @@ impl PegoutScheduler {
                             finalized_pegout_ids.len() as i64,
                         );
                     }
+                } else if let Some(sweep_meta) = &tx.sweep_metadata {
+                    // This is a finalized sweep transaction
+                    info!(
+                        "Sweep tx {} finalized! Migration {} -> {} complete.",
+                        txid, sweep_meta.source_multisig_id, sweep_meta.target_multisig_id
+                    );
+                    // TODO: Signal migration completion (update migration state)
                 } else {
                     info!("Confirmed tx {} had no associated pegout requests to finalize.", txid);
                 }
@@ -1394,6 +1436,7 @@ mod tests {
             change_idxs: vec![],
             pegout_requests: vec![],
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
 
         assert_eq!(tx.inputs().count(), 0);
@@ -1412,6 +1455,7 @@ mod tests {
             change_idxs: vec![1],
             created: SystemTime::now(),
             pegout_requests: vec![],
+            sweep_metadata: None,
         };
 
         assert_eq!(tx2.inputs().count(), 5);
@@ -1802,6 +1846,7 @@ mod tests {
             change_idxs: vec![1],
             created: SystemTime::now(),
             pegout_requests: pegouts,
+            sweep_metadata: None,
         };
 
         let pegout_scheduler = PegoutScheduler::new(
@@ -1886,6 +1931,7 @@ mod tests {
             change_idxs: vec![1],
             created: SystemTime::now(),
             pegout_requests: pegouts,
+            sweep_metadata: None,
         };
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1969,6 +2015,7 @@ mod tests {
             change_idxs: vec![1],
             created: SystemTime::now(),
             pegout_requests: pegouts.clone(),
+            sweep_metadata: None,
         };
 
         let pegout_scheduler = PegoutScheduler::new(
