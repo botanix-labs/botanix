@@ -1852,9 +1852,13 @@ impl Db {
     }
 
     /// Store pending sweep - called in get_sweep_psbt() after PSBT created
-    pub fn store_pending_sweep(&self, sweep: &PendingSweep) -> Result<(), Error> {
+    pub fn store_pending_sweep(
+        &self,
+        sweep: &PendingSweep,
+    ) -> Result<(), Error> {
         let mut bytes = Vec::new();
-        ciborium::into_writer(sweep, &mut bytes).map_err(Error::CiboriumWrite)?;
+        ciborium::into_writer(sweep, &mut bytes)
+            .map_err(Error::CiboriumWrite)?;
         self.pending_sweeps.insert(&sweep.signing_session_id, &bytes[..])?;
         Ok(())
     }
@@ -1872,7 +1876,10 @@ impl Db {
     }
 
     /// Remove pending sweep - called after sweep is tracked
-    pub fn remove_pending_sweep(&self, signing_session_id: &[u8; 32]) -> Result<(), Error> {
+    pub fn remove_pending_sweep(
+        &self,
+        signing_session_id: &[u8; 32],
+    ) -> Result<(), Error> {
         self.pending_sweeps.remove(signing_session_id)?;
         Ok(())
     }
