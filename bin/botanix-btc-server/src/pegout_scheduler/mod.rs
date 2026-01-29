@@ -626,7 +626,9 @@ impl PegoutScheduler {
                     // This is a finalized sweep transaction
                     info!(
                         "Sweep tx {} finalized! Migration {} -> {} complete.",
-                        txid, sweep_meta.source_multisig_id, sweep_meta.target_multisig_id
+                        txid,
+                        sweep_meta.source_multisig_id,
+                        sweep_meta.target_multisig_id
                     );
                     // TODO: Signal migration completion (update migration state)
                 } else {
@@ -1586,8 +1588,10 @@ mod tests {
         let change_spk =
             generate_taproot_change_scriptpubkey(serialized_agg_pkey);
         // Sweep tx has single output (the target federation address)
-        let sweep_output =
-            TxOut { value: Amount::from_sat(100000), script_pubkey: change_spk };
+        let sweep_output = TxOut {
+            value: Amount::from_sat(100000),
+            script_pubkey: change_spk,
+        };
         let tx = create_tx(3, 0, Some(sweep_output));
 
         let mut pegout_scheduler = PegoutScheduler::new(
@@ -1605,13 +1609,18 @@ mod tests {
             target_multisig_id: MultisigId::new(2),
         };
 
-        pegout_scheduler.add_sweep_tx(tx.clone(), sweep_metadata.clone(), SystemTime::now());
+        pegout_scheduler.add_sweep_tx(
+            tx.clone(),
+            sweep_metadata.clone(),
+            SystemTime::now(),
+        );
 
         // Verify tx is tracked
         let tracked_txs = pegout_scheduler.txs.clone();
         assert_eq!(tracked_txs.len(), 1);
 
-        let (tracked_txid, tracked_tx) = tracked_txs.into_iter().next().unwrap();
+        let (tracked_txid, tracked_tx) =
+            tracked_txs.into_iter().next().unwrap();
         assert_eq!(tracked_txid, tx.compute_txid());
 
         // Sweep has no pegouts
