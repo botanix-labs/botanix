@@ -1358,6 +1358,7 @@ mod tests {
         transaction::Version,
         TxIn,
     };
+    use botanix_types::MultisigId;
     use frost_secp256k1_tr as frost;
     use std::sync::LazyLock;
 
@@ -1560,6 +1561,76 @@ mod tests {
         assert_eq!(pending_txid, tx.compute_txid());
         assert_eq!(pending_tx.pegout_idxs, pegout_idxs);
         assert_eq!(pending_tx.change_idxs, change_idxs);
+    }
+
+    #[test]
+    fn test_add_sweep_tx() {
+        let db = setup_db().0;
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
+
+        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_key_package(key_package).expect("set key package");
+
+        let agg_pk = db
+            .get_public_key_package()
+            .unwrap()
+            .unwrap()
+            .verifying_key()
+            .to_secp_pk()
+            .unwrap();
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
+        // Sweep tx has single output (the target federation address)
+        let sweep_output =
+            TxOut { value: Amount::from_sat(100000), script_pubkey: change_spk };
+        let tx = create_tx(3, 0, Some(sweep_output));
+
+        let mut pegout_scheduler = PegoutScheduler::new(
+            101,
+            vec![],
+            bitcoin::BlockHash::all_zeros(),
+            db,
+            None,
+            bitcoin::Network::Regtest,
+            0,
+        );
+
+        let sweep_metadata = database::SweepMetadata {
+            source_multisig_id: MultisigId::new(1),
+            target_multisig_id: MultisigId::new(2),
+        };
+
+        pegout_scheduler.add_sweep_tx(tx.clone(), sweep_metadata.clone(), SystemTime::now());
+
+        // Verify tx is tracked
+        let tracked_txs = pegout_scheduler.txs.clone();
+        assert_eq!(tracked_txs.len(), 1);
+
+        let (tracked_txid, tracked_tx) = tracked_txs.into_iter().next().unwrap();
+        assert_eq!(tracked_txid, tx.compute_txid());
+
+        // Sweep has no pegouts
+        assert!(tracked_tx.pegout_idxs.is_empty());
+        assert!(tracked_tx.pegout_requests.is_empty());
+
+        // Sweep has all outputs as change (single output in this case)
+        assert_eq!(tracked_tx.change_idxs, vec![0]);
+
+        // Sweep metadata is set
+        assert!(tracked_tx.sweep_metadata.is_some());
+        assert_eq!(tracked_tx.sweep_metadata.unwrap(), sweep_metadata);
+
+        // Check input tracking
+        let tracked_inputs = pegout_scheduler.tracked_inputs();
+        assert_eq!(tracked_inputs.len(), 3);
+        for input in tx.input.iter() {
+            assert!(tracked_inputs.contains(&input.previous_output));
+        }
     }
 
     #[test]
