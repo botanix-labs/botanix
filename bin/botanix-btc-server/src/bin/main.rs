@@ -1843,15 +1843,23 @@ where
         // Check if this is a sweep transaction (no pegout IDs, single output)
         if psbt.is_sweep() {
             // Sweep tx - lookup metadata stored in get_sweep_psbt()
-            if let Some(pending_sweep) = self.db.get_pending_sweep(&signing_session_id).to_status()? {
+            if let Some(pending_sweep) =
+                self.db.get_pending_sweep(&signing_session_id).to_status()?
+            {
                 let sweep_metadata = database::SweepMetadata {
                     source_multisig_id: pending_sweep.source_multisig_id,
                     target_multisig_id: pending_sweep.target_multisig_id,
                 };
-                self.add_tracked_sweep_tx(signed_tx.clone(), sweep_metadata, SystemTime::now())
-                    .await
+                self.add_tracked_sweep_tx(
+                    signed_tx.clone(),
+                    sweep_metadata,
+                    SystemTime::now(),
+                )
+                .await
+                .to_status()?;
+                self.db
+                    .remove_pending_sweep(&signing_session_id)
                     .to_status()?;
-                self.db.remove_pending_sweep(&signing_session_id).to_status()?;
                 info!(
                     "[get_round2_signing_package] Tracking sweep tx {}",
                     signed_tx.compute_txid()
