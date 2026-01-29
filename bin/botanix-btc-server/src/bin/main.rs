@@ -1824,6 +1824,8 @@ where
             "[get_round2_signing_package] Found {} matching pending pegouts in the psbt",
             psbt_pending_pegouts.len()
         );
+
+        // Track the transaction - for sweeps psbt_pending_pegouts will be empty
         self.add_tracked_tx(
             signed_tx.clone(),
             &psbt_pending_pegouts,
@@ -1831,6 +1833,13 @@ where
         )
         .await
         .to_status()?;
+
+        if psbt.is_sweep() {
+            info!(
+                "[get_round2_signing_package] Tracking sweep tx {}",
+                signed_tx.compute_txid()
+            );
+        }
 
         if !self.is_coordinator() {
             // the coordinator will remove the pegout during finalize_signing

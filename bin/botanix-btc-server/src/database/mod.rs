@@ -73,6 +73,7 @@ const TREE_PENDING_PEGOUTS: &[u8; 7] = b"pegouts";
 /// sled tree for active migrations
 const TREE_MIGRATIONS: &[u8; 10] = b"migrations";
 
+
 /// Sliding window duration in seconds (90 days)
 const RETENTION_WINDOW_SECONDS: u64 = 90 * 24 * 60 * 60;
 
@@ -1770,6 +1771,7 @@ pub struct Migration {
     pub started_at_unix_secs: u64,
 }
 
+
 impl Db {
     /// Store a migration in the database.
     pub fn store_migration(&self, migration: &Migration) -> Result<(), Error> {
@@ -1827,6 +1829,7 @@ impl Db {
         }
         Ok(None)
     }
+
 }
 
 #[cfg(test)]
@@ -3399,4 +3402,5 @@ mod tests {
             "Migration should be skipped when legacy data is incomplete"
         );
     }
+
 }

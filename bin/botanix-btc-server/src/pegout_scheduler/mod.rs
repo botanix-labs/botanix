@@ -108,6 +108,12 @@ impl Tx {
             (point, output)
         })
     }
+
+    /// Returns true if this is a sweep transaction.
+    /// A sweep has no pegout requests and exactly one output (the change to target federation).
+    pub fn is_sweep(&self) -> bool {
+        self.pegout_requests.is_empty() && self.tx.output.len() == 1
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -587,6 +593,11 @@ impl PegoutScheduler {
                             finalized_pegout_ids.len() as i64,
                         );
                     }
+                } else if tx.is_sweep() {
+                    // This is a finalized sweep transaction
+                    info!("Sweep tx {} finalized!", txid);
+                    // TODO: Signal migration completion (update migration state)
+                    // https://github.com/botanix-labs/botanix-issues/issues/1147
                 } else {
                     info!("Confirmed tx {} had no associated pegout requests to finalize.", txid);
                 }
@@ -1516,6 +1527,74 @@ mod tests {
         assert_eq!(pending_txid, tx.compute_txid());
         assert_eq!(pending_tx.pegout_idxs, pegout_idxs);
         assert_eq!(pending_tx.change_idxs, change_idxs);
+    }
+
+    #[test]
+    fn test_sweep_tx_detection() {
+        let db = setup_db().0;
+        let (shares, pk_package) =
+            trusted_dealer_setup(MIN_SIGNERS, MAX_SIGNERS);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1u16)].clone())
+                .expect("valid key package");
+
+        db.set_pubkey_package(pk_package).expect("set public key package");
+        db.set_key_package(key_package).expect("set key package");
+
+        let agg_pk = db
+            .get_public_key_package()
+            .unwrap()
+            .unwrap()
+            .verifying_key()
+            .to_secp_pk()
+            .unwrap();
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
+        // Sweep tx has single output (the target federation address)
+        let sweep_output = TxOut {
+            value: Amount::from_sat(100000),
+            script_pubkey: change_spk,
+        };
+        let tx = create_tx(3, 0, Some(sweep_output));
+
+        let mut pegout_scheduler = PegoutScheduler::new(
+            101,
+            vec![],
+            bitcoin::BlockHash::all_zeros(),
+            db,
+            None,
+            bitcoin::Network::Regtest,
+            0,
+        );
+
+        // Add sweep tx with empty pending pegouts (like a sweep would be)
+        pegout_scheduler.add_tx(tx.clone(), &[], SystemTime::now());
+
+        // Verify tx is tracked
+        let tracked_txs = pegout_scheduler.txs.clone();
+        assert_eq!(tracked_txs.len(), 1);
+
+        let (tracked_txid, tracked_tx) =
+            tracked_txs.into_iter().next().unwrap();
+        assert_eq!(tracked_txid, tx.compute_txid());
+
+        // Sweep has no pegouts
+        assert!(tracked_tx.pegout_idxs.is_empty());
+        assert!(tracked_tx.pegout_requests.is_empty());
+
+        // Sweep has single output treated as change
+        assert_eq!(tracked_tx.change_idxs, vec![0]);
+
+        // is_sweep() should return true for this tx
+        assert!(tracked_tx.is_sweep());
+
+        // Check input tracking
+        let tracked_inputs = pegout_scheduler.tracked_inputs();
+        assert_eq!(tracked_inputs.len(), 3);
+        for input in tx.input.iter() {
+            assert!(tracked_inputs.contains(&input.previous_output));
+        }
     }
 
     #[test]
