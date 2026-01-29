@@ -940,6 +940,21 @@ where
         Ok(())
     }
 
+    /// Add a tracked sweep transaction to the pegout scheduler.
+    /// Called from get_round2_signing_package() when is_sweep() is true.
+    pub async fn add_tracked_sweep_tx(
+        &self,
+        tx: Transaction,
+        sweep_metadata: database::SweepMetadata,
+        timestamp: SystemTime,
+    ) -> Result<(), database::Error> {
+        let mut txindex = self.pegout_scheduler.lock().await;
+        let tx = txindex.add_sweep_tx(tx, sweep_metadata, timestamp);
+        self.db.store_tracked_tx(tx)?;
+        self.db.flush()?;
+        Ok(())
+    }
+
     pub fn is_coordinator(&self) -> bool {
         let coordinator_id =
             self.config.coordinator.unwrap_or(DEFAULT_COORDINATOR_ID);
@@ -1816,13 +1831,40 @@ where
             "[get_round2_signing_package] Found {} matching pending pegouts in the psbt",
             psbt_pending_pegouts.len()
         );
-        self.add_tracked_tx(
-            signed_tx.clone(),
-            &psbt_pending_pegouts,
-            SystemTime::now(),
-        )
-        .await
-        .to_status()?;
+
+        // Check if this is a sweep transaction (no pegout IDs, single output)
+        if psbt.is_sweep() {
+            // Sweep tx - lookup metadata stored in get_sweep_psbt()
+            if let Some(pending_sweep) = self.db.get_pending_sweep(&signing_session_id).to_status()? {
+                let sweep_metadata = database::SweepMetadata {
+                    source_multisig_id: pending_sweep.source_multisig_id,
+                    target_multisig_id: pending_sweep.target_multisig_id,
+                };
+                self.add_tracked_sweep_tx(signed_tx.clone(), sweep_metadata, SystemTime::now())
+                    .await
+                    .to_status()?;
+                self.db.remove_pending_sweep(&signing_session_id).to_status()?;
+                info!(
+                    "[get_round2_signing_package] Tracking sweep tx {}",
+                    signed_tx.compute_txid()
+                );
+            } else {
+                // Fallback: sweep detected but no metadata (shouldn't happen)
+                warn!("[get_round2_signing_package] Sweep detected but no pending sweep metadata");
+                self.add_tracked_tx(signed_tx.clone(), &[], SystemTime::now())
+                    .await
+                    .to_status()?;
+            }
+        } else {
+            // Regular pegout tx
+            self.add_tracked_tx(
+                signed_tx.clone(),
+                &psbt_pending_pegouts,
+                SystemTime::now(),
+            )
+            .await
+            .to_status()?;
+        }
 
         if !self.is_coordinator() {
             // the coordinator will remove the pegout during finalize_signing
@@ -2341,6 +2383,14 @@ where
 
         // Save psbt to db
         self.db.update_psbt(&signing_session_id, &psbt).to_status()?;
+
+        // Store pending sweep metadata - will be retrieved in get_round2_signing_package()
+        let pending_sweep = database::PendingSweep {
+            signing_session_id,
+            source_multisig_id,
+            target_multisig_id,
+        };
+        self.db.store_pending_sweep(&pending_sweep).to_status()?;
         self.db.flush().to_status()?;
 
         let psbt_bytes = hex::decode(psbt.serialize_hex()).map_err(|e| {
