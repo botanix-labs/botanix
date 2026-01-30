@@ -631,6 +631,7 @@ impl PegoutScheduler {
                         sweep_meta.target_multisig_id
                     );
                     // TODO: Signal migration completion (update migration state)
+                    // https://github.com/botanix-labs/botanix-issues/issues/1147
                 } else {
                     info!("Confirmed tx {} had no associated pegout requests to finalize.", txid);
                 }
