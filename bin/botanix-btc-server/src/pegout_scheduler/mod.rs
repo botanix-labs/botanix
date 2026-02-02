@@ -363,7 +363,7 @@ impl PegoutScheduler {
             pegout_requests: pegouts.to_vec(),
             sweep_metadata: None,
         });
-        self.txs.get(&txid).expect("just put it in")
+        self.txs.get(&txid).expect("tx must exist after track_tx")
     }
 
     /// Add a sweep transaction for tracking.
@@ -376,7 +376,16 @@ impl PegoutScheduler {
         timestamp: SystemTime,
     ) -> &Tx {
         let txid = tx.compute_txid();
-        // For sweeps, all outputs go to target federation (treated as change)
+        // Sweep transactions should have exactly one output (the change to target federation)
+        if tx.output.len() != 1 {
+            error!(
+                "Sweep tx {} has {} outputs, expected 1",
+                txid,
+                tx.output.len()
+            );
+        }
+
+        // Treat all outputs as change (safe fallback if more than one)
         let change_idxs: Vec<usize> = (0..tx.output.len()).collect();
 
         info!(
@@ -393,7 +402,7 @@ impl PegoutScheduler {
             pegout_requests: vec![],
             sweep_metadata: Some(sweep_metadata),
         });
-        self.txs.get(&txid).expect("just put it in")
+        self.txs.get(&txid).expect("tx must exist after track_tx")
     }
 
     /// Get all tracked tx pegout request ids.
