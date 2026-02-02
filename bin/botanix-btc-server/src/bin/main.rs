@@ -1857,9 +1857,6 @@ where
                 )
                 .await
                 .to_status()?;
-                self.db
-                    .remove_pending_sweep(&signing_session_id)
-                    .to_status()?;
                 info!(
                     "[get_round2_signing_package] Tracking sweep tx {}",
                     signed_tx.compute_txid()
@@ -2004,6 +2001,13 @@ where
                 .join(", ")
         );
         self.db.remove_pending_pegout(&pegout_ids).to_status()?;
+
+        // If this was a sweep, remove the pending sweep metadata
+        if psbt.is_sweep() {
+            self.db.remove_pending_sweep(&signing_session_id).to_status()?;
+            info!("[finalize_signing] Removed pending sweep");
+        }
+
         // remove the pegouts from the telemetry gauge
         if let Some(telemetry) = self.telemetry.as_ref() {
             // increase metric counter for pegouts
