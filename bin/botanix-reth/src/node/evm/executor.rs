@@ -233,7 +233,6 @@ where
         Ok(Some(gas_used))
     }
 
-    // Noop
     fn execute_transaction_with_result_closure(
         &mut self,
         tx: impl ExecutableTx<Self>
@@ -243,7 +242,11 @@ where
             &'b ExecutionResult<<E as alloy_evm::Evm>::HaltReason>,
         ),
     ) -> Result<u64, BlockExecutionError> {
-        Ok(0)
+        self.execute_transaction_with_commit_condition(tx, |res| {
+            f(res);
+            CommitChanges::Yes
+        })
+        .map(Option::unwrap_or_default)
     }
 
     // This is basically a noop since we don't have any special system tx
