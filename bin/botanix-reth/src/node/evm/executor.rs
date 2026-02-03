@@ -59,7 +59,7 @@ where
     /// Receipt builder.
     receipt_builder: R,
     /// Context for block execution.
-    _ctx: EthBlockExecutionCtx<'a>,
+    ctx: EthBlockExecutionCtx<'a>,
     /// Utility to call system caller.
     system_caller: SystemCaller<Spec>,
 }
@@ -86,7 +86,7 @@ where
     /// Creates a new BotanixBlockExecutor.
     pub(super) fn new(
         evm: EVM,
-        _ctx: EthBlockExecutionCtx<'a>,
+        ctx: EthBlockExecutionCtx<'a>,
         spec: Spec,
         receipt_builder: R,
     ) -> Self {
@@ -98,7 +98,7 @@ where
             receipts: vec![],
             system_txs: vec![],
             receipt_builder,
-            _ctx,
+            ctx,
             system_caller: SystemCaller::new(spec_clone),
         }
     }
@@ -154,10 +154,25 @@ where
     type Receipt = R::Receipt;
     type Evm = E;
 
-    // This method isn't currently used and is a noop.
+    // alloy-evm implementation @ https://github.com/alloy-rs/evm/blob/v0.19.0/crates/evm/src/eth/block.rs#L95-L106
     fn apply_pre_execution_changes(
         &mut self,
     ) -> Result<(), BlockExecutionError> {
+        // Set state clear flag if the block is after the Spurious Dragon hardfork.
+        let state_clear_flag = self.spec.is_spurious_dragon_active_at_block(
+            self.evm.block().number.saturating_to(),
+        );
+        self.evm.db_mut().set_state_clear_flag(state_clear_flag);
+
+        self.system_caller.apply_blockhashes_contract_call(
+            self.ctx.parent_hash,
+            &mut self.evm,
+        )?;
+        self.system_caller.apply_beacon_root_contract_call(
+            self.ctx.parent_beacon_block_root,
+            &mut self.evm,
+        )?;
+
         Ok(())
     }
 
