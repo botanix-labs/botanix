@@ -18,7 +18,7 @@ pub fn load_reth_config(
                         format!("Could not load config file {:?}", config_path)
                     })?;
 
-            tracing::info!(target: "reth::cli", path = ?config_path, "Network onfiguration loaded");
+            tracing::info!(target: "reth::cli", path = ?config_path, "Network configuration loaded");
 
             // Update the config with the command line arguments
             config.peers.trusted_nodes_only = network_args.trusted_only;
