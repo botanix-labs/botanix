@@ -21,7 +21,7 @@ use botanix_reth::{
         snapshot_manager::SnapshotRunnable,
         utils::{is_known_minting_contract, retry_exec},
         wallet_state_sync::WalletStateSync,
-        AuthorityConsensusBuilder,
+        AuthorityConsensusBuilder, OperatorBuilder,
     },
     node::{
         consensus::BotanixConsensus, evm::config::BotanixEvmConfig,
@@ -295,7 +295,7 @@ fn main() -> eyre::Result<()> {
             let frost_handle = if poa_cfg.federation_mode {
                 let frost_manager = frost_p2p.expect("should be some");
                 let frost_handle = frost_manager.handle();
-                task_executor.spawn_critical("p2p frost", frost_manager);
+                task_executor.spawn_critical("FrostManager", frost_manager);
                 Some(frost_handle)
             } else {
                 None
@@ -304,33 +304,29 @@ fn main() -> eyre::Result<()> {
             let botanix_evm_config = BotanixEvmConfig::new(chain_spec_arc.clone());
             let cometbft_rpc_factory = create_cometbft_factory(&poa_cfg);
             let btc_server_factory = btc_server_client.unzip().0;
-            let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
+            let (abci_started_tx, _) = tokio::sync::broadcast::channel::<()>(1);
             let (driver_tx, driver_rx) = tokio::sync::mpsc::channel(1);
 
-            let (frost_task, abci_client_builder, snapshot_manager, wallet_sync, consensus) =
+            let (abci_client_builder, snapshot_manager, consensus) =
                 match AuthorityConsensusBuilder::try_new(
                     chain_spec_arc.clone(),
                     blockchain_provider.clone(),
                     activation_manager,
-                    btc_server_factory,
+                    btc_server_factory.clone(),
                     bitcoin_checkpoints.clone(),
                     frost_setup_result.secret_key,
-                    network_handle.clone(),
-                    frost_handle,
                     task_executor.clone(),
-                    frost_setup_result.frost_config,
                     bitcoind_cfg.btc_network,
                     frost_setup_result.genesis_authorities.clone(),
                     frost_setup_result.authorities_socket_addresses,
                     botanix_evm_config,
-                    cometbft_rpc_factory,
-                    RandomSourceProvider::new(),
+                    cometbft_rpc_factory.clone(),
                     driver_tx,
                     state_sync_cfg.clone(),
                     reth_provider_factory.clone(),
                     botanix_db_provider_factory.clone(),
                     poa_cfg.block_fee_recipient_address,
-                    bitcoind_client,
+                    bitcoind_client.clone(),
                 ) {
                     std::result::Result::Ok(consensus) => consensus.build::<BtcServerExtendedClient>().await,
                     std::result::Result::Err(e) => {
@@ -349,8 +345,56 @@ fn main() -> eyre::Result<()> {
                     reth_db_provider_factory.clone(),
                     botanix_db_provider_factory,
                     blockchain_provider.clone(),
-                    storage,
+                    storage.clone(),
                 );
+
+                for multisig in frost_setup_result.federation_config.multisig {
+                    if !poa_cfg.federation_mode {
+                        break;
+                    }
+
+                    let Some(btc_server_factory) = btc_server_factory.clone() else {
+                        return Err(eyre::eyre!("btc-server mut be configured for authority"));
+                    };
+
+                    let Some(frost_config) = frost_setup_result.frost_config.clone() else {
+                        return Err(eyre::eyre!("frost config mut be configured for authority"));
+                    };
+
+                    let operator = OperatorBuilder::new(
+                        storage.clone(),
+                        btc_server_factory,
+                        network_handle.clone(),
+                        frost_handle.clone().expect("frost_handle must exist for authority"),
+                        task_executor.clone(),
+                        frost_config,
+                        cometbft_rpc_factory.clone(),
+                        RandomSourceProvider::new(),
+                        bitcoind_client.clone()
+                    );
+
+                    let (mut frost_task, wallet_sync) = operator.build::<BtcServerExtendedClient>().await;
+
+                    // TODO: Should be spawned by OperatorBuilder directly?
+                    task_executor.spawn_critical(
+                        "WalletSync", // TODO: Should be labeled
+                        Box::pin(async move {
+                            if let Err(e) = wallet_sync.sync_wallet_state().await {
+                                tracing::error!(target: "reth::cli", "Wallet Sync Error: {:?}", e);
+                            }
+                        }),
+                    );
+
+                    // TODO: Should be spawned by OperatorBuilder directly?
+                    let abci_started_rx = abci_started_tx.subscribe();
+                    task_executor.spawn_critical(
+                        "FrostTask", // TODO: Should be labeled
+                        Box::pin(async move {
+                            frost_task.start_task(abci_started_rx).await;
+                        }),
+                    );
+
+                }
 
                 // Setup and launch RPC server
                 let _rpc_handle = setup_and_run_rpc(
@@ -372,26 +416,6 @@ fn main() -> eyre::Result<()> {
                             if let Err(e) = snapshot_manager.run().await {
                                 tracing::error!(target: "reth::cli", "Snapshot Manager Error: {:?}", e);
                             }
-                        }),
-                    );
-                }
-
-                if let Some(wallet_sync) = wallet_sync {
-                    task_executor.spawn_critical(
-                        "Wallet Sync",
-                        Box::pin(async move {
-                            if let Err(e) = wallet_sync.sync_wallet_state().await {
-                                tracing::error!(target: "reth::cli", "Wallet Sync Error: {:?}", e);
-                            }
-                        }),
-                    );
-                }
-
-                if poa_cfg.federation_mode {
-                    task_executor.spawn_critical(
-                        "Frost Task",
-                        Box::pin(async move {
-                            frost_task.expect("frost task exists").start_task(abci_started_rx).await;
                         }),
                     );
                 }
