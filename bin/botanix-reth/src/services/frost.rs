@@ -14,14 +14,6 @@ use reth_network_peers::pk2id;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use std::net::SocketAddr;
 
-use crate::{
-    consensus::{
-        wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder,
-    },
-    node::{evm::config::BotanixEvmConfig, BotanixNode},
-    services::network_builder::BotanixNetworkHandle,
-};
-
 /// Result of setting up the Frost configuration for a node, containing the
 /// optional FrostConfig, the socket addresses of federation authorities, the
 /// node's secret key, and the genesis authorities.
