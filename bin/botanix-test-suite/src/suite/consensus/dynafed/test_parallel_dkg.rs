@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, GetPublicKeyRequest,
+    AbortDkgRequest, BtcServerExtendedApi, BtcServerExtendedClient,
+    GetPublicKeyRequest, StartNewDkgRequest,
 };
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 
@@ -14,7 +15,7 @@ use crate::{
 ///
 /// This test verifies that:
 /// 1. Nodes can have pre-saved keys for legacy multisig (ID 0)
-/// 2. Nodes automatically run DKG for new multisig (ID 1) when they start
+/// 2. Coordinator can trigger DKG for new multisig (ID 1) via start_new_dkg RPC
 /// 3. All nodes complete DKG and agree on the same aggregate public key
 /// 4. Pre-saved keys remain accessible after DKG completes for new multisig
 /// 5. The two multisigs have different aggregate public keys
@@ -33,6 +34,37 @@ pub async fn test_parallel_dkg(
     // Wait for DKG to complete for multisig ID 1 (the newly initialized federation)
     // Multisig ID 0 was pre-saved before nodes started, so it should be instantly available
     let target_multisig_id = MultisigId::new(LEGACY_MULTISIG_ID.as_u32() + 1);
+
+    // BTC servers create DKG sessions at startup but don't send notifications.
+    // We need to abort those sessions and restart via start_new_dkg on ALL nodes
+    // so that each node's frost_task receives the notification.
+    it_info_print!(
+        "Aborting existing DKG sessions and triggering new DKG on all nodes for multisig ID",
+        target_multisig_id.as_u32()
+    );
+
+    for (_index, fed_member) in test_fed_members.iter() {
+        let btc_server_url =
+            format!("http://{}", fed_member.bitcoin_server_url);
+        let mut btc_client = BtcServerExtendedClient::new(btc_server_url, None)
+            .await
+            .expect("Failed to create BTC server client");
+
+        // Abort any existing DKG session created at startup
+        let _ = btc_client
+            .abort_dkg(AbortDkgRequest {
+                multisig_id: target_multisig_id.as_u32(),
+            })
+            .await;
+
+        // Start new DKG - this sends DkgNotification::Start to the local frost_task
+        btc_client
+            .start_new_dkg(StartNewDkgRequest {
+                multisig_id: target_multisig_id.as_u32(),
+            })
+            .await
+            .expect("Failed to start DKG for new multisig");
+    }
 
     it_info_print!(
         "Waiting for DKG completion for multisig ID",
