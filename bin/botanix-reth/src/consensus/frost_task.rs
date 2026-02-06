@@ -487,7 +487,7 @@ where
         Ok(psbt)
     }
 
-    pub async fn start_task(&mut self, mut abci_started_rx: tokio::sync::broadcast::Receiver<()>) {
+    pub async fn start_task(&mut self, mut abci_started_rx: tokio::sync::oneshot::Receiver<()>) {
         // before we start get a proper event receiver
         let (peer_messages_tx, peer_messages_rx) = tokio::sync::oneshot::channel();
 

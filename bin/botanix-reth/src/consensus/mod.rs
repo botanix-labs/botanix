@@ -13,7 +13,6 @@ use serde_json as _;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 mod builder;
-mod operator;
 
 /// Comet BFT abci and consensus driver
 pub mod comet_bft;
@@ -23,7 +22,6 @@ mod signing;
 pub mod snapshot_manager;
 pub mod utils;
 pub use builder::AuthorityConsensusBuilder;
-pub use operator::OperatorBuilder;
 
 use crate::node::evm::config::BotanixEvmConfig;
 pub mod test_utils;

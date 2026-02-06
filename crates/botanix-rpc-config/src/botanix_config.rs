@@ -1,4 +1,4 @@
-//! Defines structure for botanix RPC configurable and business logic
+//! Defines structure for botanix RPC configurables and business logic
 
 use alloy_primitives::U256;
 use alloy_rpc_types_eth::{
@@ -7,7 +7,9 @@ use alloy_rpc_types_eth::{
 use botanix_authority_edh::extra_data_header::ExtraDataHeader;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_btc_wallet::{
-    error::BitcoindAdapterError, fallback::FallbackBitcoindClient,
+    bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory},
+    error::{BitcoindAdapterError, BitcoindError},
+    fallback::FallbackBitcoindClient,
 };
 use botanix_rpc_types::types::RichBlock;
 use btcserverlib::wallet::address::{
