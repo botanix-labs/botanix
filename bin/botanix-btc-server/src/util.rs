@@ -289,7 +289,7 @@ pub fn validate_psbt(
     }
 
     // Detect sweep transaction: no pegout outputs, single output
-    let is_sweep = psbt.is_sweep();
+    let is_sweep = psbt.is_single_output_without_pegout();
 
     if is_sweep {
         info!("Detected sweep transaction with {} inputs", psbt.inputs.len());
