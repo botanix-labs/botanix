@@ -1833,7 +1833,7 @@ where
         );
 
         // Check if this is a sweep transaction (no pegout IDs, single output)
-        if psbt.is_sweep() {
+        if psbt.is_single_output_without_pegout() {
             // Sweep tx - lookup metadata stored in get_sweep_psbt()
             if let Some(pending_sweep) =
                 self.db.get_pending_sweep(&signing_session_id).to_status()?
@@ -1995,7 +1995,7 @@ where
         self.db.remove_pending_pegout(&pegout_ids).to_status()?;
 
         // If this was a sweep, remove the pending sweep metadata
-        if psbt.is_sweep() {
+        if psbt.is_single_output_without_pegout() {
             self.db.remove_pending_sweep(&signing_session_id).to_status()?;
             info!("[finalize_signing] Removed pending sweep");
         }

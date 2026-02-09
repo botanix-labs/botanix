@@ -269,7 +269,7 @@ pub trait PsbtExt: BorrowMut<Psbt> {
 
     /// Returns true if this PSBT represents a sweep transaction (structurally).
     /// A sweep has no pegout outputs and exactly one output (the change to the target multisig).
-    fn is_sweep(&self) -> bool {
+    fn is_single_output_without_pegout(&self) -> bool {
         self.pegout_ids().is_empty() && self.borrow().outputs.len() == 1
     }
 
