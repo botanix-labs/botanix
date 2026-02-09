@@ -1835,30 +1835,40 @@ where
         // Check if this is a sweep transaction (no pegout IDs, single output)
         if psbt.is_single_output_without_pegout() {
             // Sweep tx - lookup metadata stored in get_sweep_psbt()
-            if let Some(pending_sweep) =
-                self.db.get_pending_sweep(&signing_session_id).to_status()?
-            {
-                let sweep_metadata = database::SweepMetadata {
-                    source_multisig_id: pending_sweep.source_multisig_id,
-                    target_multisig_id: pending_sweep.target_multisig_id,
-                };
-                self.add_tracked_sweep_tx(
-                    signed_tx.clone(),
-                    sweep_metadata,
-                    SystemTime::now(),
-                )
-                .await
-                .to_status()?;
-                info!(
-                    "[get_round2_signing_package] Tracking sweep tx {}",
-                    signed_tx.compute_txid()
-                );
-            } else {
-                // Fallback: sweep detected but no metadata (shouldn't happen)
-                warn!("[get_round2_signing_package] Sweep detected but no pending sweep metadata");
-                self.add_tracked_tx(signed_tx.clone(), &[], SystemTime::now())
+            match self.db.get_pending_sweep(&signing_session_id).to_status()? {
+                Some(pending_sweep) => {
+                    let sweep_metadata = database::SweepMetadata {
+                        source_multisig_id: pending_sweep.source_multisig_id,
+                        target_multisig_id: pending_sweep.target_multisig_id,
+                    };
+                    self.add_tracked_sweep_tx(
+                        signed_tx.clone(),
+                        sweep_metadata,
+                        SystemTime::now(),
+                    )
                     .await
                     .to_status()?;
+                    info!(
+                        "[get_round2_signing_package] Tracking sweep tx {}",
+                        signed_tx.compute_txid()
+                    );
+                }
+                None if self.is_coordinator() => {
+                    return Err(tonic::Status::failed_precondition(
+                        "Missing pending sweep metadata for signing session",
+                    ));
+                }
+                None => {
+                    // Non-coordinator fallback: track without sweep metadata
+                    warn!("[get_round2_signing_package] Sweep detected but no pending sweep metadata");
+                    self.add_tracked_tx(
+                        signed_tx.clone(),
+                        &[],
+                        SystemTime::now(),
+                    )
+                    .await
+                    .to_status()?;
+                }
             }
         } else {
             // Regular pegout tx
