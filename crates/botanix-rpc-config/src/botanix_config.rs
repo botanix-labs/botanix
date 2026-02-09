@@ -1,4 +1,4 @@
-//! Defines structure for botanix RPC configurables and business logic
+//! Defines structure for botanix RPC configurable and business logic
 
 use alloy_primitives::U256;
 use alloy_rpc_types_eth::{
