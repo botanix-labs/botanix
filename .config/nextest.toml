@@ -5,5 +5,10 @@ test-threads = 4
 
 [[profile.default.overrides]]
 filter = "test(general_state_tests)"
-slow-timeout = { period = "4m", terminate-after = 2 }
+slow-timeout = { period = "4m", terminate-after = 3 }
 test-threads = 8
+
+# st_bad_opcode takes ~7-8 minutes in debug mode, faster in release
+[[profile.default.overrides]]
+filter = "test(st_bad_opcode)"
+slow-timeout = { period = "5m", terminate-after = 3 }
