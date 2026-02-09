@@ -294,6 +294,7 @@ pub enum ForkSpec {
     /// London
     London,
     /// Paris aka The Merge
+    #[serde(alias = "Paris")]
     Merge,
     /// Shanghai
     Shanghai,
