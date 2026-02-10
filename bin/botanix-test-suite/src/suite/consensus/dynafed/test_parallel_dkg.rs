@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use bitcoin::Amount;
-use bitcoincore_rpc::RpcApi;
 use botanix_authority_peg::{
     mint_validation::BURN_TOPIC,
     peg_contract::PegoutData,
