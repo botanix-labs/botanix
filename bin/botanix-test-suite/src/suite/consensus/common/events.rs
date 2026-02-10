@@ -119,7 +119,7 @@ pub async fn await_epoch_block(
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct GatewayAddressResponse {
     pub gateway_address: String,
     pub aggregate_public_key: String,
