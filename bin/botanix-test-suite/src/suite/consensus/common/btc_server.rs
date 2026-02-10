@@ -12,6 +12,7 @@ use btcserverlib::{
     federation_args::{
         FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
     },
+    frost_id,
 };
 use frost_secp256k1_tr as frost;
 use reth_network_peers::PeerId;
@@ -70,27 +71,29 @@ impl SpawnedBtcServerProcess {
     }
 }
 
-/// Pre-populates BTC server databases with dummy FROST keys for specified multisig IDs.
+/// Pre-save FROST key packages for a federation member.
+///
 /// This allows nodes to skip DKG for these multisigs during testing.
 ///
 /// # Arguments
 /// * `db_path` - Path to the BTC server database directory
 /// * `multisig_ids` - Slice of multisig IDs to pre-populate with keys
-/// * `member_index` - The index of this federation member (0-based)
-/// * `max_signers` - Maximum number of signers for FROST
+/// * `frost_identifiers` - The list of FROST identifiers for all federation members.
+///   These must match what BtcServer uses at runtime (derived via `frost_id!` macro).
+/// * `member_index` - The index of this federation member (0-based), used to look up
+///   the correct identifier from `frost_identifiers`
 /// * `min_signers` - Minimum threshold of signers for FROST
-///
-/// # Returns
-/// Returns `Ok(())` on success, or an error if key generation or database operations fail
 fn presave_multisig_keys(
     db_path: &Path,
     multisig_ids: &[MultisigId],
+    frost_identifiers: &[frost::Identifier],
     member_index: u16,
-    max_signers: u16,
     min_signers: u16,
 ) -> anyhow::Result<()> {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
+
+    let max_signers = frost_identifiers.len() as u16;
 
     // Open the BTC server database
     let btc_db = BtcDatabase::open(db_path)?;
@@ -113,16 +116,23 @@ fn presave_multisig_keys(
         ) = frost::keys::generate_with_dealer(
             max_signers,
             min_signers,
-            frost::keys::IdentifierList::Default,
+            frost::keys::IdentifierList::Custom(frost_identifiers),
             &mut rng,
         )?;
 
-        // Get the key package for this specific member
-        // FROST identifiers are 1-based, so we add 1 to the member_index
-        let identifier = frost::Identifier::try_from(member_index + 1)?;
+        // Get the key package for this specific member using their identifier
+        let my_identifier =
+            frost_identifiers.get(member_index as usize).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Member index {} out of bounds for {} identifiers",
+                    member_index,
+                    frost_identifiers.len()
+                )
+            })?;
+
         let key_package = frost::keys::KeyPackage::try_from(
             shares
-                .get(&identifier)
+                .get(my_identifier)
                 .ok_or_else(|| {
                     anyhow::anyhow!(
                         "Share not found for member {}",
@@ -298,6 +308,11 @@ pub fn spawn_n_btc_server_processes(
         ));
     }
 
+    // Generate FROST identifiers once for all federation members.
+    // These must match what BtcServer uses at runtime (derived via frost_id! macro).
+    let frost_identifiers: Vec<frost::Identifier> =
+        (0..global_context.max_signers).map(|i| frost_id!(i)).collect();
+
     for i in 0..global_context.fed_instances {
         let temp_db_path = tempfile::TempDir::new()
             .context("error creating tempdir")?
@@ -314,8 +329,8 @@ pub fn spawn_n_btc_server_processes(
             presave_multisig_keys(
                 &db_path,
                 presave_multisigs,
+                &frost_identifiers,
                 i,
-                global_context.max_signers,
                 global_context.min_signers,
             )?;
         }

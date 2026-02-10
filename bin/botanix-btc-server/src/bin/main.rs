@@ -2667,19 +2667,18 @@ where
         req: tonic::Request<rpc::GetPublicKeyRequest>,
     ) -> Result<tonic::Response<rpc::GetPublicKeyResponse>, tonic::Status> {
         self.validate_jwt(&req)?;
-        // Ensure we have a key package
-        let key_package = self
-            .db
-            .get_key_package()
-            .to_status()?
-            .ok_or(badarg!("Missing key package"))?;
+        let multisig_id: MultisigId = req.into_inner().multisig_id.into();
+
+        // Ensure we have a key package for this multisig
+        let key_package =
+            self.db.get_key_package_by_id(multisig_id).to_status()?.ok_or(
+                badarg!("Missing key package for multisig_id {}", multisig_id),
+            )?;
 
         let pk = key_package.verifying_key();
         let pk = hex::encode(pk.serialize().to_status()?);
 
-        return Ok(tonic::Response::new(rpc::GetPublicKeyResponse {
-            publickey: pk,
-        }));
+        Ok(tonic::Response::new(rpc::GetPublicKeyResponse { publickey: pk }))
     }
 
     async fn get_gateway_address(
@@ -3937,7 +3936,7 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use bitcoin::{secp256k1, OutPoint, Script, Txid};
     use botanix_configs::hash::compute_config_hash;
-    use botanix_types::LEGACY_MULTISIG_ID;
+    use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
     use btcserverlib::{
         dkg::DkgMessage, test_utils::pegout_requests_from_tx,
         wallet::address::generate_taproot_change_scriptpubkey,
@@ -4113,7 +4112,61 @@ mod tests {
         });
         let res = app.get_public_key(req).await.unwrap_err();
         assert_eq!(res.code(), tonic::Code::InvalidArgument);
-        assert_eq!(res.message(), "Missing key package");
+        assert_eq!(res.message(), "Missing key package for multisig_id 0");
+    }
+
+    #[tokio::test]
+    async fn get_public_key_should_returns_key_for_multisig() {
+        let app = setup().await;
+
+        // Set up key packages for two different multisig IDs
+        let multisig_id_0: MultisigId = 0.into();
+        let multisig_id_1: MultisigId = 1.into();
+
+        // Create distinct key packages for each multisig
+        let (shares_0, pk_package_0) = trusted_dealer_setup(2, 3);
+        let key_package_0 =
+            frost::keys::KeyPackage::try_from(shares_0[&frost_id!(0)].clone())
+                .expect("valid key package");
+        app.db
+            .set_key_package_by_id(multisig_id_0, key_package_0.clone())
+            .unwrap();
+        app.db.set_pubkey_package_by_id(multisig_id_0, pk_package_0).unwrap();
+
+        let (shares_1, pk_package_1) = trusted_dealer_setup(2, 3);
+        let key_package_1 =
+            frost::keys::KeyPackage::try_from(shares_1[&frost_id!(0)].clone())
+                .expect("valid key package");
+        app.db
+            .set_key_package_by_id(multisig_id_1, key_package_1.clone())
+            .unwrap();
+        app.db.set_pubkey_package_by_id(multisig_id_1, pk_package_1).unwrap();
+
+        // Get the expected public keys
+        let expected_pk_0 =
+            hex::encode(key_package_0.verifying_key().serialize().unwrap());
+        let expected_pk_1 =
+            hex::encode(key_package_1.verifying_key().serialize().unwrap());
+
+        // Verify the keys are different (sanity check)
+        assert_ne!(
+            expected_pk_0, expected_pk_1,
+            "Test setup error: keys should be different"
+        );
+
+        // Request public key for multisig_id_0
+        let req_0 = tonic::Request::new(rpc::GetPublicKeyRequest {
+            multisig_id: *multisig_id_0,
+        });
+        let res_0 = app.get_public_key(req_0).await.unwrap();
+        assert_eq!(res_0.into_inner().publickey, expected_pk_0);
+
+        // Request public key for multisig_id_1
+        let req_1 = tonic::Request::new(rpc::GetPublicKeyRequest {
+            multisig_id: *multisig_id_1,
+        });
+        let res_1 = app.get_public_key(req_1).await.unwrap();
+        assert_eq!(res_1.into_inner().publickey, expected_pk_1);
     }
 
     #[tokio::test]
