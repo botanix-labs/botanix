@@ -5,16 +5,16 @@
 use std::time::Duration;
 
 use bitcoin::Amount;
-use botanix_authority_peg::{mint_validation::BURN_TOPIC, peg_contract::PegoutData, utils::AmountExt};
 use bitcoincore_rpc::RpcApi;
+use botanix_authority_peg::{
+    mint_validation::BURN_TOPIC, peg_contract::PegoutData, utils::AmountExt,
+};
 
 use crate::{
     it_info_print,
     suite::consensus::common::{
-        botanix_client::BotanixEthClient,
-        events::await_botanix_event,
-        pegin::PeginResult,
-        poa_node::Notifications,
+        botanix_client::BotanixEthClient, events::await_botanix_event,
+        pegin::PeginResult, poa_node::Notifications,
     },
     utils::generate_blocks,
 };
@@ -31,10 +31,11 @@ pub async fn run_pegout(
     bitcoind_rpc: &bitcoincore_rpc::Client,
     pegout_amount_btc: Option<Amount>,
 ) -> anyhow::Result<()> {
-    let pegout_amount =
-        pegout_amount_btc.unwrap_or_else(|| Amount::from_btc(0.5).expect("0.5 btc"));
-    let pegout_destination =
-        ethers::core::types::Bytes::from(pegin_result.btc_address.to_string().as_bytes().to_vec());
+    let pegout_amount = pegout_amount_btc
+        .unwrap_or_else(|| Amount::from_btc(0.5).expect("0.5 btc"));
+    let pegout_destination = ethers::core::types::Bytes::from(
+        pegin_result.btc_address.to_string().as_bytes().to_vec(),
+    );
     let pegout_data =
         ethers::core::types::Bytes::from(vec![PegoutData::version()]);
 
@@ -51,12 +52,12 @@ pub async fn run_pegout(
     generate_blocks(bitcoind_rpc, 1).await;
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    let tip_hash = bitcoind_rpc.get_best_block_hash().map_err(|e| {
-        anyhow::anyhow!("get_best_block_hash failed: {}", e)
-    })?;
-    let tip_block = bitcoind_rpc.get_block(&tip_hash).map_err(|e| {
-        anyhow::anyhow!("get_block failed: {}", e)
-    })?;
+    let tip_hash = bitcoind_rpc
+        .get_best_block_hash()
+        .map_err(|e| anyhow::anyhow!("get_best_block_hash failed: {}", e))?;
+    let tip_block = bitcoind_rpc
+        .get_block(&tip_hash)
+        .map_err(|e| anyhow::anyhow!("get_block failed: {}", e))?;
 
     it_info_print!("Tip block: ", tip_block);
     anyhow::ensure!(
@@ -73,7 +74,8 @@ pub async fn run_pegout(
         pegout_tx.input.len()
     );
     anyhow::ensure!(
-        pegout_tx.input[0].previous_output.txid == pegin_result.pegin_tx.compute_txid(),
+        pegout_tx.input[0].previous_output.txid
+            == pegin_result.pegin_tx.compute_txid(),
         "pegout input should spend pegin tx"
     );
     anyhow::ensure!(
@@ -87,19 +89,19 @@ pub async fn run_pegout(
     );
 
     let address_spk = pegin_result.btc_address.script_pubkey();
-    let match_found = pegout_tx
-        .output
-        .iter()
-        .any(|o| o.script_pubkey == address_spk);
+    let match_found =
+        pegout_tx.output.iter().any(|o| o.script_pubkey == address_spk);
     anyhow::ensure!(match_found, "pegout outputs should include btc_address");
     anyhow::ensure!(
         pegout_tx.output[1].value > Amount::from_sat(0),
         "pegout output[1] value should be positive"
     );
 
-    let total_input_value = pegin_result.pegin_tx.output[pegin_result.vout as usize].value;
+    let total_input_value =
+        pegin_result.pegin_tx.output[pegin_result.vout as usize].value;
     it_info_print!("Total input value: ", total_input_value);
-    let total_output_value = pegout_tx.output[0].value + pegout_tx.output[1].value;
+    let total_output_value =
+        pegout_tx.output[0].value + pegout_tx.output[1].value;
     it_info_print!("Total output value: ", total_output_value);
     let actual_fee = total_input_value - total_output_value;
     it_info_print!("Actual fee: ", actual_fee);

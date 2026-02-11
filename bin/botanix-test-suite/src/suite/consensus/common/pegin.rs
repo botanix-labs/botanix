@@ -68,9 +68,9 @@ pub async fn run_pegin(
     .map_err(|e| anyhow::anyhow!("gateway address not available: {:?}", e))?;
     it_info_print!("Gateway Address Response", gateway_address_response);
 
-    let balance = bitcoind_rpc.get_balance(None, None).map_err(|e| {
-        anyhow::anyhow!("bitcoind get_balance failed: {}", e)
-    })?;
+    let balance = bitcoind_rpc
+        .get_balance(None, None)
+        .map_err(|e| anyhow::anyhow!("bitcoind get_balance failed: {}", e))?;
     it_info_print!("Bitcoin balance", balance);
 
     let btc_address = bitcoin::Address::from_str(
@@ -98,10 +98,7 @@ pub async fn run_pegin(
     let tx_res = bitcoind_rpc
         .get_transaction(&pegin_txid, None)
         .map_err(|e| anyhow::anyhow!("get_transaction failed: {}", e))?;
-    anyhow::ensure!(
-        tx_res.info.confirmations > 1,
-        "pegin tx not confirmed"
-    );
+    anyhow::ensure!(tx_res.info.confirmations > 1, "pegin tx not confirmed");
     let pegin_tx = tx_res
         .transaction()
         .map_err(|e| anyhow::anyhow!("get pegin tx failed: {}", e))?;
@@ -123,13 +120,13 @@ pub async fn run_pegin(
         .info
         .blockhash
         .ok_or_else(|| anyhow::anyhow!("pegin tx has no blockhash"))?;
-    let tip = bitcoind_rpc.get_best_block_hash().map_err(|e| {
-        anyhow::anyhow!("get_best_block_hash failed: {}", e)
-    })?;
+    let tip = bitcoind_rpc
+        .get_best_block_hash()
+        .map_err(|e| anyhow::anyhow!("get_best_block_hash failed: {}", e))?;
     it_info_print!("Bitcoin Chain Tip", tip);
-    let tip_header = bitcoind_rpc.get_block_header(&tip).map_err(|e| {
-        anyhow::anyhow!("get_block_header failed: {}", e)
-    })?;
+    let tip_header = bitcoind_rpc
+        .get_block_header(&tip)
+        .map_err(|e| anyhow::anyhow!("get_block_header failed: {}", e))?;
 
     let mut headers = vec![];
     let mut cursor = tip_header;
@@ -137,7 +134,8 @@ pub async fn run_pegin(
     loop {
         stopgap -= 1;
         anyhow::ensure!(
-            stopgap > 0 && cursor.prev_blockhash != bitcoin::BlockHash::all_zeros(),
+            stopgap > 0
+                && cursor.prev_blockhash != bitcoin::BlockHash::all_zeros(),
             "confirmation block not found"
         );
         headers.push(cursor);
@@ -151,9 +149,9 @@ pub async fn run_pegin(
     headers.reverse();
     it_info_print!("Number of pegin_headers:", headers.len());
 
-    let conf_block_info = bitcoind_rpc.get_block_info(&conf_hash).map_err(
-        |e| anyhow::anyhow!("get_block_info failed: {}", e),
-    )?;
+    let conf_block_info = bitcoind_rpc
+        .get_block_info(&conf_hash)
+        .map_err(|e| anyhow::anyhow!("get_block_info failed: {}", e))?;
     it_info_print!("Block info", conf_block_info);
     let pegin_txid_computed = pegin_tx.compute_txid();
     let merkle_match: Vec<bool> = conf_block_info
@@ -161,8 +159,7 @@ pub async fn run_pegin(
         .iter()
         .map(|id| *id == pegin_txid_computed)
         .collect();
-    let pmt =
-        PartialMerkleTree::from_txids(&conf_block_info.tx, &merkle_match);
+    let pmt = PartialMerkleTree::from_txids(&conf_block_info.tx, &merkle_match);
 
     let bitcoin_block_height = conf_block_info.height as u32;
     let aggregate_pubkey = secp256k1::PublicKey::from_str(
@@ -186,20 +183,21 @@ pub async fn run_pegin(
         bitcoin_block_height,
         meta: vec![meta.clone()],
     };
-    let tip_height = bitcoind_rpc.get_block_count().map_err(|e| {
-        anyhow::anyhow!("get_block_count failed: {}", e)
-    })?;
+    let tip_height = bitcoind_rpc
+        .get_block_count()
+        .map_err(|e| anyhow::anyhow!("get_block_count failed: {}", e))?;
     let checkpoint_height = tip_height - pegin_conf_depth as u64;
-    let checkpoint_hash = bitcoind_rpc.get_block_hash(checkpoint_height).map_err(
-        |e| anyhow::anyhow!("get_block_hash failed: {}", e),
-    )?;
-    let checkpoint_header = bitcoind_rpc.get_block_header(&checkpoint_hash).map_err(
-        |e| anyhow::anyhow!("get_block_header for checkpoint failed: {}", e),
-    )?;
+    let checkpoint_hash = bitcoind_rpc
+        .get_block_hash(checkpoint_height)
+        .map_err(|e| anyhow::anyhow!("get_block_hash failed: {}", e))?;
+    let checkpoint_header =
+        bitcoind_rpc.get_block_header(&checkpoint_hash).map_err(|e| {
+            anyhow::anyhow!("get_block_header for checkpoint failed: {}", e)
+        })?;
     let checkpoint = (checkpoint_header, checkpoint_height as u32);
-    pegin_data
-        .validate(&checkpoint, &aggregate_pubkey)
-        .map_err(|e| anyhow::anyhow!("pegin data validation failed: {:?}", e))?;
+    pegin_data.validate(&checkpoint, &aggregate_pubkey).map_err(|e| {
+        anyhow::anyhow!("pegin data validation failed: {:?}", e)
+    })?;
     it_info_print!("Pegindata successfully validated");
 
     it_info_print!(
@@ -230,13 +228,12 @@ pub async fn run_pegin(
     await_botanix_event(rx, *MINT_TOPIC).await;
     tokio::time::sleep(Duration::from_secs(5)).await;
 
-    let eth_address =
-        NameOrAddress::from_str(&eth_account.to_string()).map_err(|e| {
-            anyhow::anyhow!("eth_address from_str failed: {}", e)
-        })?;
-    let eth_address_balance = provider.get_balance(eth_address, None).await.map_err(
-        |e| anyhow::anyhow!("get_balance failed: {}", e),
-    )?;
+    let eth_address = NameOrAddress::from_str(&eth_account.to_string())
+        .map_err(|e| anyhow::anyhow!("eth_address from_str failed: {}", e))?;
+    let eth_address_balance = provider
+        .get_balance(eth_address, None)
+        .await
+        .map_err(|e| anyhow::anyhow!("get_balance failed: {}", e))?;
     anyhow::ensure!(
         !eth_address_balance.is_zero(),
         "pegin balance is zero after mint"
@@ -250,7 +247,9 @@ pub async fn run_pegin(
         eth_destination,
         btc_address,
         bitcoin_block_height,
-        aggregate_public_key: gateway_address_response.aggregate_public_key.clone(),
+        aggregate_public_key: gateway_address_response
+            .aggregate_public_key
+            .clone(),
         gateway_address_response,
     })
 }

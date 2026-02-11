@@ -1,7 +1,12 @@
-use std::{collections::{HashMap, HashSet}, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use bitcoin::Amount;
-use botanix_authority_peg::{mint_validation::BURN_TOPIC, peg_contract::PegoutData, utils::AmountExt};
+use botanix_authority_peg::{
+    mint_validation::BURN_TOPIC, peg_contract::PegoutData, utils::AmountExt,
+};
 use botanix_btc_server_client::{
     BtcServerClient, GetFinalizedPegoutIdsRequest,
 };
