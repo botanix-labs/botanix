@@ -272,7 +272,7 @@ clean-build:
 # ------------------------------------------------------------
 
 # Convert find output to space-separated list for taplo
-TOML_FILES := $(shell find . -not -path "./target/*" -name "*.toml" | tr '\n' ' ')
+TOML_FILES := $(shell find . -not -path "./target/*" -not -path "./testing/*" -not -path "./node_modules/*" -name "*.toml" | tr '\n' ' ')
 BUN := $(shell command -v bun 2>/dev/null || echo "${HOME}/.bun/bin/bun")
 
 fmt: fmt-cargo fmt-rust fmt-prettier fmt-markdown
@@ -281,8 +281,10 @@ fmt-cargo:
 	@echo "Formatting TOML files..."
 	@taplo fmt $(TOML_FILES)
 
+FMT_PACKAGES := $(shell cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[].name' | grep -v ef-tests | sed 's/^/-p /' | tr '\n' ' ')
+
 fmt-rust:
-	cargo fmt -- --color always
+	cargo fmt $(FMT_PACKAGES) -- --color always
 
 fmt-prettier:
 	@$(BUN) run prettier:fix
@@ -297,7 +299,7 @@ lint-cargo:
 
 lint-rust:
 	@cargo check --all-targets --all-features
-	@cargo fmt --all --check -- --color always
+	@cargo fmt $(FMT_PACKAGES) --check -- --color always
 
 lint-clippy:
 	cargo clippy --workspace --all-targets --all-features -- -D warnings

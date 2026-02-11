@@ -1,3 +1,5 @@
+exclude = ["testing/**"]
+
 [formatting]
 align_comments = true
 align_entries = false

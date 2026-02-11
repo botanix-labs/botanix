@@ -49,6 +49,9 @@ jobs:
       - name: Install taplo
         run: cargo install taplo-cli --locked
 
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
       - name: Run Pre Commit
         uses: pre-commit/action@v3.0.1
 
