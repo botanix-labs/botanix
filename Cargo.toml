@@ -32,6 +32,7 @@ members = [
   "crates/botanix-storage",
   "crates/botanix-storage-migrate",
   "crates/botanix-utils",
+  "testing/ef-tests",
 ]
 default-members = ["bin/botanix-reth"]
 [workspace.package]
@@ -387,6 +388,8 @@ tonic = { version = "0.12.3", features = ["gzip"] }
 tracing = "0.1"
 url = "2.5.4"
 uuid = { version = "1.8.0", features = ["v4"] }
+walkdir = "2.5"
+rayon = "1.10"
 
 [profile.profiling]
 inherits = "release"

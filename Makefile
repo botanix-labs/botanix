@@ -21,6 +21,11 @@ PROFILE ?= release
 # Extra flags for Cargo
 CARGO_INSTALL_EXTRA_FLAGS ?=
 
+# The release tag of https://github.com/ethereum/tests to use for EF tests
+EF_TESTS_TAG := v17.0
+EF_TESTS_URL := https://github.com/ethereum/tests/archive/refs/tags/$(EF_TESTS_TAG).tar.gz
+EF_TESTS_DIR := ./testing/ef-tests/ethereum-tests
+
 # The docker image name
 DOCKER_IMAGE_NAME ?= ghcr.io/botanix-labs/$(BUILD_PACKAGE)
 
@@ -148,6 +153,18 @@ cov-report-html: cov-unit ## Generate a HTML coverage report and open it in the 
 	cargo llvm-cov report --html
 	open target/llvm-cov/html/index.html
 
+# Downloads and unpacks Ethereum Foundation tests in the `$(EF_TESTS_DIR)` directory.
+# Requires `wget` and `tar`
+$(EF_TESTS_DIR):
+	mkdir -p $(EF_TESTS_DIR)
+	wget $(EF_TESTS_URL) -O ethereum-tests.tar.gz
+	tar -xzf ethereum-tests.tar.gz --strip-components=1 -C $(EF_TESTS_DIR)
+	rm ethereum-tests.tar.gz
+
+.PHONY: ef-tests
+ef-tests: $(EF_TESTS_DIR) ## Runs Ethereum Foundation tests.
+	cargo nextest run -p ef-tests --features ef-tests
+
 ##@ Docker
 
 # Note: This requires a buildx builder with emulation support. For example:
@@ -199,6 +216,7 @@ endef
 clean: ## Perform a `cargo` clean and remove the binary and test vectors directories.
 	cargo clean
 	rm -rf $(BIN_DIR)
+	rm -rf $(EF_TESTS_DIR)
 
 # ------------------------------------------------------------
 #  Setup & Validation Targets
