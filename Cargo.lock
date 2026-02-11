@@ -5053,7 +5053,7 @@ dependencies = [
 
 [[package]]
 name = "ef-tests"
-version = "1.5.5-rc.4"
+version = "1.6.0"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
