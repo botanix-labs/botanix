@@ -47,6 +47,9 @@ pub struct MockBitcoind {
             >,
         >,
     >,
+    /// Configurable block confirmations for testing reorg scenarios.
+    /// Positive == in canonical chain, 0 == reorged out.
+    pub block_confirmations: u8,
 }
 
 impl MockBitcoind {
@@ -55,6 +58,7 @@ impl MockBitcoind {
             utxo_set: std::sync::Arc::new(
                 std::sync::Mutex::new(HashMap::new()),
             ),
+            block_confirmations: 1,
         }
     }
 
@@ -188,22 +192,24 @@ impl bitcoincore_rpc::RpcApi for MockBitcoind {
         }
         if method == "getblockheaderinfo" {
             let block_hash = bitcoin::BlockHash::all_zeros();
+            let confirmations = self.block_confirmations;
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
             return Ok(serde_json::from_str(
-                    &format!("{{\"hash\": \"{block_hash}\", \"confirmations\": 1, \"height\": 1, \"version\": 1, \"version_hex\": \"01000000\", \"merkleroot\": \"{block_hash}\", \"time\": {current_time}, \"mediantime\": {current_time}, \"nonce\": 1, \"bits\": \"1d00ffff\", \"difficulty\": 1, \"chainwork\": \"0000000000000000000000000000000000000000000000000000000000000001\", \"n_tx\": 1, \"previousblockhash\": \"{block_hash}\", \"nextblockhash\": \"{block_hash}\"}}",),
+                    &format!("{{\"hash\": \"{block_hash}\", \"confirmations\": {confirmations}, \"height\": 1, \"version\": 1, \"version_hex\": \"01000000\", \"merkleroot\": \"{block_hash}\", \"time\": {current_time}, \"mediantime\": {current_time}, \"nonce\": 1, \"bits\": \"1d00ffff\", \"difficulty\": 1, \"chainwork\": \"0000000000000000000000000000000000000000000000000000000000000001\", \"n_tx\": 1, \"previousblockhash\": \"{block_hash}\", \"nextblockhash\": \"{block_hash}\"}}",),
                 ).unwrap());
         }
         if method == "getblockheader" {
             let block_hash = bitcoin::BlockHash::all_zeros();
+            let confirmations = self.block_confirmations;
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
             return Ok(serde_json::from_str(
-                    &format!("{{\"hash\": \"{block_hash}\", \"confirmations\": 1, \"height\": 1, \"version\": 1, \"version_hex\": \"01000000\", \"merkleroot\": \"{block_hash}\", \"time\": {current_time}, \"mediantime\": {current_time}, \"nonce\": 1, \"bits\": \"1d00ffff\", \"difficulty\": 1, \"chainwork\": \"0000000000000000000000000000000000000000000000000000000000000001\", \"nTx\": 1, \"previousblockhash\": \"{block_hash}\", \"nextblockhash\": \"{block_hash}\"}}",),
+                    &format!("{{\"hash\": \"{block_hash}\", \"confirmations\": {confirmations}, \"height\": 1, \"version\": 1, \"version_hex\": \"01000000\", \"merkleroot\": \"{block_hash}\", \"time\": {current_time}, \"mediantime\": {current_time}, \"nonce\": 1, \"bits\": \"1d00ffff\", \"difficulty\": 1, \"chainwork\": \"0000000000000000000000000000000000000000000000000000000000000001\", \"nTx\": 1, \"previousblockhash\": \"{block_hash}\", \"nextblockhash\": \"{block_hash}\"}}",),
                 ).unwrap());
         }
         if method == "getmempoolentry" {

@@ -371,13 +371,19 @@ where
                     .get_block_header_info(&latest)
                     .map(|info| info.confirmations > 0)
                     .unwrap_or_else(|e| {
-                        warn!("Failed to validate persisted block {}: {}", latest, e);
+                        warn!(
+                            "Failed to validate persisted block {}: {}",
+                            latest, e
+                        );
                         false
                     });
 
                 if is_valid {
                     let txs = db.get_tracked_txs()?;
-                    info!("Loaded pegout scheduler with {} pending txs", txs.len());
+                    info!(
+                        "Loaded pegout scheduler with {} pending txs",
+                        txs.len()
+                    );
                     (latest, txs)
                 } else {
                     warn!(
@@ -388,7 +394,10 @@ where
                 }
             }
             None => {
-                info!("No finalized block found, using fallback: {}", fallback_checkpoint);
+                info!(
+                    "No finalized block found, using fallback: {}",
+                    fallback_checkpoint
+                );
                 (fallback_checkpoint, vec![])
             }
         };
@@ -3991,5 +4000,81 @@ mod tests {
         let utxos = app.db.get_all_utxos().unwrap();
         assert_eq!(utxos.len(), 1);
         assert_eq!(utxos[0].outpoint, existing_outpoint);
+    }
+
+    #[test]
+    fn load_pegout_scheduler_uses_persisted_block_when_valid() {
+        let temp_db = TempDir::new().unwrap();
+        let db = database::Db::open(temp_db.path()).unwrap();
+
+        let persisted_block = bitcoin::BlockHash::from_byte_array([1u8; 32]);
+        db.store_pegout_mgr_finalized_block(persisted_block).unwrap();
+
+        let fallback_block = bitcoin::BlockHash::from_byte_array([2u8; 32]);
+        let mock_bitcoind = MockBitcoind::new();
+
+        let scheduler = App::<MockBitcoind>::load_pegout_scheduler(
+            &db,
+            fallback_block,
+            1,
+            None,
+            bitcoin::Network::Regtest,
+            0,
+            &mock_bitcoind,
+        )
+        .unwrap();
+
+        assert_eq!(scheduler.last_finalized(), persisted_block);
+    }
+
+    #[test]
+    fn load_pegout_scheduler_uses_fallback_when_reorged() {
+        let temp_db = TempDir::new().unwrap();
+        let db = database::Db::open(temp_db.path()).unwrap();
+
+        let persisted_block = bitcoin::BlockHash::from_byte_array([1u8; 32]);
+        db.store_pegout_mgr_finalized_block(persisted_block).unwrap();
+
+        let fallback_block = bitcoin::BlockHash::from_byte_array([2u8; 32]);
+        let mut mock_bitcoind = MockBitcoind::new();
+        // This is intended to simulate a reorg where the persisted block is no longer in the main chain.
+        // so it should be treated as having 0 confirmations and thus be ignored in favor of the fallback.
+        mock_bitcoind.block_confirmations = 0;
+
+        let scheduler = App::<MockBitcoind>::load_pegout_scheduler(
+            &db,
+            fallback_block,
+            1,
+            None,
+            bitcoin::Network::Regtest,
+            0,
+            &mock_bitcoind,
+        )
+        .unwrap();
+
+        assert_eq!(scheduler.last_finalized(), fallback_block);
+    }
+
+    #[test]
+    fn load_pegout_scheduler_uses_fallback_when_no_persisted_block() {
+        let temp_db = TempDir::new().unwrap();
+        let db = database::Db::open(temp_db.path()).unwrap();
+
+        // NOTE: We are not storing any persisted block in the database here so it should fall back to using the fallback block.
+        let fallback_block = bitcoin::BlockHash::from_byte_array([2u8; 32]);
+        let mock_bitcoind = MockBitcoind::new();
+
+        let scheduler = App::<MockBitcoind>::load_pegout_scheduler(
+            &db,
+            fallback_block,
+            1,
+            None,
+            bitcoin::Network::Regtest,
+            0,
+            &mock_bitcoind,
+        )
+        .unwrap();
+
+        assert_eq!(scheduler.last_finalized(), fallback_block);
     }
 }
