@@ -360,34 +360,48 @@ where
         telemetry: Option<Arc<Telemetry>>,
         btc_network: bitcoin::Network,
         identifier: u16,
+        bitcoind_client: &BitcoindClient,
     ) -> Result<PegoutScheduler, database::Error> {
-        if let Some(latest) = db.get_pegout_mgr_finalized_block()? {
-            let txs = db.get_tracked_txs()?;
-            info!("Loaded pegout scheduler with {} pending txs", txs.len());
-            Ok(PegoutScheduler::new(
-                pegin_conf_depth,
-                txs,
-                latest,
-                db.clone(),
-                telemetry,
-                btc_network,
-                identifier,
-            ))
-        } else {
-            info!(
-                "No finalized block found, using fallback checkpoint: {}",
-                fallback_checkpoint
-            );
-            Ok(PegoutScheduler::new(
-                pegin_conf_depth,
-                vec![],
-                fallback_checkpoint,
-                db.clone(),
-                telemetry,
-                btc_network,
-                identifier,
-            ))
-        }
+        // Determine checkpoint and txs based on persisted state validity
+        let (checkpoint, txs) = match db.get_pegout_mgr_finalized_block()? {
+            Some(latest) => {
+                // Validate the persisted block is still in the canonical chain.
+                // If reorged out, use fallback to avoid DeepReorg errors.
+                let is_valid = bitcoind_client
+                    .get_block_header_info(&latest)
+                    .map(|info| info.confirmations > 0)
+                    .unwrap_or_else(|e| {
+                        warn!("Failed to validate persisted block {}: {}", latest, e);
+                        false
+                    });
+
+                if is_valid {
+                    let txs = db.get_tracked_txs()?;
+                    info!("Loaded pegout scheduler with {} pending txs", txs.len());
+                    (latest, txs)
+                } else {
+                    warn!(
+                        "Persisted block {} was reorged out. Using fallback: {}",
+                        latest, fallback_checkpoint
+                    );
+                    (fallback_checkpoint, vec![])
+                }
+            }
+            None => {
+                info!("No finalized block found, using fallback: {}", fallback_checkpoint);
+                (fallback_checkpoint, vec![])
+            }
+        };
+
+        Ok(PegoutScheduler::new(
+            pegin_conf_depth,
+            txs,
+            checkpoint,
+            db.clone(),
+            telemetry,
+            btc_network,
+            identifier,
+        ))
     }
 
     fn get_or_create_jwt_secret_from_path(
@@ -559,6 +573,7 @@ where
             telemetry.clone(),
             config.btc_network,
             config.identifier,
+            &bitcoind_client,
         )?);
 
         // NOTE (lamafab): in this implementation, the DKG state machine starts
