@@ -125,6 +125,9 @@ pub(crate) async fn get_psbt<BtcServerClient: BtcServerExtendedApi + Clone>(
     let req = MakeTxRequest {
         signing_session_id: signing_session_id.to_vec(),
         checkpoint_block_hash: bitcoin_checkpoint[..].to_vec(),
+        // TODO: Update these to support dynamic multisig selection during migrations
+        multisig_id_from: botanix_types::LEGACY_MULTISIG_ID.as_u32(),
+        multisig_id_to: botanix_types::LEGACY_MULTISIG_ID.as_u32(),
     };
 
     btc_server.get_psbt(req).await

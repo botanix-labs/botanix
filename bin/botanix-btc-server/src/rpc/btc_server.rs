@@ -338,6 +338,10 @@ pub struct MakeTxRequest {
     /// The checkpoint of the best finalized Bitcoin block hash.
     #[prost(bytes = "vec", tag = "2")]
     pub checkpoint_block_hash: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "4")]
+    pub multisig_id_to: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ToSignRequest {

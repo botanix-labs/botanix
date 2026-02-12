@@ -2195,14 +2195,8 @@ where
             })
             .collect::<Vec<(TxOut, PegoutId)>>();
 
-        // TODO: During migration, these should be determined by the migration state.
-        // - utxo_source_multisig_id: The multisig to select UTXOs from (current/source federation)
-        // - change_target_multisig_id: The multisig for the change address (target federation)
-        // Normally, these will be the same, but during the migration phase, the change target multisig
-        // will be the incoming multisig.
-
-        let utxo_source_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let change_target_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
+        let utxo_source_multisig_id = MultisigId::from(req.multisig_id_from);
+        let change_target_multisig_id = MultisigId::from(req.multisig_id_to);
 
         let change_pk_package = self
             .db
