@@ -1,10 +1,14 @@
-exclude = ["testing/**"]
+exclude = ["testing/**", "bin/botanix-test-suite/config.toml"]
 
 [formatting]
 align_comments = true
 align_entries = false
 reorder_arrays = false
 reorder_keys = false
+indent_string = "    "
+array_auto_collapse = false
+array_auto_expand = false
+inline_table_expand = false
 
 [[rule]]
 include = ["**/**/Cargo.toml", "**/Cargo.toml", "Cargo.toml"]
