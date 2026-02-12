@@ -2068,8 +2068,11 @@ where
 
         // Ensure we have a key package for the utxo source and target multisigs.
         // Note that this flow relies on the current coordinator to be a member of the target multisig.
-        for multisig_id in [utxo_source_multisig_id, change_target_multisig_id] {
-            if let Err(e) = self.db.get_key_package_by_id(multisig_id).to_status() {
+        for multisig_id in [utxo_source_multisig_id, change_target_multisig_id]
+        {
+            if let Err(e) =
+                self.db.get_key_package_by_id(multisig_id).to_status()
+            {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
