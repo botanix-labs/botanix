@@ -2061,21 +2061,28 @@ where
         req: tonic::Request<rpc::MakeTxRequest>,
     ) -> Result<tonic::Response<rpc::SigningPackage>, tonic::Status> {
         self.validate_jwt(&req)?;
-        // Ensure we have a key package
-        self.db.get_key_package().to_status()?;
-
         let req = req.into_inner();
 
-        if let Err(e) = self.db.get_key_package().to_status() {
-            if let Some(telemetry) = self.telemetry.as_ref() {
-                telemetry.update_signing_error_metrics(
-                    self.btc_network,
-                    self.config.identifier,
-                    &e.to_string(),
-                );
+        let utxo_source_multisig_id = MultisigId::from(req.multisig_id_from);
+        let change_target_multisig_id = MultisigId::from(req.multisig_id_to);
+
+        // Ensure we have a key package for the utxo source and target multisigs.
+        // Note that this flow relies on the current coordinator to be a member of the target multisig.
+        for multisig_id in [utxo_source_multisig_id, change_target_multisig_id]
+        {
+            if let Err(e) =
+                self.db.get_key_package_by_id(multisig_id).to_status()
+            {
+                if let Some(telemetry) = self.telemetry.as_ref() {
+                    telemetry.update_signing_error_metrics(
+                        self.btc_network,
+                        self.config.identifier,
+                        &e.to_string(),
+                    );
+                }
+                return Err(e);
             }
-            return Err(e);
-        };
+        }
 
         // take a lock on the tx_lock
         let _tx_lock = self.tx_lock.lock().await;
@@ -2194,15 +2201,6 @@ where
                 (TxOut { value: p.value, script_pubkey: p.spk.clone() }, p.id)
             })
             .collect::<Vec<(TxOut, PegoutId)>>();
-
-        // TODO: During migration, these should be determined by the migration state.
-        // - utxo_source_multisig_id: The multisig to select UTXOs from (current/source federation)
-        // - change_target_multisig_id: The multisig for the change address (target federation)
-        // Normally, these will be the same, but during the migration phase, the change target multisig
-        // will be the incoming multisig.
-
-        let utxo_source_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let change_target_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
 
         let change_pk_package = self
             .db

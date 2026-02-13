@@ -398,6 +398,8 @@ where
             &mut self.btc_server,
             &header_hash,
             cp_block_hash,
+            botanix_types::LEGACY_MULTISIG_ID, // TODO: replace
+            botanix_types::LEGACY_MULTISIG_ID, // TODO: replace
         )
         .await
         {

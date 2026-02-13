@@ -518,6 +518,8 @@ mod integration_tests {
         let request = Request::new(rpc::MakeTxRequest {
             signing_session_id: [0u8; 32].to_vec(),
             checkpoint_block_hash: BlockHash::all_zeros().to_byte_array().to_vec(),
+            multisig_id_from: LEGACY_MULTISIG_ID.as_u32(),
+            multisig_id_to: LEGACY_MULTISIG_ID.as_u32(),
         });
         let response = app.get_psbt(request).await;
 
@@ -647,6 +649,8 @@ mod integration_tests {
         let request = Request::new(rpc::MakeTxRequest {
             signing_session_id: [0u8; 32].to_vec(),
             checkpoint_block_hash: BlockHash::all_zeros().to_byte_array().to_vec(),
+            multisig_id_from: LEGACY_MULTISIG_ID.as_u32(),
+            multisig_id_to: LEGACY_MULTISIG_ID.as_u32(),
         });
         let response = app.get_psbt(request).await;
 
