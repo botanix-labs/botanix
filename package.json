@@ -4,8 +4,8 @@
     "license": "MIT",
     "private": true,
     "scripts": {
-        "prettier:fix": "prettier --write \"**/*.@(json|md|sh|toml)\"",
-        "prettier:validate": "prettier --check \"**/*.@(json|md|sh|toml)\"",
+        "prettier:fix": "prettier --write \"**/*.@(json|md|sh)\"",
+        "prettier:validate": "prettier --check \"**/*.@(json|md|sh)\"",
         "md:lint": "markdownlint -c .markdownlint.json \"**/*.md\" \".github/**/*.md\" -i \"target\" -i \"node_modules\" -i \"CHANGELOG.md\"",
         "md:fix": "markdownlint -c .markdownlint.json \"**/*.md\" \".github/**/*.md\" -i \"target\" -i \"node_modules\" -i \"CHANGELOG.md\" --fix",
         "release": "semantic-release"

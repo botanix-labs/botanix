@@ -1,9 +1,19 @@
 [profile.default]
 retries = { backoff = "exponential", count = 2, delay = "2s", jitter = true }
 slow-timeout = { period = "1m", terminate-after = 2 }
-test-threads = 4
+
+# These tests are slow - give them full CPU and long timeouts
+# Must come before general_state_tests so they match first
+[[profile.default.overrides]]
+filter = "test(st_bad_opcode) | test(st_time_consuming)"
+slow-timeout = { period = "15m", terminate-after = 3 }
+threads-required = "num-cpus"
 
 [[profile.default.overrides]]
 filter = "test(general_state_tests)"
-slow-timeout = { period = "4m", terminate-after = 2 }
-test-threads = 8
+slow-timeout = { period = "5m", terminate-after = 3 }
+
+# Blockchain tests (valid_blocks, invalid_blocks) can take 2-3 minutes
+[[profile.default.overrides]]
+filter = "test(valid_blocks) | test(invalid_blocks)"
+slow-timeout = { period = "5m", terminate-after = 3 }

@@ -30,8 +30,8 @@ members = [
     "crates/botanix-rpc-types",
     "crates/botanix-storage",
     "crates/botanix-storage-migrate",
-    "crates/botanix-types",
     "crates/botanix-utils",
+    "testing/ef-tests",
 ]
 default-members = ["bin/botanix-reth"]
 [workspace.package]
@@ -370,10 +370,12 @@ tokio-util = { version = "0.7.4", features = ["codec"] }
 toml = "0.8"
 
 # tonic
+rayon = "1.10"
 tonic = { version = "0.12.3", features = ["gzip"] }
 tracing = "0.1"
 url = "2.5.4"
 uuid = { version = "1.8.0", features = ["v4"] }
+walkdir = "2.5"
 
 [profile.profiling]
 inherits = "release"

@@ -1,5 +1,8 @@
 # Botanix Rust Formatting Configuration
 
+# Ignore paths
+ignore = ["testing"]
+
 # Edition
 edition = "2021"
 

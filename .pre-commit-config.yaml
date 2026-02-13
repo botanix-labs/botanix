@@ -10,7 +10,8 @@ exclude: |
     pnmp-lock.yaml|
     bun.lock|
     node_modules|
-    target
+    target|
+    testing
   )$
 
 repos:
