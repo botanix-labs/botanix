@@ -405,7 +405,7 @@ where
                     "Waiting for aggregate public key to be stored in the storage before starting ABCI server"
                 );
                 drop(storage);
-                tokio::time::sleep(tokio::time::Duration::from_millis(350))
+                tokio::time::sleep(tokio::time::Duration::from_millis(5_000))
                     .await;
             }
         }
