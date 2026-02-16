@@ -1,6 +1,6 @@
 //! Extended bitcoin server client with authentication
 use crate::{
-    btc_server::{
+    BtcServerClient, StartNewDkgRequest, btc_server::{
         AbortDkgRequest, ConsensusCheckpointRequest,
         DkgPayload, DkgPayloads, Empty,
         FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
@@ -16,9 +16,7 @@ use crate::{
         ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
         SubscribeToDynafedNotificationsStream, ToSignRequest,
         WalletStateResponse,
-    },
-    jwt::{Claims, JwtSecret},
-    BtcServerClient,
+    }, jwt::{Claims, JwtSecret}
 };
 use displaydoc::Display as DisplayDoc;
 use futures_util::future::BoxFuture;
@@ -124,13 +122,13 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
-    fn abort_dkg(
-        &mut self,
-        request: AbortDkgRequest,
-    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn start_new_dkg(
         &mut self,
         request: StartNewDkgRequest,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn abort_dkg(
+        &mut self,
+        request: AbortDkgRequest,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn get_signing_status(
         &mut self,
@@ -353,8 +351,8 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_wallet_state, Empty, WalletStateResponse);
     generate_method!(abort_signing, Empty, Empty);
-    generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(start_new_dkg, StartNewDkgRequest, Empty);
+    generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(
         get_signing_status,
         GetSigningStatusRequest,

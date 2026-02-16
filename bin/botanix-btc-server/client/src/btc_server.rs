@@ -46,7 +46,7 @@ pub struct GetFinalizedPegoutIdsResponse {
 pub struct SubscribeToDynafedNotificationsStream {
     #[prost(
         oneof = "subscribe_to_dynafed_notifications_stream::Notification",
-        tags = "1, 2, 3"
+        tags = "1, 2"
     )]
     pub notification: ::core::option::Option<
         subscribe_to_dynafed_notifications_stream::Notification,
@@ -417,10 +417,8 @@ pub struct GetSweepPsbtRequest {
 )]
 #[repr(i32)]
 pub enum DkgEvent {
-    Unspecified = 0,
-    DkgStart = 1,
-    DkgRestart = 2,
-    DkgAbort = 3,
+    DkgStart = 0,
+    DkgAbort = 1,
 }
 impl DkgEvent {
     /// String value of the enum field names used in the ProtoBuf definition.

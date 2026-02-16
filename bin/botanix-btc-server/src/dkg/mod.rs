@@ -15,7 +15,6 @@ use std::{
     time::{Duration, Instant},
 };
 use thiserror::Error;
-use uuid::Uuid;
 
 use botanix_types::MultisigId;
 
@@ -137,8 +136,6 @@ pub enum DynafedSubscriptionMessage {
 pub enum DkgNotification {
     /// Start a new DKG session
     Start { multisig_id: MultisigId },
-    /// Restart a DKG session
-    Restart { multisig_id: MultisigId },
     /// Abort a DKG session
     Abort { multisig_id: MultisigId },
 }
@@ -154,7 +151,6 @@ impl DkgNotification {
     pub fn multisig_id(&self) -> MultisigId {
         match self {
             DkgNotification::Start { multisig_id } => *multisig_id,
-            DkgNotification::Restart { multisig_id } => *multisig_id,
             DkgNotification::Abort { multisig_id } => *multisig_id,
         }
     }
@@ -165,9 +161,6 @@ impl Display for DkgNotification {
         match self {
             DkgNotification::Start { multisig_id } => {
                 write!(f, "DKG Started {{ multisig_id: {} }}", multisig_id)
-            }
-            DkgNotification::Restart { multisig_id } => {
-                write!(f, "DKG Restart {{ multisig_id: {} }}", multisig_id)
             }
             DkgNotification::Abort { multisig_id } => {
                 write!(f, "DKG Aborted {{ multisig_id: {} }}", multisig_id)

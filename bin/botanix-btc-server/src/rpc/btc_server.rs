@@ -46,7 +46,7 @@ pub struct GetFinalizedPegoutIdsResponse {
 pub struct SubscribeToDynafedNotificationsStream {
     #[prost(
         oneof = "subscribe_to_dynafed_notifications_stream::Notification",
-        tags = "1, 2, 3"
+        tags = "1, 2"
     )]
     pub notification: ::core::option::Option<
         subscribe_to_dynafed_notifications_stream::Notification,
@@ -417,10 +417,8 @@ pub struct GetSweepPsbtRequest {
 )]
 #[repr(i32)]
 pub enum DkgEvent {
-    Unspecified = 0,
-    DkgStart = 1,
-    DkgRestart = 2,
-    DkgAbort = 3,
+    DkgStart = 0,
+    DkgAbort = 1,
 }
 impl DkgEvent {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -429,18 +427,14 @@ impl DkgEvent {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::Unspecified => "DKG_EVENT_UNSPECIFIED",
             Self::DkgStart => "DKG_START",
-            Self::DkgRestart => "DKG_RESTART",
             Self::DkgAbort => "DKG_ABORT",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "DKG_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
             "DKG_START" => Some(Self::DkgStart),
-            "DKG_RESTART" => Some(Self::DkgRestart),
             "DKG_ABORT" => Some(Self::DkgAbort),
             _ => None,
         }

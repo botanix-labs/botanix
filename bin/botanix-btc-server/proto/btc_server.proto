@@ -1,4 +1,3 @@
-
 syntax = "proto3";
 
 package btc_server;
@@ -118,10 +117,8 @@ message SubscribeToDynafedNotificationsStream {
 }
 
 enum DkgEvent {
-    DKG_EVENT_UNSPECIFIED = 0;
-    DKG_START = 1;
-    DKG_RESTART = 2;
-    DKG_ABORT = 3;
+    DKG_START = 0;
+    DKG_ABORT = 1;
 }
 
 message DkgNotification {
