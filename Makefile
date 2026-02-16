@@ -448,8 +448,6 @@ start-btc-server-1:
 	--p2p-secret-key "${NODE_1_DIR}/discovery-secret" \
 	--address 0.0.0.0:8081 \
 	--db "./db1" \
-	--min-signers 2 \
-	--max-signers 2 \
 	--toml ./config.toml \
 	--fee-rate-diff-percentage 30 \
 	--btc-network "${BITCOIND_NETWORK}" \
@@ -468,8 +466,6 @@ start-btc-server-2:
 	--p2p-secret-key "${NODE_2_DIR}/discovery-secret" \
 	--address 0.0.0.0:8082 \
 	--db "./db2" \
-	--min-signers 2 \
-	--max-signers 2 \
 	--toml ./config.toml \
 	--fee-rate-diff-percentage 30 \
 	--btc-network "${BITCOIND_NETWORK}" \
@@ -488,8 +484,6 @@ start-btc-server-3:
 	--p2p-secret-key "${NODE_3_DIR}/discovery-secret" \
 	--address 0.0.0.0:8083 \
 	--db "./db3" \
-	--min-signers 3 \
-	--max-signers 3 \
 	--toml ./config.toml \
 	--fee-rate-diff-percentage 30 \
 	--btc-network "${BITCOIND_NETWORK}" \
@@ -525,8 +519,6 @@ start-poa-server-1:
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \
-	--frost.min_signers 2 \
-	--frost.max_signers 2 \
 	--sync.num_snapshots_to_keep 3 \
 	--p2p-secret-key "${NODE_1_DIR}/discovery-secret" \
 	--port 30303 \
@@ -564,8 +556,6 @@ start-poa-server-2:
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \
-	--frost.min_signers 2 \
-	--frost.max_signers 2 \
 	--sync.num_snapshots_to_keep 3 \
 	--p2p-secret-key "${NODE_2_DIR}/discovery-secret" \
 	--port 30304 \
@@ -603,8 +593,6 @@ start-poa-server-3:
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \
-	--frost.min_signers 3 \
-	--frost.max_signers 3 \
 	--sync.num_snapshots_to_keep 3 \
 	--p2p-secret-key "${NODE_3_DIR}/discovery-secret" \
 	--port 30305 \
@@ -894,8 +882,6 @@ PROFILE_BTC_SERVER_ARGS := \
 	--identifier ${PROFILER_FROST_ID} \
 	--address 0.0.0.0:${PROFILER_BTC_SERVER_PORT} \
 	--db ${PROFILER_DB_DIR} \
-	--min-signers ${PROFILER_FROST_MIN_SIGNERS} \
-	--max-signers ${PROFILER_FROST_MAX_SIGNERS} \
 	--toml ./bin/botanix-btc-server/config.toml \
 	--fee-rate-diff-percentage 30 \
 	--btc-network ${BITCOIND_NETWORK} \
@@ -936,8 +922,6 @@ PROFILER_POA_SEVER_ARGS := \
 	--bitcoind.primary_url "${BITCOIND_URL}" \
 	--bitcoind.primary_username "${BITCOIND_USER}" \
 	--bitcoind.primary_password "${BITCOIND_PWD}" \
-	--frost.min_signers ${PROFILER_FROST_MIN_SIGNERS} \
-	--frost.max_signers ${PROFILER_FROST_MAX_SIGNERS} \
 	--p2p-secret-key ${PROFILER_NODE_DIR}/discovery-secret \
 	--port ${PROFILER_POA_RPC_PORT} \
 	--abci-port=${PROFILER_COMET_ABCI_PORT}
