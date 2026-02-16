@@ -1,5 +1,8 @@
-use crate::consensus::utils::{
-    parse_signing_session_id, retry_exec, retry_future, FrostParseError,
+use crate::{
+    consensus::utils::{
+        parse_signing_session_id, retry_exec, retry_future, FrostParseError,
+    },
+    services::frost::MultisigConfig,
 };
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
@@ -7,7 +10,6 @@ use botanix_btc_server_client::{
     BtcServerExtendedApi, Empty, FinalizeSigningResponse, GrpcClientError,
     SigningPackage, SigningPackageRequest,
 };
-use botanix_chainspec::BotanixChainSpec;
 use frost_secp256k1_tr as frost;
 
 use botanix_consensus_common::utils::{
@@ -15,8 +17,8 @@ use botanix_consensus_common::utils::{
 };
 use reth_network::frost::{
     manager::{
-        authority_index_to_frost_identifier, FrostCommand, FrostConfig,
-        PeerData, ToFrostManager,
+        authority_index_to_frost_identifier, FrostCommand, PeerData,
+        ToFrostManager,
     },
     FrostPeerCommand, PeerMessageResponse, SigningEventResponseType,
     SigningResponse,
@@ -126,12 +128,11 @@ pub(crate) struct SigningSession {
 /// A state machine for transitioning between different signing states
 #[derive(Debug)]
 pub(crate) struct SigningStateMachine<ToFrostMan, Source, BtcServerClient> {
-    chain_spec: Arc<BotanixChainSpec>,
     btc_client: BtcServerClient,
     frost_handle: ToFrostMan,
     signing_states: Arc<RwLock<HashMap<[u8; 32], SigningSession>>>,
     personal_frost_identifier: frost::Identifier,
-    frost_config: FrostConfig,
+    multisig_config: MultisigConfig,
     random_source_provider: Source,
     metrics: Arc<AuthorityMetrics>,
 }
@@ -145,28 +146,26 @@ where
 {
     /// Constructs a new state machine with the given params
     pub(crate) fn new(
-        chain_spec: Arc<BotanixChainSpec>,
         btc_client: BtcServerClient,
         frost_handle: ToFrostMan,
-        frost_config: FrostConfig,
+        multisig_config: MultisigConfig,
         random_source_provider: Source,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         let personal_frost_identifier: frost::Identifier =
             authority_index_to_frost_identifier(
-                frost_config.authority_index as u16,
+                multisig_config.authority_index as u16,
             );
 
         let signing_states: SigningStatesMap =
             Arc::new(RwLock::new(HashMap::default()));
 
         Self {
-            chain_spec,
             btc_client,
             frost_handle,
             signing_states,
             personal_frost_identifier,
-            frost_config,
+            multisig_config,
             random_source_provider,
             metrics,
         }
@@ -428,8 +427,8 @@ where
     ) -> Result<Option<(PeerData, u64)>, Error> {
         // check if we are in turn
         let is_inturn = is_inturn(
-            self.frost_config.authorities.len() as u64,
-            self.frost_config.authority_index as u64,
+            self.multisig_config.authorities.len() as u64,
+            self.multisig_config.authority_index as u64,
             0, //TODO: Change to selection time range when we move to robin
             self.random_source_provider.random_source(),
         );
@@ -443,7 +442,7 @@ where
                 let all_connected_frost_peers =
                     self.get_all_peers_handle().await?;
                 let current_inturn_authority_index = current_inturn_index(
-                    self.frost_config.authorities.len() as u64,
+                    self.multisig_config.authorities.len() as u64,
                     unix_timestamp(),
                     0, //TODO: Change to selection time range when we move to robin
                 );
@@ -471,8 +470,8 @@ where
     /// Returns if we are a coordinator or not
     pub(crate) fn is_coordinator(&self) -> bool {
         is_inturn(
-            self.frost_config.authorities.len() as u64,
-            self.frost_config.authority_index as u64,
+            self.multisig_config.authorities.len() as u64,
+            self.multisig_config.authority_index as u64,
             0, //TODO: Change to selection time range when we move to robin
             self.random_source_provider.random_source(),
         )
@@ -492,7 +491,7 @@ where
 
             // check if we have enough connected peers to gossip to and include ourselves
             if connected_peers.len() + 1
-                < self.frost_config.min_signers as usize
+                < self.multisig_config.min_signers as usize
             {
                 error!(target: "consensus::authority::signing", "Not enough connected peers to gossip to");
                 return Err(Error::NotEnoughConnectedPeers);
@@ -545,7 +544,7 @@ where
             Some(signing_session) => {
                 // a coordinator should never re-trigger an existing session
                 if signing_session.coordinator_index
-                    == self.frost_config.authority_index as u64
+                    == self.multisig_config.authority_index as u64
                 {
                     // clear session and lose ability to be coordinator
                     // this could happen if previous session failed but wasn't removed
@@ -562,7 +561,7 @@ where
                 self.abort_signing().await?;
                 self.insert_new_signing_session(
                     session_id,
-                    self.frost_config.authority_index as u64,
+                    self.multisig_config.authority_index as u64,
                     Some(psbt.clone()),
                     SigningState::Initial,
                 )
