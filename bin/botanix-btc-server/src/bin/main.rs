@@ -18,7 +18,9 @@ use bitcoin::{
 };
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
-use botanix_configs::hash::verify_config_hash;
+use botanix_configs::{
+    federation::MultisigTomlConfig, hash::verify_config_hash,
+};
 use botanix_types::MultisigId;
 use btc_server::btc_server_server::{BtcServer, BtcServerServer};
 use btcserverlib::{
@@ -27,8 +29,7 @@ use btcserverlib::{
     coordinator::{self},
     database::{self},
     dkg::{
-        self, DkgNotification, DynafedSubscriptionMessage, MigrationEvent,
-        MigrationNotification, SweepNotification,
+        self, DkgNotification, DynafedSubscriptionMessage, SweepNotification,
     },
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -52,10 +53,10 @@ use btcserverlib::{
     wallet::{
         self,
         address::{
-            generate_taproot_address, generate_taproot_change_scriptpubkey,
-            generate_taproot_scriptpubkey, generate_tweaked_public_key,
+            generate_taproot_address, generate_taproot_scriptpubkey,
+            generate_tweaked_public_key,
         },
-        psbt::{PsbtExt, PsbtInputExt, PsbtMultisigIdExt, PsbtOutputExt},
+        psbt::{PsbtExt, PsbtMultisigIdExt, PsbtOutputExt},
         util::VerifyingKeyExt,
     },
 };
@@ -70,12 +71,12 @@ use tonic::{
     codegen::CompressionEncoding, metadata::BinaryMetadataKey,
     transport::Server,
 };
-use uuid::Uuid;
 
 const JWT_HEADER_KEY: &str = "trace-proto-bin";
 const DEFAULT_COORDINATOR_ID: u16 = 0;
 /// Maximum number of UTXOs allowed for source multisig before migration can end.
 /// This limit ensures the sweep transaction fits within Bitcoin network size limits.
+// TODO: Use this in the sweep endpoint?
 const MAX_UTXOS_FOR_MIGRATION_END: usize = 1000;
 
 macro_rules! already_exists {
@@ -128,6 +129,8 @@ pub enum Error {
     DkgDeserialization(#[from] ciborium::de::Error<std::io::Error>),
     #[error("Multisig not found: {0}")]
     MultisigNotFound(MultisigId),
+    #[error("Bad public key")]
+    BadPublicKey,
 }
 
 // To status util to convert Results with top level errors to tonic::Status
@@ -178,6 +181,7 @@ impl<T, S: Into<Error> + Debug> ToStatus<T> for Result<T, S> {
                 Error::MultisigNotFound(multisig_id) => {
                     Err(internal!("Multisig not found: {}", multisig_id))
                 }
+                Error::BadPublicKey => Err(internal!("Bad public key")),
             },
         }
     }
@@ -374,17 +378,18 @@ where
     /// Get the minimum number of signers required for the given multisig.
     fn get_min_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
         self.federation
-            .get_config_by_multisig_id(multisig_id)
+            .get_config_by_multisig_id(&multisig_id)
             .map(|c| c.min_signers)
-            .ok_or(Error::MultisigNotFound(multisig_id))
+            .map_err(|_| Error::MultisigNotFound(multisig_id))
     }
 
-    /// Get the maximum number of signers for the given multisig.
+    /// Get the maximum number of signers required for the given multisig, which
+    /// is always equal to the member size.
     fn get_max_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
         self.federation
-            .get_config_by_multisig_id(multisig_id)
-            .map(|c| c.effective_max_signers())
-            .ok_or(Error::MultisigNotFound(multisig_id))
+            .get_config_by_multisig_id(&multisig_id)
+            .map(|c| c.members.len() as u16)
+            .map_err(|_| Error::MultisigNotFound(multisig_id))
     }
 
     fn load_pegout_scheduler(
@@ -438,13 +443,13 @@ where
     fn new_dkg_state_machine(
         frost_identifier: frost::Identifier,
         p2p_secret_key: secp256k1::SecretKey,
-        multisig_id: MultisigId,
         coordinator: frost::Identifier,
-        federation: &FederationTomlConfig,
-        min_signers: u16,
-        max_signers: u16,
+        multisig_conf: &MultisigTomlConfig,
         is_coordinator: bool,
     ) -> Result<DkgState, Error> {
+        let min_signers = multisig_conf.min_signers;
+        let max_signers = multisig_conf.members.len() as u16;
+
         let dkg_config = dkg::Config {
             max_signers,
             min_signers,
@@ -458,29 +463,19 @@ where
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
 
-        let multisig_config = federation
-            .get_config_by_multisig_id(multisig_id)
-            .ok_or_else(|| {
-                dkg::Error::BadConfig(format!(
-                    "missing multisig id {}",
-                    multisig_id
-                ))
-            })?;
+        let members: BTreeMap<frost::Identifier, secp256k1::PublicKey> =
+            multisig_conf
+                .members
+                .iter()
+                .enumerate()
+                .map(|(idx, m)| {
+                    let id = frost_id!(idx as u16);
+                    let pub_key = secp256k1::PublicKey::from_str(&m.key)
+                        .map_err(|_| Error::BadPublicKey)?;
 
-        let mut members = BTreeMap::new();
-        for (pos, p2p_public_key) in
-            multisig_config.federation_member_public_key.iter().enumerate()
-        {
-            let id = frost_id!(pos as u16);
-            let pubkey = secp256k1::PublicKey::from_str(&p2p_public_key.key)
-                .map_err(|_| {
-                    dkg::Error::BadConfig(
-                        "invalid federation member public key".to_string(),
-                    )
-                })?;
-
-            members.insert(id, pubkey);
-        }
+                    Ok((id, pub_key))
+                })
+                .collect::<Result<BTreeMap<_, _>, Error>>()?;
 
         // As the coordinator, we simply use the system time as the session
         // nonce. This value doesn't need to be precisely synchronized - it
@@ -508,7 +503,7 @@ where
         let machine = dkg::DkgStateMachine::new(
             frost_identifier,
             p2p_secret_key,
-            multisig_id,
+            multisig_conf.multisig_id,
             coordinator,
             members,
             dkg_config,
@@ -562,29 +557,13 @@ where
         let raw = std::fs::read_to_string(&config.federation_config_path)?;
         verify_config_hash(&raw, &config.config_hash)
             .map_err(|e| dkg::Error::BadConfig(e.to_string()))?;
+
         let federation = FederationTomlConfig::from_str(&raw).map_err(|e| {
             dkg::Error::BadConfig(format!(
                 "invalid federation Toml config: {}",
                 e
             ))
         })?;
-
-        let active_multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let active_multisig = federation
-            .get_config_by_multisig_id(active_multisig_id)
-            .ok_or_else(|| {
-                dkg::Error::BadConfig(format!(
-                    "missing multisig id {}",
-                    active_multisig_id
-                ))
-            })?;
-
-        let member_count = active_multisig.federation_member_public_key.len();
-
-        info!(
-            "Using multisig {} with {} members",
-            active_multisig.multisig_id, member_count
-        );
 
         // Prepare our secret key.
         let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
@@ -680,6 +659,7 @@ where
             )
             .map_err(|e| Error::PegoutSchedulerSync(e.into()))?
         };
+
         let pegout_manager = Mutex::new(Self::load_pegout_scheduler(
             &db,
             fallback_checkpoint,
@@ -708,12 +688,12 @@ where
         let mut sessions = HashMap::new();
 
         // Iterate through all multisig configurations
-        for multisig_config in &federation.multisig {
+        for multisig_config in &federation.multisigs {
             let multisig_id = multisig_config.multisig_id;
 
             // Check if this node is a member of this multisig
             let is_member = multisig_config
-                .federation_member_public_key
+                .members
                 .iter()
                 .any(|member| member.key == node_public_key.to_string());
 
@@ -756,22 +736,14 @@ where
                     info!(
                         "Multisig {} not yet processed, starting DKG with {} members",
                         multisig_id,
-                        multisig_config.federation_member_public_key.len()
+                        multisig_config.members.len()
                     );
-
-                    let _member_count =
-                        multisig_config.federation_member_public_key.len();
-                    let max_signers = multisig_config.effective_max_signers();
-                    let min_signers = multisig_config.min_signers;
 
                     let state = Self::new_dkg_state_machine(
                         frost_identifier,
                         p2p_secret_key,
-                        multisig_id,
                         coordinator,
-                        &federation,
-                        min_signers,
-                        max_signers,
+                        multisig_config,
                         frost_identifier == coordinator,
                     )?;
 
@@ -1346,21 +1318,6 @@ where
                             let payload = rpc::SubscribeToDynafedNotificationsStream {
                                 notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
                                     event: rpc::DkgEvent::DkgStart as i32,
-                                    multisig_id: *multisig_id,
-                                })),
-                            };
-                            tx.send(Ok(payload)).await
-                        }
-                        DynafedSubscriptionMessage::Dkg(
-                            DkgNotification::Restart { multisig_id },
-                        ) => {
-                            trace!(
-                                "DKG restarted for multisig {}",
-                                multisig_id
-                            );
-                            let payload = rpc::SubscribeToDynafedNotificationsStream {
-                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Dkg(rpc::DkgNotification {
-                                    event: rpc::DkgEvent::DkgRestart as i32,
                                     multisig_id: *multisig_id,
                                 })),
                             };
@@ -2975,14 +2932,17 @@ where
             .coordinator
             .unwrap_or(DEFAULT_COORDINATOR_ID));
 
+        let multisig_conf = self
+            .federation
+            .get_config_by_multisig_id(&multisig_id)
+            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .to_status()?;
+
         let state = Self::new_dkg_state_machine(
             self.identifier,
             self.p2p_secret_key,
-            multisig_id,
             coordinator,
-            &self.federation,
-            self.get_min_signers(multisig_id).to_status()?,
-            self.get_max_signers(multisig_id).to_status()?,
+            multisig_conf,
             self.is_coordinator(),
         )
         .map_err(|e| {
@@ -3019,21 +2979,23 @@ where
 
         let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
+        // TODO: We should allow overwriting this => this should be based on
+        // finalized attestations.
         if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
             return Err(already_exists!(
                 "key package already exists for multisig_id {} and cannot be aborted",
                 multisig_id
             ));
         }
+
         let mut sessions = self.dkg_sessions.lock().await;
-        if !sessions.contains_key(&multisig_id) {
+        if sessions.remove(&multisig_id).is_none() {
             return Err(tonic::Status::not_found(format!(
                 "DKG session not found for multisig_id {}",
                 multisig_id
             )));
         }
 
-        sessions.remove(&multisig_id);
         info!("Requested to abort DKG session for multisig_id {}", multisig_id);
 
         // send the notification async to the subscription method
@@ -3478,6 +3440,7 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
         ),
     )
     .expect("bitcoind client");
+
     let btc_server: App<bitcoincore_rpc::Client> =
         App::new(config.clone(), bitcoind_client, telemetry.clone())?;
 
@@ -3621,24 +3584,20 @@ mod tests {
         [[multisig]]
         multisig-id = 0
         min-signers = 2
-        max-signers = 3
 
-        [[multisig.federation-member-public-key]]
+        [[multisig.member]]
         key = "03185b1f0226d6d5949b902f083dd6e5b04ecdccdedd4cf48080de60b0bfe3b606"
         # Private key: 46de0f5cdbf2619ba8155964f951661ef89126aaddfcbbab56b7422e37572ff8
         socket-addr = "127.0.0.1:30303"
-        role = "continuing"
 
-        [[multisig.federation-member-public-key]]
+        [[multisig.member]]
         key = "038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140"
         # Private key: 27eeb2264674f15f2bac84d84b5e8f0c40722f8327fe7354bf14c84e248f8838
         socket-addr = "127.0.0.1:30304"
-        role = "continuing"
 
-        [[multisig.federation-member-public-key]]
+        [[multisig.member]]
         key = "02a7a1a9c37cd072f9752ef6b154876fe51f1ad2f7a6a627ef26e5075631af9f29"
         socket-addr = "127.0.0.1:30305"
-        role = "continuing"
         "#;
         let config_hash = compute_config_hash(federation_content);
 
