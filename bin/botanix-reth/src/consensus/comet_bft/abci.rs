@@ -652,11 +652,10 @@ where
             }
         };
 
-        match self.botanix_consensus.validate_header_standalone(
-            block.header(),
-            self.storage.genesis_authorities.as_slice(),
-            Some(&agg_pk),
-        ) {
+        match self
+            .botanix_consensus
+            .validate_header_standalone(block.header(), Some(&agg_pk))
+        {
             Ok(_) => {}
             Err(e) => {
                 error!("Error in validate_header_standalone(): {:?}", e);
