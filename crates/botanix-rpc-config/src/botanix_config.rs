@@ -7,9 +7,7 @@ use alloy_rpc_types_eth::{
 use botanix_authority_edh::extra_data_header::ExtraDataHeader;
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_btc_wallet::{
-    bitcoind::{BitcoindClientFactory, BitcoindConfig, BitcoindFactory},
-    error::{BitcoindAdapterError, BitcoindError},
-    fallback::FallbackBitcoindClient,
+    error::BitcoindAdapterError, fallback::FallbackBitcoindClient,
 };
 use botanix_rpc_types::types::RichBlock;
 use btcserverlib::wallet::address::{
