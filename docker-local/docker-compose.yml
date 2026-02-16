@@ -18,8 +18,6 @@ services:
       - --p2p-secret-key=/app/config/discovery-secret
       - --address=0.0.0.0:8080
       - --db=/app/db
-      - --min-signers=${FROST_MIN_SIGNERS:?err}
-      - --max-signers=${FROST_MAX_SIGNERS:?err}
       - --toml=/app/config/config.toml
       - --fee-rate-diff-percentage=30
       - --btc-network=${BITCOIND_NETWORK:?err}
@@ -72,8 +70,6 @@ services:
       - --bitcoind.username=${BITCOIND_USER:?err}
       - --bitcoind.password=${BITCOIND_PASSWORD:?err}
       - --bitcoind.zmq.hash-block-address=${BITCOIND_ZMQ_HASH_BLOCK_ADDRESS:?err}
-      - --frost.min_signers=${FROST_MIN_SIGNERS:?err}
-      - --frost.max_signers=${FROST_MAX_SIGNERS:?err}
       - --sync.num_snapshots_to_keep=3
       - --p2p-secret-key=/app/config/discovery-secret
       - --port=30303
