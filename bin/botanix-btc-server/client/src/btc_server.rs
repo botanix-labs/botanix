@@ -280,6 +280,30 @@ pub struct DkgPayloads {
     pub timeout: u64,
     #[prost(message, repeated, tag = "2")]
     pub payloads: ::prost::alloc::vec::Vec<DkgPayload>,
+    #[prost(message, optional, tag = "3")]
+    pub attestation: ::core::option::Option<DkgAttestation>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DkgAttestation {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+    #[prost(bytes = "vec", tag = "2")]
+    pub public_key_package: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "3")]
+    pub signing_package: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, repeated, tag = "4")]
+    pub signatures: ::prost::alloc::vec::Vec<DkgSignatureEntry>,
+    #[prost(bytes = "vec", tag = "5")]
+    pub aggregated_signature: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DkgSignatureEntry {
+    #[prost(bytes = "vec", tag = "1")]
+    pub frost_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub signature_share: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "3")]
+    pub attestation_signature: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayload {

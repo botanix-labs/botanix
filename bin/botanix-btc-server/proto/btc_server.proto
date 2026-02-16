@@ -25,6 +25,8 @@ service BtcServer {
 
     rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
 
+    rpc NewMultisigAttestation(DkgAttestation) returns(Empty) {}
+
     rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
     // Signing Endpoints
@@ -279,6 +281,21 @@ message AbortDkgRequest {
 message DkgPayloads {
     uint64 timeout = 1;
     repeated DkgPayload payloads = 2;
+    optional DkgAttestation attestation = 3;
+}
+
+message DkgAttestation {
+    uint32 multisig_id = 1;
+    bytes public_key_package = 2;
+    bytes signing_package = 3;
+    repeated DkgSignatureEntry signatures = 4;
+    bytes aggregated_signature = 5;
+}
+
+message DkgSignatureEntry {
+    bytes frost_id = 1;
+    bytes signature_share = 2;
+    bytes attestation_signature = 3;
 }
 
 message DkgPayload {

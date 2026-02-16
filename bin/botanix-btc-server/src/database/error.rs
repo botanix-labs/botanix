@@ -48,6 +48,8 @@ pub enum Error {
     BitcoindError(#[from] bitcoincore_rpc::Error),
     #[error("Tracked tx not found in Pegout Scheduler")]
     TrackedTxNotFoundInPegoutScheduler,
+    #[error("Multisig attestation not found when marking for finalization")]
+    MultisigAttestationNotFound,
     #[error("Bad passphrase for decrypting key-package import")]
     BadDecryptionPassphrase,
     /// Related to [`super::ExportedKeyPackage`].

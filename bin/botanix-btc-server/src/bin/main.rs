@@ -2708,6 +2708,8 @@ where
             // TODO (lamafab): Option?
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
             payloads,
+            // TODO: implement from https://github.com/botanix-labs/botanix/pull/94
+            attestation: None,
         };
 
         Ok(tonic::Response::new(resp))
@@ -2939,6 +2941,8 @@ where
             // TODO (lamafab): Option?
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
             payloads,
+            // TODO: implement from https://github.com/botanix-labs/botanix/pull/94
+            attestation: None,
         };
 
         Ok(tonic::Response::new(resp))
@@ -3047,226 +3051,39 @@ where
 
         Ok(tonic::Response::new(rpc::Empty {}))
     }
-
-    async fn start_migration(
+    async fn new_multisig_attestation(
         &self,
-        req: tonic::Request<rpc::StartMigrationRequest>,
-    ) -> Result<tonic::Response<rpc::StartMigrationResponse>, tonic::Status>
-    {
-        self.validate_jwt(&req)?;
-
-        let inner = req.into_inner();
-        let multisig_id_from: MultisigId = inner.multisig_id_from.into();
-        let multisig_id_to: MultisigId = inner.multisig_id_to.into();
-
-        // Check source multisig has a key package (required)
-        if self
-            .db
-            .get_key_package_by_id(multisig_id_from)
-            .to_status()?
-            .is_none()
-        {
-            return Err(tonic::Status::not_found(format!(
-                "Source multisig {} does not have a key package",
-                multisig_id_from
-            )));
-        }
-
-        // Check target multisig does NOT have a key package yet
-        if self.db.get_key_package_by_id(multisig_id_to).to_status()?.is_some()
-        {
-            return Err(tonic::Status::failed_precondition(format!(
-                "Target multisig {} already has a key package",
-                multisig_id_to
-            )));
-        }
-
-        let multisig_id_from: MultisigId = inner.multisig_id_from.into();
-        let multisig_id_to: MultisigId = inner.multisig_id_to.into();
-
-        if multisig_id_from == multisig_id_to {
-            return Err(tonic::Status::invalid_argument(
-                "multisig_id_from and multisig_id_to must be different",
-            ));
-        }
-
-        // Check no existing migration is active for these multisig_ids
-        if let Some(existing_id) = self
-            .db
-            .migration_exists_for_multisig(multisig_id_from)
-            .to_status()?
-        {
-            return Err(already_exists!(
-                "Migration {} already active involving source multisig {}",
-                existing_id,
-                multisig_id_from
-            ));
-        }
-        if let Some(existing_id) =
-            self.db.migration_exists_for_multisig(multisig_id_to).to_status()?
-        {
-            return Err(already_exists!(
-                "Migration {} already active involving target multisig {}",
-                existing_id,
-                multisig_id_to
-            ));
-        }
-
-        // Generate UUID for migration_id
-        let migration_id = Uuid::new_v4();
-
-        // Get current timestamp
-        let started_at_unix_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-
-        // Store migration state in database
-        self.db
-            .store_migration(&database::Migration {
-                migration_id,
-                multisig_id_from,
-                multisig_id_to,
-                started_at_unix_secs,
-            })
-            .to_status()?;
-        self.db.flush().to_status()?;
-
-        info!(
-            "Started migration {} from multisig {} to multisig {}",
-            migration_id, multisig_id_from, multisig_id_to
-        );
-
-        // Send migration notification
-        if let Err(e) = self.dynafed_notifications_tx.send(
-            DynafedSubscriptionMessage::Migration(MigrationNotification {
-                event: MigrationEvent::Start,
-                multisig_id_from,
-                multisig_id_to,
-                migration_id,
-            }),
-        ) {
-            error!(
-                "No subscribers to receive migration start notification for {}: {}",
-                migration_id, e
-            );
-        }
-
-        Ok(tonic::Response::new(rpc::StartMigrationResponse {
-            migration_id: migration_id.to_string(),
-        }))
-    }
-
-    async fn end_migration(
-        &self,
-        req: tonic::Request<rpc::EndMigrationRequest>,
+        req: tonic::Request<rpc::DkgAttestation>,
     ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
         self.validate_jwt(&req)?;
 
-        let migration_id_str = req.into_inner().migration_id;
-        let migration_id = Uuid::parse_str(&migration_id_str).map_err(|e| {
-            tonic::Status::invalid_argument(format!(
-                "Invalid migration_id UUID: {}",
-                e
-            ))
-        })?;
+        let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
-        let migration =
-            self.db.get_migration(&migration_id).to_status()?.ok_or_else(
-                || {
-                    tonic::Status::not_found(format!(
-                        "Migration {} not found",
-                        migration_id
-                    ))
-                },
-            )?;
+        let Some(tracked) =
+            self.db.get_multisig_attestation(multisig_id).to_status()?
+        else {
+            return Err(tonic::Status::not_found(format!(
+                "DKG session not found for multisig_id {}",
+                multisig_id
+            )));
+        };
 
-        let multisig_id_from = migration.multisig_id_from;
-        let multisig_id_to = migration.multisig_id_to;
-
-        // Verify target multisig now has a key package (DKG completed)
-        if self.db.get_key_package_by_id(multisig_id_to).to_status()?.is_none()
-        {
-            return Err(tonic::Status::failed_precondition(format!(
-                "Target multisig {} does not have a key package yet (DKG not completed)",
-                multisig_id_to
+        if tracked.marked_finalized {
+            return Err(tonic::Status::not_found(format!(
+                "DKG session not found for multisig_id {}",
+                multisig_id
             )));
         }
 
-        // Validation 2: Check no tracked transactions have change outputs going to source multisig (m1)
-        // During migration, change SPK should be set to target multisig (m2).
-        // If any tracked transactions still have change going to m1, we must wait for them to clear.
-        let source_pk_package = self
-            .db
-            .get_public_key_package_by_id(multisig_id_from)
-            .to_status()?
-            .ok_or_else(|| {
-                tonic::Status::internal(format!(
-                    "Source multisig {} does not have a public key package",
-                    multisig_id_from
-                ))
-            })?;
-        let source_agg_pk =
-            source_pk_package.verifying_key().to_secp_pk().map_err(|e| {
-                internal!("Failed to convert source multisig public key: {}", e)
-            })?;
-        let source_change_spk =
-            generate_taproot_change_scriptpubkey(source_agg_pk.serialize());
+        // We can now officially mark the multisig as finalized and is hence
+        // ready to be used for pegins and pegouts.
+        self.db.mark_multisig_attestation_finalized(multisig_id).to_status()?;
 
-        let tracked_txs = self.db.get_tracked_txs().to_status()?;
-        for tx in &tracked_txs {
-            for (_outpoint, output) in tx.change() {
-                if output.script_pubkey == source_change_spk {
-                    return Err(tonic::Status::failed_precondition(format!(
-                        "Cannot end migration: tracked transaction {} has change output going to source multisig {}. \
-                        Wait for all pending pegouts with change to source multisig to be confirmed.",
-                        tx.txid, multisig_id_from
-                    )));
-                }
-            }
-        }
-
-        // Validation 3: Check UTXO count of source multisig is below maximum
-        // All UTXOs must be swept to target multisig in a single transaction.
-        // If there are too many UTXOs, the sweep transaction would be too large.
-        let source_utxo_count =
-            self.db.iter_utxos_by_multisig(multisig_id_from).count();
-        if source_utxo_count > MAX_UTXOS_FOR_MIGRATION_END {
-            return Err(tonic::Status::failed_precondition(format!(
-                "Cannot end migration: source multisig {} has {} UTXOs, which exceeds the maximum of {}. \
-                Wait for more pegouts spending from source multisig to reduce UTXO count, \
-                or increase UTXO consolidation per pegout.",
-                multisig_id_from, source_utxo_count, MAX_UTXOS_FOR_MIGRATION_END
-            )));
-        }
-
-        info!(
-            "Migration {} validation passed: source multisig {} has {} UTXOs (max: {}), no pending change outputs to source",
-            migration_id, multisig_id_from, source_utxo_count, MAX_UTXOS_FOR_MIGRATION_END
-        );
-
-        // Remove migration from database
-        self.db.remove_migration(&migration_id).to_status()?;
-        self.db.flush().to_status()?;
-
-        info!(
-            "Ended migration {} from multisig {} to multisig {}",
-            migration_id, multisig_id_from, multisig_id_to
-        );
-
-        // Send migration notification
-        if let Err(e) = self.dynafed_notifications_tx.send(
-            DynafedSubscriptionMessage::Migration(MigrationNotification {
-                event: MigrationEvent::End,
-                multisig_id_from,
-                multisig_id_to,
-                migration_id,
-            }),
-        ) {
-            error!(
-                "No subscribers to receive migration end notification for {}: {}",
-                migration_id, e
-            );
+        // Cleanup the DKG session state.
+        let mut sessions = self.dkg_sessions.lock().await;
+        if sessions.remove(&multisig_id).is_none() {
+            // TODO: We can just skip/ignore this.
+            todo!();
         }
 
         Ok(tonic::Response::new(rpc::Empty {}))
