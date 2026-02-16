@@ -1,17 +1,17 @@
 use crate::{
     models::{
-        ChunkId, HeaderWithPegs, MigrationId, MigrationRecord, MigrationStatus,
-        PeerID, RuntimeVersion, Snapshot, SnapshotChunk, SnapshotId,
-        SnapshotSync, SnapshotSyncId, UuidID, WalletStateSyncRecord,
+        ChunkId, HeaderWithPegs, PeerID, RuntimeVersion, Snapshot,
+        SnapshotChunk, SnapshotId, SnapshotSync, SnapshotSyncId, UuidID,
+        WalletStateSyncRecord,
     },
     provider::database::provider::{
         BotanixDatabaseProvider, BotanixDatabaseProviderRO,
         BotanixDatabaseProviderRW,
     },
-    DatabaseProviderFactoryRO, DatabaseProviderFactoryRW, MigrationReader,
-    MigrationWriter, RuntimeTransitionsReadWrite, SnapshotReader,
-    SnapshotWriter, StagedHeaderReader, StagedHeaderWriter,
-    WalletStateSyncReader, WalletStateSyncWriter,
+    DatabaseProviderFactoryRO, DatabaseProviderFactoryRW,
+    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
+    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
+    WalletStateSyncWriter,
 };
 use alloy_primitives::{BlockNumber, Bytes, B256};
 use reth_db_api::database::Database;
@@ -632,90 +632,3 @@ impl<DB: Database, N: NodeTypes + NodeTypesForProvider>
         self.provider_rw()?.get_last_runtime_version()
     }
 }
-
-impl<DB: Database, N: NodeTypes + NodeTypesForProvider> MigrationReader
-    for BotanixProviderFactory<DB, N>
-{
-    #[inline(always)]
-    fn get_all_migrations(&self) -> ProviderResult<Vec<MigrationRecord>> {
-        self.provider()?.get_all_migrations()
-    }
-
-    #[inline(always)]
-    fn get_migration(
-        &self,
-        migration_id: MigrationId,
-    ) -> ProviderResult<Option<MigrationRecord>> {
-        self.provider()?.get_migration(migration_id)
-    }
-
-    #[inline(always)]
-    fn migration_exists_for_multisig(
-        &self,
-        multisig_id: u32,
-    ) -> ProviderResult<Option<MigrationId>> {
-        self.provider()?.migration_exists_for_multisig(multisig_id)
-    }
-
-    #[inline(always)]
-    fn get_migrations_count(&self) -> ProviderResult<usize> {
-        self.provider()?.get_migrations_count()
-    }
-}
-
-impl<DB: Database, N: NodeTypes + NodeTypesForProvider> MigrationWriter
-    for BotanixProviderFactory<DB, N>
-{
-    fn store_migration(&self, record: &MigrationRecord) -> ProviderResult<()> {
-        let provider = self.provider_rw()?;
-
-        provider.store_migration(record)?;
-
-        provider.commit()?;
-
-        Ok(())
-    }
-
-    fn update_migration_status(
-        &self,
-        migration_id: MigrationId,
-        status: MigrationStatus,
-    ) -> ProviderResult<bool> {
-        let provider = self.provider_rw()?;
-
-        let updated = provider.update_migration_status(migration_id, status)?;
-
-        if updated {
-            provider.commit()?;
-        }
-
-        Ok(updated)
-    }
-
-    fn remove_migration(
-        &self,
-        migration_id: MigrationId,
-    ) -> ProviderResult<bool> {
-        let provider = self.provider_rw()?;
-
-        let removed = provider.remove_migration(migration_id)?;
-
-        if removed {
-            provider.commit()?;
-        }
-
-        Ok(removed)
-    }
-
-    fn remove_all_migrations(&self) -> ProviderResult<()> {
-        let provider = self.provider_rw()?;
-
-        provider.remove_all_migrations()?;
-
-        provider.commit()?;
-
-        Ok(())
-    }
-}
-
-// TODO: add tests
