@@ -1765,19 +1765,6 @@ impl TryFrom<Utxo> for RpcUtxo {
     }
 }
 
-/// A migration state stored in the database.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Migration {
-    /// The unique migration ID (UUIDv4).
-    pub migration_id: Uuid,
-    /// The source multisig ID (funds are being moved FROM this multisig).
-    pub multisig_id_from: MultisigId,
-    /// The target multisig ID (funds are being moved TO this multisig).
-    pub multisig_id_to: MultisigId,
-    /// Unix timestamp (seconds) when the migration was started.
-    pub started_at_unix_secs: u64,
-}
-
 /// Pending sweep - stored when sweep PSBT is created, before signing completes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingSweep {
@@ -1794,63 +1781,6 @@ pub struct SweepMetadata {
 }
 
 impl Db {
-    /// Store a migration in the database.
-    pub fn store_migration(&self, migration: &Migration) -> Result<(), Error> {
-        let mut bytes = Vec::new();
-        ciborium::into_writer(&migration, &mut bytes)
-            .map_err(Error::CiboriumWrite)?;
-        self.migrations
-            .insert(migration.migration_id.as_bytes(), &bytes[..])?;
-        Ok(())
-    }
-
-    /// Get a migration by its ID.
-    pub fn get_migration(
-        &self,
-        migration_id: &Uuid,
-    ) -> Result<Option<Migration>, Error> {
-        Ok(self
-            .migrations
-            .get(migration_id.as_bytes())?
-            .map(|b| ciborium::de::from_reader(b.as_ref()))
-            .transpose()?)
-    }
-
-    /// Get all active migrations.
-    pub fn get_all_migrations(&self) -> Result<Vec<Migration>, Error> {
-        let mut ret = Vec::new();
-        for res in self.migrations.iter() {
-            let (_k, v) = res?;
-            let migration: Migration = ciborium::de::from_reader(v.as_ref())
-                .expect("corrupt db: migration");
-            ret.push(migration);
-        }
-        Ok(ret)
-    }
-
-    /// Remove a migration by its ID.
-    pub fn remove_migration(&self, migration_id: &Uuid) -> Result<bool, Error> {
-        Ok(self.migrations.remove(migration_id.as_bytes())?.is_some())
-    }
-
-    /// Check if a migration exists for the given multisig IDs (either as source or target).
-    pub fn migration_exists_for_multisig(
-        &self,
-        multisig_id: MultisigId,
-    ) -> Result<Option<Uuid>, Error> {
-        for res in self.migrations.iter() {
-            let (_k, v) = res?;
-            let migration: Migration = ciborium::de::from_reader(v.as_ref())
-                .expect("corrupt db: migration");
-            if migration.multisig_id_from == multisig_id
-                || migration.multisig_id_to == multisig_id
-            {
-                return Ok(Some(migration.migration_id));
-            }
-        }
-        Ok(None)
-    }
-
     /// Store pending sweep - called in get_sweep_psbt() after PSBT created
     pub fn store_pending_sweep(
         &self,

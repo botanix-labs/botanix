@@ -59,8 +59,6 @@ pub mod subscribe_to_dynafed_notifications_stream {
         #[prost(message, tag = "1")]
         Dkg(super::DkgNotification),
         #[prost(message, tag = "2")]
-        Migration(super::MigrationNotification),
-        #[prost(message, tag = "3")]
         Sweep(super::SweepNotification),
     }
 }
@@ -70,20 +68,6 @@ pub struct DkgNotification {
     pub event: i32,
     #[prost(uint32, tag = "2")]
     pub multisig_id: u32,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MigrationNotification {
-    #[prost(enumeration = "MigrationEvent", tag = "1")]
-    pub event: i32,
-    /// The multisig being migrated FROM
-    #[prost(uint32, tag = "2")]
-    pub multisig_id_from: u32,
-    /// The multisig being migrated TO
-    #[prost(uint32, tag = "3")]
-    pub multisig_id_to: u32,
-    /// UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
-    #[prost(string, tag = "4")]
-    pub migration_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct SweepNotification {
@@ -379,54 +363,6 @@ pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
-/// Migration messages
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct StartMigrationRequest {
-    /// Source multisig (must have key package)
-    #[prost(uint32, tag = "1")]
-    pub multisig_id_from: u32,
-    /// Target multisig (will run DKG)
-    #[prost(uint32, tag = "2")]
-    pub multisig_id_to: u32,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct StartMigrationResponse {
-    /// UUIDv4 for tracking
-    #[prost(string, tag = "1")]
-    pub migration_id: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EndMigrationRequest {
-    #[prost(string, tag = "1")]
-    pub migration_id: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct AbortMigrationRequest {
-    #[prost(string, tag = "1")]
-    pub migration_id: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GetMigrationRequest {
-    #[prost(string, tag = "1")]
-    pub migration_id: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MigrationInfo {
-    #[prost(string, tag = "1")]
-    pub migration_id: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "2")]
-    pub multisig_id_from: u32,
-    #[prost(uint32, tag = "3")]
-    pub multisig_id_to: u32,
-    /// Unix timestamp when migration started
-    #[prost(uint64, tag = "4")]
-    pub started_at_unix_secs: u64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ListMigrationsResponse {
-    #[prost(message, repeated, tag = "1")]
-    pub migrations: ::prost::alloc::vec::Vec<MigrationInfo>,
-}
 /// Sweep messages
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct InitiateSweepRequest {
@@ -486,59 +422,7 @@ impl DkgEvent {
         }
     }
 }
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    ::prost::Enumeration,
-)]
-#[repr(i32)]
-pub enum MigrationEvent {
-    Unspecified = 0,
-    MigrationStart = 1,
-    MigrationEnd = 2,
-    MigrationAbort = 3,
-}
-impl MigrationEvent {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "MIGRATION_EVENT_UNSPECIFIED",
-            Self::MigrationStart => "MIGRATION_START",
-            Self::MigrationEnd => "MIGRATION_END",
-            Self::MigrationAbort => "MIGRATION_ABORT",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "MIGRATION_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
-            "MIGRATION_START" => Some(Self::MigrationStart),
-            "MIGRATION_END" => Some(Self::MigrationEnd),
-            "MIGRATION_ABORT" => Some(Self::MigrationAbort),
-            _ => None,
-        }
-    }
-}
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    ::prost::Enumeration,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum SigningStatus {
     Running = 0,
@@ -1365,127 +1249,10 @@ pub mod btc_server_client {
                 "/btc_server.BtcServer/NewConsensusCheckpoint",
             );
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "btc_server.BtcServer",
-                "NewConsensusCheckpoint",
-            ));
-            self.inner.unary(req, path, codec).await
-        }
-        /// Migration endpoints
-        pub async fn start_migration(
-            &mut self,
-            request: impl tonic::IntoRequest<super::StartMigrationRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::StartMigrationResponse>,
-            tonic::Status,
-        > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!(
-                    "Service was not ready: {}",
-                    e.into()
-                ))
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/StartMigration",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "btc_server.BtcServer",
-                "StartMigration",
-            ));
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn end_migration(
-            &mut self,
-            request: impl tonic::IntoRequest<super::EndMigrationRequest>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
-        {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!(
-                    "Service was not ready: {}",
-                    e.into()
-                ))
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/EndMigration",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "btc_server.BtcServer",
-                "EndMigration",
-            ));
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn abort_migration(
-            &mut self,
-            request: impl tonic::IntoRequest<super::AbortMigrationRequest>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
-        {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!(
-                    "Service was not ready: {}",
-                    e.into()
-                ))
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/AbortMigration",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "btc_server.BtcServer",
-                "AbortMigration",
-            ));
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn get_migration(
-            &mut self,
-            request: impl tonic::IntoRequest<super::GetMigrationRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::MigrationInfo>,
-            tonic::Status,
-        > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!(
-                    "Service was not ready: {}",
-                    e.into()
-                ))
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/GetMigration",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "btc_server.BtcServer",
-                "GetMigration",
-            ));
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn list_migrations(
-            &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
-        ) -> std::result::Result<
-            tonic::Response<super::ListMigrationsResponse>,
-            tonic::Status,
-        > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!(
-                    "Service was not ready: {}",
-                    e.into()
-                ))
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/ListMigrations",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "btc_server.BtcServer",
-                "ListMigrations",
-            ));
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("btc_server.BtcServer", "NewConsensusCheckpoint"),
+                );
             self.inner.unary(req, path, codec).await
         }
         /// Sweep endpoint

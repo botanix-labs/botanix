@@ -1,20 +1,19 @@
 //! Extended bitcoin server client with authentication
 use crate::{
     btc_server::{
-        AbortDkgRequest, AbortMigrationRequest, ConsensusCheckpointRequest,
-        DkgPayload, DkgPayloads, Empty, EndMigrationRequest,
+        AbortDkgRequest, ConsensusCheckpointRequest,
+        DkgPayload, DkgPayloads, Empty,
         FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
         GetAllUtxosResponse, GetDkgPayloadsRequest,
         GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
         GetGatewayAddressRequest, GetGatewayAddressResponse,
-        GetMigrationRequest, GetPendingPegoutsResponse, GetPublicKeyRequest,
+        GetPendingPegoutsResponse, GetPublicKeyRequest,
         GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
         GetSigningStatusRequest, GetSigningStatusResponse, GetSweepPsbtRequest,
-        GetTrackedTxsResponse, ListMigrationsResponse, ListMultisigsResponse,
-        MakeTxRequest, MigrationInfo, RecoverMissingUtxosRequest,
+        GetTrackedTxsResponse, ListMultisigsResponse,
+        MakeTxRequest, RecoverMissingUtxosRequest,
         RecoverMissingUtxosResponse, ResetAllUtxosRequest,
         ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
-        StartMigrationRequest, StartMigrationResponse, StartNewDkgRequest,
         SubscribeToDynafedNotificationsStream, ToSignRequest,
         WalletStateResponse,
     },
@@ -206,26 +205,6 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: RecoverMissingUtxosRequest,
     ) -> BoxFuture<'_, Result<RecoverMissingUtxosResponse, GrpcClientError>>;
-    fn start_migration(
-        &mut self,
-        request: StartMigrationRequest,
-    ) -> BoxFuture<'_, Result<StartMigrationResponse, GrpcClientError>>;
-    fn end_migration(
-        &mut self,
-        request: EndMigrationRequest,
-    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
-    fn abort_migration(
-        &mut self,
-        request: AbortMigrationRequest,
-    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
-    fn get_migration(
-        &mut self,
-        request: GetMigrationRequest,
-    ) -> BoxFuture<'_, Result<MigrationInfo, GrpcClientError>>;
-    fn list_migrations(
-        &mut self,
-        request: Empty,
-    ) -> BoxFuture<'_, Result<ListMigrationsResponse, GrpcClientError>>;
 }
 
 /// Macros for generating grpc methods implementation
@@ -402,15 +381,6 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
         RecoverMissingUtxosRequest,
         RecoverMissingUtxosResponse
     );
-    generate_method!(
-        start_migration,
-        StartMigrationRequest,
-        StartMigrationResponse
-    );
-    generate_method!(end_migration, EndMigrationRequest, Empty);
-    generate_method!(abort_migration, AbortMigrationRequest, Empty);
-    generate_method!(get_migration, GetMigrationRequest, MigrationInfo);
-    generate_method!(list_migrations, Empty, ListMigrationsResponse);
     generate_stream_method!(
         get_finalized_pegout_ids,
         GetFinalizedPegoutIdsRequest,

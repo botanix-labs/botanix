@@ -75,13 +75,6 @@ service BtcServer {
 
     rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
 
-    // Migration endpoints
-    rpc StartMigration(StartMigrationRequest) returns (StartMigrationResponse) {}
-    rpc EndMigration(EndMigrationRequest) returns (Empty) {}
-    rpc AbortMigration(AbortMigrationRequest) returns (Empty) {}
-    rpc GetMigration(GetMigrationRequest) returns (MigrationInfo) {}
-    rpc ListMigrations(Empty) returns (ListMigrationsResponse) {}
-
     // Sweep endpoint
     rpc InitiateSweep(InitiateSweepRequest) returns (Empty) {}
 }
@@ -118,8 +111,7 @@ message GetFinalizedPegoutIdsResponse {
 message SubscribeToDynafedNotificationsStream {
     oneof notification {
         DkgNotification dkg = 1;
-        MigrationNotification migration = 2;
-        SweepNotification sweep = 3;
+        SweepNotification sweep = 2;
     }
 }
 
@@ -133,20 +125,6 @@ enum DkgEvent {
 message DkgNotification {
     DkgEvent event = 1;
     uint32 multisig_id = 2;
-}
-
-message MigrationNotification {
-    MigrationEvent event = 1;
-    uint32 multisig_id_from = 2;  // The multisig being migrated FROM
-    uint32 multisig_id_to = 3;    // The multisig being migrated TO
-    string migration_id = 4;   // UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
-}
-
-enum MigrationEvent {
-    MIGRATION_EVENT_UNSPECIFIED = 0;
-    MIGRATION_START = 1;
-    MIGRATION_END = 2;
-    MIGRATION_ABORT = 3;
 }
 
 message SweepNotification {
@@ -367,39 +345,6 @@ enum SigningStatus {
     RUNNING = 0;
     FINALIZED = 1;
     FAILED = 2;
-}
-
-// Migration messages
-message StartMigrationRequest {
-    uint32 multisig_id_from = 1;  // Source multisig (must have key package)
-    uint32 multisig_id_to = 2;    // Target multisig (will run DKG)
-}
-
-message StartMigrationResponse {
-    string migration_id = 1;  // UUIDv4 for tracking
-}
-
-message EndMigrationRequest {
-    string migration_id = 1;
-}
-
-message AbortMigrationRequest {
-    string migration_id = 1;
-}
-
-message GetMigrationRequest {
-    string migration_id = 1;
-}
-
-message MigrationInfo {
-    string migration_id = 1;
-    uint32 multisig_id_from = 2;
-    uint32 multisig_id_to = 3;
-    uint64 started_at_unix_secs = 4;  // Unix timestamp when migration started
-}
-
-message ListMigrationsResponse {
-    repeated MigrationInfo migrations = 1;
 }
 
 // Sweep messages
