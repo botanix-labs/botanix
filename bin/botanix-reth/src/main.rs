@@ -12,16 +12,16 @@ use botanix_chainspec::{
     parser::BotanixChainSpecParser,
 };
 use botanix_cli_args::{
-    chain::{get_chain_from_federation_config, BotanixNetwork},
+    chain::{get_botanix_chain_from_federation_config, BotanixNetwork},
     BotanixArgs,
 };
+use botanix_configs::federation::load_federation_config_toml;
 use botanix_reth::{
     consensus::{
         comet_bft::abci::ABCIDriver,
         snapshot_manager::SnapshotRunnable,
         utils::{is_known_minting_contract, retry_exec},
-        wallet_state_sync::WalletStateSync,
-        AuthorityConsensusBuilder,
+        AuthorityConsensusBuilder, OperatorBuilder,
     },
     node::{
         consensus::BotanixConsensus, evm::config::BotanixEvmConfig,
@@ -120,9 +120,6 @@ fn main() -> eyre::Result<()> {
             // Bitcoind Config
             let bitcoind_cfg = args.bitcoind.clone();
 
-            // Frost Config
-            let frost_cfg = args.frost.clone();
-
             // POA Config
             let poa_cfg = args.poa.clone();
 
@@ -139,12 +136,18 @@ fn main() -> eyre::Result<()> {
 
             // Testnet and Devnet should result in the same chain spec
             let botanix_network = BotanixNetwork::from_args(poa_cfg.is_testnet, poa_cfg.is_devnet)?;
-            let chain_spec = get_chain_from_federation_config(
+
+            let federation_toml = load_federation_config_toml(
                 poa_cfg
                     .federation_config_path
                     .clone()
                     .to_str()
                     .expect("federation config path to exist"),
+            )?;
+
+            // TODO: This should reuse `botanix_fee_recipient`
+            let chain_spec = get_botanix_chain_from_federation_config(
+                federation_toml.clone(),
                 !botanix_network.is_mainnet(),
             )?;
             let chain_spec_arc = Arc::new(chain_spec.clone());
@@ -178,10 +181,8 @@ fn main() -> eyre::Result<()> {
             let frost_setup_result = setup_frost(
                 &chain_spec,
                 &datadir_args,
-                &poa_cfg,
+                federation_toml.clone(),
                 &network_args,
-                &frost_cfg,
-                &state_sync_cfg,
                 &mut reth_cfg,
             )?;
 
@@ -256,8 +257,9 @@ fn main() -> eyre::Result<()> {
                 .account_code(&*MINT_CONTRACT_ADDRESS)
                 .expect("Minting contract address exists")
                 .expect("Minting contract bytecode to exist");
+
             if let Err(e) = is_known_minting_contract(
-                frost_setup_result.federation_config.minting_contract_bytecode.clone(),
+                federation_toml.minting_contract_bytecode.clone(),
                 &deployed_bytecode.original_bytes(),
             ) {
                 error!(target: "reth::cli", "{}", e);
@@ -291,136 +293,134 @@ fn main() -> eyre::Result<()> {
                 pool.clone(),
             ).await?;
 
+            // TODO: Should only fed members start this?
             // Start all the p2p tasks
-            let frost_handle = if poa_cfg.federation_mode {
-                let frost_manager = frost_p2p.expect("should be some");
-                let frost_handle = frost_manager.handle();
-                task_executor.spawn_critical("p2p frost", frost_manager);
-                Some(frost_handle)
-            } else {
-                None
-            };
+            let frost_manager = frost_p2p.expect("should be some");
+            let frost_handle = frost_manager.handle();
+
+            task_executor.spawn_critical("p2p frost", frost_manager);
 
             let botanix_evm_config = BotanixEvmConfig::new(chain_spec_arc.clone());
             let cometbft_rpc_factory = create_cometbft_factory(&poa_cfg);
             let btc_server_factory = btc_server_client.unzip().0;
-            let (abci_started_tx, abci_started_rx) = tokio::sync::oneshot::channel::<()>();
             let (driver_tx, driver_rx) = tokio::sync::mpsc::channel(1);
 
-            let (frost_task, abci_client_builder, snapshot_manager, wallet_sync, consensus) =
-                match AuthorityConsensusBuilder::try_new(
-                    chain_spec_arc.clone(),
-                    blockchain_provider.clone(),
-                    activation_manager,
+            let (abci_client_builder, snapshot_manager, consensus) = match AuthorityConsensusBuilder::try_new(
+                chain_spec_arc.clone(),
+                blockchain_provider.clone(),
+                activation_manager,
+                poa_cfg.federation_mode, // is_fed_node
+                bitcoin_checkpoints.clone(),
+                task_executor.clone(),
+                bitcoind_cfg.btc_network,
+                botanix_evm_config,
+                cometbft_rpc_factory.clone(),
+                driver_tx,
+                state_sync_cfg.clone(),
+                reth_provider_factory.clone(),
+                botanix_db_provider_factory.clone(),
+                poa_cfg.block_fee_recipient_address,
+                bitcoind_client.clone(),
+            ) {
+                std::result::Result::Ok(consensus) => consensus.build::<BtcServerExtendedClient>().await,
+                std::result::Result::Err(e) => {
+                    return Err(eyre::eyre!("AuthorityConsensusBuilderError : {:?}", e));
+                }
+            };
+
+            let storage = if let Some(abci_client_builder) = abci_client_builder.as_ref() {
+                abci_client_builder.storage().clone()
+            } else {
+                panic!("ABCI client builder should exist in authority mode");
+            };
+
+            let mut abci_driver = ABCIDriver::new(
+                driver_rx,
+                reth_db_provider_factory.clone(),
+                botanix_db_provider_factory,
+                blockchain_provider.clone(),
+                storage.clone(),
+            );
+
+            if poa_cfg.federation_mode {
+                let Some(btc_server_factory) = btc_server_factory.clone() else {
+                    return Err(eyre::eyre!("btc-server mut be configured for authority"));
+                };
+
+                let operator = OperatorBuilder::new(
+                    storage,
                     btc_server_factory,
-                    bitcoin_checkpoints.clone(),
-                    frost_setup_result.secret_key,
                     network_handle.clone(),
                     frost_handle,
                     task_executor.clone(),
-                    frost_setup_result.frost_config,
-                    bitcoind_cfg.btc_network,
-                    frost_setup_result.genesis_authorities.clone(),
-                    frost_setup_result.authorities_socket_addresses,
-                    botanix_evm_config,
+                    frost_setup_result.multisigs,
                     cometbft_rpc_factory,
                     RandomSourceProvider::new(),
-                    driver_tx,
-                    state_sync_cfg.clone(),
-                    reth_provider_factory.clone(),
-                    botanix_db_provider_factory.clone(),
-                    poa_cfg.block_fee_recipient_address,
                     bitcoind_client,
-                ) {
-                    std::result::Result::Ok(consensus) => consensus.build::<BtcServerExtendedClient>().await,
-                    std::result::Result::Err(e) => {
-                        return Err(eyre::eyre!("AuthorityConsensusBuilderError : {:?}", e));
-                    }
-                };
-
-                let storage = if let Some(abci_client_builder) = abci_client_builder.as_ref() {
-                    abci_client_builder.storage().clone()
-                } else {
-                    panic!("ABCI client builder should exist in authority mode");
-                };
-
-                let mut abci_driver = ABCIDriver::new(
-                    driver_rx,
-                    reth_db_provider_factory.clone(),
-                    botanix_db_provider_factory,
-                    blockchain_provider.clone(),
-                    storage,
                 );
 
-                // Setup and launch RPC server
-                let _rpc_handle = setup_and_run_rpc(
-                    blockchain_provider.clone(),
-                    &original_rpc_server_args,
-                    &task_executor,
-                    Arc::clone(&chain_spec_arc),
-                    botanix_provider.clone(),
-                    pool.clone(),
-                    network_handle.clone(),
-                    consensus,
-                ).await?;
+                let mut frost_task = operator.build::<BtcServerExtendedClient>().await;
 
-                if let Some(mut snapshot_manager) = snapshot_manager {
-                    tracing::info!("Snapshot manager is enabled.");
-                    task_executor.spawn_critical(
-                        "Snapshot Manager",
-                        Box::pin(async move {
-                            if let Err(e) = snapshot_manager.run().await {
-                                tracing::error!(target: "reth::cli", "Snapshot Manager Error: {:?}", e);
-                            }
-                        }),
-                    );
+                // TODO: Should be spawned by OperatorBuilder directly?
+                task_executor.spawn_critical(
+                    "FrostTask", // TODO: Should be labeled
+                    Box::pin(async move {
+                        if let Err(e) = frost_task.start_task().await {
+                            tracing::error!(target: "reth::cli", "Frost Task Error: {:?}", e);
+                        }
+                    }),
+                );
+            }
+
+            // Setup and launch RPC server
+            let _rpc_handle = setup_and_run_rpc(
+                blockchain_provider.clone(),
+                &original_rpc_server_args,
+                &task_executor,
+                Arc::clone(&chain_spec_arc),
+                botanix_provider.clone(),
+                pool.clone(),
+                network_handle.clone(),
+                consensus,
+            ).await?;
+
+            // launch the network manager task
+            task_executor.spawn_critical("network p2p", network_manager);
+            task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
+            task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
+
+            // NOTE: the node will block here until DKG has completed
+            let abci_client_builder = abci_client_builder.expect("abci client builder exists");
+            let fut = || async {
+                abci_client_builder
+                    .start_server(
+                        &task_executor.clone(),
+                        pool.clone(),
+                        poa_cfg.abci_host.to_string(),
+                        poa_cfg.abci_port,
+                    )
+                    .await
+            };
+
+            match retry_exec("abci_server_start", fut, 3, Duration::from_secs(2)).await {
+                std::result::Result::Ok(()) => {}
+                std::result::Result::Err(err) => {
+                    tracing::error!(target: "reth::cli", "Failed to connect to abci client: {}", err);
+                    return Err(eyre::eyre!("Failed to connect to abci client: {}", err));
                 }
+            };
 
-                if let Some(wallet_sync) = wallet_sync {
-                    task_executor.spawn_critical(
-                        "Wallet Sync",
-                        Box::pin(async move {
-                            if let Err(e) = wallet_sync.sync_wallet_state().await {
-                                tracing::error!(target: "reth::cli", "Wallet Sync Error: {:?}", e);
-                            }
-                        }),
-                    );
-                }
-
-                if poa_cfg.federation_mode {
-                    task_executor.spawn_critical(
-                        "Frost Task",
-                        Box::pin(async move {
-                            frost_task.expect("frost task exists").start_task(abci_started_rx).await;
-                        }),
-                    );
-                }
-
-                // launch the network manager task
-                task_executor.spawn_critical("network p2p", network_manager);
-                task_executor.spawn_critical("txpool p2p task", tx_pool_p2p);
-                task_executor.spawn_critical("eth request handler p2p task", eth_request_handler_p2p);
-
-                // NOTE: the node will block here until DKG has completed
-                let abci_client_builder = abci_client_builder.expect("abci client builder exists");
-                let fut = || async {
-                    abci_client_builder
-                        .start_server(
-                            &task_executor.clone(),
-                            pool.clone(),
-                            poa_cfg.abci_host.to_string(),
-                            poa_cfg.abci_port,
-                        )
-                        .await
-                };
-
-                match retry_exec("abci_server_start", fut, 3, Duration::from_secs(2)).await {
-                    std::result::Result::Ok(()) => {}
-                    std::result::Result::Err(err) => {
-                        tracing::error!(target: "reth::cli", "Failed to connect to abci client: {}", err);
-                        return Err(eyre::eyre!("Failed to connect to abci client: {}", err));
-                    }
-                };
+            if let Some(mut snapshot_manager) = snapshot_manager {
+                tracing::info!("Snapshot manager is enabled.");
+                task_executor.spawn_critical(
+                    "Snapshot Manager",
+                    Box::pin(async move {
+                        if let Err(e) = snapshot_manager.run().await {
+                            tracing::error!(target: "reth::cli", "Snapshot Manager Error: {:?}", e);
+                        }
+                    }),
+                );
+            }
 
             // add metrics if necessary
             run_metrics_service(metrics_args, &task_executor, chain_spec_arc).await?;
@@ -432,8 +432,6 @@ fn main() -> eyre::Result<()> {
             );
             tracing::info!(target: "reth::cli", "Spawned async bitcoin task for block headers");
 
-            // send the signal that abci driver can start
-            abci_started_tx.send(()).expect("abci started tx");
             let (tx, rx) = tokio::sync::oneshot::channel();
             task_executor.spawn_critical(
                 "abci driver",
