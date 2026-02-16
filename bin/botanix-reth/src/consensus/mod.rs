@@ -44,17 +44,8 @@ pub struct Storage<RDB, BDB> {
     pub(crate) reth_database: RDB,
     /// Botanix Database Provider Factory
     pub(crate) botanix_database_factory: BDB,
-    /// The authority list in the genesis block
-    pub(crate) genesis_authorities: Vec<secp256k1::PublicKey>,
-    /// keep track of my place among the signer
-    /// This will change as new signers are removed
-    pub(crate) signer_index: usize,
-    /// Authority Signer public key
-    pub(crate) authority: secp256k1::PublicKey,
     /// Bitcoin network
     pub(crate) btc_network: bitcoin::Network,
-    /// Authority socket addresses pulled from federation config
-    pub(crate) authority_socket_addresses: Vec<SocketAddr>,
     /// Evm config
     pub(crate) evm_config: BotanixEvmConfig,
     /// Bitcoind Factory
@@ -69,12 +60,8 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
     /// Create a new instance of the storage
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        genesis_authorities: Vec<secp256k1::PublicKey>,
-        signer_index: usize,
-        authority: secp256k1::PublicKey,
         btc_network: bitcoin::Network,
         aggregate_public_key: Option<secp256k1::PublicKey>,
-        authority_socket_addresses: Vec<SocketAddr>,
         evm_config: BotanixEvmConfig,
         chain_spec: Arc<BotanixChainSpec>,
         bitcoind_factory: Arc<FallbackBitcoindClient>,
@@ -90,17 +77,12 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
             None
         };
 
-        let storage_inner =
-            StorageInner { aggregate_public_key, is_block_syncing: false };
+        let storage_inner = StorageInner { aggregate_public_key };
 
         Self {
             reth_database,
             botanix_database_factory,
-            genesis_authorities,
-            signer_index,
-            authority,
             btc_network,
-            authority_socket_addresses,
             evm_config,
             chain_spec,
             bitcoind_factory,
@@ -128,6 +110,4 @@ pub(crate) struct StorageInner {
     /// Should get populated after DKG
     pub(crate) aggregate_public_key:
         Option<BTreeMap<MultisigId, secp256k1::PublicKey>>,
-    /// Suggests if we are currently syncing blocks
-    pub(crate) is_block_syncing: bool,
 }

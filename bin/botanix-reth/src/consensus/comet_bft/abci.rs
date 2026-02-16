@@ -3243,12 +3243,8 @@ mod tests {
         ));
 
         let storage = Storage::new(
-            Vec::new(),
-            0,
-            pk,
             bitcoin::Network::Regtest,
             Some(pk),
-            Vec::new(),
             evm_config,
             spec.clone(),
             bitcoind_client,
