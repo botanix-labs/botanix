@@ -19,13 +19,16 @@ use botanix_authority_peg::{
     peg_contract::{PeginMeta, PegoutData, PegoutWithId},
 };
 use botanix_btc_server_client::{
+    subscribe_to_dynafed_notifications_stream::Notification,
     BtcServerExtendedApi, GetSweepPsbtRequest, GrpcClientError, MakeTxRequest,
     PendingPegout, ScriptBuf, SigningPackage, TxOut, Utxo,
 };
 use botanix_storage::models;
 use botanix_types::MultisigId;
 use btcserverlib::{
+    dkg::{DkgNotification, DynafedSubscriptionMessage, SweepNotification},
     pegout_id::PegoutId,
+    rpc::DkgEvent,
     wallet::psbt::{PsbtExt, PsbtOutputExt},
 };
 use futures_util::Future;
@@ -173,6 +176,7 @@ pub(crate) fn get_utxos_from_pegin_meta(
     if pegins.is_empty() {
         return vec![];
     }
+
     pegins
         .iter()
         .filter_map(|pegin| utxo_from_pegin_meta(pegin, aggregate_public_keys))
@@ -187,6 +191,7 @@ pub(crate) fn get_pending_pegouts_from_pegout_data(
     if pegouts.is_empty() {
         return vec![];
     }
+
     pegouts
         .iter()
         .map(|pegout| PendingPegout {
@@ -281,6 +286,33 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(
         .collect()
 }
 
+pub(crate) fn get_dynafed_sub_msg_from_notification(
+    notification: Notification,
+) -> eyre::Result<DynafedSubscriptionMessage> {
+    let msg = match notification {
+        botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Dkg(dkg) => {
+            let dkg_notification = match DkgEvent::try_from(dkg.event)? {
+                DkgEvent::DkgStart => DkgNotification::Start {
+                    multisig_id: dkg.multisig_id.into(),
+                },
+                DkgEvent::DkgAbort => DkgNotification::Abort {
+                    multisig_id: dkg.multisig_id.into(),
+                },
+            };
+
+            DynafedSubscriptionMessage::Dkg(dkg_notification)
+        }
+        botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Sweep(sweep) => {
+            DynafedSubscriptionMessage::Sweep(SweepNotification {
+                multisig_id_from: sweep.multisig_id_from.into(),
+                multisig_id_to: sweep.multisig_id_to.into(),
+            })
+        }
+    };
+
+    Ok(msg)
+}
+
 pub(crate) fn get_utxos_from_staged_pegins(
     pegins: Vec<models::PeginData>,
 ) -> Vec<Utxo> {
@@ -365,9 +397,11 @@ pub(crate) fn find_epoch_start(
     current_block_number: u64,
 ) -> u64 {
     let mut start_block_number = current_block_number;
+
     while start_block_number % epoch_length != 0 {
         start_block_number -= 1;
     }
+
     start_block_number
 }
 
@@ -385,8 +419,10 @@ pub(crate) fn parse_signing_session_id(
     if session_id.len() != 32 {
         return Err(FrostParseError::InvalidSigningSessionId);
     }
+
     let mut session_id_array = [0u8; 32];
     session_id_array.copy_from_slice(session_id.as_slice());
+
     Ok(session_id_array)
 }
 
@@ -417,6 +453,7 @@ pub(crate) async fn epoch_pegouts(
 ) -> Result<Vec<PegoutData>, EpochPegoutsError> {
     let start_block = find_epoch_start(epoch_length, best_block);
     let mut pegouts = Vec::new();
+
     for block in start_block..=best_block {
         match client.block_by_number(block) {
             Ok(Some(block))
@@ -662,6 +699,7 @@ pub(crate) fn generate_utxo_merkel_root(
     // compute the utxo set hash root
     let root = bitcoin::merkle_tree::calculate_root(utxos.into_iter())
         .ok_or(UtxoMerkelRootError::BadMerkleRoot)?;
+
     Ok(root)
 }
 
@@ -670,11 +708,11 @@ pub fn is_known_minting_contract(
     precompiled_bytecode: String,
     deployed_bytecode: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let test = hex::encode(deployed_bytecode);
     info!(
         "Deployed Minting contract bytecode: {}",
         hex::encode(deployed_bytecode)
     );
+
     if precompiled_bytecode != hex::encode(deployed_bytecode) {
         error!(
             "Precompiled Minting contract bytecode: {}",
