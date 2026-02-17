@@ -112,3 +112,7 @@ ACT_TESTING.md
 botanix/
 
 docker-local/configs
+
+.agents/
+.codex/
+.claude/skills/
