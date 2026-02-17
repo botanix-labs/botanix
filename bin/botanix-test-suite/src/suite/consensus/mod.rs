@@ -529,6 +529,19 @@ impl Suite for ConsensusIntegrationTestSuite {
                     frost::test_batch_pegins::batch_pegins
                 )
             }
+            "dynafed_batch_pegin" => {
+                run_test!(
+                    self,
+                    CreateTestConfig {
+                        create_bitcoind_node: true,
+                        create_poa_nodes: true,
+                        create_btc_servers: true,
+                        create_cometbft_nodes: true,
+                        ..Default::default()
+                    },
+                    dynafed::test_dynafed_batch_pegin::dynafed_batch_pegin
+                )
+            }
             "utxo_sync" => {
                 run_test!(
                     self,
