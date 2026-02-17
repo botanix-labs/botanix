@@ -41,6 +41,9 @@ Configured in `.mcp.json` (auto-enabled via `.claude/settings.json`):
 
 - **GitHub** — issues, PRs, project boards (`GITHUB_PERSONAL_ACCESS_TOKEN` env var required)
 - **Linear** — issue tracking
+- **Google Cloud** — general GCP interaction via gcloud CLI (requires `gcloud` CLI authenticated)
+- **Google Cloud Storage** — GCS bucket and object operations
+- **Google Cloud Observability** — logs, metrics, traces, error reports
 
 ### Local Dev Environment
 
