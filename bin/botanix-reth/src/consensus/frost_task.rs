@@ -805,7 +805,7 @@ where
             .get_mut(&LEGACY_MULTISIG_ID)
             .ok_or(eyre::eyre!("No multisig entry found for Id {}", LEGACY_MULTISIG_ID))?;
 
-        if multisig.signing_sm.is_coordinator() {
+        if !multisig.signing_sm.is_coordinator() {
             info!(
                 target: "consensus::authority::frost_task::handle_canon_state_commit",
                 "Received canon state notification during epoch block but we're not the coordinator"
