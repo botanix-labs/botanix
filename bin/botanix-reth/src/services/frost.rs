@@ -91,17 +91,12 @@ pub fn setup_frost(
     let multisigs = federation_config
         .multisigs
         .into_iter()
-        .map(|m| {
-            let authorities = m.get_federation_pub_keys()?;
-
-            let authority_index = authorities.iter().position(|a| *a == authority_pk).ok_or_else(|| {
-                eyre::eyre!(
-                    "Your public key could not be found in the list of federation public keys"
-                )
-            })?;
-
+        .filter_map(|m| { // TODO: we should probably have a different way to handle non-federation nodes
+            let authorities = m.get_federation_pub_keys().ok()?;
+            let authority_index = authorities.iter().position(|a| *a == authority_pk)?;
+            
             // TODO: Do basic validation?
-            Ok(MultisigConfig {
+            Some(MultisigConfig {
                 multisig_id: m.multisig_id,
                 min_signers: m.min_signers,
                 max_signers: authorities.len() as u16,
@@ -109,7 +104,7 @@ pub fn setup_frost(
                 authority_index,
             })
         })
-        .collect::<eyre::Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
     Ok(FrostConfigSetupResult { secret_key, multisigs })
 }

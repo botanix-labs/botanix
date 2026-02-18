@@ -293,12 +293,15 @@ fn main() -> eyre::Result<()> {
                 pool.clone(),
             ).await?;
 
-            // TODO: Should only fed members start this?
-            // Start all the p2p tasks
-            let frost_manager = frost_p2p.expect("should be some");
-            let frost_handle = frost_manager.handle();
-
-            task_executor.spawn_critical("p2p frost", frost_manager);
+            // Start frost p2p tasks (only available for federation nodes)
+            let frost_handle = if poa_cfg.federation_mode {
+                let frost_manager = frost_p2p.expect("frost p2p must exist in federation mode");
+                let handle = frost_manager.handle();
+                task_executor.spawn_critical("p2p frost", frost_manager);
+                Some(handle)
+            } else {
+                None
+            };
 
             let botanix_evm_config = BotanixEvmConfig::new(chain_spec_arc.clone());
             let cometbft_rpc_factory = create_cometbft_factory(&poa_cfg);
@@ -351,7 +354,7 @@ fn main() -> eyre::Result<()> {
                     storage,
                     btc_server_factory,
                     network_handle.clone(),
-                    frost_handle,
+                    frost_handle.expect("frost handle must exist in federation mode"),
                     task_executor.clone(),
                     frost_setup_result.multisigs,
                     cometbft_rpc_factory,
