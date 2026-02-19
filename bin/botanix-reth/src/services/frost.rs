@@ -34,13 +34,15 @@ pub struct FrostConfigSetupResult {
 }
 
 impl FrostConfigSetupResult {
-    /// Returns the combined list of authority public keys across all multisig
+    /// Returns the combined list of unique authority public keys across all multisig
     /// configurations.
     pub fn authorities(&self) -> Vec<secp256k1::PublicKey> {
+        let mut seen = std::collections::HashSet::new();
         self.multisigs
             .iter()
-            .map(|m| m.authorities.to_vec())
-            .flatten()
+            .flat_map(|m| m.authorities.iter())
+            .filter(|pk| seen.insert(**pk))
+            .cloned()
             .collect()
     }
 }
