@@ -10,7 +10,7 @@ pub trait RandomSource: Debug {
 }
 
 /// Struct that provides a random source of 32 bytes.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct RandomSourceProvider;
 
 impl RandomSourceProvider {

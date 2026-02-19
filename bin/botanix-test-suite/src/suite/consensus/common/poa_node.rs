@@ -22,7 +22,7 @@ use botanix_btc_server_client::{
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_configs::federation::{
-    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+    FedMemberPubKey, FederationTomlConfig, MultisigTomlConfig,
 };
 use botanix_reth::node::{storage::BotanixStorage, BotanixNode};
 use botanix_storage::BotanixProviderFactory;
@@ -151,6 +151,7 @@ pub struct FederationMemberTestConfig {
     pub peers_list: Vec<FederationMemberTestConfig>,
     pub sender: tokio::sync::broadcast::Sender<Notifications>,
     pub frost_min_signers: u16,
+    // TODO: Deprecate this?
     pub frost_max_signers: u16,
     pub num_snapshots_to_keep: u64,
     pub peer_id: PeerId,
@@ -277,7 +278,6 @@ impl FederationMemberTestConfig {
             let pk = FedMemberPubKey {
                 key: peer.secret_key.public_key(SECP256K1).to_string(),
                 socket_addr: format!("127.0.0.1:{}", peer.discovery_port),
-                role: FederationRole::Continuing,
             };
             fed_member_pks.push(pk);
         }
@@ -285,7 +285,6 @@ impl FederationMemberTestConfig {
         let my_pk = FedMemberPubKey {
             key: self.secret_key.public_key(SECP256K1).to_string(),
             socket_addr: format!("127.0.0.1:{}", self.discovery_port),
-            role: FederationRole::Continuing,
         };
         fed_member_pks.push(my_pk);
 
@@ -308,18 +307,18 @@ impl FederationMemberTestConfig {
             let multisig_id = botanix_types::MultisigId::new(
                 LEGACY_MULTISIG_ID.as_u32() + offset as u32,
             );
-            multisig_configs.push(MultisigConfig::new(
+
+            multisig_configs.push(MultisigTomlConfig::new(
                 multisig_id,
                 self.frost_min_signers,
-                self.frost_max_signers,
                 edh_authorities.clone(),
             ));
         }
         let federation_config = FederationTomlConfig::new(
-            multisig_configs,
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
+            multisig_configs,
         )
         .expect("valid federation config");
         it_info_print!("Federation config", federation_config);
@@ -349,8 +348,6 @@ impl FederationMemberTestConfig {
         let bitcoind_url = self.bitcoind_url.to_string();
         let bitcoind_username = self.bitcoind_username.clone();
         let bitcoind_password = self.bitcoind_password.clone();
-        let frost_min_signers = self.frost_min_signers.to_string();
-        let frost_max_signers = self.frost_max_signers.to_string();
         let num_snapshots_to_keep = self.num_snapshots_to_keep.to_string();
         let discovery_port = self.discovery_port.to_string();
         let abci_port = self.abci_port.to_string();
@@ -406,10 +403,6 @@ impl FederationMemberTestConfig {
             bitcoind_username.as_str(),
             "--bitcoind.primary_password",
             bitcoind_password.as_str(),
-            "--frost.min_signers",
-            frost_min_signers.as_str(),
-            "--frost.max_signers",
-            frost_max_signers.as_str(),
             "--sync.num_snapshots_to_keep",
             num_snapshots_to_keep.as_str(),
             "--sync.snapshot_message_format",

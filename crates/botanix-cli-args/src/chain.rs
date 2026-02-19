@@ -64,8 +64,9 @@ impl BotanixNetwork {
 }
 
 /// Returns the Botanix network chain spec based on a flag
-pub fn get_botanix_chain(
-    raw: &str,
+pub fn get_botanix_chain_from_federation_config(
+    // TODO: Rename variable?
+    genesis_toml_config: FederationTomlConfig,
     is_testnet: bool,
 ) -> eyre::Result<BotanixChainSpec> {
     let network = if is_testnet {
@@ -74,8 +75,6 @@ pub fn get_botanix_chain(
         BotanixNetwork::Mainnet
     };
 
-    // our own toml format
-    let genesis_toml_config = FederationTomlConfig::from_str(raw)?;
     let botanix_fee_recipient = genesis_toml_config.botanix_fee_recipient;
     info!("Botanix fee recipient: {:?}", botanix_fee_recipient);
     let lst_fee_receiver = genesis_toml_config.lst_fee_receiver;
@@ -128,8 +127,9 @@ pub fn get_botanix_chain(
     Ok(botanix_chain)
 }
 
-/// Returns the botanix network chain spec using the config at the passed path
-pub fn get_chain_from_federation_config(
+/// Returns the botanix network chain spec using the config at the passed path,
+/// expected to be in the [`FederationTomlConfig`] format.
+pub fn get_botanix_chain_from_raw(
     s: &str,
     is_testnet: bool,
 ) -> eyre::Result<BotanixChainSpec, eyre::Error> {
@@ -148,7 +148,9 @@ pub fn get_chain_from_federation_config(
         }
     };
 
-    get_botanix_chain(&raw, is_testnet)
+    // our own toml format
+    let toml_config = FederationTomlConfig::from_str(&raw)?;
+    get_botanix_chain_from_federation_config(toml_config, is_testnet)
 }
 
 #[cfg(test)]

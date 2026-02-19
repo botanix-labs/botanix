@@ -15,7 +15,6 @@ use std::{
     time::{Duration, Instant},
 };
 use thiserror::Error;
-use uuid::Uuid;
 
 use botanix_types::MultisigId;
 
@@ -129,8 +128,6 @@ mod sealed_pkg {
 pub enum DynafedSubscriptionMessage {
     /// DKG-related notifications
     Dkg(DkgNotification),
-    /// Migration-related notifications
-    Migration(MigrationNotification),
     /// Sweep-related notifications
     Sweep(SweepNotification),
 }
@@ -139,25 +136,8 @@ pub enum DynafedSubscriptionMessage {
 pub enum DkgNotification {
     /// Start a new DKG session
     Start { multisig_id: MultisigId },
-    /// Restart a DKG session
-    Restart { multisig_id: MultisigId },
     /// Abort a DKG session
     Abort { multisig_id: MultisigId },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MigrationNotification {
-    pub event: MigrationEvent,
-    pub multisig_id_from: MultisigId,
-    pub multisig_id_to: MultisigId,
-    pub migration_id: Uuid,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MigrationEvent {
-    Start,
-    End,
-    Abort,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,7 +151,6 @@ impl DkgNotification {
     pub fn multisig_id(&self) -> MultisigId {
         match self {
             DkgNotification::Start { multisig_id } => *multisig_id,
-            DkgNotification::Restart { multisig_id } => *multisig_id,
             DkgNotification::Abort { multisig_id } => *multisig_id,
         }
     }
@@ -183,26 +162,10 @@ impl Display for DkgNotification {
             DkgNotification::Start { multisig_id } => {
                 write!(f, "DKG Started {{ multisig_id: {} }}", multisig_id)
             }
-            DkgNotification::Restart { multisig_id } => {
-                write!(f, "DKG Restart {{ multisig_id: {} }}", multisig_id)
-            }
             DkgNotification::Abort { multisig_id } => {
                 write!(f, "DKG Aborted {{ multisig_id: {} }}", multisig_id)
             }
         }
-    }
-}
-
-impl Display for MigrationNotification {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Migration {:?} {{ from: {}, to: {}, id: {} }}",
-            self.event,
-            self.multisig_id_from,
-            self.multisig_id_to,
-            self.migration_id
-        )
     }
 }
 
@@ -220,9 +183,6 @@ impl Display for DynafedSubscriptionMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DynafedSubscriptionMessage::Dkg(dkg) => write!(f, "{}", dkg),
-            DynafedSubscriptionMessage::Migration(migration) => {
-                write!(f, "{}", migration)
-            }
             DynafedSubscriptionMessage::Sweep(sweep) => {
                 write!(f, "{}", sweep)
             }

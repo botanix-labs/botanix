@@ -13,7 +13,10 @@ use reth_config::Config;
 use reth_db::DatabaseEnv;
 use reth_network::{
     eth_requests::EthRequestHandler,
-    frost::{manager::FrostManager, protocol::FrostProtoHandler},
+    frost::{
+        manager::{FrostConfig, FrostManager},
+        protocol::FrostProtoHandler,
+    },
     protocol::IntoRlpxSubProtocol,
     transactions::TransactionsManager,
     NetworkConfigBuilder, NetworkHandle, NetworkManager,
@@ -182,6 +185,31 @@ pub async fn setup_network_builder(
     let network_config =
         network_cfg_builder.build(reth_provider_factory.clone());
 
+    let frost_config = if poa_cfg.federation_mode {
+        // Prepare `FrostConfig` for the `NetworkManager`. Do NOTE that the
+        // manager only requires the authority list, therefore we use garbage
+        // values for the other fields.
+        //
+        // TODO (lamafab): Consider updating this upstream in the `reth` repo
+        // such that there is no confusion about this behavior.
+        let authorities = frost_setup_result.authorities();
+        if authorities.is_empty() {
+            // This should never occur if [TODO]
+            return Err(eyre::eyre!("authority list is empty"));
+        }
+
+        Some(FrostConfig {
+            authority_pk: authorities[0], // garbage
+            authority_index: usize::MAX,  // garbage
+            authorities,
+            min_signers: u16::MIN, // garbage
+            max_signers: u16::MIN, // garbage
+            wallet_state_sync_chunk_size: u64::MIN, // garbage
+        })
+    } else {
+        None
+    };
+
     // Create the network manager and get the handle
     let (
         network_handle,
@@ -191,7 +219,7 @@ pub async fn setup_network_builder(
         frost_p2p,
     ) = NetworkManager::builder(network_config)
         .await?
-        .frost(frost_setup_result.frost_config.clone())
+        .frost(frost_config)
         .request_handler(reth_provider_factory.clone())
         .transactions(pool, Default::default())
         .split_with_handle();

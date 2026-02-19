@@ -79,7 +79,6 @@ impl BotanixConsensus<BotanixChainSpec> {
     pub fn validate_header_standalone(
         &self,
         header: &Header,
-        genesis_authorities: &[secp256k1::PublicKey],
         aggregate_public_key: Option<&secp256k1::PublicKey>,
     ) -> Result<(), ConsensusError> {
         if aggregate_public_key.is_none() {
@@ -92,11 +91,7 @@ impl BotanixConsensus<BotanixChainSpec> {
         let _sealed_header = header.clone().seal_slow();
 
         // Validate EDH serialization and signature on block
-        self.validate_extra_data_header(
-            header,
-            genesis_authorities,
-            aggregate_public_key,
-        )?;
+        self.validate_extra_data_header(header, aggregate_public_key)?;
 
         // Validate fee benificiary
         self.validate_block_beneficiary(header)?;
@@ -120,7 +115,6 @@ impl BotanixConsensus<BotanixChainSpec> {
     fn validate_extra_data_header(
         &self,
         header: &Header,
-        _genesis_authorities: &[secp256k1::PublicKey],
         aggregate_public_key: Option<&secp256k1::PublicKey>,
     ) -> Result<(), ConsensusError> {
         // Skip over genesis
@@ -461,16 +455,12 @@ mod tests {
             BOTANIX_TESTNET.as_ref().to_owned(),
         ));
         let header = Header { number: 0, ..Default::default() };
-        let authority_signers = vec![];
         // Just use the first key as the dummy agg key
         let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
         let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
 
-        let result = consensus.validate_extra_data_header(
-            &header,
-            &authority_signers,
-            Some(&dummy_agg_key),
-        );
+        let result =
+            consensus.validate_extra_data_header(&header, Some(&dummy_agg_key));
 
         assert!(result.is_ok());
     }
@@ -488,18 +478,14 @@ mod tests {
         let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
         edh.aggregated_public_key = dummy_agg_key;
 
-        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
         let header = Header {
             number: 1,
             extra_data: Bytes::from([1; MAXIMUM_EXTRA_DATA_SIZE + 1]),
             ..Default::default()
         };
 
-        let result = consensus.validate_extra_data_header(
-            &header,
-            &authority_signers,
-            Some(&dummy_agg_key),
-        );
+        let result =
+            consensus.validate_extra_data_header(&header, Some(&dummy_agg_key));
         assert!(result.is_err());
         assert!(matches!(
             result.err().unwrap(),
@@ -513,14 +499,9 @@ mod tests {
             BOTANIX_TESTNET.as_ref().to_owned(),
         ));
         let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
-        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
         let header = Header { number: 1, ..Default::default() };
 
-        let result = consensus.validate_extra_data_header(
-            &header,
-            &authority_signers,
-            None,
-        );
+        let result = consensus.validate_extra_data_header(&header, None);
         assert!(result.is_err());
         assert!(matches!(
             result.err().unwrap(),
@@ -539,19 +520,14 @@ mod tests {
         let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
         let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
 
-        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
-        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
         let header = Header {
             number: 1,
             extra_data: Bytes::from([0; 64]),
             ..Default::default()
         };
 
-        let result = consensus.validate_extra_data_header(
-            &header,
-            &authority_signers,
-            Some(&dummy_agg_key),
-        );
+        let result =
+            consensus.validate_extra_data_header(&header, Some(&dummy_agg_key));
         assert!(result.is_err());
         assert!(matches!(
             result.err().unwrap(),
@@ -571,19 +547,14 @@ mod tests {
         let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
         let dummy_agg_key = sk1.public_key(secp256k1::SECP256K1);
 
-        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
-        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
         let header = Header {
             number: 1,
             extra_data: Bytes::from(edh.serialize()),
             ..Default::default()
         };
 
-        let result = consensus.validate_extra_data_header(
-            &header,
-            &authority_signers,
-            Some(&dummy_agg_key),
-        );
+        let result =
+            consensus.validate_extra_data_header(&header, Some(&dummy_agg_key));
         assert!(matches!(
             result.err().unwrap(),
             ConsensusError::InvalidAggregatedPublicKey(
@@ -602,19 +573,15 @@ mod tests {
             aggregated_public_key: nums_secp256k1_pk(),
             ..Default::default()
         };
-        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
-        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
+
         let header = Header {
             number: 1,
             extra_data: Bytes::from(edh.serialize()),
             ..Default::default()
         };
 
-        let result = consensus.validate_extra_data_header(
-            &header,
-            &authority_signers,
-            Some(&nums_secp256k1_pk()),
-        );
+        let result = consensus
+            .validate_extra_data_header(&header, Some(&nums_secp256k1_pk()));
         assert!(matches!(
             result.err().unwrap(),
             ConsensusError::InvalidAggregatedPublicKey(
@@ -640,19 +607,14 @@ mod tests {
         let different_key = secp256k1::SecretKey::from_str(SK2).unwrap();
         let different_pk = different_key.public_key(secp256k1::SECP256K1);
 
-        let sk1 = secp256k1::SecretKey::from_str(SK1).unwrap();
-        let authority_signers = vec![sk1.public_key(secp256k1::SECP256K1)];
         let header = Header {
             number: 1,
             extra_data: Bytes::from(edh.serialize()),
             ..Default::default()
         };
 
-        let result = consensus.validate_extra_data_header(
-            &header,
-            &authority_signers,
-            Some(&different_pk),
-        );
+        let result =
+            consensus.validate_extra_data_header(&header, Some(&different_pk));
         assert!(matches!(
             result.err().unwrap(),
             ConsensusError::InvalidAggregatedPublicKey(

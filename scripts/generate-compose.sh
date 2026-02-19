@@ -138,8 +138,6 @@ for i in $(seq 1 "$NUM_NODES"); do
       - --identifier=$NODE_INDEX
       - --address=0.0.0.0:8080
       - --db=/bitcoin-server/data/db
-      - --min-signers=$MIN_SIGNERS
-      - --max-signers=$MAX_SIGNERS
       - --toml=/bitcoin-server/config/config.toml
       - --fee-rate-diff-percentage=30
       - --bitcoind-url=http://bitcoin-core:18443
@@ -193,8 +191,6 @@ for i in $(seq 1 "$NUM_NODES"); do
       - --bitcoind.primary_url=http://bitcoin-core:18443
       - --bitcoind.primary_username=foo
       - --bitcoind.primary_password=bar
-      - --frost.min_signers=$MIN_SIGNERS
-      - --frost.max_signers=$MAX_SIGNERS
       - --p2p-secret-key=/reth/botanix_testnet/config/discovery-secret
       - --port=30303
       - --btc-network=regtest

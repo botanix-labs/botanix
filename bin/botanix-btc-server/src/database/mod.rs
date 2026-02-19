@@ -28,7 +28,6 @@ use log::{info, warn};
 use miniscript::psbt::PsbtExt;
 use serde::{Deserialize, Serialize};
 use sled::transaction::{ConflictableTransactionError, TransactionError};
-use uuid::Uuid;
 pub mod error;
 pub mod version;
 pub use error::{ChangeOutputError, Error};
@@ -70,8 +69,8 @@ const KEY_FINALIZED_PEGOUT_IDS_MERKLE_ROOT: &[u8; 9] = b"pegoutids";
 /// sled tree for pending pegout requests
 const TREE_PENDING_PEGOUTS: &[u8; 7] = b"pegouts";
 
-/// sled tree for active migrations
-const TREE_MIGRATIONS: &[u8; 10] = b"migrations";
+/// sled tree for federation attestions
+const TREE_ATTESTATIONS: &[u8; 12] = b"attestations";
 
 /// sled tree for pending sweeps (sweep metadata stored before signing completes)
 const TREE_PENDING_SWEEPS: &[u8; 14] = b"pending_sweeps";
@@ -161,6 +160,13 @@ pub struct ExportedKeyPackage {
     pub enc_pk_package: Vec<u8>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct AttestionEntry {
+    // TODO: implement from https://github.com/botanix-labs/botanix/pull/94
+    pub attestation: (),
+    pub marked_finalized: bool,
+}
+
 #[derive(Clone)]
 pub struct Db {
     /// NB a db is also a "default tree" so maybe here we could store some
@@ -176,11 +182,13 @@ pub struct Db {
     /// A tree of round 1 dkg commitments
     ///
     /// Indexed by peer id
+    // TODO: Can be deprecated
     round1_dkg_packages: sled::Tree,
 
     /// A tree of round 1 dkg commitments
     ///
     /// Indexed by peer id
+    // TODO: Can be deprecated
     round2_dkg_packages: sled::Tree,
 
     /// A tree of PSBTs
@@ -213,10 +221,10 @@ pub struct Db {
     /// Indexed by multisig_id (u32).
     pubkey_packages: sled::Tree,
 
-    /// A tree of active migrations.
+    /// A tree of attestations (TODO: Clarify).
     ///
-    /// Indexed by migration_id (UUID bytes).
-    migrations: sled::Tree,
+    /// Indexed by multisig_id (u32).
+    attestations: sled::Tree,
 
     /// Pending sweeps - stores sweep metadata between PSBT creation and tracking.
     /// Indexed by signing_session_id.
@@ -238,7 +246,7 @@ impl Db {
             finalized_pegout_ids: db.open_tree(TREE_FINALIZED_PEGOUT_IDS)?,
             key_packages: db.open_tree(TREE_MULTI_KEY_PACKAGES)?,
             pubkey_packages: db.open_tree(TREE_MULTI_PUBKEY_PACKAGES)?,
-            migrations: db.open_tree(TREE_MIGRATIONS)?,
+            attestations: db.open_tree(TREE_ATTESTATIONS)?,
             pending_sweeps: db.open_tree(TREE_PENDING_SWEEPS)?,
             db,
         })
@@ -255,6 +263,8 @@ impl Db {
         self.finalized_pegout_ids.flush()?;
         self.key_packages.flush()?;
         self.pubkey_packages.flush()?;
+        self.attestations.flush()?;
+        self.pending_sweeps.flush()?;
         Ok(())
     }
 
@@ -423,6 +433,55 @@ impl Db {
         pk_package: frost::keys::PublicKeyPackage,
     ) -> Result<(), Error> {
         self.set_pubkey_package_by_id(LEGACY_MULTISIG_ID, pk_package)
+    }
+
+    // TODO: Document
+    pub fn set_multisig_attestation(
+        &self,
+        multisig_id: MultisigId,
+        attestation: (),
+    ) -> Result<(), Error> {
+        let key = multisig_id.as_u32().to_le_bytes();
+        let entry = AttestionEntry { attestation, marked_finalized: false };
+
+        let mut bytes = Vec::new();
+        ciborium::into_writer(&entry, &mut bytes).expect("writing to buffer");
+
+        self.attestations.insert(&key, &bytes[..])?;
+        Ok(())
+    }
+
+    // TODO: Document
+    pub fn mark_multisig_attestation_finalized(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<(), Error> {
+        // Retrieve attestation entry and set flag to finalized.
+        let mut entry: AttestionEntry = self
+            .get_multisig_attestation(multisig_id)?
+            .ok_or(Error::MultisigAttestationNotFound)?;
+
+        entry.marked_finalized = true;
+
+        let key = multisig_id.as_u32().to_le_bytes();
+        let mut bytes = Vec::new();
+        ciborium::into_writer(&entry, &mut bytes).expect("writing to buffer");
+
+        self.attestations.insert(&key, &bytes[..])?;
+        Ok(())
+    }
+
+    // TODO: Document
+    pub fn get_multisig_attestation(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<Option<AttestionEntry>, Error> {
+        let key = multisig_id.as_u32().to_le_bytes();
+        self.attestations
+            .get(&key)?
+            .map(|b| ciborium::from_reader::<AttestionEntry, _>(b.as_ref()))
+            .transpose()
+            .map_err(Into::into)
     }
 
     /// Retrieves a key package by multisig_id from the multi-key storage.
@@ -1765,19 +1824,6 @@ impl TryFrom<Utxo> for RpcUtxo {
     }
 }
 
-/// A migration state stored in the database.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Migration {
-    /// The unique migration ID (UUIDv4).
-    pub migration_id: Uuid,
-    /// The source multisig ID (funds are being moved FROM this multisig).
-    pub multisig_id_from: MultisigId,
-    /// The target multisig ID (funds are being moved TO this multisig).
-    pub multisig_id_to: MultisigId,
-    /// Unix timestamp (seconds) when the migration was started.
-    pub started_at_unix_secs: u64,
-}
-
 /// Pending sweep - stored when sweep PSBT is created, before signing completes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingSweep {
@@ -1794,63 +1840,6 @@ pub struct SweepMetadata {
 }
 
 impl Db {
-    /// Store a migration in the database.
-    pub fn store_migration(&self, migration: &Migration) -> Result<(), Error> {
-        let mut bytes = Vec::new();
-        ciborium::into_writer(&migration, &mut bytes)
-            .map_err(Error::CiboriumWrite)?;
-        self.migrations
-            .insert(migration.migration_id.as_bytes(), &bytes[..])?;
-        Ok(())
-    }
-
-    /// Get a migration by its ID.
-    pub fn get_migration(
-        &self,
-        migration_id: &Uuid,
-    ) -> Result<Option<Migration>, Error> {
-        Ok(self
-            .migrations
-            .get(migration_id.as_bytes())?
-            .map(|b| ciborium::de::from_reader(b.as_ref()))
-            .transpose()?)
-    }
-
-    /// Get all active migrations.
-    pub fn get_all_migrations(&self) -> Result<Vec<Migration>, Error> {
-        let mut ret = Vec::new();
-        for res in self.migrations.iter() {
-            let (_k, v) = res?;
-            let migration: Migration = ciborium::de::from_reader(v.as_ref())
-                .expect("corrupt db: migration");
-            ret.push(migration);
-        }
-        Ok(ret)
-    }
-
-    /// Remove a migration by its ID.
-    pub fn remove_migration(&self, migration_id: &Uuid) -> Result<bool, Error> {
-        Ok(self.migrations.remove(migration_id.as_bytes())?.is_some())
-    }
-
-    /// Check if a migration exists for the given multisig IDs (either as source or target).
-    pub fn migration_exists_for_multisig(
-        &self,
-        multisig_id: MultisigId,
-    ) -> Result<Option<Uuid>, Error> {
-        for res in self.migrations.iter() {
-            let (_k, v) = res?;
-            let migration: Migration = ciborium::de::from_reader(v.as_ref())
-                .expect("corrupt db: migration");
-            if migration.multisig_id_from == multisig_id
-                || migration.multisig_id_to == multisig_id
-            {
-                return Ok(Some(migration.migration_id));
-            }
-        }
-        Ok(None)
-    }
-
     /// Store pending sweep - called in get_sweep_psbt() after PSBT created
     pub fn store_pending_sweep(
         &self,

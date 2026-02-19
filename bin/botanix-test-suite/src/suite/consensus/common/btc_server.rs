@@ -10,7 +10,7 @@ use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use btcserverlib::{
     database::Db as BtcDatabase,
     federation_args::{
-        FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+        FedMemberPubKey, FederationTomlConfig, MultisigTomlConfig,
     },
     frost_id,
 };
@@ -167,7 +167,7 @@ fn spawn_btc_server_process(
     id: u16,
     btc_server_port: u16,
     db_path: PathBuf,
-    multisig_configs: Vec<MultisigConfig>,
+    multisig_configs: Vec<MultisigTomlConfig>,
 ) -> anyhow::Result<SpawnedBtcServerProcess> {
     let db_path_arg = db_path.display().to_string();
 
@@ -189,10 +189,10 @@ fn spawn_btc_server_process(
 
     // Write federation config to tempfile with the provided multisig configs
     let federation_config = FederationTomlConfig::new(
+        String::new(), // Not needed
+        String::new(), // Not needed
+        String::new(), // Not needed
         multisig_configs,
-        String::new(), // Not needed
-        String::new(), // Not needed
-        String::new(), // Not needed
     )
     .expect("valid federation config");
 
@@ -294,16 +294,14 @@ pub fn spawn_n_btc_server_processes(
             fed_members.push(FedMemberPubKey {
                 key: public_key.to_string(),
                 socket_addr: String::new(),
-                role: FederationRole::Continuing,
             });
         }
 
         let multisig_id =
             MultisigId::new(LEGACY_MULTISIG_ID.as_u32() + offset as u32);
-        multisig_configs.push(MultisigConfig::new(
+        multisig_configs.push(MultisigTomlConfig::new(
             multisig_id,
             global_context.min_signers,
-            global_context.max_signers,
             fed_members,
         ));
     }

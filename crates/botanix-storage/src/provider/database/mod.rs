@@ -33,7 +33,6 @@
 //! database errors in a consistent error type for proper error propagation.
 
 mod factory;
-mod migration;
 mod provider;
 mod runtime_transitions;
 mod snapshot;

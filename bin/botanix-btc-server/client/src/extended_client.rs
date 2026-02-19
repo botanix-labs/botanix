@@ -1,25 +1,22 @@
 //! Extended bitcoin server client with authentication
 use crate::{
-    btc_server::{
-        AbortDkgRequest, AbortMigrationRequest, ConsensusCheckpointRequest,
-        DkgPayload, DkgPayloads, Empty, EndMigrationRequest,
+    BtcServerClient, StartNewDkgRequest, btc_server::{
+        AbortDkgRequest, ConsensusCheckpointRequest,
+        DkgPayload, DkgPayloads, Empty,
         FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
         GetAllUtxosResponse, GetDkgPayloadsRequest,
         GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
         GetGatewayAddressRequest, GetGatewayAddressResponse,
-        GetMigrationRequest, GetPendingPegoutsResponse, GetPublicKeyRequest,
+        GetPendingPegoutsResponse, GetPublicKeyRequest,
         GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
         GetSigningStatusRequest, GetSigningStatusResponse, GetSweepPsbtRequest,
-        GetTrackedTxsResponse, ListMigrationsResponse, ListMultisigsResponse,
-        MakeTxRequest, MigrationInfo, RecoverMissingUtxosRequest,
+        GetTrackedTxsResponse, ListMultisigsResponse,
+        MakeTxRequest, RecoverMissingUtxosRequest,
         RecoverMissingUtxosResponse, ResetAllUtxosRequest,
         ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
-        StartMigrationRequest, StartMigrationResponse, StartNewDkgRequest,
         SubscribeToDynafedNotificationsStream, ToSignRequest,
         WalletStateResponse,
-    },
-    jwt::{Claims, JwtSecret},
-    BtcServerClient,
+    }, jwt::{Claims, JwtSecret}
 };
 use displaydoc::Display as DisplayDoc;
 use futures_util::future::BoxFuture;
@@ -125,13 +122,13 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
-    fn abort_dkg(
-        &mut self,
-        request: AbortDkgRequest,
-    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn start_new_dkg(
         &mut self,
         request: StartNewDkgRequest,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn abort_dkg(
+        &mut self,
+        request: AbortDkgRequest,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn get_signing_status(
         &mut self,
@@ -206,26 +203,6 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: RecoverMissingUtxosRequest,
     ) -> BoxFuture<'_, Result<RecoverMissingUtxosResponse, GrpcClientError>>;
-    fn start_migration(
-        &mut self,
-        request: StartMigrationRequest,
-    ) -> BoxFuture<'_, Result<StartMigrationResponse, GrpcClientError>>;
-    fn end_migration(
-        &mut self,
-        request: EndMigrationRequest,
-    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
-    fn abort_migration(
-        &mut self,
-        request: AbortMigrationRequest,
-    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
-    fn get_migration(
-        &mut self,
-        request: GetMigrationRequest,
-    ) -> BoxFuture<'_, Result<MigrationInfo, GrpcClientError>>;
-    fn list_migrations(
-        &mut self,
-        request: Empty,
-    ) -> BoxFuture<'_, Result<ListMigrationsResponse, GrpcClientError>>;
 }
 
 /// Macros for generating grpc methods implementation
@@ -374,8 +351,8 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_wallet_state, Empty, WalletStateResponse);
     generate_method!(abort_signing, Empty, Empty);
-    generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(start_new_dkg, StartNewDkgRequest, Empty);
+    generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(
         get_signing_status,
         GetSigningStatusRequest,
@@ -402,15 +379,6 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
         RecoverMissingUtxosRequest,
         RecoverMissingUtxosResponse
     );
-    generate_method!(
-        start_migration,
-        StartMigrationRequest,
-        StartMigrationResponse
-    );
-    generate_method!(end_migration, EndMigrationRequest, Empty);
-    generate_method!(abort_migration, AbortMigrationRequest, Empty);
-    generate_method!(get_migration, GetMigrationRequest, MigrationInfo);
-    generate_method!(list_migrations, Empty, ListMigrationsResponse);
     generate_stream_method!(
         get_finalized_pegout_ids,
         GetFinalizedPegoutIdsRequest,

@@ -12,7 +12,6 @@ use botanix_btc_server_client::{
     BtcServerExtendedApi, FinalizedPegout, GetFinalizedPegoutIdsResponse,
     GrpcClientError, ResetWalletStateRequest,
 };
-use botanix_btc_wallet::bitcoind::BitcoindFactory;
 use botanix_data_parser::{
     prost_parser::ProstMessageSerdelizer, DataParser, Error as CompressorError,
     SerializationType,
@@ -22,9 +21,8 @@ use botanix_storage::{
 };
 use btcserverlib::pegout_id::PegoutId;
 use once_cell::sync::Lazy;
-use reth_evm::ConfigureEvm;
 use reth_network::frost::{
-    manager::{FrostCommand, FrostConfig, ToFrostManager},
+    manager::{FrostCommand, ToFrostManager},
     PeerMessageResponse,
 };
 use reth_provider::{
@@ -95,7 +93,7 @@ pub struct WalletStateSyncEngine<RDB, BDB, ToFrostMan, BtcServerClient> {
     to_frost_manager: ToFrostMan,
     data_parser: DataParser,
     task_executor: TaskExecutor,
-    frost_config: FrostConfig,
+    min_required_criterion: u64,
     current_response_cycle: WalletStateSyncResponseCycle,
 }
 
@@ -115,7 +113,7 @@ where
         btc_server: BtcServerClient,
         to_frost_manager: ToFrostMan,
         task_executor: TaskExecutor,
-        frost_config: FrostConfig,
+        min_required_criterion: u64,
     ) -> Self {
         let data_parser = DataParser::default()
             .with_serialization_type(SerializationType::Postcard);
@@ -125,7 +123,7 @@ where
             to_frost_manager,
             data_parser,
             task_executor,
-            frost_config,
+            min_required_criterion,
             current_response_cycle: Default::default(),
         }
     }
@@ -218,8 +216,8 @@ where
             peer_messages_rx.await.expect("peer messages rx to be open");
 
         let data_parser = self.data_parser.clone();
-        let frost_config = self.frost_config.clone();
         let current_response_cycle = self.current_response_cycle.clone();
+        let min_required_criterion = self.min_required_criterion;
         let mut canon_events =
             self.storage.reth_database.subscribe_to_canonical_state();
         let btc_network = self.storage.btc_network;
@@ -338,7 +336,7 @@ where
                                     }
 
                                     // check if we have all the chunks and a minimum superset available
-                                    match botanix_provider_factory.get_minimum_superset(frost_config.min_signers as u64) {
+                                    match botanix_provider_factory.get_minimum_superset(min_required_criterion) {
                                         Ok((found, minimum_superset)) => {
                                             if found {
                                                 // hydrate the superset
