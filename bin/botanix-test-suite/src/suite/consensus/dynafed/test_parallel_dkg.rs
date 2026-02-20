@@ -20,35 +20,6 @@ use crate::{
     },
 };
 
-/// Restart DKG sessions on all federation nodes for a given multisig ID.
-/// TODO: this is a temporary workaround as the normal flow is still under development.
-async fn restart_dkg_on_all_nodes(
-    fed_members: &std::collections::BTreeMap<u16, FederationMemberTestConfig>,
-    multisig_id: MultisigId,
-) -> anyhow::Result<()> {
-    for (_index, fed_member) in fed_members.iter() {
-        let btc_server_url =
-            format!("http://{}", fed_member.bitcoin_server_url);
-        let mut btc_client = BtcServerExtendedClient::new(btc_server_url, None)
-            .await
-            .expect("Failed to create BTC server client");
-
-        // Abort any existing DKG session created at startup
-        let _ = btc_client
-            .abort_dkg(AbortDkgRequest { multisig_id: multisig_id.as_u32() })
-            .await;
-
-        // Start new DKG - this sends DkgNotification::Start to the local frost_task
-        btc_client
-            .start_new_dkg(StartNewDkgRequest {
-                multisig_id: multisig_id.as_u32(),
-            })
-            .await
-            .expect("Failed to start DKG for new multisig");
-    }
-    Ok(())
-}
-
 /// Test parallel DKG functionality with multiple multisig IDs.
 ///
 /// This test verifies that:
@@ -72,16 +43,6 @@ pub async fn test_parallel_dkg(
     // Wait for DKG to complete for multisig ID 1 (the newly initialized federation)
     // Multisig ID 0 was pre-saved before nodes started, so it should be instantly available
     let target_multisig_id = MultisigId::new(LEGACY_MULTISIG_ID.as_u32() + 1);
-
-    // Restart DKG on all nodes (temporary workaround as the normal flow is still under development)
-    it_info_print!(
-        "Restarting DKG sessions on all nodes for multisig ID",
-        target_multisig_id.as_u32()
-    );
-    restart_dkg_on_all_nodes(&test_fed_members, target_multisig_id)
-        .await
-        .expect("Failed to restart DKG on all nodes");
-
     it_info_print!(
         "Waiting for DKG completion for multisig ID",
         target_multisig_id.as_u32()

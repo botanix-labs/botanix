@@ -34,13 +34,15 @@ pub struct FrostConfigSetupResult {
 }
 
 impl FrostConfigSetupResult {
-    /// Returns the combined list of authority public keys across all multisig
+    /// Returns the combined list of unique authority public keys across all multisig
     /// configurations.
     pub fn authorities(&self) -> Vec<secp256k1::PublicKey> {
+        let mut seen = std::collections::HashSet::new();
         self.multisigs
             .iter()
-            .map(|m| m.authorities.to_vec())
-            .flatten()
+            .flat_map(|m| m.authorities.iter())
+            .filter(|pk| seen.insert(**pk))
+            .cloned()
             .collect()
     }
 }
@@ -91,10 +93,12 @@ pub fn setup_frost(
     let multisigs = federation_config
         .multisigs
         .into_iter()
-        .filter_map(|m| { // TODO: we should probably have a different way to handle non-federation nodes
+        .filter_map(|m| {
+            // TODO: we should probably have a different way to handle non-federation nodes
             let authorities = m.get_federation_pub_keys().ok()?;
-            let authority_index = authorities.iter().position(|a| *a == authority_pk)?;
-            
+            let authority_index =
+                authorities.iter().position(|a| *a == authority_pk)?;
+
             // TODO: Do basic validation?
             Some(MultisigConfig {
                 multisig_id: m.multisig_id,
