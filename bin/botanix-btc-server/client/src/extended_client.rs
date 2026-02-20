@@ -1,22 +1,22 @@
 //! Extended bitcoin server client with authentication
 use crate::{
-    btc_server::{
-        AbortDkgRequest, ConsensusCheckpointRequest, DkgPayload, DkgPayloads,
-        Empty, FinalizeSignerRequest, FinalizeSigningRequest,
-        FinalizeSigningResponse, GetAllUtxosResponse, GetDkgPayloadsRequest,
+    BtcServerClient, StartNewDkgRequest, btc_server::{
+        AbortDkgRequest, ConsensusCheckpointRequest,
+        DkgPayload, DkgPayloads, Empty,
+        FinalizeSignerRequest, FinalizeSigningRequest, FinalizeSigningResponse,
+        GetAllUtxosResponse, GetDkgPayloadsRequest,
         GetFinalizedPegoutIdsRequest, GetFinalizedPegoutIdsResponse,
         GetGatewayAddressRequest, GetGatewayAddressResponse,
-        GetPendingPegoutsResponse, GetPublicKeyRequest, GetPublicKeyResponse,
-        GetSessionIdsRequest, GetSessionIdsResponse, GetSigningStatusRequest,
-        GetSigningStatusResponse, GetSweepPsbtRequest, GetTrackedTxsResponse,
-        ListMultisigsResponse, MakeTxRequest, RecoverMissingUtxosRequest,
+        GetPendingPegoutsResponse, GetPublicKeyRequest,
+        GetPublicKeyResponse, GetSessionIdsRequest, GetSessionIdsResponse,
+        GetSigningStatusRequest, GetSigningStatusResponse, GetSweepPsbtRequest,
+        GetTrackedTxsResponse, ListMultisigsResponse,
+        MakeTxRequest, RecoverMissingUtxosRequest,
         RecoverMissingUtxosResponse, ResetAllUtxosRequest,
         ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
         SubscribeToDynafedNotificationsStream, ToSignRequest,
         WalletStateResponse,
-    },
-    jwt::{Claims, JwtSecret},
-    BtcServerClient, StartNewDkgRequest,
+    }, jwt::{Claims, JwtSecret}
 };
 use displaydoc::Display as DisplayDoc;
 use futures_util::future::BoxFuture;

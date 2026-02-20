@@ -93,12 +93,10 @@ pub fn setup_frost(
     let multisigs = federation_config
         .multisigs
         .into_iter()
-        .filter_map(|m| {
-            // TODO: we should probably have a different way to handle non-federation nodes
+        .filter_map(|m| { // TODO: we should probably have a different way to handle non-federation nodes
             let authorities = m.get_federation_pub_keys().ok()?;
-            let authority_index =
-                authorities.iter().position(|a| *a == authority_pk)?;
-
+            let authority_index = authorities.iter().position(|a| *a == authority_pk)?;
+            
             // TODO: Do basic validation?
             Some(MultisigConfig {
                 multisig_id: m.multisig_id,
