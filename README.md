@@ -88,18 +88,23 @@ The project includes Claude Code configuration out of the box:
 
 #### MCP Servers
 
-External tool integrations are configured in `.mcp.json` (GitHub and Linear). To enable the GitHub MCP server:
+External tool integrations are configured in `.mcp.json` (GitHub, Linear, Sentry, and Google Cloud).
 
-1. Create a [GitHub Personal Access Token](https://github.com/settings/tokens) with `repo`, `issues`, and `project` scopes
-2. Add it to your shell profile (`~/.bashrc` or `~/.zshrc`):
+**GitHub** — requires a [Personal Access Token](https://github.com/settings/tokens) with `repo`, `issues`, and `project` scopes.
 
-    ```bash
-    export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_your_token_here"
-    ```
+Add both to your shell profile (`~/.bashrc` or `~/.zshrc`):
 
-3. Restart your terminal and Claude Code
+```bash
+export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_your_token_here"
+```
 
-The token is picked up automatically from the environment — never commit it to the repo.
+Then restart your terminal and Claude Code. Tokens are picked up automatically from the environment — never commit them to the repo.
+
+**Linear** — authenticates via browser OAuth on first use (no token needed).
+
+**Google Cloud** — requires the `gcloud` CLI to be installed and authenticated (`gcloud auth login`).
+
+Restart your terminal and Claude Code. The token is picked up automatically from the environment — never commit it to the repo.
 
 ## Contributing
 
