@@ -240,7 +240,7 @@ where
         );
 
         // Prepare all multisigs entries, either be retrieving the aggregated
-        // public keys from the BTC server or by starting the coresponding DKG
+        // public keys from the BTC server or by starting the corresponding DKG
         // runner task.
         self.check_multisig_state()
             .await
@@ -259,7 +259,7 @@ where
         loop {
             // Check any staged headers; note that we return an error if this
             // fails, since we do not want to process any notifications after
-            // such an occurence.
+            // such an occurrence.
             //
             // This method returns quickly if there are no staged headers.
             self.check_staged_headers()
