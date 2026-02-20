@@ -2,15 +2,18 @@ use std::time::Duration;
 
 use bitcoin::{hashes::Hash, Amount};
 use bitcoincore_rpc::RpcApi;
-use botanix_btc_server_client;
+use botanix_btc_server_client::{
+    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest,
+};
 use botanix_chainspec::constants::BOTANIX_TESTNET;
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use ethers::{
     prelude::Provider,
     providers::{Http, Middleware},
 };
 
 use crate::{
-    it_info_print,
+    it_info_print, it_warn_print,
     suite::consensus::{
         common::pegin::{run_batch_pegin, BatchPeginConfig},
         ConsensusIntegrationTestSuite,
@@ -19,18 +22,14 @@ use crate::{
 
 /// Test batch pegin in a dynafed context.
 ///
-/// Sends multiple pegins (each with a unique ETH destination and gateway address)
-/// in a single batch, then verifies balances and UTXO tracking on the btc-server.
+/// Uses the same dynafed setup as parallel_dkg: waits for DKG to complete for
+/// the new multisig (ID 1), verifies legacy multisig (ID 0) is pre-saved, then
+/// sends multiple pegins in a single batch and verifies balances and UTXO tracking.
 #[allow(clippy::too_many_lines)]
 pub async fn dynafed_batch_pegin(
     suite: &ConsensusIntegrationTestSuite,
 ) -> anyhow::Result<()> {
-    let pegin_conf_depth =
-        BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
-    it_info_print!("Pegin Confirmation Depth", pegin_conf_depth);
-
-    let bitcoind_rpc = suite.global_context.bitcoind_rpc();
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    it_info_print!("Starting dynafed batch pegin test");
 
     let test_fed_members = suite
         .local_context
@@ -38,6 +37,95 @@ pub async fn dynafed_batch_pegin(
         .as_ref()
         .expect("test federation member configurations")
         .clone();
+
+    // Dynafed setup: wait for DKG to complete for multisig ID 1 (new federation)
+    let target_multisig_id = MultisigId::new(LEGACY_MULTISIG_ID.as_u32() + 1);
+    it_info_print!(
+        "Waiting for DKG completion for multisig ID",
+        target_multisig_id.as_u32()
+    );
+
+    let mut dkg_completed = vec![];
+    for (index, fed_member) in test_fed_members.iter() {
+        let btc_server_url =
+            format!("http://{}", fed_member.bitcoin_server_url);
+        let mut btc_client = BtcServerExtendedClient::new(btc_server_url, None)
+            .await
+            .expect("Failed to create BTC server client");
+
+        let pub_key = loop {
+            match btc_client
+                .get_public_key(GetPublicKeyRequest {
+                    multisig_id: target_multisig_id.as_u32(),
+                })
+                .await
+            {
+                Ok(pub_key) => {
+                    it_info_print!(format!(
+                        "DKG completed for node {} multisig ID {}",
+                        index,
+                        target_multisig_id.as_u32()
+                    ));
+                    break pub_key;
+                }
+                Err(_) => {
+                    it_warn_print!(format!(
+                        "DKG pending for node {} multisig ID {}",
+                        index,
+                        target_multisig_id.as_u32()
+                    ));
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+            }
+        };
+
+        dkg_completed.push((*index, pub_key.publickey.clone()));
+    }
+
+    // All nodes must agree on the same aggregate public key for multisig ID 1
+    let first_pubkey = &dkg_completed[0].1;
+    for (index, pubkey) in &dkg_completed {
+        anyhow::ensure!(
+            pubkey == first_pubkey,
+            "Node {} has different aggregate public key for multisig ID {}",
+            index,
+            target_multisig_id.as_u32()
+        );
+    }
+    it_info_print!(format!(
+        "All nodes completed DKG with matching aggregate public key for multisig ID {}",
+        target_multisig_id.as_u32()
+    ));
+
+    // Verify legacy multisig (ID 0) is pre-saved
+    it_info_print!("Verifying pre-saved legacy multisig keys (ID 0)");
+    for (index, fed_member) in test_fed_members.iter() {
+        let btc_server_url =
+            format!("http://{}", fed_member.bitcoin_server_url);
+        let mut btc_client = BtcServerExtendedClient::new(btc_server_url, None)
+            .await
+            .expect("Failed to create BTC server client");
+
+        btc_client
+            .get_public_key(GetPublicKeyRequest {
+                multisig_id: LEGACY_MULTISIG_ID.as_u32(),
+            })
+            .await
+            .expect("Legacy multisig should be pre-saved");
+
+        it_info_print!(format!(
+            "Node {} has pre-saved legacy multisig (ID {})",
+            index,
+            LEGACY_MULTISIG_ID.as_u32()
+        ));
+    }
+
+    let pegin_conf_depth =
+        BOTANIX_TESTNET.bitcoin_checkpoint_confirmation_depth;
+    it_info_print!("Pegin Confirmation Depth", pegin_conf_depth);
+
+    let bitcoind_rpc = suite.global_context.bitcoind_rpc();
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let mut rx = suite
         .local_context
@@ -108,7 +196,7 @@ pub async fn dynafed_batch_pegin(
         .btc_server_clients
         .clone()
         .expect("btc server clients")[0]
-        .get_all_utxos(botanix_btc_server_client::Empty {})
+        .get_all_utxos(Empty {})
         .await?
         .into_inner()
         .utxos;

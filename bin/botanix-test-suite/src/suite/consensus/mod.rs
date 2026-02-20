@@ -537,6 +537,7 @@ impl Suite for ConsensusIntegrationTestSuite {
                         create_poa_nodes: true,
                         create_btc_servers: true,
                         create_cometbft_nodes: true,
+                        num_multisigs: 2,
                         ..Default::default()
                     },
                     dynafed::test_dynafed_batch_pegin::dynafed_batch_pegin
