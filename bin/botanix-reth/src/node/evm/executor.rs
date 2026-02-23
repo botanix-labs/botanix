@@ -42,7 +42,6 @@ use revm::{
 };
 use tracing::debug;
 
-// TODO: Determine if and how this is being used.
 pub(super) struct BotanixBlockExecutor<'a, EVM, Spec, R: ReceiptBuilder>
 where
     Spec: EthChainSpec,
@@ -60,7 +59,7 @@ where
     /// Receipt builder.
     receipt_builder: R,
     /// Context for block execution.
-    _ctx: EthBlockExecutionCtx<'a>,
+    ctx: EthBlockExecutionCtx<'a>,
     /// Utility to call system caller.
     system_caller: SystemCaller<Spec>,
 }
@@ -87,7 +86,7 @@ where
     /// Creates a new BotanixBlockExecutor.
     pub(super) fn new(
         evm: EVM,
-        _ctx: EthBlockExecutionCtx<'a>,
+        ctx: EthBlockExecutionCtx<'a>,
         spec: Spec,
         receipt_builder: R,
     ) -> Self {
@@ -99,7 +98,7 @@ where
             receipts: vec![],
             system_txs: vec![],
             receipt_builder,
-            _ctx,
+            ctx,
             system_caller: SystemCaller::new(spec_clone),
         }
     }
@@ -155,25 +154,85 @@ where
     type Receipt = R::Receipt;
     type Evm = E;
 
-    // This method isn't currently used and is a noop.
+    // alloy-evm implementation @ https://github.com/alloy-rs/evm/blob/v0.19.0/crates/evm/src/eth/block.rs#L95-L106
     fn apply_pre_execution_changes(
         &mut self,
     ) -> Result<(), BlockExecutionError> {
+        // Set state clear flag if the block is after the Spurious Dragon hardfork.
+        let state_clear_flag = self.spec.is_spurious_dragon_active_at_block(
+            self.evm.block().number.saturating_to(),
+        );
+        self.evm.db_mut().set_state_clear_flag(state_clear_flag);
+
+        self.system_caller.apply_blockhashes_contract_call(
+            self.ctx.parent_hash,
+            &mut self.evm,
+        )?;
+        self.system_caller.apply_beacon_root_contract_call(
+            self.ctx.parent_beacon_block_root,
+            &mut self.evm,
+        )?;
+
         Ok(())
     }
 
-    // Noop
+    // alloy-evm implementation @ https://github.com/alloy-rs/evm/blob/v0.19.0/crates/evm/src/eth/block.rs#L108-L155
     fn execute_transaction_with_commit_condition(
         &mut self,
-        _tx: impl ExecutableTx<Self>,
-        _f: impl FnOnce(
+        tx: impl ExecutableTx<Self>,
+        f: impl FnOnce(
             &ExecutionResult<<Self::Evm as Evm>::HaltReason>,
         ) -> CommitChanges,
     ) -> Result<Option<u64>, BlockExecutionError> {
-        Ok(Some(0))
+        // The sum of the transaction's gas limit, Tg, and the gas utilized in this block prior,
+        // must be no greater than the block's gasLimit.
+        let block_available_gas = self.evm.block().gas_limit - self.gas_used;
+
+        if tx.tx().gas_limit() > block_available_gas {
+            return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
+                transaction_gas_limit: tx.tx().gas_limit(),
+                block_available_gas,
+            }
+            .into());
+        }
+
+        // Execute transaction.
+        let ResultAndState { result, state } =
+            self.evm.transact(&tx).map_err(|err| {
+                BlockExecutionError::evm(err, tx.tx().trie_hash())
+            })?;
+
+        if !f(&result).should_commit() {
+            return Ok(None);
+        }
+
+        self.system_caller.on_state(
+            StateChangeSource::Transaction(self.receipts.len()),
+            &state,
+        );
+
+        let gas_used = result.gas_used();
+
+        // append gas used
+        self.gas_used += gas_used;
+
+        // Push transaction changeset and calculate header bloom filter for receipt.
+        self.receipts.push(self.receipt_builder.build_receipt(
+            ReceiptBuilderCtx {
+                tx: tx.tx(),
+                evm: &self.evm,
+                result,
+                state: &state,
+                cumulative_gas_used: self.gas_used,
+            },
+        ));
+
+        // Commit the state changes.
+        self.evm.db_mut().commit(state);
+
+        Ok(Some(gas_used))
     }
 
-    // Noop
     fn execute_transaction_with_result_closure(
         &mut self,
         tx: impl ExecutableTx<Self>
@@ -183,7 +242,11 @@ where
             &'b ExecutionResult<<E as alloy_evm::Evm>::HaltReason>,
         ),
     ) -> Result<u64, BlockExecutionError> {
-        Ok(0)
+        self.execute_transaction_with_commit_condition(tx, |res| {
+            f(res);
+            CommitChanges::Yes
+        })
+        .map(Option::unwrap_or_default)
     }
 
     // This is basically a noop since we don't have any special system tx
