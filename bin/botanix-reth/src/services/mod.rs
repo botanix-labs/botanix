@@ -8,7 +8,6 @@ pub mod frost;
 pub mod metrics;
 pub mod migrator;
 pub mod network_builder;
-pub mod poa;
 pub mod provider;
 pub mod recover_utxos;
 pub mod reth;
