@@ -1,6 +1,5 @@
 use prometheus::{
-    register_gauge_vec, register_histogram_vec, register_int_counter_vec,
-    register_int_gauge_vec, GaugeVec, HistogramVec, IntCounterVec, IntGaugeVec,
+    GaugeVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts,
     Registry,
 };
 
@@ -136,12 +135,15 @@ pub struct BtcServerMetrics {
     pub total_received_round1_dkg_packages: IntCounterVec,
     pub total_received_round2_dkg_packages: IntCounterVec,
     pub total_received_round3_dkg_packages: IntCounterVec,
+    pub total_received_round4_dkg_packages: IntCounterVec,
     pub round1_dkg_throughput: IntCounterVec,
     pub round2_dkg_throughput: IntCounterVec,
     pub round3_dkg_throughput: IntCounterVec,
+    pub round4_dkg_throughput: IntCounterVec,
     pub round1_dkg_latency_histogram: HistogramVec,
     pub round2_dkg_latency_histogram: HistogramVec,
     pub round3_dkg_latency_histogram: HistogramVec,
+    pub round4_dkg_latency_histogram: HistogramVec,
     pub round1_dkg_package_size_histogram: HistogramVec,
     pub round2_dkg_package_size_histogram: HistogramVec,
     pub dkg_error_rates: IntCounterVec,
@@ -181,347 +183,343 @@ impl BtcServerMetrics {
         );
 
         // ================================== signing ==================================
-        let total_signing_sessions = register_int_gauge_vec!(
-            "total_signing_sessions",
-            "A metric counting the number of total signing sessions",
+        let total_signing_sessions = IntGaugeVec::new(
+            Opts::new(
+                "total_signing_sessions",
+                "A metric counting the number of total signing sessions",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let total_aborted_signing_sessions = register_int_gauge_vec!(
-            "total_aborted_signing_sessions",
-            "A metric counting the number of total aborted signing sessions",
+        let total_aborted_signing_sessions = IntGaugeVec::new(
+            Opts::new("total_aborted_signing_sessions", "A metric counting the number of total aborted signing sessions"),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let total_finalized_signing_sessions = register_int_gauge_vec!(
-            "total_finalized_signing_sessions",
-            "A metric counting the number of total finalized signing sessions",
+        let total_finalized_signing_sessions = IntGaugeVec::new(
+            Opts::new("total_finalized_signing_sessions", "A metric counting the number of total finalized signing sessions"),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let total_received_round1_signing_packages = register_int_counter_vec!(
-            "total_received_round1_signing_packages",
-            "A metric counting the number of received round 1 packages",
+        let total_received_round1_signing_packages = IntCounterVec::new(
+            Opts::new(
+                "total_received_round1_signing_packages",
+                "A metric counting the number of received round 1 packages",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let total_received_round2_signing_packages = register_int_counter_vec!(
-            "total_received_round2_signing_packages",
-            "A metric counting the number of received round 2 packages",
+        let total_received_round2_signing_packages = IntCounterVec::new(
+            Opts::new(
+                "total_received_round2_signing_packages",
+                "A metric counting the number of received round 2 packages",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let round1_signing_throughput = register_int_counter_vec!(
-            "round1_signing_throughput",
-            "A metric counting the number of gossiped round1 signing messages per signing round and id",
+        let round1_signing_throughput = IntCounterVec::new(
+            Opts::new("round1_signing_throughput", "A metric counting the number of gossiped round1 signing messages per signing round and id"),
             &["btc_chain", "self_id", "signing_session_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let round2_signing_throughput = register_int_counter_vec!(
-            "round2_signing_throughput",
-            "A metric counting the number of gossiped round2 signing messages per signing round and id",
+        let round2_signing_throughput = IntCounterVec::new(
+            Opts::new("round2_signing_throughput", "A metric counting the number of gossiped round2 signing messages per signing round and id"),
             &["btc_chain", "self_id", "signing_session_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        // New histogram metric for block latency
-        let round1_signing_latency = register_histogram_vec!(
-            "round1_signing_latency_ms",
-            "Histogram of latencies between receiving and writing round1 signing package to db",
+        let round1_signing_latency = HistogramVec::new(
+            HistogramOpts::new("round1_signing_latency_ms", "Histogram of latencies between receiving and writing round1 signing package to db")
+                .buckets(vec![10.0, 50.0, 100.0, 500.0, 1000.0, 10000.0, 100000.0, 1000000.0]),
             &["btc_chain", "self_id"],
-            // buckets for latency measurement in ms (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
-            vec![10.0, 50.0, 100.0, 500.0, 1000.0, 10000.0, 100000.0, 1000000.0],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let round2_signing_latency = register_histogram_vec!(
-            "round2_signing_latency_ms",
-            "Histogram of latencies between receiving and writing round2 signing package to db",
+        let round2_signing_latency = HistogramVec::new(
+            HistogramOpts::new("round2_signing_latency_ms", "Histogram of latencies between receiving and writing round2 signing package to db")
+                .buckets(vec![10.0, 50.0, 100.0, 500.0, 1000.0, 10000.0, 100000.0, 1000000.0]),
             &["btc_chain", "self_id"],
-            // buckets for latency measurement in ms (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
-            vec![10.0, 50.0, 100.0, 500.0, 1000.0, 10000.0, 100000.0, 1000000.0],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let round1_signing_package_size_histogram = register_histogram_vec!(
-            "round1_signing_package_size_bytes",
-            "Histogram of round1 signing packages sizes in bytes",
-            &["btc_chain", "self_id"],
-            vec![
+        let round1_signing_package_size_histogram = HistogramVec::new(
+            HistogramOpts::new(
+                "round1_signing_package_size_bytes",
+                "Histogram of round1 signing packages sizes in bytes",
+            )
+            .buckets(vec![
                 10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
-                1000000.0
-            ]
-        )
-        .expect("metric must be created");
-
-        let round2_signing_package_size_histogram = register_histogram_vec!(
-            "round2_signing_package_size_bytes",
-            "Histogram of round2 signing packages sizes in bytes",
+                1000000.0,
+            ]),
             &["btc_chain", "self_id"],
-            vec![
+        )?;
+
+        let round2_signing_package_size_histogram = HistogramVec::new(
+            HistogramOpts::new(
+                "round2_signing_package_size_bytes",
+                "Histogram of round2 signing packages sizes in bytes",
+            )
+            .buckets(vec![
                 10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
-                1000000.0
-            ]
-        )
-        .expect("metric must be created");
-
-        let multisig_utxos_count = register_int_gauge_vec!(
-            "multisig_utxos_count",
-            "A metric counting the number of multisig UTXOs",
+                1000000.0,
+            ]),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let multisig_utxos_total_value = register_int_gauge_vec!(
-            "multisig_utxos_total_value",
-            "A metric representing the total value of multisig UTXOs in satoshis",
+        let multisig_utxos_count = IntGaugeVec::new(
+            Opts::new(
+                "multisig_utxos_count",
+                "A metric counting the number of multisig UTXOs",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let input_selection_time = register_int_counter_vec!(
-            "input_selection_time",
-            "A metric counting the time taken for input selection",
+        let multisig_utxos_total_value = IntGaugeVec::new(
+            Opts::new("multisig_utxos_total_value", "A metric representing the total value of multisig UTXOs in satoshis"),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let pegins_count = register_int_counter_vec!(
-            "pegins_count",
-            "A metric counting the pegins",
+        let input_selection_time = IntCounterVec::new(
+            Opts::new(
+                "input_selection_time",
+                "A metric counting the time taken for input selection",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let pegouts_count = register_int_counter_vec!(
-            "pegouts_count",
-            "A metric counting the pegouts",
+        let pegins_count = IntCounterVec::new(
+            Opts::new("pegins_count", "A metric counting the pegins"),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let success_broadcasted_pegout_txs_count = register_int_gauge_vec!(
-            "success_broadcasted_pegout_txs_count",
-            "A metric counting the successful broadcasted pegout txs",
+        let pegouts_count = IntCounterVec::new(
+            Opts::new("pegouts_count", "A metric counting the pegouts"),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let failed_broadcasted_pegout_txs_count = register_int_gauge_vec!(
-            "failed_broadcasted_pegout_txs_count",
-            "A metric counting the failed broadcasted pegout txs",
+        let success_broadcasted_pegout_txs_count = IntGaugeVec::new(
+            Opts::new(
+                "success_broadcasted_pegout_txs_count",
+                "A metric counting the successful broadcasted pegout txs",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let started_round1_signings_count = register_int_gauge_vec!(
-            "started_round1_signings_count",
-            "A metric counting the started round1 signings",
+        let failed_broadcasted_pegout_txs_count = IntGaugeVec::new(
+            Opts::new(
+                "failed_broadcasted_pegout_txs_count",
+                "A metric counting the failed broadcasted pegout txs",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let completed_round2_signings_count = register_int_gauge_vec!(
-            "completed_round2_signings_count",
-            "A metric counting the completed round2 signings",
+        let started_round1_signings_count = IntGaugeVec::new(
+            Opts::new(
+                "started_round1_signings_count",
+                "A metric counting the started round1 signings",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let signing_error_rates = register_int_counter_vec!(
-            "signing_error_rates",
-            "A metric counting errors or failures during signing message processing",
+        let completed_round2_signings_count = IntGaugeVec::new(
+            Opts::new(
+                "completed_round2_signings_count",
+                "A metric counting the completed round2 signings",
+            ),
+            &["btc_chain", "self_id"],
+        )?;
+
+        let signing_error_rates = IntCounterVec::new(
+            Opts::new("signing_error_rates", "A metric counting errors or failures during signing message processing"),
             &["btc_chain", "self_id", "error_type"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let signing_success_rate = register_int_counter_vec!(
-            "signing_success_rate",
-            "A metric counting successfully signed messages",
+        let signing_success_rate = IntCounterVec::new(
+            Opts::new(
+                "signing_success_rate",
+                "A metric counting successfully signed messages",
+            ),
             &["btc_chain", "self_id", "signing_session_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let member_uptime = register_int_gauge_vec!(
-            "member_uptime",
-            "A metric counting the uptime of federation members",
+        let member_uptime = IntGaugeVec::new(
+            Opts::new(
+                "member_uptime",
+                "A metric counting the uptime of federation members",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
         // System Performance Metrics
-        let bitcoind_rpc_latency = register_histogram_vec!(
-            "bitcoind_rpc_latency",
-            "A metric representing the latency of bitcoind RPC calls",
-            &["btc_chain", "self_id", "rpc_method"],
-            vec![
+        let bitcoind_rpc_latency = HistogramVec::new(
+            HistogramOpts::new(
+                "bitcoind_rpc_latency",
+                "A metric representing the latency of bitcoind RPC calls",
+            )
+            .buckets(vec![
                 10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
-                1000000.0
-            ]
-        )
-        .expect("metric must be created");
+                1000000.0,
+            ]),
+            &["btc_chain", "self_id", "rpc_method"],
+        )?;
 
-        let bitcoind_sync_status = register_int_gauge_vec!(
-            "bitcoind_sync_status",
-            "A metric representing the sync status of bitcoind",
-            &["btc_chain", "self_id", "service"] // status can be "syncing" = 0 or "up" = 1
-        )
-        .expect("metric must be created");
+        let bitcoind_sync_status = IntGaugeVec::new(
+            Opts::new(
+                "bitcoind_sync_status",
+                "A metric representing the sync status of bitcoind",
+            ),
+            &["btc_chain", "self_id", "service"],
+        )?;
 
-        let fee_rate_abnormalities = register_int_counter_vec!(
-            "fee_rate_abnormalities",
-            "A metric counting fee rate abnormalities",
+        let fee_rate_abnormalities = IntCounterVec::new(
+            Opts::new(
+                "fee_rate_abnormalities",
+                "A metric counting fee rate abnormalities",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
         //  ================================== dkg ==================================
-        let total_received_round1_dkg_packages = register_int_counter_vec!(
-            "total_received_round1_dkg_packages",
-            "A metric counting the number of received round 1 dkg packages",
+        let total_received_round1_dkg_packages = IntCounterVec::new(
+            Opts::new(
+                "total_received_round1_dkg_packages",
+                "A metric counting the number of received round 1 dkg packages",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let total_received_round2_dkg_packages = register_int_counter_vec!(
-            "total_received_round2_dkg_packages",
-            "A metric counting the number of received round 2 dkg packages",
+        let total_received_round2_dkg_packages = IntCounterVec::new(
+            Opts::new(
+                "total_received_round2_dkg_packages",
+                "A metric counting the number of received round 2 dkg packages",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let total_received_round3_dkg_packages = register_int_counter_vec!(
-            "total_received_round3_dkg_packages",
-            "A metric counting the number of received round 3 dkg packages",
+        let total_received_round3_dkg_packages = IntCounterVec::new(
+            Opts::new(
+                "total_received_round3_dkg_packages",
+                "A metric counting the number of received round 3 dkg packages",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        // ---
-        let round1_dkg_throughput = register_int_counter_vec!(
-            "round1_dkg_throughput",
-            "A metric counting the number of gossiped round1 dkg messages per id",
+        let total_received_round4_dkg_packages = IntCounterVec::new(
+            Opts::new(
+                "total_received_round4_dkg_packages",
+                "A metric counting the number of received round 4 dkg packages",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
-
-        let round2_dkg_throughput = register_int_counter_vec!(
-            "round2_dkg_throughput",
-            "A metric counting the number of gossiped round2 dkg messages per id",
-            &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
-
-        let round3_dkg_throughput = register_int_counter_vec!(
-            "round3_dkg_throughput",
-            "A metric counting the number of gossiped round2 dkg messages per id",
-            &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
         // ---
-        // New histogram metric for package latency
-        let round1_dkg_latency_histogram = register_histogram_vec!(
-            "round1_dkg_latency_secs",
-            "Histogram of latencies between receiving and writing dkg package to db",
+        let round1_dkg_throughput = IntCounterVec::new(
+            Opts::new("round1_dkg_throughput", "A metric counting the number of gossiped round1 dkg messages per id"),
             &["btc_chain", "self_id"],
-            // buckets for latency measurement (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
-            vec![10.0, 50.0, 100.0, 500.0, 1000.0],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let round2_dkg_latency_histogram = register_histogram_vec!(
-            "round2_dkg_latency_secs",
-            "Histogram of latencies between receiving and writing round2 dkg package to db",
+        let round2_dkg_throughput = IntCounterVec::new(
+            Opts::new("round2_dkg_throughput", "A metric counting the number of gossiped round2 dkg messages per id"),
             &["btc_chain", "self_id"],
-            // buckets for latency measurement (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
-            vec![10.0, 50.0, 100.0, 500.0, 1000.0],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let round3_dkg_latency_histogram = register_histogram_vec!(
-            "round3_dkg_latency_secs",
-            "Histogram of latencies between receiving and writing round2 dkg package to db",
+        let round3_dkg_throughput = IntCounterVec::new(
+            Opts::new("round3_dkg_throughput", "A metric counting the number of gossiped round3 dkg messages per id"),
             &["btc_chain", "self_id"],
-            // buckets for latency measurement (e.g., 0.1s, 0.5s, 1s, 5s, 10s)
-            vec![10.0, 50.0, 100.0, 500.0, 1000.0],
-        )
-        .expect("metric must be created");
+        )?;
+
+        let round4_dkg_throughput = IntCounterVec::new(
+            Opts::new("round4_dkg_throughput", "A metric counting the number of gossiped round4 dkg messages per id"),
+            &["btc_chain", "self_id"],
+        )?;
 
         // ---
-        let round1_dkg_package_size_histogram = register_histogram_vec!(
-            "round1_dkg_package_size_bytes",
-            "Histogram of round1 dkg packages sizes in bytes",
+        let round1_dkg_latency_histogram = HistogramVec::new(
+            HistogramOpts::new("round1_dkg_latency_secs", "Histogram of latencies between receiving and writing round1 dkg package to db")
+                .buckets(vec![10.0, 50.0, 100.0, 500.0, 1000.0]),
             &["btc_chain", "self_id"],
-            vec![
+        )?;
+
+        let round2_dkg_latency_histogram = HistogramVec::new(
+            HistogramOpts::new("round2_dkg_latency_secs", "Histogram of latencies between receiving and writing round2 dkg package to db")
+                .buckets(vec![10.0, 50.0, 100.0, 500.0, 1000.0]),
+            &["btc_chain", "self_id"],
+        )?;
+
+        let round3_dkg_latency_histogram = HistogramVec::new(
+            HistogramOpts::new("round3_dkg_latency_secs", "Histogram of latencies between receiving and writing round3 dkg package to db")
+                .buckets(vec![10.0, 50.0, 100.0, 500.0, 1000.0]),
+            &["btc_chain", "self_id"],
+        )?;
+
+        let round4_dkg_latency_histogram = HistogramVec::new(
+            HistogramOpts::new("round4_dkg_latency_secs", "Histogram of latencies between receiving and writing round4 dkg package to db")
+                .buckets(vec![10.0, 50.0, 100.0, 500.0, 1000.0]),
+            &["btc_chain", "self_id"],
+        )?;
+
+        // ---
+        let round1_dkg_package_size_histogram = HistogramVec::new(
+            HistogramOpts::new(
+                "round1_dkg_package_size_bytes",
+                "Histogram of round1 dkg packages sizes in bytes",
+            )
+            .buckets(vec![
                 10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
-                1000000.0
-            ]
-        )
-        .expect("metric must be created");
-
-        let round2_dkg_package_size_histogram = register_histogram_vec!(
-            "round2_dkg_package_size_bytes",
-            "Histogram of round2 dkg packages sizes in bytes",
+                1000000.0,
+            ]),
             &["btc_chain", "self_id"],
-            vec![
-                10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
-                1000000.0
-            ]
-        )
-        .expect("metric must be created");
+        )?;
 
-        let dkg_error_rates = register_int_counter_vec!(
-            "dkg_error_rates",
-            "A metric counting errors or failures during dkg message processing",
+        let round2_dkg_package_size_histogram = HistogramVec::new(
+            HistogramOpts::new(
+                "round2_dkg_package_size_bytes",
+                "Histogram of round2 dkg packages sizes in bytes",
+            )
+            .buckets(vec![
+                10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 100000.0,
+                1000000.0,
+            ]),
+            &["btc_chain", "self_id"],
+        )?;
+
+        let dkg_error_rates = IntCounterVec::new(
+            Opts::new("dkg_error_rates", "A metric counting errors or failures during dkg message processing"),
             &["btc_chain", "self_id", "error_type"],
-        )
-        .expect("metric must be created");
+        )?;
 
         // ---
-        let pegout_scheduler_error_rates = register_int_counter_vec!(
-            "pegout_scheduler_error_rates",
-            "A metric counting errors or failures during the pegout scheduler processing",
+        let pegout_scheduler_error_rates = IntCounterVec::new(
+            Opts::new("pegout_scheduler_error_rates", "A metric counting errors or failures during the pegout scheduler processing"),
             &["btc_chain", "self_id", "error_type"],
-        )
-        .expect("metric must be created");
+        )?;
 
         // ====================================================================
         // Transaction Processing Metrics
-        let pending_pegouts = register_int_gauge_vec!(
-            "pending_pegouts",
-            "A metric counting the number of pending pegouts",
+        let pending_pegouts = IntGaugeVec::new(
+            Opts::new(
+                "pending_pegouts",
+                "A metric counting the number of pending pegouts",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let finalized_pegout_ids = register_int_gauge_vec!(
-            "finalized_pegout_ids",
-            "A metric counting the number of pending pegouts",
+        let finalized_pegout_ids = IntGaugeVec::new(
+            Opts::new(
+                "finalized_pegout_ids",
+                "A metric counting the number of pending pegouts",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let pegin_confirmation_depth = register_int_gauge_vec!(
-            "pegin_confirmation_depth",
-            "A metric representing the confirmation depth of pegin transactions",
+        let pegin_confirmation_depth = IntGaugeVec::new(
+            Opts::new("pegin_confirmation_depth", "A metric representing the confirmation depth of pegin transactions"),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let transaction_fee_rates = register_histogram_vec!(
-            "transaction_fee_rates",
-            "A metric representing the transaction fee rates",
-            &["btc_chain", "self_id"],
-            // buckets for measurement in satoshis (e.g., 1.0, 100.0, 10000.0, 100000.0, 1000000.0,
-            // 10000000.0, 100000000.0)
-            vec![
+        let transaction_fee_rates = HistogramVec::new(
+            HistogramOpts::new(
+                "transaction_fee_rates",
+                "A metric representing the transaction fee rates",
+            )
+            .buckets(vec![
                 1.0,
                 10.0,
                 100.0,
@@ -529,46 +527,45 @@ impl BtcServerMetrics {
                 100000.0,
                 1000000.0,
                 10000000.0,
-                100000000.0
-            ] // up to 1 BTC,
-        )
-        .expect("metric must be created");
-
-        let last_attempted_pegout_height = register_int_gauge_vec!(
-            "last_attempted_pegout_height",
-            "A metric representing the last attempted pegout height",
+                100000000.0,
+            ]),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let last_successful_pegout_height = register_int_gauge_vec!(
-            "last_successful_pegout_height",
-            "A metric representing the last successful pegout height",
+        let last_attempted_pegout_height = IntGaugeVec::new(
+            Opts::new(
+                "last_attempted_pegout_height",
+                "A metric representing the last attempted pegout height",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
 
-        let last_pegin_height = register_int_gauge_vec!(
-            "last_pegin_height",
-            "A metric representing the last pegin height",
+        let last_successful_pegout_height = IntGaugeVec::new(
+            Opts::new(
+                "last_successful_pegout_height",
+                "A metric representing the last successful pegout height",
+            ),
             &["btc_chain", "self_id"],
-        )
-        .expect("metric must be created");
+        )?;
+
+        let last_pegin_height = IntGaugeVec::new(
+            Opts::new(
+                "last_pegin_height",
+                "A metric representing the last pegin height",
+            ),
+            &["btc_chain", "self_id"],
+        )?;
 
         // ====================================================================
-        let info = register_gauge_vec!(
-            "info",
-            "Application status information",
-            &["version", "git_sha", "build_time", "rust_version"]
-        )
-        .expect("metric must be created");
+        let info = GaugeVec::new(
+            Opts::new("info", "Application status information"),
+            &["version", "git_sha", "build_time", "rust_version"],
+        )?;
 
-        let config = register_gauge_vec!(
-            "config",
-            "Application configuration",
-            &["btc_network", "identifier", "min_signers", "max_signers"]
-        )
-        .expect("metric must be created");
+        let config = GaugeVec::new(
+            Opts::new("config", "Application configuration"),
+            &["btc_network", "identifier", "min_signers", "max_signers"],
+        )?;
 
         info.with_label_values(&[
             CARGO_PKG_VERSION,
@@ -616,12 +613,16 @@ impl BtcServerMetrics {
             .register(Box::new(total_received_round2_dkg_packages.clone()))?;
         registry
             .register(Box::new(total_received_round3_dkg_packages.clone()))?;
+        registry
+            .register(Box::new(total_received_round4_dkg_packages.clone()))?;
         registry.register(Box::new(round1_dkg_throughput.clone()))?;
         registry.register(Box::new(round2_dkg_throughput.clone()))?;
         registry.register(Box::new(round3_dkg_throughput.clone()))?;
+        registry.register(Box::new(round4_dkg_throughput.clone()))?;
         registry.register(Box::new(round1_dkg_latency_histogram.clone()))?;
         registry.register(Box::new(round2_dkg_latency_histogram.clone()))?;
         registry.register(Box::new(round3_dkg_latency_histogram.clone()))?;
+        registry.register(Box::new(round4_dkg_latency_histogram.clone()))?;
         registry
             .register(Box::new(round1_dkg_package_size_histogram.clone()))?;
         registry
@@ -687,12 +688,15 @@ impl BtcServerMetrics {
             total_received_round1_dkg_packages,
             total_received_round2_dkg_packages,
             total_received_round3_dkg_packages,
+            total_received_round4_dkg_packages,
             round1_dkg_throughput,
             round2_dkg_throughput,
             round3_dkg_throughput,
+            round4_dkg_throughput,
             round1_dkg_latency_histogram,
             round2_dkg_latency_histogram,
             round3_dkg_latency_histogram,
+            round4_dkg_latency_histogram,
             round1_dkg_package_size_histogram,
             round2_dkg_package_size_histogram,
             dkg_error_rates,
@@ -717,7 +721,7 @@ impl BtcServerMetrics {
 
 #[cfg(test)]
 mod tests {
-    use prometheus::{gather, Encoder, TextEncoder};
+    use prometheus::{Encoder, TextEncoder};
 
     use super::*;
 
@@ -746,7 +750,7 @@ mod tests {
             .with_label_values(&["regtest", "0"])
             .inc_by(5);
 
-        let metric_families = gather();
+        let metric_families = metrics.registry.gather();
         let mut buffer = Vec::new();
         let encoder = TextEncoder::new();
         encoder.encode(&metric_families, &mut buffer).unwrap();
@@ -767,7 +771,7 @@ mod tests {
             .with_label_values(&["regtest", "0"])
             .observe(0.75);
 
-        let metric_families = gather();
+        let metric_families = metrics.registry.gather();
         let mut buffer = Vec::new();
         let encoder = TextEncoder::new();
         encoder.encode(&metric_families, &mut buffer).unwrap();
@@ -788,7 +792,7 @@ mod tests {
             .with_label_values(&["regtest", "1"])
             .observe(1500.1);
 
-        let metric_families = gather();
+        let metric_families = metrics.registry.gather();
         let mut buffer = Vec::new();
         let encoder = TextEncoder::new();
         encoder.encode(&metric_families, &mut buffer).unwrap();
@@ -809,7 +813,7 @@ mod tests {
             .with_label_values(&["regtest", "5"])
             .set(10);
 
-        let metric_families = gather();
+        let metric_families = metrics.registry.gather();
         let mut buffer = Vec::new();
         let encoder = TextEncoder::new();
         encoder.encode(&metric_families, &mut buffer).unwrap();
@@ -830,7 +834,7 @@ mod tests {
             .with_label_values(&["regtest", "3", "abc"])
             .inc_by(10);
 
-        let metric_families = gather();
+        let metric_families = metrics.registry.gather();
         let mut buffer = Vec::new();
         let encoder = TextEncoder::new();
         encoder.encode(&metric_families, &mut buffer).unwrap();
@@ -852,7 +856,7 @@ mod tests {
             .with_label_values(&["regtest", "4", "write_error"])
             .inc_by(1);
 
-        let metric_families = gather();
+        let metric_families = metrics.registry.gather();
         let mut buffer = Vec::new();
         let encoder = TextEncoder::new();
         encoder.encode(&metric_families, &mut buffer).unwrap();
