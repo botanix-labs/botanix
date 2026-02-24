@@ -51,6 +51,7 @@ botanix-btc-server = { workspace = true }
 
 # Misc
 derive_more = { workspace = true }
+secp256k1 = { workspace = true }
 
 # tracing
 tracing = { workspace = true }
