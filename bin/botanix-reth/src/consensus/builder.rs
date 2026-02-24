@@ -1,6 +1,7 @@
 use crate::{
     consensus::{
         comet_bft::abci::{ABCIClientBuilder, ABCIDriverMessage},
+        multisig_manager::BotanixMultisigManager,
         snapshot_manager::{SnapshotManager, SnapshotManagerStateLock},
         utils::{is_poa_epoch, seal_slow},
         Storage,
@@ -15,7 +16,7 @@ use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, GrpcClientFactory,
+    BtcServerExtendedApi, BtcServerExtendedClient,
 };
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
@@ -36,10 +37,7 @@ use reth_provider::{
 };
 use reth_storage_api::NodePrimitivesProvider;
 use reth_tasks::TaskExecutor;
-use std::{
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 
 /// Builder type for configuring the setup
@@ -48,6 +46,7 @@ pub struct AuthorityConsensusBuilder<RDB, BDB> {
     consensus: BotanixConsensus<BotanixChainSpec>,
     storage: Storage<RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
+    multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
     is_fed_node: bool,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     task_executor: TaskExecutor,
@@ -96,6 +95,7 @@ where
         chain_spec: Arc<BotanixChainSpec>,
         reth_provider: RDB,
         activation_manager: ActivationManager<VoteWatcher, Address>,
+        multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
         is_fed_node: bool,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         task_executor: TaskExecutor,
@@ -174,9 +174,6 @@ where
         // Try to instantiate storage
         let storage = Storage::new(
             btc_network,
-            // Aggregate pk to be filled out by the dkg state machine if we are
-            // still on genesis block
-            agg_pk,
             evm_config,
             chain_spec.clone(),
             bitcoind_client.clone(),
@@ -187,6 +184,7 @@ where
         Ok(Self {
             storage,
             activation_manager,
+            multisig_manager,
             is_fed_node,
             consensus: BotanixConsensus::new(chain_spec),
             bitcoin_checkpoints,
@@ -218,8 +216,9 @@ where
         let Self {
             consensus,
             storage,
-            is_fed_node,
             activation_manager,
+            multisig_manager,
+            is_fed_node,
             bitcoin_checkpoints,
             task_executor,
             cometbft_rpc_factory,
@@ -240,6 +239,7 @@ where
         let abci_client_builder = Some(ABCIClientBuilder::new(
             storage.clone(),
             activation_manager,
+            multisig_manager,
             bitcoin_checkpoints,
             consensus.clone(),
             cometbft_rpc_factory.clone(),
