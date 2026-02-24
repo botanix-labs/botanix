@@ -456,9 +456,11 @@ where
             // NOTE: We set a very conservative timeout for the DKG process
             // to resend messages. For direct connections this could be set
             // to a lower millisecond range, technically.
+            // TODO: We should simplify this and use the same timeout for all rounds.
             round1_package_timeout: Duration::from_secs(3),
             round2_package_timeout: Duration::from_secs(3),
             round3_package_timeout: Duration::from_secs(3),
+            round4_package_timeout: Duration::from_secs(3),
             // Start a new DKG session if not completed in 5 minutes.
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
@@ -685,6 +687,8 @@ where
         let node_public_key =
             secp256k1::PublicKey::from_secret_key(&secp, &p2p_secret_key);
 
+        // TODO: The DKG state machine should be deleted once the attestations
+        // are confirmed on-chain.
         let mut sessions = HashMap::new();
 
         // Iterate through all multisig configurations
@@ -2623,10 +2627,6 @@ where
 
         let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
-        if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
-            return Err(already_exists!("already have key package"));
-        }
-
         let mut sessions = self.dkg_sessions.lock().await;
         let Some(dkg) = sessions.get_mut(&multisig_id) else {
             return Err(tonic::Status::internal(format!(
@@ -2658,15 +2658,18 @@ where
             });
         }
 
+        let attestation: Option<rpc::DkgAttestation> =
+            dkg.machine.attestation().map(|att| {
+                att.try_into().expect("attestation format must be valid")
+            });
+
         // Set any timers, and retrieve next timeout event.
         let timeout = dkg.machine.timeout(Instant::now());
 
         let resp = rpc::DkgPayloads {
-            // TODO (lamafab): Option?
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
             payloads,
-            // TODO: implement from https://github.com/botanix-labs/botanix/pull/94
-            attestation: None,
+            attestation,
         };
 
         Ok(tonic::Response::new(resp))
@@ -2738,14 +2741,7 @@ where
         let payload = dkg::DkgPayload { sender, recipient, msg };
 
         match &payload.msg {
-            dkg::DkgMessage::Round1 {
-                initiator: _,
-                context: _,
-                nonce: _,
-                ephemeral_pub: _,
-                signature: _,
-                package,
-            } => {
+            dkg::DkgMessage::Round1 { package, .. } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     let mut bytes = vec![];
                     ciborium::into_writer(&package, &mut bytes)
@@ -2758,12 +2754,7 @@ where
                     );
                 }
             }
-            dkg::DkgMessage::Round2 {
-                initiator: _,
-                target: _,
-                nonce: _,
-                package,
-            } => {
+            dkg::DkgMessage::Round2 { package, .. } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     let mut bytes = vec![];
                     ciborium::into_writer(&package, &mut bytes)
@@ -2776,9 +2767,18 @@ where
                     );
                 }
             }
-            dkg::DkgMessage::Round3 { initiator: _, signature: _ } => {
+            dkg::DkgMessage::Round3 { .. } => {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_round3_dkg_metrics(
+                        self.btc_network,
+                        self.config.identifier,
+                        start.elapsed().as_millis(),
+                    );
+                }
+            }
+            dkg::DkgMessage::Round4 { .. } => {
+                if let Some(telemetry) = self.telemetry.as_ref() {
+                    telemetry.update_round4_dkg_metrics(
                         self.btc_network,
                         self.config.identifier,
                         start.elapsed().as_millis(),
@@ -2830,7 +2830,7 @@ where
             payloads.push(rpc::DkgPayload {
                 sender: p.sender.serialize(),
                 recipient: p.recipient.serialize(),
-                payload: bytes.clone(),
+                payload: bytes,
                 multisig_id: *multisig_id,
             });
         }
@@ -2869,6 +2869,7 @@ where
                     }
                     return Err(e);
                 }
+
                 if let Err(e) = self.db.flush().to_status() {
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
@@ -2879,27 +2880,21 @@ where
                     }
                     return Err(e);
                 }
-
-                // Note that we keep the dkg machine running, in case the
-                // coordinator does not receive the final acknowledgment and we need
-                // to issue a response.
-                //
-                // TODO (lamafab): we could technically shut it down once we receive
-                // the first signing request, since that indicates that the Dkg
-                // process has completed successfully. But there are no downsides of
-                // keeping it running as of now.
             }
         }
+
+        let attestation: Option<rpc::DkgAttestation> =
+            dkg.machine.attestation().map(|att| {
+                att.try_into().expect("attestation format must be valid")
+            });
 
         // Set any timers, and retrieve next timeout event.
         let timeout = dkg.machine.timeout(Instant::now());
 
         let resp = rpc::DkgPayloads {
-            // TODO (lamafab): Option?
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
             payloads,
-            // TODO: implement from https://github.com/botanix-labs/botanix/pull/94
-            attestation: None,
+            attestation,
         };
 
         Ok(tonic::Response::new(resp))
@@ -3045,7 +3040,6 @@ where
         let mut sessions = self.dkg_sessions.lock().await;
         if sessions.remove(&multisig_id).is_none() {
             // TODO: We can just skip/ignore this.
-            todo!();
         }
 
         Ok(tonic::Response::new(rpc::Empty {}))
