@@ -7,12 +7,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub use stage_one::complete_stage_one;
-pub use stage_two::complete_stage_two;
+use stage_four::complete_stage_four;
+use stage_one::complete_stage_one;
+use stage_three::complete_stage_three;
+use stage_two::complete_stage_two;
 
-mod encryption;
+//mod encryption;
 mod reset;
-mod simulation;
+//mod simulation;
+mod stage_four;
 mod stage_one;
 mod stage_three;
 mod stage_two;
@@ -23,8 +26,9 @@ fn test_config() -> Config {
         max_signers: 3,
         min_signers: 2,
         round1_package_timeout: Duration::from_secs(3),
-        round2_package_timeout: Duration::from_secs(4),
-        round3_package_timeout: Duration::from_secs(5),
+        round2_package_timeout: Duration::from_secs(3),
+        round3_package_timeout: Duration::from_secs(3),
+        round4_package_timeout: Duration::from_secs(3),
         pending_session_timeout: Some(Duration::from_secs(180)),
     }
 }
@@ -119,6 +123,26 @@ impl CheckedSend {
 
         CheckedSend { payloads, sender, cursor: 0 }
     }
+    /// Like [`CheckedSend::new`], but only reads up to `max` messages generated
+    /// by the DKG state machine.
+    pub fn new_max_msg(
+        machine: &mut DkgStateMachine,
+        now: Instant,
+        max: usize,
+    ) -> Self {
+        let sender = machine.frost_id();
+
+        let mut payloads = vec![];
+        for idx in 0..max {
+            let Some(dkg) = machine.send(now) else {
+                panic!("Expected payload at index {idx}");
+            };
+
+            payloads.push(dkg);
+        }
+
+        CheckedSend { payloads, sender, cursor: 0 }
+    }
     pub fn round1(
         mut self,
         initiator: frost::Identifier,
@@ -127,7 +151,7 @@ impl CheckedSend {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::Round1 { initiator: i, .. } = dkg.msg else {
-            panic!("Expected round1 message");
+            panic!("Expected round1 message, got: {:?}", dkg.msg);
         };
 
         assert_eq!(dkg.sender, self.sender);
@@ -145,7 +169,7 @@ impl CheckedSend {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::AckRound1 { initiator: i } = dkg.msg else {
-            panic!("Expected ack_round1 message");
+            panic!("Expected ack_round1 message, got: {:?}", dkg.msg);
         };
 
         assert_eq!(dkg.sender, self.sender);
@@ -164,7 +188,7 @@ impl CheckedSend {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::Round2 { initiator: i, target: t, .. } = dkg.msg else {
-            panic!("Expected round2 message");
+            panic!("Expected round2 message, got: {:?}", dkg.msg);
         };
 
         assert_eq!(dkg.sender, self.sender);
@@ -184,7 +208,7 @@ impl CheckedSend {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::AckRound2 { initiator: i, target: t } = dkg.msg else {
-            panic!("Expected ack_round2 message");
+            panic!("Expected ack_round2 message, got: {:?}", dkg.msg);
         };
 
         assert_eq!(dkg.sender, self.sender);
@@ -203,7 +227,7 @@ impl CheckedSend {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::Round3 { initiator: i, .. } = dkg.msg else {
-            panic!("Expected round3 message");
+            panic!("Expected round3 message, got: {:?}", dkg.msg);
         };
 
         assert_eq!(dkg.sender, self.sender);
@@ -221,7 +245,43 @@ impl CheckedSend {
         let dkg = &self.payloads[self.cursor];
 
         let DkgMessage::AckRound3 { initiator: i } = dkg.msg else {
-            panic!("Expected ack_round3 message");
+            panic!("Expected ack_round3 message, got: {:?}", dkg.msg);
+        };
+
+        assert_eq!(dkg.sender, self.sender);
+        assert_eq!(dkg.recipient, recipient);
+        assert_eq!(i, initiator.into());
+
+        self.cursor += 1;
+        self
+    }
+    pub fn round4(
+        mut self,
+        initiator: frost::Identifier,
+        recipient: frost::Identifier,
+    ) -> Self {
+        let dkg = &self.payloads[self.cursor];
+
+        let DkgMessage::Round4 { initiator: i, .. } = dkg.msg else {
+            panic!("Expected round4 message, got: {:?}", dkg.msg);
+        };
+
+        assert_eq!(dkg.sender, self.sender);
+        assert_eq!(dkg.recipient, recipient);
+        assert_eq!(i, initiator.into());
+
+        self.cursor += 1;
+        self
+    }
+    pub fn ack_round4(
+        mut self,
+        initiator: frost::Identifier,
+        recipient: frost::Identifier,
+    ) -> Self {
+        let dkg = &self.payloads[self.cursor];
+
+        let DkgMessage::AckRound4 { initiator: i } = dkg.msg else {
+            panic!("Expected ack_round4 message, got: {:?}", dkg.msg);
         };
 
         assert_eq!(dkg.sender, self.sender);
