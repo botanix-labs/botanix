@@ -74,10 +74,13 @@ impl FedMemberPubKey {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MultisigTomlConfig {
-    /// Identifier for this multisig (0 = pre-dynafed, 1 = next, ...)
+    /// Identifier for this multisig
     pub multisig_id: MultisigId,
     /// Threshold for this multisig
     pub min_signers: u16,
+    /// The coordinator identifier.
+    #[serde(default)]
+    pub coordinator: u16,
     /// Members participating in this multisig
     #[serde(rename = "member")]
     pub members: Vec<FedMemberPubKey>,
@@ -87,9 +90,15 @@ impl MultisigTomlConfig {
     pub fn new(
         multisig_id: MultisigId,
         min_signers: u16,
+        coordinator: Option<u16>,
         members: Vec<FedMemberPubKey>,
     ) -> Self {
-        Self { multisig_id, min_signers, members }
+        Self {
+            multisig_id,
+            min_signers,
+            coordinator: coordinator.unwrap_or_default(),
+            members,
+        }
     }
 
     pub fn get_federation_pub_keys(
@@ -259,6 +268,7 @@ lst-fee-receiver = "0x1BAdd95a3c52baBecDF7ebb8BeE264005ddAa458"
 [[multisig]]
 multisig-id = 0
 min-signers = 2
+coordinator = 1
 
 [[multisig.member]]
 key = "0268c9ee781a5f06434eb96ae54569b6354428d3e4f88822333d48f2b0bfd69ba4"
@@ -298,6 +308,7 @@ socket-addr = "172.22.3.1:30303"
 
         assert_eq!(m1.multisig_id, MultisigId::new(0));
         assert_eq!(m1.min_signers, 2);
+        assert_eq!(m1.coordinator, 1);
         assert_eq!(m1.members.len(), 3);
         assert_eq!(m1.members[0].key, "0268c9ee781a5f06434eb96ae54569b6354428d3e4f88822333d48f2b0bfd69ba4");
         assert_eq!(m1.members[0].socket_addr, "172.22.1.1:30303");
@@ -308,6 +319,7 @@ socket-addr = "172.22.3.1:30303"
 
         assert_eq!(m2.multisig_id, MultisigId::new(1));
         assert_eq!(m2.min_signers, 2);
+        assert_eq!(m2.coordinator, 0);
         assert_eq!(m2.members.len(), 3);
         assert_eq!(m2.members[0].key, "0268c9ee781a5f06434eb96ae54569b6354428d3e4f88822333d48f2b0bfd69ba4");
         assert_eq!(m2.members[0].socket_addr, "172.22.1.1:30303");
