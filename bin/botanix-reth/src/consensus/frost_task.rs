@@ -1,8 +1,9 @@
 use crate::{
     consensus::{
+        multisig_manager::MultisigSubmitter,
         signing::SigningStateMachine,
         utils::{
-            get_dynafed_sub_msg_from_notification,
+            deserialize_dkg_attestation, get_dynafed_sub_msg_from_notification,
             get_pending_pegouts_from_pegout_data,
             get_pending_pegouts_from_staged_pegouts, get_sweep_psbt,
             get_utxos_from_pegin_meta, get_utxos_from_staged_pegins,
@@ -11,7 +12,7 @@ use crate::{
         Storage,
     },
     node::network::BotanixNetworkPrimitives,
-    services::frost::MultisigConfig,
+    services::frost::AuthorityMultisigConfig,
 };
 use alloy_consensus::{BlockHeader, Sealable};
 use alloy_primitives::{Bytes, B256};
@@ -21,23 +22,24 @@ use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_peg::peg_contract::{PeginMeta, PegoutWithId};
 use botanix_authority_rsp::RandomSource;
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, ConsensusCheckpointRequest, GrpcClientError,
-    PendingPegout, SubscribeToDynafedNotificationsStream, Utxo,
+    BtcServerExtendedApi, ConsensusCheckpointRequest, DkgPayloads,
+    GrpcClientError, PendingPegout, SubscribeToDynafedNotificationsStream,
+    Utxo,
 };
-use botanix_comet_bft_rpc::{
-    Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory,
-};
+use botanix_comet_bft_rpc::{CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_data_parser::{
     prost_parser::{ProstError, ProstMessageSerdelizer},
     DataParser, Error as DataParserError,
 };
-use botanix_storage::{StagedHeaderReader, StagedHeaderWriter};
+use botanix_storage::{
+    MultisigManagerReader, StagedHeaderReader, StagedHeaderWriter,
+};
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use btcserverlib::{
     dkg::{DkgNotification, DynafedSubscriptionMessage, SweepNotification},
     wallet::psbt::frost_id_from_bytes,
 };
-use eyre::{eyre, Context};
+use eyre::{eyre, Context, ContextCompat};
 use frost_secp256k1_tr as frost;
 use futures::{pin_mut, StreamExt};
 use reth_network::{
@@ -65,22 +67,9 @@ use std::{
     time::Duration,
 };
 use tendermint_rpc::client::HttpClient;
-use tokio::sync::mpsc::{self, error::SendError};
+use tokio::sync::mpsc;
 use tracing::{error, info, trace, warn};
 
-// TODO: @rwlock Combine with FrostTaskError?
-#[derive(Debug, thiserror::Error)]
-/// Errors that can occur during synchronization.
-pub(crate) enum SyncError {
-    #[error("tendermint error")]
-    /// Error related to Tendermint.
-    Tendermint(#[from] tendermint::Error),
-    /// Error related to Tendermint RPC.
-    #[error("tendermint rpc error")]
-    TendermintRpc(#[from] tendermint_rpc::Error),
-}
-
-// TODO: @rwlock Combine with FrostTaskError?
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum FinalizedPegoutIdsSyncSerializationError {
     #[error("Received a grpc client error {0}")]
@@ -92,7 +81,7 @@ pub(crate) enum FinalizedPegoutIdsSyncSerializationError {
 }
 
 struct MultisigEntry<ToFrostMan, Source, BtcServerClient> {
-    config: MultisigConfig,
+    config: AuthorityMultisigConfig,
     signing_sm: SigningStateMachine<ToFrostMan, Source, BtcServerClient>,
     /// A handle to the `DkgRunnerTask` task. This is only `Some` if no
     /// aggregate public key is available, and the `start_task` method has hence
@@ -108,6 +97,8 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
     pub(crate) frost_handle: ToFrostMan,
     /// Shared storage to insert aggregate public key
     pub(crate) storage: Storage<RDB, BDB>,
+    //
+    multisig_handle: MultisigSubmitter,
     //
     multisigs: BTreeMap<
         MultisigId,
@@ -133,12 +124,6 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
         tokio::sync::broadcast::Sender<SubscribeToDynafedNotificationsStream>,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum FrostTaskError {
-    #[error("Unable to get all connected peers {0}")]
-    UnableToGetAllConnectedPeers(#[from] SendError<FrostCommand>),
-}
-
 impl<RDB, BDB, ToFrostMan, Source, BtcServerClient>
     FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient>
 where
@@ -146,7 +131,7 @@ where
     RDB: BlockReaderIdExt + StateProviderFactory + CanonStateSubscriptions + Clone + 'static,
     <<RDB as NodePrimitivesProvider>::Primitives as NodePrimitives>::BlockHeader:
         HeaderExt + Sealable,
-    BDB: StagedHeaderReader + StagedHeaderWriter + Clone + 'static,
+    BDB: StagedHeaderReader + StagedHeaderWriter + MultisigManagerReader + Clone + 'static,
     Source: RandomSource + Clone,
     BtcServerClient: BtcServerExtendedApi + Clone,
 {
@@ -156,7 +141,8 @@ where
         btc_server: BtcServerClient,
         network_handle: NetworkHandle<BotanixNetworkPrimitives>,
         frost_handle: ToFrostMan,
-        multisig_configs: Vec<MultisigConfig>,
+        multisig_handle: MultisigSubmitter,
+        multisig_configs: Vec<AuthorityMultisigConfig>,
         storage: Storage<RDB, BDB>,
         compressor: DataParser,
         random_source_provider: Source,
@@ -168,11 +154,11 @@ where
         let multisigs = multisig_configs
             .into_iter()
             .map(|config| {
-                // TODO: Update this log => it's weird.
                 info!(
                     target: "consensus::authority::frost_task::new",
-                    "Frost authority index: {}/{}",
-                    config.authority_index, config.authorities.len() - 1
+                    "Multisig Id {} with frost authority index: {}/{}",
+                    config.multisig_id, config.authority_index,
+                    config.authorities.len() - 1
                 );
 
                 // Setup the signing state machine.
@@ -186,10 +172,11 @@ where
 
                 let multisig_id = config.multisig_id;
 
+                // Setup the default multisig entry; the `dkg_task` might be set
+                // during [`FrostTask::start_task`].
                 let entry = MultisigEntry {
                     config,
                     signing_sm,
-                    // Might be set during [`FrostTask::start_task`].
                     dkg_task: None,
                 };
 
@@ -204,6 +191,7 @@ where
         Self {
             network_handle,
             frost_handle,
+            multisig_handle,
             multisigs,
             storage,
             btc_server,
@@ -362,6 +350,8 @@ where
             // TODO: The endpoint should return `Option<_>`, such that we can
             // actually properly distinguish between errors and missing
             // packages.
+            // TODO: The public key should probably be retrieved from the
+            // MultisigManager? Or at least do a cross-check.
             let Ok(public_key) = self.btc_server.get_public_key(
                 botanix_btc_server_client::GetPublicKeyRequest {
                     multisig_id: multisig_id.as_u32(),
@@ -369,16 +359,15 @@ where
             ).await else {
                 warn!(
                     target: "consensus::authority::frost_task::start_task",
-                    "No public key found, proceeding with DKG"
+                    "No public key found for multisig Id {multisig_id}, proceeding with DKG..."
                 );
 
                 // Start the dkg state machine task runner.
                 let handle = DkgRunnerTask::start(
                     self.frost_handle.clone(),
+                    self.multisig_handle.clone(),
                     &entry.config.authorities,
-                    self.storage.clone(),
                     self.btc_server.clone(),
-                    Arc::clone(&self.metrics),
                     *multisig_id,
                 );
 
@@ -386,7 +375,7 @@ where
 
                 info!(
                     target: "consensus::authority::frost_task::start_task",
-                    "DKG runner task started..."
+                    "DKG runner task for multisig Id {multisig_id} started..."
                 );
 
                 continue;
@@ -394,22 +383,9 @@ where
 
             info!(
                 target: "consensus::authority::frost_task::start_task",
-                "received aggregate public key from dkg state machine {:?}",
-                public_key
+                "Received aggregate public key from btc-server for multisig Id {}: {:?}",
+                multisig_id, public_key
             );
-
-            let public_key = hex::decode(public_key.publickey)
-                .wrap_err("Failed to hex-decode public key")?;
-
-            let public_key = secp256k1::PublicKey::from_slice(&public_key)
-                .wrap_err("Failed to create secp256k1 public key from slice")?;
-
-            // Fill the Storage entry with the multisigs' public key.
-            let mut storage = self.storage.inner.write().await;
-            storage
-                .aggregate_public_key
-                .get_or_insert_default()
-                .insert(*multisig_id, public_key);
         }
 
         Ok(())
@@ -508,10 +484,9 @@ where
         // Start the dkg state machine task runner for that multisig id
         let handle = DkgRunnerTask::start(
             self.frost_handle.clone(),
+            self.multisig_handle.clone(),
             &multisig.config.authorities,
-            self.storage.clone(),
             self.btc_server.clone(),
-            Arc::clone(&self.metrics),
             multisig_id,
         );
 
@@ -602,7 +577,7 @@ where
         }
 
         // Initiate signing session
-        /*
+        /* TODO
         multisig
             .signing_sm
             .initiate_signing_session(signing_session_id, sweep_psbt_payload.psbt)
@@ -628,6 +603,9 @@ where
         );
 
         match notification {
+            // TODO: This should contain an attestation report such that the
+            // multisig can get _activated_ on the btc-server side => requires
+            // upstream changes to the `reth` repo.
             CanonStateNotification::Commit { new, pegins, pegouts } => {
                 self.on_canon_state_commit(new, pegins, pegouts).await?;
             }
@@ -650,20 +628,24 @@ where
         let header_hash = tip.hash();
         let header = tip.header();
 
-        // Read aggregate public keys once for lookups
-        let Some(aggregate_public_keys) = self
+        let active_multisigs: BTreeMap<
+            MultisigId,
+            secp256k1::PublicKey,
+        > = self
             .storage
-            .inner
-            .read()
-            .await
-            .aggregate_public_key
-            .clone()
-        else {
-            // Since we are skipping the current block, we need to check for staged headers on the next iteration.
+            .botanix_database_factory
+            .get_active_multisigs()?
+            .into_iter()
+            .map(|m| (m.multisig_id, m.aggregate_public_key()))
+            .collect();
+
+        if active_multisigs.is_empty() {
+            // Since we are skipping the current block, we need to check for
+            // staged headers on the next iteration.
             self.check_staged_headers = true;
 
             return Err(eyre!("No aggregate public keys found"));
-        };
+        }
 
         // Convert pegins into the appropriate format
         let pegins = pegins.as_ref().map_or_else(Vec::new, |pegins| {
@@ -678,8 +660,11 @@ where
                     }
                 }).collect::<Vec<_>>();
 
-                get_utxos_from_pegin_meta(deserialized.as_slice(), &aggregate_public_keys)
-            });
+            get_utxos_from_pegin_meta(
+                deserialized.as_slice(),
+                &active_multisigs
+            )
+        });
 
         // Convert pegouts into the appropriate format
         let pending_pegouts = pegouts.as_ref().map_or_else(Vec::new, |pegouts| {
@@ -902,15 +887,15 @@ where
     /// Forwards a DKG response from a peer to the corresponding
     /// [`DkgRunnerTask`] via its mpsc channel.
     async fn on_peer_msg_dkg(&mut self, dkg_response: DkgResponse) -> eyre::Result<()> {
+        let multisig_id = dkg_response.multisig_id.into();
+
         let multisig = self
             .multisigs
-            .get(&dkg_response.multisig_id.into())
-            .ok_or(eyre::eyre!("No multisig entry found for Id {}", dkg_response.multisig_id))?;
+            .get(&multisig_id)
+            .ok_or(eyre::eyre!("No multisig entry found for Id {multisig_id}"))?;
 
         let Some(task) = multisig.dkg_task.as_ref() else {
-            // TODO: log message
-            warn!(target: "consensus::authority::frost_task::start_task", "TODO");
-            return Ok(());
+            return Err(eyre!("No DKG runner task started for multisig Id {multisig_id}, dropping DKG payload"));
         };
 
         task.try_send(dkg_response).wrap_err("Failed to send DKG response to DKG runner task")
@@ -1075,43 +1060,31 @@ where
     }
 }
 
-struct DkgRunnerTask<RDB, BDB, ToFrostMan, BtcServerClient> {
+struct DkgRunnerTask<ToFrostMan, BtcServerClient> {
     rx: mpsc::Receiver<DkgResponse>,
     // Frost network Handler
     frost_handle: ToFrostMan,
+    //
+    multisig_handle: MultisigSubmitter,
     // Frost Id lookup table
     frost_ids: HashMap<frost_secp256k1_tr::Identifier, secp256k1::PublicKey>,
-    // Shared storage to insert aggregate public key
-    storage: Storage<RDB, BDB>,
     // btc-server client
     btc_server: BtcServerClient,
-    // Authority Metrics
-    metrics: Arc<AuthorityMetrics>,
     // Multisig ID for this DKG task
     multisig_id: MultisigId,
 }
 
-impl<RDB, BDB, ToFrostMan, BtcServerClient>
-    DkgRunnerTask<RDB, BDB, ToFrostMan, BtcServerClient>
+impl<ToFrostMan, BtcServerClient> DkgRunnerTask<ToFrostMan, BtcServerClient>
 where
-    RDB: BlockReaderIdExt
-        + StateProviderFactory
-        + CanonStateSubscriptions
-        + Clone
-        + 'static
-        + Send
-        + Sync,
-    BDB: Clone + 'static + Send + Sync,
     ToFrostMan: 'static + Send + Sync + ToFrostManager,
     BtcServerClient: BtcServerExtendedApi,
 {
     #[allow(clippy::new_ret_no_self)]
     fn start(
         frost_handle: ToFrostMan,
+        multisig_handle: MultisigSubmitter,
         authorities: &[secp256k1::PublicKey],
-        storage: Storage<RDB, BDB>,
         btc_server: BtcServerClient,
-        metrics: Arc<AuthorityMetrics>,
         multisig_id: MultisigId,
     ) -> mpsc::Sender<DkgResponse> {
         let (tx, rx) = mpsc::channel(100);
@@ -1129,10 +1102,9 @@ where
         let this = DkgRunnerTask {
             rx,
             frost_handle,
+            multisig_handle,
             frost_ids,
-            storage,
             btc_server,
-            metrics,
             multisig_id,
         };
 
@@ -1141,6 +1113,8 @@ where
 
         tx
     }
+    // TODO: Restructure this method to keep the even loop shorter => move
+    // corresponding logic to sub-methods.
     async fn run(mut self) {
         const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -1176,36 +1150,13 @@ where
                         }
                     };
 
-                    if let Ok(resp) = self
-                        .btc_server
-                        .get_public_key(
-                            botanix_btc_server_client::GetPublicKeyRequest {
-                                multisig_id: *self.multisig_id,
-                            },
-                        )
-                        .await
+                    // Handle optional DKG attestations.
+                    if let Err(err) = self.handle_dkg_attestations(&resp).await
                     {
-                        self.metrics.created_agg_pub_keys.increment(1);
-
-                        // decode the public key and assign it to the self
-                        // variable
-                        let public_key_package =
-                            secp256k1::PublicKey::from_str(&resp.publickey)
-                                .expect("invalid aggregated public key");
-
-                        let mut storage = self.storage.write().await;
-                        if let Some(agg_pks) =
-                            storage.aggregate_public_key.as_mut()
-                        {
-                            agg_pks
-                                .insert(self.multisig_id, public_key_package);
-                        } else {
-                            storage.aggregate_public_key =
-                                Some(BTreeMap::from([(
-                                    self.multisig_id,
-                                    public_key_package,
-                                )]));
-                        }
+                        error!(
+                            target: "consensus::authority::frost_task::DkgRunnerTask",
+                            "Failed to handle Dkg attestations: {err}"
+                        );
                     }
 
                     // Update timeout at which point the btc-server should be
@@ -1253,12 +1204,21 @@ where
                             timeout = DEFAULT_TIMEOUT;
                             error!(
                                 target: "consensus::authority::frost_task::DkgRunnerTask",
-                                "Error getting dkg payloads from btc server {err:?}"
+                                "Error getting dkg payloads from btc server: {err:?}"
                             );
 
                             continue;
                         }
                     };
+
+                    // Handle optional DKG attestations.
+                    if let Err(err) = self.handle_dkg_attestations(&resp).await
+                    {
+                        error!(
+                            target: "consensus::authority::frost_task::DkgRunnerTask",
+                            "Failed to handle Dkg attestations: {err}"
+                        );
+                    }
 
                     // Update timeout at which point the btc-server should be
                     // called again.
@@ -1280,7 +1240,7 @@ where
     async fn gossip_payloads(
         &self,
         payloads: Vec<botanix_btc_server_client::DkgPayload>,
-    ) -> Result<(), FrostTaskError> {
+    ) -> eyre::Result<()> {
         if payloads.is_empty() {
             return Ok(());
         }
@@ -1295,16 +1255,11 @@ where
             let (tx, rx) = tokio::sync::oneshot::channel();
 
             let cmd = FrostCommand::GetAllConnectedPeers(tx);
-            if let Err(e) = self.frost_handle.send_command(cmd) {
-                error!(
-                    target: "consensus::authority::frost_task::DkgRunnerTask",
-                    "Failed to send GetAllConnectedPeers frost command {e}"
-                );
+            self.frost_handle
+                .send_command(cmd)
+                .wrap_err("Failed to request connected peers handle")?;
 
-                return Err(FrostTaskError::UnableToGetAllConnectedPeers(e));
-            }
-
-            rx.await.expect("expect all peers handle to exist")
+            rx.await.wrap_err("Failed to retrieve connected peers handle")?
         };
 
         for payload in payloads {
@@ -1319,6 +1274,7 @@ where
                     recipient
                 );
 
+                // Continue with next payload.
                 continue;
             };
 
@@ -1330,12 +1286,13 @@ where
                 .find(|(_, peer_data)| peer_data.frost_identifier == recipient)
                 .map(|(_, peer_data)| peer_data)
             else {
-                warn!(
+                error!(
                     target: "consensus::authority::frost_task::DkgRunnerTask",
                     "Peer handle not found for recipient {}, dropping DKG payload...",
                     pk_string
                 );
 
+                // Continue with next payload.
                 continue;
             };
 
@@ -1364,7 +1321,62 @@ where
                     );
                 }
             }
+
+            // Continue with next payload.
         }
+
+        Ok(())
+    }
+    async fn handle_dkg_attestations(
+        &mut self,
+        payloads: &DkgPayloads,
+    ) -> eyre::Result<()> {
+        let Some(att) = payloads.attestation.as_ref() else { return Ok(()) };
+
+        let (public_key_package, signing_package, signatures) =
+            deserialize_dkg_attestation(att)
+                .wrap_err("Failed to deserialize Dkg attestation")?;
+
+        let res = self
+            .multisig_handle
+            .submit_attestation(
+                self.multisig_id,
+                public_key_package,
+                signing_package,
+                signatures,
+            )
+            .await;
+
+        // TODO: Make the distinction between error and resubmission clearer, if
+        // possible?
+        if res.is_ok() {
+            info!(
+                target: "consensus::authority::frost_task::DkgRunnerTask",
+                "Dkg attestations submitted to the consensus layer"
+            );
+        } else {
+            warn!(
+                target: "consensus::authority::frost_task::DkgRunnerTask",
+                "Dkg attestations already submitted, skipped..."
+            );
+        }
+
+        // Sanity check; the public key should be saved on the `btc-server`
+        // side.
+        let resp = self
+            .btc_server
+            .get_public_key(botanix_btc_server_client::GetPublicKeyRequest {
+                multisig_id: self.multisig_id.as_u32(),
+            })
+            .await
+            .wrap_err(
+                "Failed to retrieve aggregated public key from the btc-server",
+            )?;
+
+        // Decode the public key
+        let _public_key_package =
+            secp256k1::PublicKey::from_str(&resp.publickey)
+                .expect("invalid aggregated public key");
 
         Ok(())
     }
