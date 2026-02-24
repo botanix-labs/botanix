@@ -45,3 +45,4 @@ impl_compression_for_compact!(
     HeaderWithPegs,
     WalletStateSyncRecord
 );
+// Note: MigrationRecord and MigrationStatus manually implement Compress/Decompress

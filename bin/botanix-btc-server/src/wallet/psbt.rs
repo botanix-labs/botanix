@@ -267,6 +267,12 @@ pub trait PsbtExt: BorrowMut<Psbt> {
         self.borrow().outputs.iter().filter_map(|o| o.pegout_id()).collect()
     }
 
+    /// Returns true if this PSBT represents a sweep transaction (structurally).
+    /// A sweep has no pegout outputs and exactly one output (the change to the target multisig).
+    fn is_single_output_without_pegout(&self) -> bool {
+        self.pegout_ids().is_empty() && self.borrow().outputs.len() == 1
+    }
+
     /// Converts this PSBT into a vector of Frost signing packages.
     ///
     /// This function takes a PSBT as input and processes each input to generate the necessary
@@ -319,6 +325,56 @@ pub trait PsbtExt: BorrowMut<Psbt> {
 }
 impl PsbtExt for Psbt {}
 
+/// Errors that can occur when getting the unified multisig_id from a PSBT.
+#[derive(Debug, thiserror::Error)]
+pub enum PsbtMultisigIdError {
+    #[error("PSBT has no inputs")]
+    NoInputs,
+    #[error("PSBT input missing multisig_id")]
+    MissingMultisigId,
+    #[error("PSBT inputs have mismatched multisig_id values")]
+    MismatchedMultisigIds,
+}
+
+/// Extension trait for extracting a unified multisig_id from a PSBT.
+///
+/// This trait provides methods for safely extracting the multisig_id from a PSBT
+/// while validating that all inputs belong to the same multisig.
+pub trait PsbtMultisigIdExt: std::borrow::Borrow<Psbt> {
+    /// Get the multisig_id for this PSBT, validating all inputs have the same value.
+    ///
+    /// This method iterates through all inputs and verifies they all contain
+    /// the same multisig_id. Returns an error if:
+    /// - The PSBT has no inputs
+    /// - Any input is missing a multisig_id
+    /// - The inputs have different multisig_id values
+    fn multisig_id(&self) -> Result<MultisigId, PsbtMultisigIdError> {
+        let psbt = self.borrow();
+        let mut unique_id: Option<MultisigId> = None;
+
+        if psbt.inputs.is_empty() {
+            return Err(PsbtMultisigIdError::NoInputs);
+        }
+
+        for input in &psbt.inputs {
+            let id = input
+                .multisig_id()
+                .ok_or(PsbtMultisigIdError::MissingMultisigId)?;
+
+            match unique_id {
+                None => unique_id = Some(id),
+                Some(existing) if existing != id => {
+                    return Err(PsbtMultisigIdError::MismatchedMultisigIds);
+                }
+                Some(_) => {}
+            }
+        }
+
+        unique_id.ok_or(PsbtMultisigIdError::NoInputs)
+    }
+}
+impl PsbtMultisigIdExt for Psbt {}
+
 /// Errors that can occur when calculating the fee per output for a PSBT.
 #[derive(Debug, thiserror::Error)]
 pub enum PsbtFeePerOutputError {
@@ -362,12 +418,39 @@ pub(crate) struct InputDTO {
     pub multisig_id: MultisigId,
 }
 
+/// Validates that all inputs have the same `multisig_id`.
+///
+/// Returns an error if:
+/// - The inputs slice is empty (`PsbtMultisigIdError::NoInputs`)
+/// - The inputs have different `multisig_id` values (`PsbtMultisigIdError::MismatchedMultisigIds`)
+pub(crate) fn validate_inputs_multisig_id(
+    inputs: &[InputDTO],
+) -> Result<(), PsbtMultisigIdError> {
+    let first = inputs.first().ok_or(PsbtMultisigIdError::NoInputs)?;
+    let expected_id = first.multisig_id;
+
+    for input in inputs.iter().skip(1) {
+        if input.multisig_id != expected_id {
+            return Err(PsbtMultisigIdError::MismatchedMultisigIds);
+        }
+    }
+
+    Ok(())
+}
+
 /// Create psbt with proprietary tweak fields
+///
+/// Returns an error if:
+/// - The inputs slice is empty (`PsbtMultisigIdError::NoInputs`)
+/// - The inputs have different `multisig_id` values (`PsbtMultisigIdError::MismatchedMultisigIds`)
 pub(crate) fn create_psbt(
     inputs: Vec<InputDTO>,
     outputs: Vec<(TxOut, PegoutId)>,
     change: Option<TxOut>,
-) -> Psbt {
+) -> Result<Psbt, PsbtMultisigIdError> {
+    // Validate that all inputs have the same multisig_id
+    validate_inputs_multisig_id(&inputs)?;
+
     let mut output: Vec<TxOut> =
         outputs.iter().map(|(out, _)| out).cloned().collect();
     if let Some(change) = change {
@@ -409,7 +492,7 @@ pub(crate) fn create_psbt(
         psbt_output.set_pegout_id(*pegout_id);
     }
 
-    psbt
+    Ok(psbt)
 }
 
 /// Create a sweep PSBT with a single output and no pegout IDs.
@@ -417,7 +500,17 @@ pub(crate) fn create_psbt(
 /// A sweep transaction consolidates multiple UTXOs into a single output,
 /// to the incoming multisig's change address. Unlike regular pegouts, the transaction
 /// does not have any associated pegout requests.
-pub(crate) fn create_sweep_psbt(inputs: Vec<InputDTO>, output: TxOut) -> Psbt {
+///
+/// Returns an error if:
+/// - The inputs slice is empty (`PsbtMultisigIdError::NoInputs`)
+/// - The inputs have different `multisig_id` values (`PsbtMultisigIdError::MismatchedMultisigIds`)
+pub(crate) fn create_sweep_psbt(
+    inputs: Vec<InputDTO>,
+    output: TxOut,
+) -> Result<Psbt, PsbtMultisigIdError> {
+    // Validate that all inputs have the same multisig_id
+    validate_inputs_multisig_id(&inputs)?;
+
     let tx = bitcoin::Transaction {
         version: bitcoin::transaction::Version::TWO,
         lock_time: bitcoin::locktime::absolute::LockTime::ZERO,
@@ -444,7 +537,7 @@ pub(crate) fn create_sweep_psbt(inputs: Vec<InputDTO>, output: TxOut) -> Psbt {
         psbt_input.set_multisig_id(utxo.multisig_id);
     }
 
-    psbt
+    Ok(psbt)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -479,4 +572,209 @@ pub(crate) fn calculate_sighash(
     )?;
 
     Ok(sighash)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::version::UtxoVersion;
+    use bitcoin::{hashes::Hash, Amount, OutPoint, ScriptBuf, TxOut, Txid};
+
+    fn create_test_input(multisig_id: MultisigId) -> InputDTO {
+        InputDTO {
+            outpoint: OutPoint {
+                txid: Txid::from_slice(&[0u8; 32]).unwrap(),
+                vout: 0,
+            },
+            output: TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: ScriptBuf::new(),
+            },
+            eth_address: None,
+            version: UtxoVersion::V1,
+            multisig_id,
+        }
+    }
+
+    fn create_test_pegout_id() -> PegoutId {
+        [0u8; 36]
+    }
+
+    #[test]
+    fn multisig_id_single_input() {
+        let id = MultisigId::new(42);
+        let input = create_test_input(id);
+        let output = TxOut {
+            value: Amount::from_sat(90_000),
+            script_pubkey: ScriptBuf::new(),
+        };
+        let psbt = create_psbt(
+            vec![input],
+            vec![(output, create_test_pegout_id())],
+            None,
+        )
+        .expect("test inputs should be valid");
+
+        let result = psbt.multisig_id();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), id);
+    }
+
+    #[test]
+    fn multisig_id_multiple_inputs_same_id() {
+        let id = MultisigId::new(42);
+        let inputs = vec![
+            create_test_input(id),
+            create_test_input(id),
+            create_test_input(id),
+        ];
+        let output = TxOut {
+            value: Amount::from_sat(290_000),
+            script_pubkey: ScriptBuf::new(),
+        };
+        let psbt =
+            create_psbt(inputs, vec![(output, create_test_pegout_id())], None)
+                .expect("test inputs should be valid");
+
+        let result = psbt.multisig_id();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), id);
+    }
+
+    #[test]
+    fn multisig_id_multiple_inputs_different_ids() {
+        let id1 = MultisigId::new(42);
+        let id2 = MultisigId::new(99);
+        let inputs = vec![create_test_input(id1), create_test_input(id2)];
+        let output = TxOut {
+            value: Amount::from_sat(190_000),
+            script_pubkey: ScriptBuf::new(),
+        };
+
+        // create_psbt now validates inputs upfront and returns error for mismatched IDs
+        let result =
+            create_psbt(inputs, vec![(output, create_test_pegout_id())], None);
+        assert!(matches!(
+            result,
+            Err(PsbtMultisigIdError::MismatchedMultisigIds)
+        ));
+    }
+
+    #[test]
+    fn multisig_id_no_inputs() {
+        // Create an empty PSBT manually
+        let tx = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::locktime::absolute::LockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let psbt = Psbt::from_unsigned_tx(tx).expect("tx is unsigned");
+
+        let result = psbt.multisig_id();
+        assert!(matches!(result, Err(PsbtMultisigIdError::NoInputs)));
+    }
+
+    #[test]
+    fn multisig_id_missing_multisig_id() {
+        // Create a PSBT with an input that has no multisig_id set
+        let tx = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::locktime::absolute::LockTime::ZERO,
+            input: vec![bitcoin::TxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_slice(&[0u8; 32]).unwrap(),
+                    vout: 0,
+                },
+                sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+                script_sig: ScriptBuf::new(),
+                witness: Default::default(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let psbt = Psbt::from_unsigned_tx(tx).expect("tx is unsigned");
+
+        let result = psbt.multisig_id();
+        assert!(matches!(result, Err(PsbtMultisigIdError::MissingMultisigId)));
+    }
+
+    #[test]
+    fn validate_inputs_multisig_id_single_input() {
+        let id = MultisigId::new(42);
+        let inputs = vec![create_test_input(id)];
+
+        let result = validate_inputs_multisig_id(&inputs);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_inputs_multisig_id_multiple_same() {
+        let id = MultisigId::new(42);
+        let inputs = vec![
+            create_test_input(id),
+            create_test_input(id),
+            create_test_input(id),
+        ];
+
+        let result = validate_inputs_multisig_id(&inputs);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_inputs_multisig_id_multiple_different() {
+        let id1 = MultisigId::new(42);
+        let id2 = MultisigId::new(99);
+        let inputs = vec![create_test_input(id1), create_test_input(id2)];
+
+        let result = validate_inputs_multisig_id(&inputs);
+        assert!(matches!(
+            result,
+            Err(PsbtMultisigIdError::MismatchedMultisigIds)
+        ));
+    }
+
+    #[test]
+    fn validate_inputs_multisig_id_empty() {
+        let inputs: Vec<InputDTO> = vec![];
+
+        let result = validate_inputs_multisig_id(&inputs);
+        assert!(matches!(result, Err(PsbtMultisigIdError::NoInputs)));
+    }
+
+    #[test]
+    fn create_psbt_empty_inputs_returns_error() {
+        let inputs: Vec<InputDTO> = vec![];
+        let output = TxOut {
+            value: Amount::from_sat(100_000),
+            script_pubkey: ScriptBuf::new(),
+        };
+
+        let result =
+            create_psbt(inputs, vec![(output, create_test_pegout_id())], None);
+        assert!(matches!(result, Err(PsbtMultisigIdError::NoInputs)));
+    }
+
+    #[test]
+    fn create_psbt_mismatched_multisig_ids_returns_error() {
+        let id1 = MultisigId::new(1);
+        let id2 = MultisigId::new(2);
+        let inputs = vec![create_test_input(id1), create_test_input(id2)];
+        let output = TxOut {
+            value: Amount::from_sat(190_000),
+            script_pubkey: ScriptBuf::new(),
+        };
+
+        let result =
+            create_psbt(inputs, vec![(output, create_test_pegout_id())], None);
+        assert!(matches!(
+            result,
+            Err(PsbtMultisigIdError::MismatchedMultisigIds)
+        ));
+    }
 }

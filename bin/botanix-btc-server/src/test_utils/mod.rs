@@ -8,7 +8,8 @@ use crate::{
         TX_NOT_FOUND_BITCOIND_ERROR, TX_NOT_IN_MEMPOOL_BITCOIND_ERROR,
     },
     wallet::{
-        address::generate_taproot_change_scriptpubkey, util::VerifyingKeyExt,
+        address::generate_taproot_change_scriptpubkey, psbt::PsbtInputExt,
+        util::VerifyingKeyExt,
     },
 };
 use bitcoin::{
@@ -20,6 +21,7 @@ use bitcoin::{
 use bitcoincore_rpc::json::{
     EstimateMode, EstimateSmartFeeResult, StringOrStringArray,
 };
+use botanix_types::MultisigId;
 use frost_secp256k1_tr as frost;
 use rand::{rngs::OsRng, thread_rng, RngCore};
 use serde::ser::Error;
@@ -462,6 +464,94 @@ pub fn create_psbt(
         });
     }
     psbt
+}
+
+/// Create a sweep PSBT for testing.
+///
+/// - `num_inputs`: number of inputs (UTXOs being swept)
+/// - `source_multisig_id`: the multisig ID that owns the input UTXOs
+/// - `change_output`: the single output (should be derived from target multisig)
+pub fn create_sweep_psbt(
+    num_inputs: usize,
+    source_multisig_id: MultisigId,
+    change_output: TxOut,
+) -> Psbt {
+    // Create random outpoints for inputs
+    let inputs: Vec<TxIn> = (0..num_inputs)
+        .map(|_| {
+            let mut txid_bytes = [0u8; 32];
+            thread_rng().fill_bytes(&mut txid_bytes);
+            TxIn {
+                previous_output: OutPoint {
+                    txid: Txid::from_slice(&txid_bytes).expect("valid txid"),
+                    vout: 0,
+                },
+                sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+                script_sig: ScriptBuf::new(),
+                witness: Witness::default(),
+            }
+        })
+        .collect();
+
+    // Create transaction with single change output
+    let tx = Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: LockTime::ZERO,
+        input: inputs,
+        output: vec![change_output.clone()],
+    };
+
+    // Calculate value per input to cover output + fees
+    let weight = tx.weight();
+    let fee = FEERATE * weight;
+    let total_needed = fee.to_sat() + change_output.value.to_sat();
+    let value_per_input = total_needed / num_inputs as u64 + 1;
+
+    // Create PSBT and set input metadata
+    let mut psbt = Psbt::from_unsigned_tx(tx).expect("valid psbt");
+    for i in 0..num_inputs {
+        psbt.inputs[i].witness_utxo = Some(TxOut {
+            value: Amount::from_sat(value_per_input),
+            script_pubkey: ScriptBuf::new(),
+        });
+        psbt.inputs[i].set_multisig_id(source_multisig_id);
+    }
+
+    psbt
+}
+
+/// Set up key packages for the given multisig IDs.
+///
+/// Creates a new trusted dealer key package for each multisig ID and stores it in the database.
+pub fn setup_key_packages(db: &database::Db, multisig_ids: &[MultisigId]) {
+    for &multisig_id in multisig_ids {
+        let (shares, pk_package) = trusted_dealer_setup(2, 2);
+        let _key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(1)].clone())
+                .expect("valid key package");
+        db.set_pubkey_package_by_id(multisig_id, pk_package)
+            .expect("set public key package");
+    }
+}
+
+pub fn create_change(
+    db: &database::Db,
+    multisig_id: MultisigId,
+    value: Amount,
+) -> TxOut {
+    let secp_pk = db
+        .get_public_key_package_by_id(multisig_id)
+        .expect("valid key package")
+        .expect("key package exists")
+        .verifying_key()
+        .to_secp_pk()
+        .expect("valid secp pk");
+    let serialized_pkey = secp_pk.serialize();
+    let change_script =
+        crate::wallet::address::generate_taproot_change_scriptpubkey(
+            serialized_pkey,
+        );
+    TxOut { value, script_pubkey: change_script }
 }
 
 pub fn get_change(db: &database::Db) -> TxOut {

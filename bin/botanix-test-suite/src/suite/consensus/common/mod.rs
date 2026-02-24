@@ -4,7 +4,9 @@ pub mod botanix_client;
 pub mod btc_server;
 pub mod comet_node;
 pub mod events;
+pub mod pegin;
 pub mod pegin_recovery_node;
+pub mod pegout;
 pub mod poa_node;
 pub mod rpc_node;
 

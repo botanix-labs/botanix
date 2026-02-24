@@ -405,7 +405,7 @@ where
                     "Waiting for aggregate public key to be stored in the storage before starting ABCI server"
                 );
                 drop(storage);
-                tokio::time::sleep(tokio::time::Duration::from_millis(350))
+                tokio::time::sleep(tokio::time::Duration::from_millis(5_000))
                     .await;
             }
         }
@@ -652,11 +652,10 @@ where
             }
         };
 
-        match self.botanix_consensus.validate_header_standalone(
-            block.header(),
-            self.storage.genesis_authorities.as_slice(),
-            Some(&agg_pk),
-        ) {
+        match self
+            .botanix_consensus
+            .validate_header_standalone(block.header(), Some(&agg_pk))
+        {
             Ok(_) => {}
             Err(e) => {
                 error!("Error in validate_header_standalone(): {:?}", e);
@@ -3243,12 +3242,8 @@ mod tests {
         ));
 
         let storage = Storage::new(
-            Vec::new(),
-            0,
-            pk,
             bitcoin::Network::Regtest,
             Some(pk),
-            Vec::new(),
             evm_config,
             spec.clone(),
             bitcoind_client,

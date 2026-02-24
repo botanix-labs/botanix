@@ -42,7 +42,7 @@ pub struct GetFinalizedPegoutIdsResponse {
     #[prost(bool, tag = "4")]
     pub is_final: bool,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct SubscribeToDynafedNotificationsStream {
     #[prost(
         oneof = "subscribe_to_dynafed_notifications_stream::Notification",
@@ -54,12 +54,12 @@ pub struct SubscribeToDynafedNotificationsStream {
 }
 /// Nested message and enum types in `SubscribeToDynafedNotificationsStream`.
 pub mod subscribe_to_dynafed_notifications_stream {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
     pub enum Notification {
         #[prost(message, tag = "1")]
         Dkg(super::DkgNotification),
         #[prost(message, tag = "2")]
-        Migration(super::MigrationNotification),
+        Sweep(super::SweepNotification),
     }
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
@@ -69,19 +69,12 @@ pub struct DkgNotification {
     #[prost(uint32, tag = "2")]
     pub multisig_id: u32,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MigrationNotification {
-    #[prost(enumeration = "MigrationEvent", tag = "1")]
-    pub event: i32,
-    /// The multisig being migrated FROM
-    #[prost(uint32, tag = "2")]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SweepNotification {
+    #[prost(uint32, tag = "1")]
     pub multisig_id_from: u32,
-    /// The multisig being migrated TO
-    #[prost(uint32, tag = "3")]
+    #[prost(uint32, tag = "2")]
     pub multisig_id_to: u32,
-    /// UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
-    #[prost(string, tag = "4")]
-    pub migration_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FinalizeSignerRequest {
@@ -287,6 +280,30 @@ pub struct DkgPayloads {
     pub timeout: u64,
     #[prost(message, repeated, tag = "2")]
     pub payloads: ::prost::alloc::vec::Vec<DkgPayload>,
+    #[prost(message, optional, tag = "3")]
+    pub attestation: ::core::option::Option<DkgAttestation>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DkgAttestation {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+    #[prost(bytes = "vec", tag = "2")]
+    pub public_key_package: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "3")]
+    pub signing_package: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, repeated, tag = "4")]
+    pub signatures: ::prost::alloc::vec::Vec<DkgSignatureEntry>,
+    #[prost(bytes = "vec", tag = "5")]
+    pub aggregated_signature: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DkgSignatureEntry {
+    #[prost(bytes = "vec", tag = "1")]
+    pub frost_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub signature_share: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "3")]
+    pub attestation_signature: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayload {
@@ -329,6 +346,10 @@ pub struct MakeTxRequest {
     /// The checkpoint of the best finalized Bitcoin block hash.
     #[prost(bytes = "vec", tag = "2")]
     pub checkpoint_block_hash: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "4")]
+    pub multisig_id_to: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ToSignRequest {
@@ -366,13 +387,28 @@ pub struct GetSessionIdsResponse {
     #[prost(bytes = "vec", repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
+/// Sweep messages
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct InitiateSweepRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_to: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSweepPsbtRequest {
+    #[prost(bytes = "vec", tag = "1")]
+    pub signing_session_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id_from: u32,
+    #[prost(uint32, tag = "3")]
+    pub multisig_id_to: u32,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum DkgEvent {
-    Unspecified = 0,
-    DkgStart = 1,
-    DkgRestart = 2,
-    DkgAbort = 3,
+    DkgStart = 0,
+    DkgAbort = 1,
 }
 impl DkgEvent {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -381,51 +417,15 @@ impl DkgEvent {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::Unspecified => "DKG_EVENT_UNSPECIFIED",
             Self::DkgStart => "DKG_START",
-            Self::DkgRestart => "DKG_RESTART",
             Self::DkgAbort => "DKG_ABORT",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "DKG_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
             "DKG_START" => Some(Self::DkgStart),
-            "DKG_RESTART" => Some(Self::DkgRestart),
             "DKG_ABORT" => Some(Self::DkgAbort),
-            _ => None,
-        }
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum MigrationEvent {
-    Unspecified = 0,
-    MigrationStart = 1,
-    MigrationEnd = 2,
-    MigrationAbort = 3,
-}
-impl MigrationEvent {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "MIGRATION_EVENT_UNSPECIFIED",
-            Self::MigrationStart => "MIGRATION_START",
-            Self::MigrationEnd => "MIGRATION_END",
-            Self::MigrationAbort => "MIGRATION_ABORT",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "MIGRATION_EVENT_UNSPECIFIED" => Some(Self::Unspecified),
-            "MIGRATION_START" => Some(Self::MigrationStart),
-            "MIGRATION_END" => Some(Self::MigrationEnd),
-            "MIGRATION_ABORT" => Some(Self::MigrationAbort),
             _ => None,
         }
     }
@@ -753,6 +753,29 @@ pub mod btc_server_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("btc_server.BtcServer", "AbortDkg"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn new_multisig_attestation(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DkgAttestation>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/NewMultisigAttestation",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("btc_server.BtcServer", "NewMultisigAttestation"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn subscribe_to_dynafed_notifications(
@@ -1205,9 +1228,9 @@ pub mod btc_server_client {
                 .insert(GrpcMethod::new("btc_server.BtcServer", "ResetWalletState"));
             self.inner.unary(req, path, codec).await
         }
-        pub async fn sweep_to_multisig(
+        pub async fn get_sweep_psbt(
             &mut self,
-            request: impl tonic::IntoRequest<super::Empty>,
+            request: impl tonic::IntoRequest<super::GetSweepPsbtRequest>,
         ) -> std::result::Result<tonic::Response<super::SigningPackage>, tonic::Status> {
             self.inner
                 .ready()
@@ -1219,11 +1242,11 @@ pub mod btc_server_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/SweepToMultisig",
+                "/btc_server.BtcServer/GetSweepPsbt",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("btc_server.BtcServer", "SweepToMultisig"));
+                .insert(GrpcMethod::new("btc_server.BtcServer", "GetSweepPsbt"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn new_consensus_checkpoint(
@@ -1247,6 +1270,28 @@ pub mod btc_server_client {
                 .insert(
                     GrpcMethod::new("btc_server.BtcServer", "NewConsensusCheckpoint"),
                 );
+            self.inner.unary(req, path, codec).await
+        }
+        /// Sweep endpoint
+        pub async fn initiate_sweep(
+            &mut self,
+            request: impl tonic::IntoRequest<super::InitiateSweepRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/InitiateSweep",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("btc_server.BtcServer", "InitiateSweep"));
             self.inner.unary(req, path, codec).await
         }
     }

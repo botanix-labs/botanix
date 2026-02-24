@@ -30,8 +30,12 @@ use serde::{Deserialize, Serialize};
 use sled::transaction::{ConflictableTransactionError, TransactionError};
 pub mod error;
 pub mod version;
-pub use error::Error;
+pub use error::{ChangeOutputError, Error};
 use version::UtxoVersion;
+
+use crate::wallet::{
+    address::generate_taproot_change_scriptpubkey, util::VerifyingKeyExt,
+};
 use zeroize::Zeroizing;
 
 /// sled tree id for the utxos tree.
@@ -64,6 +68,12 @@ const KEY_FINALIZED_PEGOUT_IDS_MERKLE_ROOT: &[u8; 9] = b"pegoutids";
 
 /// sled tree for pending pegout requests
 const TREE_PENDING_PEGOUTS: &[u8; 7] = b"pegouts";
+
+/// sled tree for federation attestions
+const TREE_ATTESTATIONS: &[u8; 12] = b"attestations";
+
+/// sled tree for pending sweeps (sweep metadata stored before signing completes)
+const TREE_PENDING_SWEEPS: &[u8; 14] = b"pending_sweeps";
 
 /// Sliding window duration in seconds (90 days)
 const RETENTION_WINDOW_SECONDS: u64 = 90 * 24 * 60 * 60;
@@ -150,6 +160,13 @@ pub struct ExportedKeyPackage {
     pub enc_pk_package: Vec<u8>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct AttestionEntry {
+    // TODO: implement from https://github.com/botanix-labs/botanix/pull/94
+    pub attestation: (),
+    pub marked_finalized: bool,
+}
+
 #[derive(Clone)]
 pub struct Db {
     /// NB a db is also a "default tree" so maybe here we could store some
@@ -165,11 +182,13 @@ pub struct Db {
     /// A tree of round 1 dkg commitments
     ///
     /// Indexed by peer id
+    // TODO: Can be deprecated
     round1_dkg_packages: sled::Tree,
 
     /// A tree of round 1 dkg commitments
     ///
     /// Indexed by peer id
+    // TODO: Can be deprecated
     round2_dkg_packages: sled::Tree,
 
     /// A tree of PSBTs
@@ -201,6 +220,15 @@ pub struct Db {
     ///
     /// Indexed by multisig_id (u32).
     pubkey_packages: sled::Tree,
+
+    /// A tree of attestations (TODO: Clarify).
+    ///
+    /// Indexed by multisig_id (u32).
+    attestations: sled::Tree,
+
+    /// Pending sweeps - stores sweep metadata between PSBT creation and tracking.
+    /// Indexed by signing_session_id.
+    pending_sweeps: sled::Tree,
 }
 
 impl Db {
@@ -218,6 +246,8 @@ impl Db {
             finalized_pegout_ids: db.open_tree(TREE_FINALIZED_PEGOUT_IDS)?,
             key_packages: db.open_tree(TREE_MULTI_KEY_PACKAGES)?,
             pubkey_packages: db.open_tree(TREE_MULTI_PUBKEY_PACKAGES)?,
+            attestations: db.open_tree(TREE_ATTESTATIONS)?,
+            pending_sweeps: db.open_tree(TREE_PENDING_SWEEPS)?,
             db,
         })
     }
@@ -233,6 +263,8 @@ impl Db {
         self.finalized_pegout_ids.flush()?;
         self.key_packages.flush()?;
         self.pubkey_packages.flush()?;
+        self.attestations.flush()?;
+        self.pending_sweeps.flush()?;
         Ok(())
     }
 
@@ -403,6 +435,55 @@ impl Db {
         self.set_pubkey_package_by_id(LEGACY_MULTISIG_ID, pk_package)
     }
 
+    // TODO: Document
+    pub fn set_multisig_attestation(
+        &self,
+        multisig_id: MultisigId,
+        attestation: (),
+    ) -> Result<(), Error> {
+        let key = multisig_id.as_u32().to_le_bytes();
+        let entry = AttestionEntry { attestation, marked_finalized: false };
+
+        let mut bytes = Vec::new();
+        ciborium::into_writer(&entry, &mut bytes).expect("writing to buffer");
+
+        self.attestations.insert(&key, &bytes[..])?;
+        Ok(())
+    }
+
+    // TODO: Document
+    pub fn mark_multisig_attestation_finalized(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<(), Error> {
+        // Retrieve attestation entry and set flag to finalized.
+        let mut entry: AttestionEntry = self
+            .get_multisig_attestation(multisig_id)?
+            .ok_or(Error::MultisigAttestationNotFound)?;
+
+        entry.marked_finalized = true;
+
+        let key = multisig_id.as_u32().to_le_bytes();
+        let mut bytes = Vec::new();
+        ciborium::into_writer(&entry, &mut bytes).expect("writing to buffer");
+
+        self.attestations.insert(&key, &bytes[..])?;
+        Ok(())
+    }
+
+    // TODO: Document
+    pub fn get_multisig_attestation(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<Option<AttestionEntry>, Error> {
+        let key = multisig_id.as_u32().to_le_bytes();
+        self.attestations
+            .get(&key)?
+            .map(|b| ciborium::from_reader::<AttestionEntry, _>(b.as_ref()))
+            .transpose()
+            .map_err(Into::into)
+    }
+
     /// Retrieves a key package by multisig_id from the multi-key storage.
     ///
     /// # Arguments
@@ -453,6 +534,56 @@ impl Db {
         } else {
             Ok(None)
         }
+    }
+
+    /// Internal util to get change script pubkey for a specific multisig federation.
+    fn get_change_spk(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<ScriptBuf, ChangeOutputError> {
+        let agg_pk = self
+            .get_public_key_package_by_id(multisig_id)?
+            .expect("pk key package should exist")
+            .verifying_key()
+            .to_secp_pk()?;
+        let serialized_agg_pkey = agg_pk.serialize();
+        let change_spk =
+            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
+        Ok(change_spk)
+    }
+
+    /// Attempts to match a script pubkey against known multisig change addresses.
+    /// Checks the current multisig first, then falls back to the previous multisig
+    /// (for transactions created before/during migration).
+    ///
+    /// Returns:
+    /// - `Ok(Some(multisig_id))` if the script matches a known multisig change address
+    /// - `Ok(None)` if the script doesn't match any known multisig
+    /// - `Err(e)` if there was an error fetching the change SPK (e.g., db error)
+    pub fn match_change_spk_to_multisig(
+        &self,
+        script_pubkey: &ScriptBuf,
+    ) -> Result<Option<MultisigId>, ChangeOutputError> {
+        // TODO: Query current_multisig_id and previous_multisig_id from migration state in db.
+        let current_multisig_id = LEGACY_MULTISIG_ID;
+        let previous_multisig_id: Option<MultisigId> = None; // TODO: Query from db
+
+        // Try current multisig first (most common case)
+        let current_spk = self.get_change_spk(current_multisig_id)?;
+        if script_pubkey == &current_spk {
+            return Ok(Some(current_multisig_id));
+        }
+
+        // Fallback: check previous multisig (for txs created before/during migration)
+        if let Some(prev_id) = previous_multisig_id {
+            let prev_spk = self.get_change_spk(prev_id)?;
+            if script_pubkey == &prev_spk {
+                return Ok(Some(prev_id));
+            }
+        }
+
+        // No match found
+        Ok(None)
     }
 
     /// Sets a key package by multisig_id in the multi-key storage.
@@ -1693,6 +1824,56 @@ impl TryFrom<Utxo> for RpcUtxo {
     }
 }
 
+/// Pending sweep - stored when sweep PSBT is created, before signing completes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingSweep {
+    pub signing_session_id: [u8; 32],
+    pub source_multisig_id: MultisigId,
+    pub target_multisig_id: MultisigId,
+}
+
+/// Sweep metadata - stored with the tracked Tx to identify it as a sweep.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SweepMetadata {
+    pub source_multisig_id: MultisigId,
+    pub target_multisig_id: MultisigId,
+}
+
+impl Db {
+    /// Store pending sweep - called in get_sweep_psbt() after PSBT created
+    pub fn store_pending_sweep(
+        &self,
+        sweep: &PendingSweep,
+    ) -> Result<(), Error> {
+        let mut bytes = Vec::new();
+        ciborium::into_writer(sweep, &mut bytes)
+            .map_err(Error::CiboriumWrite)?;
+        self.pending_sweeps.insert(&sweep.signing_session_id, &bytes[..])?;
+        Ok(())
+    }
+
+    /// Get pending sweep - called in get_round2_signing_package() to get metadata
+    pub fn get_pending_sweep(
+        &self,
+        signing_session_id: &[u8; 32],
+    ) -> Result<Option<PendingSweep>, Error> {
+        Ok(self
+            .pending_sweeps
+            .get(signing_session_id)?
+            .map(|b| ciborium::de::from_reader(b.as_ref()))
+            .transpose()?)
+    }
+
+    /// Remove pending sweep - called after sweep is tracked
+    pub fn remove_pending_sweep(
+        &self,
+        signing_session_id: &[u8; 32],
+    ) -> Result<(), Error> {
+        self.pending_sweeps.remove(signing_session_id)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use futures::StreamExt;
@@ -2601,6 +2782,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests: pegout_reqs,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.store_tracked_tx(&tracked_tx).unwrap();
         db.flush().unwrap();
@@ -2642,6 +2824,7 @@ mod tests {
                 pegout_idxs: vec![0],
                 pegout_requests: pegout_reqs,
                 created: SystemTime::now(),
+                sweep_metadata: None,
             };
             txs.push(tracked_tx);
         }
@@ -2680,6 +2863,7 @@ mod tests {
                 pegout_idxs: vec![0],
                 pegout_requests: pegout_reqs,
                 created: SystemTime::now(),
+                sweep_metadata: None,
             };
             txs.push(tracked_tx);
         }
@@ -2714,6 +2898,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests: pegout_reqs,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.store_tracked_tx(&tracked_tx).unwrap();
         db.flush().unwrap();
@@ -2741,6 +2926,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests: pegout_reqs,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.store_tracked_tx(&tracked_tx2).unwrap();
         db.update_tracked_tx_merkle_root().unwrap();
@@ -2868,6 +3054,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.store_tracked_tx(&tracked_tx).unwrap();
         db.flush().unwrap();
@@ -2897,6 +3084,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.store_tracked_tx(&tracked_tx).unwrap();
         db.flush().unwrap();
@@ -2916,6 +3104,7 @@ mod tests {
             pegout_idxs: vec![0],
             pegout_requests: pegout_requests2,
             created: SystemTime::now(),
+            sweep_metadata: None,
         };
         db.reset_tracked_txs(&[&tracked_tx2]).unwrap();
         db.flush().unwrap();
@@ -3262,5 +3451,64 @@ mod tests {
             !migrated,
             "Migration should be skipped when legacy data is incomplete"
         );
+    }
+
+    #[test]
+    fn test_store_and_get_pending_sweep() {
+        let (db, _temp_dir) = setup_db();
+
+        let signing_session_id: [u8; 32] = [42u8; 32];
+        let pending_sweep = PendingSweep {
+            signing_session_id,
+            source_multisig_id: MultisigId::new(1),
+            target_multisig_id: MultisigId::new(2),
+        };
+
+        // Store pending sweep
+        db.store_pending_sweep(&pending_sweep).unwrap();
+        db.flush().unwrap();
+
+        // Retrieve it
+        let retrieved = db.get_pending_sweep(&signing_session_id).unwrap();
+        assert!(retrieved.is_some());
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.signing_session_id, signing_session_id);
+        assert_eq!(retrieved.source_multisig_id, MultisigId::new(1));
+        assert_eq!(retrieved.target_multisig_id, MultisigId::new(2));
+    }
+
+    #[test]
+    fn test_get_pending_sweep_not_found() {
+        let (db, _temp_dir) = setup_db();
+
+        let signing_session_id: [u8; 32] = [99u8; 32];
+
+        // Should return None for non-existent sweep
+        let retrieved = db.get_pending_sweep(&signing_session_id).unwrap();
+        assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn test_remove_pending_sweep() {
+        let (db, _temp_dir) = setup_db();
+
+        let signing_session_id: [u8; 32] = [42u8; 32];
+        let pending_sweep = PendingSweep {
+            signing_session_id,
+            source_multisig_id: MultisigId::new(1),
+            target_multisig_id: MultisigId::new(2),
+        };
+
+        // Store and verify it exists
+        db.store_pending_sweep(&pending_sweep).unwrap();
+        db.flush().unwrap();
+        assert!(db.get_pending_sweep(&signing_session_id).unwrap().is_some());
+
+        // Remove it
+        db.remove_pending_sweep(&signing_session_id).unwrap();
+        db.flush().unwrap();
+
+        // Verify it's gone
+        assert!(db.get_pending_sweep(&signing_session_id).unwrap().is_none());
     }
 }

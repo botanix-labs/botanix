@@ -61,6 +61,7 @@ use tracing::info;
 
 // scopes
 pub mod common;
+mod dynafed;
 pub mod frost;
 mod invalid_transactions;
 mod rpc_node;
@@ -413,6 +414,7 @@ pub struct CreateTestConfig {
     pub create_btc_servers: bool,
     pub create_cometbft_nodes: bool,
     pub create_state_syncing_node: bool,
+    pub num_multisigs: u16,
 }
 
 impl CreateTestConfig {
@@ -426,6 +428,7 @@ impl CreateTestConfig {
             create_btc_servers: true,
             create_cometbft_nodes: true,
             create_state_syncing_node: true,
+            num_multisigs: 1,
         }
     }
 }
@@ -440,6 +443,7 @@ impl Default for CreateTestConfig {
             create_btc_servers: false,
             create_cometbft_nodes: false,
             create_state_syncing_node: false,
+            num_multisigs: 1,
         }
     }
 }
@@ -523,6 +527,20 @@ impl Suite for ConsensusIntegrationTestSuite {
                         ..Default::default()
                     },
                     frost::test_batch_pegins::batch_pegins
+                )
+            }
+            "dynafed_batch_pegin" => {
+                run_test!(
+                    self,
+                    CreateTestConfig {
+                        create_bitcoind_node: true,
+                        create_poa_nodes: true,
+                        create_btc_servers: true,
+                        create_cometbft_nodes: true,
+                        num_multisigs: 2,
+                        ..Default::default()
+                    },
+                    dynafed::test_dynafed_batch_pegin::dynafed_batch_pegin
                 )
             }
             "utxo_sync" => {
@@ -734,6 +752,20 @@ impl Suite for ConsensusIntegrationTestSuite {
                         ..Default::default()
                     },
                     frost::test_pegin_recovery::test_pegin_recovery
+                )
+            }
+            "test_parallel_dkg" => {
+                run_test!(
+                    self,
+                    CreateTestConfig {
+                        create_bitcoind_node: true,
+                        create_poa_nodes: true,
+                        create_btc_servers: true,
+                        create_cometbft_nodes: true,
+                        num_multisigs: 2,
+                        ..Default::default()
+                    },
+                    dynafed::test_parallel_dkg::test_parallel_dkg
                 )
             }
             _ => {
@@ -995,10 +1027,28 @@ impl Suite for ConsensusIntegrationTestSuite {
         let mut btc_server_clients = vec![];
         if create_test_config.create_btc_servers {
             it_info_print!("Starting btc servers ...");
+
+            // Determine which multisigs to pre-save
+            // Pre-save all except the last one, which will undergo DKG
+            let presave_multisigs = if create_test_config.num_multisigs > 1 {
+                (0..create_test_config.num_multisigs - 1)
+                    .map(|offset| {
+                        botanix_types::MultisigId::new(
+                            botanix_types::LEGACY_MULTISIG_ID.as_u32()
+                                + offset as u32,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                vec![] // No pre-saving for single multisig
+            };
+
             self.local_context.btc_processes =
                 Some(spawn_n_btc_server_processes(
                     self.global_context.clone(),
                     &members_keypairs,
+                    create_test_config.num_multisigs,
+                    &presave_multisigs,
                 )?);
             // let btc servers come up
             tokio::time::sleep(Duration::from_secs(5)).await;
@@ -1161,9 +1211,10 @@ impl Suite for ConsensusIntegrationTestSuite {
                     Arc::clone(&build_command_authorities_list);
 
                 // spawn poa node as a process
-                spawned_poa_processes.push(
-                    poa_node.spawn_service(build_command_authorities_list)?,
-                );
+                spawned_poa_processes.push(poa_node.spawn_service(
+                    build_command_authorities_list,
+                    create_test_config.num_multisigs,
+                )?);
 
                 // wait for two seconds in between processes start
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -1275,6 +1326,7 @@ impl Suite for ConsensusIntegrationTestSuite {
                 spawned_rpc_processes.push(rpc_node.spawn_service(
                     build_command_authorities_list,
                     poa_nodes_clone,
+                    create_test_config.num_multisigs,
                 )?);
 
                 // wait for two seconds in between processes start

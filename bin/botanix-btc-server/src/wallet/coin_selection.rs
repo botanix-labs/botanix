@@ -1,7 +1,7 @@
 use crate::{
     database::version::UtxoVersion,
     wallet::{
-        psbt::PegoutId as PegoutIdBytes,
+        psbt::{PegoutId as PegoutIdBytes, PsbtMultisigIdError},
         util::{calculate_signed_tx_weight, WalletCalculationError},
         TAPROOT_KEYSPEND_SIGHASH_DEFAULT_WEIGHT,
     },
@@ -42,6 +42,8 @@ pub enum CoinSelectionError {
     NoViableOutputs,
     #[error("Wallet calculation error: {0}")]
     WalletCalculationError(#[from] WalletCalculationError),
+    #[error("PSBT multisig ID error: {0}")]
+    PsbtMultisigIdError(#[from] PsbtMultisigIdError),
 }
 
 #[derive(Debug, Error)]
@@ -247,7 +249,7 @@ fn apply_fees_and_create_psbt(
                     selected_inputs.to_vec(),
                     final_pegouts,
                     change,
-                ),
+                )?,
                 filtered_pegout_ids,
             ))
         }
@@ -291,7 +293,7 @@ fn apply_fees_and_create_psbt(
                         selected_inputs.to_vec(),
                         final_outputs,
                         recalculated_change,
-                    ),
+                    )?,
                     filtered_pegout_ids,
                 )),
                 FilterResult::SomeFiltered { filtered_pegout_ids: _ } => {
@@ -361,7 +363,7 @@ fn calculate_required_fee(
         inputs.to_vec(),
         outputs.to_vec(),
         change.clone(),
-    );
+    )?;
     let total_weight = calculate_signed_tx_weight(&psbt)?;
     let absolute_fee = fee_rate
         .fee_wu(total_weight)

@@ -632,5 +632,3 @@ impl<DB: Database, N: NodeTypes + NodeTypesForProvider>
         self.provider_rw()?.get_last_runtime_version()
     }
 }
-
-// TODO: add tests

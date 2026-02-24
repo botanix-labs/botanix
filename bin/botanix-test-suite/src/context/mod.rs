@@ -25,6 +25,7 @@ pub struct GlobalContext {
     pub run_suite: RunSuite,
     pub timeout: u64,
     pub min_signers: u16,
+    // TODO: Deprecate this?
     pub max_signers: u16,
     pub num_snapshots_to_keep: u64,
     pub btc_network: String,

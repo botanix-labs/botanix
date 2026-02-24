@@ -11,7 +11,7 @@ use crate::{
 use anyhow::Context;
 use bitcoin::hashes::{sha256, Hash};
 use botanix_configs::federation::{
-    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+    FedMemberPubKey, FederationTomlConfig, MultisigTomlConfig,
 };
 use botanix_types::LEGACY_MULTISIG_ID;
 use reth_network_peers::pk2id;
@@ -88,6 +88,7 @@ pub struct NonFederationMemberTestConfig {
     pub botanix_eth_client: Option<BotanixEthClient>,
     pub lst_fee_receiver: String,
     pub frost_min_signers: u16,
+    // TODO: Deprecate this?
     pub frost_max_signers: u16,
 }
 
@@ -144,6 +145,7 @@ impl NonFederationMemberTestConfig {
         &mut self,
         edh_authorities_list: Arc<Vec<PublicKey>>,
         poa_nodes: Vec<FederationMemberTestConfig>,
+        num_multisigs: u16,
     ) -> anyhow::Result<SpawnedRpcServerProcess> {
         it_info_print!(format!(
             "RPC Engine {} secret key = {:?}",
@@ -173,7 +175,6 @@ impl NonFederationMemberTestConfig {
             let pk = FedMemberPubKey {
                 key: peer.secret_key.public_key(SECP256K1).to_string(),
                 socket_addr: format!("127.0.0.1:{}", peer.discovery_port),
-                role: FederationRole::Continuing,
             };
             fed_member_pks.push(pk);
         }
@@ -188,18 +189,23 @@ impl NonFederationMemberTestConfig {
             }
         }
 
-        // Need to create a federation.toml in the data dir
-        let multisig_current = MultisigConfig::new(
-            LEGACY_MULTISIG_ID,
-            self.frost_min_signers,
-            self.frost_max_signers,
-            edh_authorities,
-        );
+        // Need to create a federation.toml in the data dir with multiple multisig configs
+        let mut multisig_configs = vec![];
+        for offset in 0..num_multisigs {
+            let multisig_id = botanix_types::MultisigId::new(
+                LEGACY_MULTISIG_ID.as_u32() + offset as u32,
+            );
+            multisig_configs.push(MultisigTomlConfig::new(
+                multisig_id,
+                self.frost_min_signers,
+                edh_authorities.clone(),
+            ));
+        }
         let federation_config = FederationTomlConfig::new(
-            vec![multisig_current],
             self.botanix_fee_recipient.clone(),
             String::from(MINTING_CONTRACT_BYTECODE),
             self.lst_fee_receiver.clone(),
+            multisig_configs,
         )
         .expect("valid federation config");
         it_info_print!("Federation config", federation_config);

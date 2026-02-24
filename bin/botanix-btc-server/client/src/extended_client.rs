@@ -8,14 +8,15 @@ use crate::{
         GetGatewayAddressRequest, GetGatewayAddressResponse,
         GetPendingPegoutsResponse, GetPublicKeyRequest, GetPublicKeyResponse,
         GetSessionIdsRequest, GetSessionIdsResponse, GetSigningStatusRequest,
-        GetSigningStatusResponse, GetTrackedTxsResponse, ListMultisigsResponse,
-        MakeTxRequest, RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
-        ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
-        SigningPackageRequest, SubscribeToDynafedNotificationsStream,
-        ToSignRequest, WalletStateResponse,
+        GetSigningStatusResponse, GetSweepPsbtRequest, GetTrackedTxsResponse,
+        ListMultisigsResponse, MakeTxRequest, RecoverMissingUtxosRequest,
+        RecoverMissingUtxosResponse, ResetAllUtxosRequest,
+        ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
+        SubscribeToDynafedNotificationsStream, ToSignRequest,
+        WalletStateResponse,
     },
     jwt::{Claims, JwtSecret},
-    BtcServerClient,
+    BtcServerClient, StartNewDkgRequest,
 };
 use displaydoc::Display as DisplayDoc;
 use futures_util::future::BoxFuture;
@@ -93,6 +94,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: MakeTxRequest,
     ) -> BoxFuture<'_, Result<SigningPackage, GrpcClientError>>;
+    fn get_sweep_psbt(
+        &mut self,
+        request: GetSweepPsbtRequest,
+    ) -> BoxFuture<'_, Result<SigningPackage, GrpcClientError>>;
     fn get_to_sign_package(
         &mut self,
         request: ToSignRequest,
@@ -116,6 +121,10 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
     fn abort_signing(
         &mut self,
         request: Empty,
+    ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
+    fn start_new_dkg(
+        &mut self,
+        request: StartNewDkgRequest,
     ) -> BoxFuture<'_, Result<Empty, GrpcClientError>>;
     fn abort_dkg(
         &mut self,
@@ -327,6 +336,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(new_round1_signing_package, SigningPackage, Empty);
     generate_method!(get_psbt, MakeTxRequest, SigningPackage);
+    generate_method!(get_sweep_psbt, GetSweepPsbtRequest, SigningPackage);
     generate_method!(get_to_sign_package, ToSignRequest, SigningPackage);
     generate_method!(new_round2_signing_package, SigningPackage, Empty);
     generate_method!(
@@ -341,6 +351,7 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_wallet_state, Empty, WalletStateResponse);
     generate_method!(abort_signing, Empty, Empty);
+    generate_method!(start_new_dkg, StartNewDkgRequest, Empty);
     generate_method!(abort_dkg, AbortDkgRequest, Empty);
     generate_method!(
         get_signing_status,

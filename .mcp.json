@@ -1,0 +1,24 @@
+{
+    "mcpServers": {
+        "linear": {
+            "command": "npx",
+            "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
+        },
+        "github": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-github"]
+        },
+        "gcloud": {
+            "command": "npx",
+            "args": ["-y", "@google-cloud/gcloud-mcp"]
+        },
+        "gcloud-storage": {
+            "command": "npx",
+            "args": ["-y", "@google-cloud/storage-mcp"]
+        },
+        "gcloud-observability": {
+            "command": "npx",
+            "args": ["-y", "@google-cloud/observability-mcp"]
+        }
+    }
+}

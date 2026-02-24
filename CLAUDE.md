@@ -77,9 +77,7 @@ When reviewing branch changes, run these checks (in parallel where possible):
 - Linter: `cargo clippy`
 - Tests: `cargo test`
 
-## Workflow
-
-### Review Checklist
+## Review Checklist
 
 When asked to review changes in the branch, run these checks in parallel:
 
@@ -91,7 +89,7 @@ When asked to review changes in the branch, run these checks in parallel:
 - Run `cargo clippy` and address warnings
 - Write a short summary of all important changes for PR description
 
-### Before Marking Done
+## Before Marking Done
 
 - `cargo fmt` passes
 - `cargo clippy` has no warnings

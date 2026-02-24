@@ -1,12 +1,20 @@
-use crate::{context::GlobalContext, suite::consensus::common::is_port_free};
+use crate::{
+    context::GlobalContext, it_info_print,
+    suite::consensus::common::is_port_free,
+};
 use alloy_primitives::Address;
 use anyhow::Context;
 use botanix_configs::hash::compute_config_hash;
 use botanix_consensus_common::utils::unix_timestamp;
-use botanix_types::LEGACY_MULTISIG_ID;
-use btcserverlib::federation_args::{
-    FedMemberPubKey, FederationRole, FederationTomlConfig, MultisigConfig,
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
+use btcserverlib::{
+    database::Db as BtcDatabase,
+    federation_args::{
+        FedMemberPubKey, FederationTomlConfig, MultisigTomlConfig,
+    },
+    frost_id,
 };
+use frost_secp256k1_tr as frost;
 use reth_network_peers::PeerId;
 use std::{
     path::{Path, PathBuf},
@@ -63,6 +71,91 @@ impl SpawnedBtcServerProcess {
     }
 }
 
+/// Pre-save FROST key packages for a federation member.
+///
+/// This allows nodes to skip DKG for these multisigs during testing.
+///
+/// # Arguments
+/// * `db_path` - Path to the BTC server database directory
+/// * `multisig_ids` - Slice of multisig IDs to pre-populate with keys
+/// * `frost_identifiers` - The list of FROST identifiers for all federation members.
+///   These must match what BtcServer uses at runtime (derived via `frost_id!` macro).
+/// * `member_index` - The index of this federation member (0-based), used to look up
+///   the correct identifier from `frost_identifiers`
+/// * `min_signers` - Minimum threshold of signers for FROST
+fn presave_multisig_keys(
+    db_path: &Path,
+    multisig_ids: &[MultisigId],
+    frost_identifiers: &[frost::Identifier],
+    member_index: u16,
+    min_signers: u16,
+) -> anyhow::Result<()> {
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+
+    let max_signers = frost_identifiers.len() as u16;
+
+    // Open the BTC server database
+    let btc_db = BtcDatabase::open(db_path)?;
+
+    for multisig_id in multisig_ids {
+        // Generate dummy FROST keys using trusted dealer with deterministic seed
+        // In a real scenario, all members would generate these together through DKG
+        // For testing, we use a deterministic seed based on multisig_id to ensure
+        // all nodes generate the same keys for the same multisig_id
+        let mut seed = [0u8; 32];
+        seed[0..4].copy_from_slice(&multisig_id.as_u32().to_le_bytes());
+        let mut rng = StdRng::from_seed(seed);
+
+        let (shares, pubkeys): (
+            std::collections::BTreeMap<
+                frost::Identifier,
+                frost::keys::SecretShare,
+            >,
+            frost::keys::PublicKeyPackage,
+        ) = frost::keys::generate_with_dealer(
+            max_signers,
+            min_signers,
+            frost::keys::IdentifierList::Custom(frost_identifiers),
+            &mut rng,
+        )?;
+
+        // Get the key package for this specific member using their identifier
+        let my_identifier =
+            frost_identifiers.get(member_index as usize).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Member index {} out of bounds for {} identifiers",
+                    member_index,
+                    frost_identifiers.len()
+                )
+            })?;
+
+        let key_package = frost::keys::KeyPackage::try_from(
+            shares
+                .get(my_identifier)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Share not found for member {}",
+                        member_index
+                    )
+                })?
+                .clone(),
+        )?;
+
+        // Save both the key package and public key package to the database
+        btc_db.set_key_package_by_id(*multisig_id, key_package)?;
+        btc_db.set_pubkey_package_by_id(*multisig_id, pubkeys)?;
+
+        it_info_print!(
+            "Pre-saved FROST keys for BTC server {} multisig ID {}",
+            member_index,
+            multisig_id
+        );
+    }
+
+    Ok(())
+}
+
 fn spawn_btc_server_process(
     global_context: Arc<GlobalContext>,
     members_keypairs: &Vec<(
@@ -74,6 +167,7 @@ fn spawn_btc_server_process(
     id: u16,
     btc_server_port: u16,
     db_path: PathBuf,
+    multisig_configs: Vec<MultisigTomlConfig>,
 ) -> anyhow::Result<SpawnedBtcServerProcess> {
     let db_path_arg = db_path.display().to_string();
 
@@ -84,9 +178,6 @@ fn spawn_btc_server_process(
 
     let identifier = id.to_string();
     let coordinator = 0u16.to_string();
-
-    let frost_max_signers = global_context.max_signers.to_string();
-    let frost_min_signers = global_context.min_signers.to_string();
     let address = format!("0.0.0.0:{}", btc_server_port);
     let _http_port = (BTC_SERVER_HTTP_PORT + id).to_string();
 
@@ -96,35 +187,12 @@ fn spawn_btc_server_process(
         return Err(anyhow::anyhow!("botanix-btc-server binary not found at {}. Please compile it first before running the test-suite", binary_abs_path.display().to_string()));
     }
 
-    // Create federation members
-    let mut fed_members = vec![];
-    for i in 0..global_context.fed_instances {
-        let public_key = members_keypairs
-            .get(i as usize)
-            .cloned()
-            .expect("To have keypair information")
-            .1;
-
-        fed_members.push(FedMemberPubKey {
-            key: public_key.to_string(),
-            // Not needed
-            socket_addr: String::new(),
-            role: FederationRole::Continuing,
-        });
-    }
-
-    // Write federation config to tempfile
-    let multisig_current = MultisigConfig::new(
-        LEGACY_MULTISIG_ID,
-        global_context.min_signers,
-        global_context.max_signers,
-        fed_members,
-    );
+    // Write federation config to tempfile with the provided multisig configs
     let federation_config = FederationTomlConfig::new(
-        vec![multisig_current],
         String::new(), // Not needed
         String::new(), // Not needed
         String::new(), // Not needed
+        multisig_configs,
     )
     .expect("valid federation config");
 
@@ -207,8 +275,42 @@ pub fn spawn_n_btc_server_processes(
         PeerId,
         Address,
     )>,
+    num_multisigs: u16,
+    presave_multisigs: &[MultisigId],
 ) -> anyhow::Result<Vec<SpawnedBtcServerProcess>> {
     let mut processes = vec![];
+
+    // Create multisig configs for all multisigs
+    let mut multisig_configs = vec![];
+    for offset in 0..num_multisigs {
+        let mut fed_members = vec![];
+        for i in 0..global_context.fed_instances {
+            let public_key = members_keypairs
+                .get(i as usize)
+                .cloned()
+                .expect("To have keypair information")
+                .1;
+
+            fed_members.push(FedMemberPubKey {
+                key: public_key.to_string(),
+                socket_addr: String::new(),
+            });
+        }
+
+        let multisig_id =
+            MultisigId::new(LEGACY_MULTISIG_ID.as_u32() + offset as u32);
+        multisig_configs.push(MultisigTomlConfig::new(
+            multisig_id,
+            global_context.min_signers,
+            fed_members,
+        ));
+    }
+
+    // Generate FROST identifiers once for all federation members.
+    // These must match what BtcServer uses at runtime (derived via frost_id! macro).
+    let frost_identifiers: Vec<frost::Identifier> =
+        (0..global_context.max_signers).map(|i| frost_id!(i)).collect();
+
     for i in 0..global_context.fed_instances {
         let temp_db_path = tempfile::TempDir::new()
             .context("error creating tempdir")?
@@ -219,6 +321,18 @@ pub fn spawn_n_btc_server_processes(
         let db_path = Path::new(&temp_db_path).join(format!("db{}", i));
         std::fs::create_dir_all(&db_path)
             .context("failed to create tempdir with db subdir")?;
+
+        // PRE-SAVE DUMMY KEYS BEFORE SPAWNING THE PROCESS
+        if !presave_multisigs.is_empty() {
+            presave_multisig_keys(
+                &db_path,
+                presave_multisigs,
+                &frost_identifiers,
+                i,
+                global_context.min_signers,
+            )?;
+        }
+
         let btc_server_port = BTC_SERVER_START_PORT + i;
 
         if !is_port_free(btc_server_port) {
@@ -235,6 +349,7 @@ pub fn spawn_n_btc_server_processes(
             i,
             btc_server_port,
             db_path.clone(),
+            multisig_configs.clone(),
         )?;
         processes.push(child_process);
     }

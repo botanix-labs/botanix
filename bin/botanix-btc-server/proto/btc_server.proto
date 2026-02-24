@@ -1,4 +1,3 @@
-
 syntax = "proto3";
 
 package btc_server;
@@ -24,6 +23,8 @@ service BtcServer {
     rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
 
     rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
+
+    rpc NewMultisigAttestation(DkgAttestation) returns(Empty) {}
 
     rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
@@ -71,9 +72,12 @@ service BtcServer {
 
     rpc ResetWalletState(ResetWalletStateRequest) returns (Empty) {}
 
-    rpc SweepToMultisig(Empty) returns (SigningPackage) {}
+    rpc GetSweepPsbt(GetSweepPsbtRequest) returns (SigningPackage) {}
 
     rpc NewConsensusCheckpoint(ConsensusCheckpointRequest) returns (Empty) {}
+
+    // Sweep endpoint
+    rpc InitiateSweep(InitiateSweepRequest) returns (Empty) {}
 }
 
 message PendingPegout {
@@ -108,15 +112,13 @@ message GetFinalizedPegoutIdsResponse {
 message SubscribeToDynafedNotificationsStream {
     oneof notification {
         DkgNotification dkg = 1;
-        MigrationNotification migration = 2;
+        SweepNotification sweep = 2;
     }
 }
 
 enum DkgEvent {
-    DKG_EVENT_UNSPECIFIED = 0;
-    DKG_START = 1;
-    DKG_RESTART = 2;
-    DKG_ABORT = 3;
+    DKG_START = 0;
+    DKG_ABORT = 1;
 }
 
 message DkgNotification {
@@ -124,18 +126,9 @@ message DkgNotification {
     uint32 multisig_id = 2;
 }
 
-message MigrationNotification {
-    MigrationEvent event = 1;
-    uint32 multisig_id_from = 2;  // The multisig being migrated FROM
-    uint32 multisig_id_to = 3;    // The multisig being migrated TO
-    string migration_id = 4;   // UUIDv4 as string "550e8400-e29b-41d4-a716-446655440000"
-}
-
-enum MigrationEvent {
-    MIGRATION_EVENT_UNSPECIFIED = 0;
-    MIGRATION_START = 1;
-    MIGRATION_END = 2;
-    MIGRATION_ABORT = 3;
+message SweepNotification {
+    uint32 multisig_id_from = 1;
+    uint32 multisig_id_to = 2;
 }
 
 message FinalizeSignerRequest {
@@ -285,6 +278,21 @@ message AbortDkgRequest {
 message DkgPayloads {
     uint64 timeout = 1;
     repeated DkgPayload payloads = 2;
+    optional DkgAttestation attestation = 3;
+}
+
+message DkgAttestation {
+    uint32 multisig_id = 1;
+    bytes public_key_package = 2;
+    bytes signing_package = 3;
+    repeated DkgSignatureEntry signatures = 4;
+    bytes aggregated_signature = 5;
+}
+
+message DkgSignatureEntry {
+    bytes frost_id = 1;
+    bytes signature_share = 2;
+    bytes attestation_signature = 3;
 }
 
 message DkgPayload {
@@ -314,6 +322,8 @@ message MakeTxRequest {
     bytes signing_session_id = 1;
     // The checkpoint of the best finalized Bitcoin block hash.
     bytes checkpoint_block_hash = 2;
+    uint32 multisig_id_from = 3;
+    uint32 multisig_id_to = 4;
 }
 
 message ToSignRequest {
@@ -349,4 +359,16 @@ enum SigningStatus {
     RUNNING = 0;
     FINALIZED = 1;
     FAILED = 2;
+}
+
+// Sweep messages
+message InitiateSweepRequest {
+    uint32 multisig_id_from = 1;
+    uint32 multisig_id_to = 2;
+}
+
+message GetSweepPsbtRequest {
+    bytes signing_session_id = 1;
+    uint32 multisig_id_from = 2;
+    uint32 multisig_id_to = 3;
 }

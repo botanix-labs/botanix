@@ -3,6 +3,17 @@ use frost_secp256k1_tr as frost;
 use std::{array::TryFromSliceError, io, time::SystemTimeError};
 use thiserror::Error;
 
+use crate::wallet::util::VerifyingKeyExtError;
+
+/// Error type for change output matching operations.
+#[derive(Debug, Error)]
+pub enum ChangeOutputError {
+    #[error("key conversion error {0}")]
+    KeyConversion(#[from] VerifyingKeyExtError),
+    #[error("db error {0}")]
+    Db(#[from] Error),
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("internal DB error")]
@@ -37,6 +48,8 @@ pub enum Error {
     BitcoindError(#[from] bitcoincore_rpc::Error),
     #[error("Tracked tx not found in Pegout Scheduler")]
     TrackedTxNotFoundInPegoutScheduler,
+    #[error("Multisig attestation not found when marking for finalization")]
+    MultisigAttestationNotFound,
     #[error("Bad passphrase for decrypting key-package import")]
     BadDecryptionPassphrase,
     /// Related to [`super::ExportedKeyPackage`].
