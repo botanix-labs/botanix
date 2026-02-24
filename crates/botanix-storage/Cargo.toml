@@ -23,10 +23,14 @@ alloy-primitives = { workspace = true }
 arbitrary = { workspace = true }
 auto_impl = { workspace = true }
 bytes = { workspace = true }
+ciborium = { workspace = true }
 eyre = { workspace = true }
+frost-secp256k1-tr = { workspace = true }
 itertools = { workspace = true }
 modular-bitfield = { workspace = true }
+parking_lot = { workspace = true }
 reth-codecs = { workspace = true }
+thiserror = { workspace = true }
 # reth
 reth-chainspec = { workspace = true, optional = true }
 reth-db = { workspace = true, features = ["mdbx"] }
@@ -60,6 +64,8 @@ proptest-arbitrary-interop = { workspace = true }
 reth-primitives = { workspace = true, features = ["arbitrary"] }
 tempfile = { workspace = true }
 test-fuzz = { workspace = true }
+# Enable test-utils feature for tests
+botanix-storage = { path = ".", features = ["test-utils"] }
 
 [lints]
 workspace = true
