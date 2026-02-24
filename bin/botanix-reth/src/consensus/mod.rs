@@ -19,6 +19,7 @@ mod operator;
 pub mod comet_bft;
 mod execution_utils;
 mod frost_task;
+pub mod multisig_manager;
 mod signing;
 pub mod snapshot_manager;
 pub mod utils;
