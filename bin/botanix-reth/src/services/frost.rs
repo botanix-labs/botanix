@@ -18,10 +18,46 @@ pub struct MultisigConfig {
     pub min_signers: u16,
     /// Total number of signers for this multisig (defaults to member count).
     pub max_signers: u16,
+    /// The coordinator index, usually zero.
+    pub coordinator: u16,
+    /// Index of the current node within the `authorities` list.
+    pub authority_index: Option<u16>,
     /// Public keys of all members participating in this multisig.
     pub authorities: Vec<secp256k1::PublicKey>,
+}
+
+impl TryFrom<MultisigConfig> for AuthorityMultisigConfig {
+    type Error = eyre::Error;
+
+    fn try_from(m: MultisigConfig) -> Result<Self, Self::Error> {
+        let authority_index = m.authority_index.ok_or_else(|| {
+            eyre::eyre!("node is not a member of multisig {}", m.multisig_id)
+        })?;
+
+        Ok(AuthorityMultisigConfig {
+            multisig_id: m.multisig_id,
+            min_signers: m.min_signers,
+            max_signers: m.max_signers,
+            coordinator: m.coordinator,
+            authority_index,
+            authorities: m.authorities,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AuthorityMultisigConfig {
+    /// Identifier for this multisig.
+    pub multisig_id: MultisigId,
+    /// Minimum number of signers required to produce a valid signature.
+    pub min_signers: u16,
+    /// Total number of signers for this multisig (defaults to member count).
+    pub max_signers: u16,
+    pub coordinator: u16,
     /// Index of the current node within the `authorities` list.
-    pub authority_index: usize,
+    pub authority_index: u16,
+    /// Public keys of all members participating in this multisig.
+    pub authorities: Vec<secp256k1::PublicKey>,
 }
 
 /// Result of setting up the Frost configuration for a node.
@@ -69,7 +105,10 @@ pub fn setup_frost(
     tracing::debug!(target: "reth::cli", ?network_secret_path, "Loading p2p key file");
     let secret_key = get_secret_key(&network_secret_path)?;
     let authority_pk = secret_key.public_key(SECP256K1);
-    tracing::info!("Federation Member PubKey {:?}", authority_pk.to_string());
+    tracing::info!(
+        "Federation Member Public Key {:?}",
+        authority_pk.to_string()
+    );
     tracing::info!("Federation Member Enode {:?}", pk2id(&authority_pk));
 
     // Add trusted nodes with va the `--trusted-peers` CLI flag.
@@ -93,22 +132,24 @@ pub fn setup_frost(
     let multisigs = federation_config
         .multisigs
         .into_iter()
-        .filter_map(|m| {
-            // TODO: we should probably have a different way to handle non-federation nodes
-            let authorities = m.get_federation_pub_keys().ok()?;
-            let authority_index =
-                authorities.iter().position(|a| *a == authority_pk)?;
+        .map(|m| {
+            let authorities = m.get_federation_pub_keys()?;
+            let authority_index: Option<_> = authorities
+                .iter()
+                .position(|a| *a == authority_pk)
+                .map(|i| i as u16);
 
             // TODO: Do basic validation?
-            Some(MultisigConfig {
+            Ok(MultisigConfig {
                 multisig_id: m.multisig_id,
                 min_signers: m.min_signers,
                 max_signers: authorities.len() as u16,
-                authorities,
+                coordinator: m.coordinator,
                 authority_index,
+                authorities,
             })
         })
-        .collect::<Vec<_>>();
+        .collect::<eyre::Result<Vec<_>>>()?;
 
     Ok(FrostConfigSetupResult { secret_key, multisigs })
 }
