@@ -19,6 +19,7 @@ use botanix_configs::federation::load_federation_config_toml;
 use botanix_reth::{
     consensus::{
         comet_bft::abci::ABCIDriver,
+        multisig_manager::{attested_legacy_multisig, MultisigManager},
         snapshot_manager::SnapshotRunnable,
         utils::{is_known_minting_contract, retry_exec},
         AuthorityConsensusBuilder, OperatorBuilder,
@@ -34,7 +35,7 @@ use botanix_reth::{
         botanix_provider::create_botanix_provider,
         btc_server::create_btc_server_client,
         cometbft::create_cometbft_factory,
-        frost::setup_frost,
+        frost::{setup_frost, AuthorityMultisigConfig},
         metrics::run_metrics_service,
         migrator::init_and_migrate_botanix_db,
         network_builder::{lookup_head, setup_network_builder},
@@ -47,12 +48,12 @@ use botanix_reth::{
 use botanix_storage::{tables::create_botanix_tables, BotanixProviderFactory};
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
-use eyre::Ok;
 use reth::{
     cli::{Cli, Commands},
     providers::CanonStateSubscriptions,
 };
 use reth_db::DatabaseEnv;
+use reth_network::frost::manager::authority_index_to_frost_identifier;
 use reth_node_builder::RethTransactionPoolConfig;
 use reth_node_core::version::version_metadata;
 use reth_prune_types::PruneModes;
@@ -303,6 +304,41 @@ fn main() -> eyre::Result<()> {
                 None
             };
 
+            let legacy_multisig = if poa_cfg.is_testnet {
+                None
+            } else if poa_cfg.is_devnet {
+                None
+            } else {
+                Some(attested_legacy_multisig())
+            };
+
+            // Setup multisig manager with optionally preloaded legacy multisig.
+            let (multisig_manager, multisig_handle) = MultisigManager::new_botanix(botanix_db_provider_factory.clone(), legacy_multisig)?;
+
+            for m in frost_setup_result.multisigs.clone() {
+                // TODO: Create convenience method for this.
+                let authorities = m
+                    .authorities
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, pubkey) | {
+                        let idx = authority_index_to_frost_identifier(idx as u16);
+
+                        (idx, pubkey)
+                    })
+                    .collect();
+
+                // TODO: This could be a problem for expired multisigs, since it
+                // might reinsert those on startup.
+                multisig_manager.guard_commit(|g| {
+                    g.set_staging_multisig(
+                        m.multisig_id,
+                        authority_index_to_frost_identifier(m.coordinator),
+                        authorities,
+                    )
+                })?;
+            }
+
             let botanix_evm_config = BotanixEvmConfig::new(chain_spec_arc.clone());
             let cometbft_rpc_factory = create_cometbft_factory(&poa_cfg);
             let btc_server_factory = btc_server_client.unzip().0;
@@ -312,6 +348,7 @@ fn main() -> eyre::Result<()> {
                 chain_spec_arc.clone(),
                 blockchain_provider.clone(),
                 activation_manager,
+                multisig_manager.clone(),
                 poa_cfg.federation_mode, // is_fed_node
                 bitcoin_checkpoints.clone(),
                 task_executor.clone(),
@@ -342,7 +379,7 @@ fn main() -> eyre::Result<()> {
                 reth_db_provider_factory.clone(),
                 botanix_db_provider_factory,
                 blockchain_provider.clone(),
-                storage.clone(),
+                multisig_manager,
             );
 
             if poa_cfg.federation_mode {
@@ -350,13 +387,20 @@ fn main() -> eyre::Result<()> {
                     return Err(eyre::eyre!("btc-server mut be configured for authority"));
                 };
 
+                let multisig_configs = frost_setup_result
+                    .multisigs
+                    .into_iter()
+                    .map(AuthorityMultisigConfig::try_from)
+                    .collect::<eyre::Result<Vec<_>>>()?;
+
                 let operator = OperatorBuilder::new(
                     storage,
                     btc_server_factory,
                     network_handle.clone(),
                     frost_handle.expect("frost handle must exist in federation mode"),
+                    multisig_handle,
                     task_executor.clone(),
-                    frost_setup_result.multisigs,
+                    multisig_configs,
                     cometbft_rpc_factory,
                     RandomSourceProvider::new(),
                     bitcoind_client,
