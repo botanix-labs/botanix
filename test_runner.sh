@@ -23,6 +23,7 @@ tests_to_run=(
     "test_pegin_recovery"
     "rpc_node"
     "test_parallel_dkg"
+    "dynafed_new_member"
 )
 exit_codes=()
 

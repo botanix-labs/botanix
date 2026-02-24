@@ -191,6 +191,7 @@ jobs:
           - "test_pegin_recovery"
           - "rpc_node"
           - "test_parallel_dkg"
+          - "dynafed_new_member"
     env:
       RUST_BACKTRACE: 1
       TEST_TO_RUN: ${{ matrix.test }}

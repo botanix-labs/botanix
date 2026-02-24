@@ -546,6 +546,24 @@ impl Suite for ConsensusIntegrationTestSuite {
                     dynafed::test_dynafed_batch_pegin::dynafed_batch_pegin
                 )
             }
+            "dynafed_new_member" => {
+                run_test!(
+                    self,
+                    CreateTestConfig {
+                        create_bitcoind_node: true,
+                        create_poa_nodes: true,
+                        create_btc_servers: true,
+                        create_cometbft_nodes: true,
+                        num_multisigs: 2,
+                        multisig_member_indices: Some(vec![
+                            vec![0, 1, 2, 3],
+                            vec![0, 1, 2, 3, 4],
+                        ]),
+                        ..Default::default()
+                    },
+                    dynafed::test_dynafed_new_member::test_dynafed_new_member
+                )
+            }
             "utxo_sync" => {
                 run_test!(
                     self,
@@ -1032,7 +1050,6 @@ impl Suite for ConsensusIntegrationTestSuite {
             it_info_print!("Starting btc servers ...");
 
             // Build per-multisig membership: which member indices participate in each multisig.
-            // Currently all fed_instances members are in every multisig.
             let all_members: Vec<u16> =
                 (0..self.global_context.fed_instances).collect();
             let multisig_memberships: Vec<(
@@ -1044,7 +1061,12 @@ impl Suite for ConsensusIntegrationTestSuite {
                         botanix_types::LEGACY_MULTISIG_ID.as_u32()
                             + offset as u32,
                     );
-                    (multisig_id, all_members.clone())
+                    let members = create_test_config
+                        .multisig_member_indices
+                        .as_ref()
+                        .and_then(|v| v.get(offset as usize).cloned())
+                        .unwrap_or_else(|| all_members.clone());
+                    (multisig_id, members)
                 })
                 .collect();
 

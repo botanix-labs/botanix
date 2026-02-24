@@ -318,10 +318,20 @@ pub fn spawn_n_btc_server_processes(
             .context("failed to create tempdir with db subdir")?;
 
         // PRE-SAVE DUMMY KEYS BEFORE SPAWNING THE PROCESS
-        if !presave_multisigs.is_empty() {
+        // Only pre-save for multisigs where this node is an actual member.
+        let node_presave_multisigs: Vec<MultisigId> = presave_multisigs
+            .iter()
+            .filter(|mid| {
+                multisig_memberships
+                    .iter()
+                    .any(|(id, members)| id == *mid && members.contains(&i))
+            })
+            .copied()
+            .collect();
+        if !node_presave_multisigs.is_empty() {
             presave_multisig_keys(
                 &db_path,
-                presave_multisigs,
+                &node_presave_multisigs,
                 &frost_identifiers,
                 i,
                 global_context.min_signers,
