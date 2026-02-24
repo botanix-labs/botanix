@@ -2,7 +2,7 @@ use crate::{
     consensus::utils::{
         parse_signing_session_id, retry_exec, retry_future, FrostParseError,
     },
-    services::frost::MultisigConfig,
+    services::frost::AuthorityMultisigConfig,
 };
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
@@ -132,7 +132,7 @@ pub(crate) struct SigningStateMachine<ToFrostMan, Source, BtcServerClient> {
     frost_handle: ToFrostMan,
     signing_states: Arc<RwLock<HashMap<[u8; 32], SigningSession>>>,
     personal_frost_identifier: frost::Identifier,
-    multisig_config: MultisigConfig,
+    multisig_config: AuthorityMultisigConfig,
     random_source_provider: Source,
     metrics: Arc<AuthorityMetrics>,
 }
@@ -148,7 +148,7 @@ where
     pub(crate) fn new(
         btc_client: BtcServerClient,
         frost_handle: ToFrostMan,
-        multisig_config: MultisigConfig,
+        multisig_config: AuthorityMultisigConfig,
         random_source_provider: Source,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
