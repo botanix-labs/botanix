@@ -1,5 +1,6 @@
 use super::{Initiator, Target};
 use bitcoin::secp256k1;
+use botanix_types::MultisigId;
 use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit, Nonce};
 use frost::keys::dkg::{round1, round2};
 use frost_secp256k1_tr as frost;
@@ -289,7 +290,7 @@ impl DkgHandshakeManager {
             // ID generates the following order:
             //
             // * ss1 = DH(my_static_key, their_ephemeral_key)
-            // * ss2 = DH(their_static_key, my_ephemeral_key)
+            // * ss2 = DH(my_ephemeral_key, their_static_key)
             //
             // The other participant generates this in the opposite direction,
             // of course.
@@ -475,158 +476,151 @@ impl SecureChannelManager {
     ///
     /// A `KeyVerificationManager` instance if all required packages are processed, Error
     /// otherwise
-    pub fn finalize(&mut self) -> Result<KeyVerificationManager, Error> {
+    // TODO: Should this commit the aggregated public key?
+    pub fn finalize(&mut self) -> Result<[u8; 32], Error> {
         if self.round2_checks.len() != self.fed_members.len() {
             return Err(Error::InsufficientSamples);
         }
 
         // Mark stage2 as complete; we just commit an empty message.
-        self.transcript.append_message(b"round2_commit", b"");
+        let mut commit = [0; 32];
+        self.transcript.challenge_bytes(b"round2_commit", &mut commit);
 
-        Ok(KeyVerificationManager {
-            secp: self.secp.clone(),
-            transcript: self.transcript.clone(),
-            my_frost_id: self.my_frost_id,
-            my_static_sec: self.my_static_sec,
-            fed_members: std::mem::take(&mut self.fed_members),
-            challenge: None,
-            round3_commits: BTreeMap::new(),
-        })
+        Ok(commit)
     }
 }
 
-/// Authentication layer for round three of the DKG protocol.
-///
-/// Handles the verification of signatures on the final aggregated public key
-/// package to ensure all participants have the same view of the generated key.
-#[derive(Clone)]
-pub struct KeyVerificationManager {
+pub struct AttestationManager {
     secp: secp256k1::Secp256k1<secp256k1::All>,
     transcript: Transcript,
     my_frost_id: frost::Identifier,
     my_static_sec: secp256k1::SecretKey,
     fed_members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
-    challenge: Option<[u8; 32]>,
-    round3_commits: BTreeMap<frost::Identifier, secp256k1::ecdsa::Signature>,
+    signing_package: frost::SigningPackage,
+    public_key_package: frost::keys::PublicKeyPackage,
+    signature_shares:
+        BTreeMap<frost::Identifier, frost::round2::SignatureShare>,
 }
 
-impl std::fmt::Debug for KeyVerificationManager {
+impl std::fmt::Debug for AttestationManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KeyVerificationManager")
+        f.debug_struct("AttestationManager")
             .field("transcript", &"[REDACTED]")
             .field("my_frost_id", &self.my_frost_id)
             .field("my_static_sec", &"[REDACTED]")
             .field("fed_members", &self.fed_members)
-            .field("challenge", &self.challenge)
-            .field("round3_commits", &self.round3_commits)
+            .field("signing_package", &self.signing_package)
+            .field("public_key_package", &self.public_key_package)
+            .field("signature_shares", &self.signature_shares)
             .finish()
     }
 }
 
-impl KeyVerificationManager {
-    /// Creates a signature commitment on the final public key package.
-    ///
-    /// # Arguments
-    ///
-    /// * `package` - The final aggregated public key package
-    ///
-    /// # Returns
-    ///
-    /// A signature on the public key package for verification by other
-    /// participants
-    pub fn commit_round3(
+impl AttestationManager {
+    pub fn new(
+        multisig_id: MultisigId,
+        my_frost_id: frost::Identifier,
+        my_static_sec: secp256k1::SecretKey,
+        fed_members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
+        signing_package: frost::SigningPackage,
+        public_key_package: frost::keys::PublicKeyPackage,
+    ) -> Result<Self, Error> {
+        if !fed_members.contains_key(&my_frost_id) {
+            return Err(Error::SelfNotInFederation);
+        }
+
+        let mut commit = [0; 32];
+
+        let mut t = Transcript::new(b"botanix/multisig-attestation/v1");
+        t.append_u64(b"multisig_id", multisig_id.as_u32() as u64);
+        t.append_message(
+            b"signing_package",
+            signing_package.serialize().unwrap().as_slice(),
+        );
+        t.append_message(
+            b"public_key_package",
+            public_key_package.serialize().unwrap().as_slice(),
+        );
+        t.challenge_bytes(b"attestation_commit", &mut commit);
+
+        let secp = secp256k1::Secp256k1::new();
+
+        Ok(AttestationManager {
+            secp,
+            transcript: t,
+            my_frost_id,
+            my_static_sec,
+            fed_members,
+            signing_package,
+            public_key_package,
+            signature_shares: BTreeMap::new(),
+        })
+    }
+    pub fn commit_signature_share(
         &mut self,
-        package: &frost::keys::PublicKeyPackage,
+        signature_share: frost::round2::SignatureShare,
     ) -> Result<secp256k1::ecdsa::Signature, Error> {
         let mut commit = [0; 32];
 
-        self.transcript
-            .append_message(b"round3_package", package.serialize()?.as_slice());
-        self.transcript.challenge_bytes(b"round3_commit", &mut commit);
+        let mut t = self.transcript.clone();
+        t.append_message(
+            b"signature_share",
+            signature_share.serialize().as_slice(),
+        );
+        t.challenge_bytes(b"attestation_commit", &mut commit);
+        std::mem::drop(t);
 
         let msg =
             secp256k1::Message::from_digest_slice(&commit).expect("valid size");
-        let signature = self.secp.sign_ecdsa(&msg, &self.my_static_sec);
+        let sig = self.secp.sign_ecdsa(&msg, &self.my_static_sec);
 
-        // Set the unified challenge.
-        self.challenge = Some(commit);
+        self.signature_shares.insert(self.my_frost_id, signature_share);
 
-        // Keep track of our own signature.
-        self.round3_commits.insert(self.my_frost_id, signature);
-
-        Ok(signature)
+        Ok(sig)
     }
-    /// Validates a received signature on the final public key package.
-    ///
-    /// # Arguments
-    ///
-    /// * `initiator` - The FROST identifier of the signature creator
-    /// * `signature` - The signature to verify
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if validation succeeds, Error otherwise
-    pub fn validate_round3(
+    pub fn validate_signature_share(
         &mut self,
-        initiator: Initiator,
-        signature: secp256k1::ecdsa::Signature,
+        id: frost::Identifier,
+        signature_share: frost::round2::SignatureShare,
+        attestation_sig: secp256k1::ecdsa::Signature,
     ) -> Result<(), Error> {
-        let Some(challenge) = &self.challenge else {
-            // We do not process incoming round3 messages until we have sent our
-            // own, since we require the aggregated key package to compute the
-            // challenge to be signed.
-            return Err(Error::AwaitingChallengeGeneration);
-        };
+        let mut commit = [0; 32];
+        let fed = self.fed_members.get(&id).ok_or(Error::NotAFedMember)?;
 
-        let fed_static =
-            self.fed_members.get(&initiator.0).ok_or(Error::NotAFedMember)?;
+        let mut t = self.transcript.clone();
+        t.append_message(
+            b"signature_share",
+            signature_share.serialize().as_slice(),
+        );
+        t.challenge_bytes(b"attestation_commit", &mut commit);
+        std::mem::drop(t);
 
-        // Verify the signature using the public key of the fed member.
-        let msg = secp256k1::Message::from_digest_slice(challenge)
-            .expect("valid size");
+        let msg =
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+        fed.verify(&self.secp, &msg, &attestation_sig).unwrap();
 
-        if fed_static.verify(&self.secp, &msg, &signature).is_err() {
-            return Err(Error::SignatureVerificationFailed);
-        }
-
-        self.round3_commits.insert(initiator.0, signature);
+        self.signature_shares.insert(id, signature_share);
 
         Ok(())
     }
-    /// Finalizes round three, completing the DKG protocol.
-    ///
-    /// Ensures all required signatures have been verified and
-    /// generates a final commitment value.
-    ///
-    /// # Returns
-    ///
-    /// A 32-byte array representing the final commitment if all required
-    /// signatures are verified, Error otherwise
-    pub fn finalize(&mut self) -> Result<[u8; 32], Error> {
-        // Validate basic conditions.
-        if self.round3_commits.len() != self.fed_members.len() {
-            return Err(Error::InsufficientSamples);
+    pub fn finalize(&mut self) -> Result<frost::Signature, Error> {
+        if self.signature_shares.len() != self.fed_members.len() {
+            todo!()
         }
 
-        let mut round3_commits: Vec<(
-            frost::Identifier,
-            secp256k1::ecdsa::Signature,
-        )> = std::mem::take(&mut self.round3_commits).into_iter().collect();
+        // Verify each participants signature share and aggregate the final
+        // signature which is then verified against the aggregated public key.
+        let aggr_sig = frost::aggregate(
+            &self.signing_package,
+            &self.signature_shares,
+            &self.public_key_package,
+        )
+        .unwrap();
 
-        // Sort in ascending order, by the frost_id.
-        round3_commits.sort_by(|a, b| a.0.cmp(&b.0));
+        self.public_key_package
+            .verifying_key()
+            .verify(self.signing_package.message(), &aggr_sig)?;
 
-        let t = &mut self.transcript;
-        for (_, signature) in round3_commits {
-            t.append_message(
-                b"round3_commit",
-                signature.serialize_compact().as_slice(),
-            );
-        }
-
-        let mut final_commit = [0; 32];
-        t.challenge_bytes(b"final_commit", &mut final_commit);
-
-        Ok(final_commit)
+        Ok(aggr_sig)
     }
 }
