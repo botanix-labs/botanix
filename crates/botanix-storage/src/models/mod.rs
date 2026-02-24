@@ -23,11 +23,15 @@
 //! by leveraging the Reth compact encoding system.
 
 mod activation_manager;
+mod generic;
+mod multisig_manager;
 mod snapshot;
 mod staged_header;
 mod wallet_sync;
 
 pub use activation_manager::*;
+pub use generic::*;
+pub use multisig_manager::*;
 pub use snapshot::*;
 pub use staged_header::*;
 pub use wallet_sync::*;
