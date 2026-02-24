@@ -310,6 +310,7 @@ fn create_federation_config(
     let multisig_config = MultisigTomlConfig {
         multisig_id: LEGACY_MULTISIG_ID,
         min_signers: 2,
+        coordinator: 0,
         members: fed_pks,
     };
 
