@@ -163,6 +163,8 @@ bitcoin = { version = "0.32.5", features = ["base64", "rand", "serde"] }
 bitcoin_hashes = "0.16.0"
 bitcoincore-rpc = "0.19.0"
 bitcoincore-zmq = { version = "1.5.2", features = ["async"] }
+ciborium = "0.2.1"
+merlin = "3.0.0"
 
 # precompiles deps
 bls_on_arkworks = "0.3.0"
