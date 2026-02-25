@@ -1,8 +1,7 @@
 use std::time::Duration;
 
 use botanix_btc_server_client::{
-    AbortDkgRequest, BtcServerExtendedApi, BtcServerExtendedClient,
-    GetPublicKeyRequest, StartNewDkgRequest,
+    BtcServerExtendedApi, BtcServerExtendedClient, GetPublicKeyRequest,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
@@ -11,11 +10,7 @@ use ethers::providers::{Http, Provider};
 use crate::{
     it_info_print, it_warn_print,
     suite::consensus::{
-        common::{
-            pegin::{run_pegin, PeginResult},
-            pegout::run_pegout,
-            poa_node::FederationMemberTestConfig,
-        },
+        common::{pegin::run_pegin, pegout::run_pegout},
         ConsensusIntegrationTestSuite,
     },
 };
