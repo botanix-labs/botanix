@@ -415,6 +415,7 @@ pub struct CreateTestConfig {
     pub create_cometbft_nodes: bool,
     pub create_state_syncing_node: bool,
     pub num_multisigs: u16,
+    pub multisig_member_indices: Option<Vec<Vec<u16>>>,
 }
 
 impl CreateTestConfig {
@@ -429,6 +430,7 @@ impl CreateTestConfig {
             create_cometbft_nodes: true,
             create_state_syncing_node: true,
             num_multisigs: 1,
+            multisig_member_indices: None,
         }
     }
 }
@@ -444,6 +446,7 @@ impl Default for CreateTestConfig {
             create_cometbft_nodes: false,
             create_state_syncing_node: false,
             num_multisigs: 1,
+            multisig_member_indices: None,
         }
     }
 }
@@ -1028,26 +1031,39 @@ impl Suite for ConsensusIntegrationTestSuite {
         if create_test_config.create_btc_servers {
             it_info_print!("Starting btc servers ...");
 
-            // Determine which multisigs to pre-save
-            // Pre-save all except the last one, which will undergo DKG
+            // Build per-multisig membership: which member indices participate in each multisig.
+            // Currently all fed_instances members are in every multisig.
+            let all_members: Vec<u16> =
+                (0..self.global_context.fed_instances).collect();
+            let multisig_memberships: Vec<(
+                botanix_types::MultisigId,
+                Vec<u16>,
+            )> = (0..create_test_config.num_multisigs)
+                .map(|offset| {
+                    let multisig_id = botanix_types::MultisigId::new(
+                        botanix_types::LEGACY_MULTISIG_ID.as_u32()
+                            + offset as u32,
+                    );
+                    (multisig_id, all_members.clone())
+                })
+                .collect();
+
+            // Pre-save all multisigs except the last one, which will undergo DKG
             let presave_multisigs = if create_test_config.num_multisigs > 1 {
-                (0..create_test_config.num_multisigs - 1)
-                    .map(|offset| {
-                        botanix_types::MultisigId::new(
-                            botanix_types::LEGACY_MULTISIG_ID.as_u32()
-                                + offset as u32,
-                        )
-                    })
+                multisig_memberships
+                    [..multisig_memberships.len() - 1]
+                    .iter()
+                    .map(|(id, _)| *id)
                     .collect::<Vec<_>>()
             } else {
-                vec![] // No pre-saving for single multisig
+                vec![]
             };
 
             self.local_context.btc_processes =
                 Some(spawn_n_btc_server_processes(
                     self.global_context.clone(),
                     &members_keypairs,
-                    create_test_config.num_multisigs,
+                    &multisig_memberships,
                     &presave_multisigs,
                 )?);
             // let btc servers come up

@@ -269,32 +269,29 @@ pub fn spawn_n_btc_server_processes(
         PeerId,
         Address,
     )>,
-    num_multisigs: u16,
+    multisig_memberships: &[(MultisigId, Vec<u16>)],
     presave_multisigs: &[MultisigId],
 ) -> anyhow::Result<Vec<SpawnedBtcServerProcess>> {
     let mut processes = vec![];
 
-    // Create multisig configs for all multisigs
     let mut multisig_configs = vec![];
-    for offset in 0..num_multisigs {
-        let mut fed_members = vec![];
-        for i in 0..global_context.fed_instances {
-            let public_key = members_keypairs
-                .get(i as usize)
-                .cloned()
-                .expect("To have keypair information")
-                .1;
+    for (multisig_id, member_indices) in multisig_memberships {
+        let fed_members: Vec<FedMemberPubKey> = member_indices
+            .iter()
+            .map(|&i| {
+                let public_key = members_keypairs
+                    .get(i as usize)
+                    .expect("member index out of bounds for keypairs")
+                    .1;
+                FedMemberPubKey {
+                    key: public_key.to_string(),
+                    socket_addr: String::new(),
+                }
+            })
+            .collect();
 
-            fed_members.push(FedMemberPubKey {
-                key: public_key.to_string(),
-                socket_addr: String::new(),
-            });
-        }
-
-        let multisig_id =
-            MultisigId::new(LEGACY_MULTISIG_ID.as_u32() + offset as u32);
         multisig_configs.push(MultisigTomlConfig::new(
-            multisig_id,
+            *multisig_id,
             global_context.min_signers,
             None,
             fed_members,
