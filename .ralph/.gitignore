@@ -1,0 +1,13 @@
+# Ralph gitignore
+# Add these to your project's .gitignore
+
+# Logs (optional - you may want to keep these)
+logs/*.log
+
+# Temporary files
+*.tmp
+*.bak
+
+# Don't ignore state - it's important!
+# !state/features.json
+# !state/progress.txt

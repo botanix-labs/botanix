@@ -1,0 +1,5 @@
+=== Ralph Progress Log ===
+Project: [Configure in .ralph/config.yaml]
+Initialized: [Run setup.sh]
+
+--- Sessions Below ---

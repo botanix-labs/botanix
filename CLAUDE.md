@@ -69,3 +69,37 @@ When reviewing branch changes, run these checks (in parallel where possible):
 6. `make lint`
 7. `make test-unit`
 8. Write a short summary of important changes for PR description
+
+## Review Checklist
+
+When asked to review changes in the branch, run these checks in parallel:
+
+- Check for silent failures (unwrap without context, swallowed errors)
+- Verify code comments are accurate
+- Review any new types for correctness and naming
+- General code review (logic, edge cases, performance)
+- Run `make fmt` (fix any issues)
+- Run `make lint` and address warnings
+- Write a short summary of all important changes for PR description
+
+## Before Marking Done
+
+- `make fmt` passes
+- `make lint` has no warnings
+- `make test` passes
+- No `.unwrap()` on user-facing paths — use proper error handling
+
+## Rust Conventions
+
+- Prefer `?` operator over `.unwrap()` for error propagation
+- Use `thiserror` for custom error types, `anyhow` for application errors
+- Derive `Debug` on all public types
+- Keep functions small and focused — extract when over ~40 lines
+- Prefer strong types over primitive obsession (newtype pattern for IDs, amounts)
+
+## DeFi-Specific (This Repo)
+
+- All token amounts must use the correct decimals from config — never hardcode
+- Contract addresses come from verified address lists, never inline strings
+- Any chain interaction must handle revert cases explicitly
+- Log all on-chain call parameters at debug level for troubleshooting

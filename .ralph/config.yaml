@@ -1,0 +1,116 @@
+# Ralph Configuration
+# Edit this for your project
+
+project:
+  name: "my-project"
+  language: "rust"  # rust | typescript | python | go
+  description: "Project description"
+
+# Model configuration per agent type
+# Supports: claude, openai, droid, or custom command
+models:
+  # Ideation agent - needs creativity, broad knowledge, research
+  ideate:
+    provider: "claude"
+    model: "claude-opus-4-5-20251101"
+
+  # PRD creation - needs user interaction, clear writing
+  prd:
+    provider: "claude"
+    model: "claude-opus-4-5-20251101"
+
+  # Planner agent - needs strong reasoning, architecture understanding
+  planner:
+    provider: "claude"  # claude | openai | droid | custom
+    model: "claude-opus-4-5-20251101"
+    # For custom provider, specify full command:
+    # provider: "custom"
+    # command: "my-cli --model gpt-5"
+
+  # Coding agent - needs code generation, following patterns
+  coding:
+    provider: "claude"
+    model: "claude-opus-4-5-20251101"
+
+  # Feature reviewer - needs analytical skills
+  reviewer:
+    provider: "claude"
+    model: "claude-opus-4-5-20251101"
+
+  # Merger agent - needs git operations, conflict resolution
+  merger:
+    provider: "claude"
+    model: "claude-opus-4-5-20251101"
+
+  # Default for any unspecified agent
+  default:
+    provider: "claude"
+    model: "claude-opus-4-5-20251101"
+
+# CLI commands for each provider (customize paths/flags as needed)
+# Use {model} placeholder for the model name
+# Use {prompt_file} placeholder for the prompt file path (if supported)
+cli:
+  claude: "claude --print --model {model}"
+  openai: "openai-cli chat --model {model}"
+  droid: "droid exec -m {model} --auto high -f {prompt_file}"
+  # Add your own CLI tools:
+  # cursor: "cursor-agent --model {model}"
+  # aider: "aider --model {model}"
+
+# Available droid models:
+#   gpt-5.1, gpt-5.1-codex, gpt-5.1-codex-max
+#   gpt-5.2, gpt-5.2-codex
+#   claude-sonnet-4-5-20250929, claude-opus-4-5-20251101, claude-haiku-4-5-20251001
+#   gemini-3-pro-preview, gemini-3-flash-preview
+#   glm-4.7 (Droid Core)
+
+# Database isolation for parallel agents (optional)
+# Ralph can create per-agent database copies for test isolation.
+#
+# WARNING: Only use a LOCAL/DEV database! Never point to production.
+#
+# Option 1: Reference an env var from your .env file
+# database:
+#   from_env: "DATABASE_URL"  # Reads this var from .env
+#
+# Option 2: Specify URL directly (NOT recommended - use .env instead)
+# database:
+#   url: "postgres://localhost:5432/myapp_dev"
+#
+# Leave commented out to disable DB isolation (most projects don't need it).
+
+parallelization:
+  max_agents: 3
+  pr_workflow: true  # Create PRs instead of direct commits
+
+# When true, Ralph will prompt for missing config/env vars instead of skipping.
+# When false (or in CI), Ralph will fail fast with clear error messages.
+interactive: true
+
+validators:
+  # Rust (default)
+  check: "cargo check"
+  lint: "cargo clippy --fix --allow-dirty --allow-staged"
+  format: "cargo fmt --all"
+  test: "cargo test --lib"
+
+  # TypeScript alternative:
+  # check: "tsc --noEmit"
+  # lint: "eslint --fix ."
+  # format: "prettier --write ."
+  # test: "jest"
+
+  # Python alternative:
+  # check: "mypy ."
+  # lint: "ruff check --fix ."
+  # format: "ruff format ."
+  # test: "pytest"
+
+git:
+  default_branch: "main"
+  # Feature branch where all Ralph work happens
+  # All PRs merge here, then this branch merges to main when complete
+  feature_branch: "ralph/feature"  # Change to your feature name, e.g., "ralph/compliance-system"
+  # PRs target the feature branch, not main
+  pr_base: "ralph/feature"

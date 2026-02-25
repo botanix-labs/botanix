@@ -8,15 +8,20 @@ use alloy_rlp::Decodable;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use reth_chainspec::ChainSpec;
 use reth_consensus::{Consensus, HeaderValidator};
-use reth_db_common::init::{insert_genesis_hashes, insert_genesis_history, insert_genesis_state};
-use reth_ethereum_consensus::{validate_block_post_execution, EthBeaconConsensus};
+use reth_db_common::init::{
+    insert_genesis_hashes, insert_genesis_history, insert_genesis_state,
+};
+use reth_ethereum_consensus::{
+    validate_block_post_execution, EthBeaconConsensus,
+};
 use reth_ethereum_primitives::Block;
 use reth_evm::{execute::Executor, ConfigureEvm};
 use reth_evm_ethereum::EthEvmConfig;
 use reth_primitives_traits::{RecoveredBlock, SealedBlock};
 use reth_provider::{
-    test_utils::create_test_provider_factory_with_chain_spec, BlockWriter, DatabaseProviderFactory,
-    ExecutionOutcome, HistoryWriter, OriginalValuesKnown, StateWriter, StorageLocation,
+    test_utils::create_test_provider_factory_with_chain_spec, BlockWriter,
+    DatabaseProviderFactory, ExecutionOutcome, HistoryWriter,
+    OriginalValuesKnown, StateWriter, StorageLocation,
 };
 use reth_revm::database::StateProviderDatabase;
 use reth_trie::{HashedPostState, KeccakKeyHasher, StateRoot};
@@ -56,12 +61,12 @@ impl BlockchainTestCase {
     const fn excluded_fork(network: ForkSpec) -> bool {
         matches!(
             network,
-            ForkSpec::ByzantiumToConstantinopleAt5 |
-                ForkSpec::Constantinople |
-                ForkSpec::ConstantinopleFix |
-                ForkSpec::MergeEOF |
-                ForkSpec::MergeMeterInitCode |
-                ForkSpec::MergePush0
+            ForkSpec::ByzantiumToConstantinopleAt5
+                | ForkSpec::Constantinople
+                | ForkSpec::ConstantinopleFix
+                | ForkSpec::MergeEOF
+                | ForkSpec::MergeMeterInitCode
+                | ForkSpec::MergePush0
         )
     }
 
@@ -84,7 +89,9 @@ impl BlockchainTestCase {
     #[inline]
     fn expected_failure(case: &BlockchainTest) -> Option<(u64, String)> {
         case.blocks.iter().enumerate().find_map(|(idx, blk)| {
-            blk.expect_exception.as_ref().map(|msg| ((idx + 1) as u64, msg.clone()))
+            blk.expect_exception
+                .as_ref()
+                .map(|msg| ((idx + 1) as u64, msg.clone()))
         })
     }
 
@@ -141,8 +148,9 @@ impl Case for BlockchainTestCase {
             tests: {
                 let s = fs::read_to_string(path)
                     .map_err(|error| Error::Io { path: path.into(), error })?;
-                serde_json::from_str(&s)
-                    .map_err(|error| Error::CouldNotDeserialize { path: path.into(), error })?
+                serde_json::from_str(&s).map_err(|error| {
+                    Error::CouldNotDeserialize { path: path.into(), error }
+                })?
             },
             skip: should_skip(path),
         })
@@ -155,7 +163,7 @@ impl Case for BlockchainTestCase {
     fn run(&self) -> Result<(), Error> {
         // If the test is marked for skipping, return a Skipped error immediately.
         if self.skip {
-            return Err(Error::Skipped)
+            return Err(Error::Skipped);
         }
 
         // Iterate through test cases, filtering by the network type to exclude specific forks.
@@ -184,7 +192,8 @@ impl Case for BlockchainTestCase {
 fn run_case(case: &BlockchainTest) -> Result<(), Error> {
     // Create a new test database and initialize a provider for the test case.
     let chain_spec: Arc<ChainSpec> = Arc::new(case.network.into());
-    let factory = create_test_provider_factory_with_chain_spec(chain_spec.clone());
+    let factory =
+        create_test_provider_factory_with_chain_spec(chain_spec.clone());
     let provider = factory.database_provider_rw().unwrap();
 
     // Insert initial test state into the provider.
@@ -236,20 +245,28 @@ fn run_case(case: &BlockchainTest) -> Result<(), Error> {
             .map_err(|err| Error::block_failed(block_number, err))?;
 
         // Consensus checks after block execution
-        validate_block_post_execution(block, &chain_spec, &output.receipts, &output.requests)
-            .map_err(|err| Error::block_failed(block_number, err))?;
+        validate_block_post_execution(
+            block,
+            &chain_spec,
+            &output.receipts,
+            &output.requests,
+        )
+        .map_err(|err| Error::block_failed(block_number, err))?;
 
         // Compute and check the post state root
-        let hashed_state =
-            HashedPostState::from_bundle_state::<KeccakKeyHasher>(output.state.state());
-        let (computed_state_root, _) =
-            StateRoot::overlay_root_with_updates(provider.tx_ref(), hashed_state.clone())
-                .map_err(|err| Error::block_failed(block_number, err))?;
+        let hashed_state = HashedPostState::from_bundle_state::<KeccakKeyHasher>(
+            output.state.state(),
+        );
+        let (computed_state_root, _) = StateRoot::overlay_root_with_updates(
+            provider.tx_ref(),
+            hashed_state.clone(),
+        )
+        .map_err(|err| Error::block_failed(block_number, err))?;
         if computed_state_root != block.state_root {
             return Err(Error::block_failed(
                 block_number,
                 Error::Assertion("state root mismatch".to_string()),
-            ))
+            ));
         }
 
         // Commit the post state/state diff to the database
@@ -281,7 +298,8 @@ fn run_case(case: &BlockchainTest) -> Result<(), Error> {
     // - Either an issue with the test setup
     // - Possibly an error in the test case where the post-state root in the last block does not
     //   match the post-state values.
-    let expected_post_state = case.post_state.as_ref().ok_or(Error::MissingPostState)?;
+    let expected_post_state =
+        case.post_state.as_ref().ok_or(Error::MissingPostState)?;
     for (&address, account) in expected_post_state {
         account.assert_db(address, provider.tx_ref())?;
     }
@@ -301,8 +319,10 @@ fn decode_blocks(
         let decoded = SealedBlock::<Block>::decode(&mut block.rlp.as_ref())
             .map_err(|err| Error::block_failed(block_number, err))?;
 
-        let recovered_block =
-            decoded.clone().try_recover().map_err(|err| Error::block_failed(block_number, err))?;
+        let recovered_block = decoded
+            .clone()
+            .try_recover()
+            .map_err(|err| Error::block_failed(block_number, err))?;
 
         blocks.push(recovered_block);
     }
@@ -315,7 +335,8 @@ fn pre_execution_checks(
     parent: &RecoveredBlock<Block>,
     block: &RecoveredBlock<Block>,
 ) -> Result<(), Error> {
-    let consensus: EthBeaconConsensus<ChainSpec> = EthBeaconConsensus::new(chain_spec);
+    let consensus: EthBeaconConsensus<ChainSpec> =
+        EthBeaconConsensus::new(chain_spec);
 
     let sealed_header = block.sealed_header();
 
@@ -324,7 +345,10 @@ fn pre_execution_checks(
         block.body(),
         sealed_header,
     )?;
-    consensus.validate_header_against_parent(sealed_header, parent.sealed_header())?;
+    consensus.validate_header_against_parent(
+        sealed_header,
+        parent.sealed_header(),
+    )?;
     consensus.validate_header(sealed_header)?;
     consensus.validate_block_pre_execution(block)?;
 

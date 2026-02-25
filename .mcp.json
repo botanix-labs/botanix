@@ -16,6 +16,10 @@
             "command": "npx",
             "args": ["-y", "@google-cloud/storage-mcp"]
         },
+        "gdrive": {
+            "command": "npx",
+            "args": ["-y", "@anthropic-ai/mcp-server-gdrive"]
+        },
         "gcloud-observability": {
             "command": "npx",
             "args": ["-y", "@google-cloud/observability-mcp"]
