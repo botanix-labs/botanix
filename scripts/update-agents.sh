@@ -11,7 +11,7 @@ set -euo pipefail
 #    AGENTS="codex" ./scripts/update-agents.sh   # via env var
 # ──────────────────────────────────────────────────────────────
 
-SKILLS_REPO="botanix-labs/botanix-skills"
+SKILLS_REPO="botanix-labs/botanix-skills/skills/botanix"
 SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.4.1}"
 
 # Default agents to install for (override via args or AGENTS env var)
