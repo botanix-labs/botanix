@@ -311,6 +311,7 @@ impl FederationMemberTestConfig {
             multisig_configs.push(MultisigTomlConfig::new(
                 multisig_id,
                 self.frost_min_signers,
+                None,
                 edh_authorities.clone(),
             ));
         }
