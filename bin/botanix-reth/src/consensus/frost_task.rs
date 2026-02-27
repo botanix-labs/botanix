@@ -31,6 +31,7 @@ use botanix_data_parser::{
     prost_parser::{ProstError, ProstMessageSerdelizer},
     DataParser, Error as DataParserError,
 };
+use botanix_storage::models::MultisigStatus;
 use botanix_storage::{
     MultisigManagerReader, StagedHeaderReader, StagedHeaderWriter,
 };
@@ -784,11 +785,38 @@ where
             return Ok(());
         }
 
-        // TODO: Support multi-federation setup.
+        // Determine which multisig to spend UTXOs from and where change goes.
+        // A Degrading multisig has UTXOs that need draining first; otherwise use
+        // the Funding multisig. Change always goes to the current Funding multisig.
+        let active = self
+            .storage
+            .botanix_database_factory
+            .get_active_multisigs()?;
+
+        let funding_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Funding)
+            .ok_or_else(|| eyre::eyre!("No funding multisig found"))?;
+
+        let degrading_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Degrading);
+
+        let utxo_source_id = degrading_entry
+            .map(|m| m.multisig_id)
+            .unwrap_or(funding_entry.multisig_id);
+        let change_target_id = funding_entry.multisig_id;
+
+        info!(
+            target: "consensus::authority::frost_task::handle_canon_state_commit",
+            "Pegout UTXO source: multisig_id={}, change target: multisig_id={}",
+            utxo_source_id, change_target_id,
+        );
+
         let multisig = self
             .multisigs
-            .get_mut(&LEGACY_MULTISIG_ID)
-            .ok_or(eyre::eyre!("No multisig entry found for Id {}", LEGACY_MULTISIG_ID))?;
+            .get_mut(&utxo_source_id)
+            .ok_or(eyre::eyre!("No multisig entry found for Id {}", utxo_source_id))?;
 
         if !multisig.signing_sm.is_coordinator() {
             info!(
@@ -799,13 +827,12 @@ where
             return Ok(());
         }
 
-        // Create psbt and send init signing message.
         let psbt_payload = crate::consensus::utils::get_psbt(
             &mut self.btc_server,
             &header_hash,
             cp_block_hash,
-            LEGACY_MULTISIG_ID, // TODO: replace
-            LEGACY_MULTISIG_ID, // TODO: replace
+            utxo_source_id,
+            change_target_id,
         )
         .await
         .wrap_err("Failed to retrieve PSBT from the BTC server")?;

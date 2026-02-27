@@ -218,18 +218,30 @@ fn utxo_from_pegin_meta(
     let serialized_script_pub_key =
         bitcoin::consensus::serialize(&tx_out.script_pubkey);
 
+    let pegin_agg_pk = pegin_meta.aggregate_publickey();
+    info!(
+        "utxo_from_pegin_meta: pegin aggregate_pk={}, outpoint={}:{}, value={}, available_multisig_keys={:?}",
+        pegin_agg_pk,
+        pegin_meta.outpoint().txid, pegin_meta.outpoint().vout,
+        tx_out.value,
+        aggregate_public_keys.iter().map(|(id, pk)| format!("{}={}", id, pk)).collect::<Vec<_>>(),
+    );
+
     let multisig_id = match multisig_id_from_public_key(
         aggregate_public_keys,
-        &pegin_meta.aggregate_publickey(),
+        &pegin_agg_pk,
     ) {
-        Some(id) => id.as_u32(),
+        Some(id) => {
+            info!("utxo_from_pegin_meta: matched multisig_id={}", id);
+            id.as_u32()
+        }
         None => {
             // For this to happen, the pegin would have belonged to a multisig from
             // before this node was added to the federation. However, the pegin
             // should not have been accepted by the minting contract.
             error!(
                 "No multisig_id found for aggregate public key {:?}, skipping pegin",
-                pegin_meta.aggregate_publickey()
+                pegin_agg_pk
             );
             return None;
         }
@@ -256,6 +268,11 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(
     pegins: &[PeginMeta],
     aggregate_public_keys: &BTreeMap<MultisigId, secp256k1::PublicKey>,
 ) -> Vec<models::PeginData> {
+    info!(
+        "get_staged_pegins_from_pegin_meta: pegins={}, aggregate_public_keys={:?}",
+        pegins.len(),
+        aggregate_public_keys.iter().map(|(id, pk)| format!("{}={}", id, pk)).collect::<Vec<_>>(),
+    );
     pegins
         .iter()
         .filter_map(|pegin| {
@@ -268,21 +285,24 @@ pub(crate) fn get_staged_pegins_from_pegin_meta(
                 bitcoin::consensus::serialize(&tx_out.script_pubkey);
             let eth_address = pegin.address().to_vec();
 
+            let pegin_agg_pk = pegin.aggregate_publickey();
             let multisig_id = multisig_id_from_public_key(
                 aggregate_public_keys,
-                &pegin.aggregate_publickey(),
+                &pegin_agg_pk,
             )
             .map(|id| id.as_u32())
             .ok_or_else(|| {
-                // For this to happen, the pegin would have belonged to a multisig that this
-                // node was not a part of. This should not happen, as the pegin should not have
-                // been accepted by the minting contract.
                 error!(
                     "No multisig_id found for aggregate public key {:?}, skipping pegin",
-                    pegin.aggregate_publickey()
+                    pegin_agg_pk
                 )
             })
             .ok()?;
+
+            info!(
+                "get_staged_pegins_from_pegin_meta: pegin outpoint={}:{}, value={}, agg_pk={}, resolved multisig_id={}",
+                pegin.outpoint().txid, pegin.outpoint().vout, value, pegin_agg_pk, multisig_id,
+            );
 
             Some(models::PeginData { txid, vout, value, script_pubkey, eth_address, multisig_id: multisig_id.into() })
         })
@@ -321,17 +341,24 @@ pub(crate) fn get_utxos_from_staged_pegins(
 ) -> Vec<Utxo> {
     pegins
         .into_iter()
-        .map(|pegin| Utxo {
-            outpoint: Some(botanix_btc_server_client::OutPoint {
-                txid: pegin.txid,
-                vout: pegin.vout as u32,
-            }),
-            output: Some(TxOut {
-                value: pegin.value,
-                script_pubkey: Some(ScriptBuf { script: pegin.script_pubkey }),
-            }),
-            eth_address: hex::encode(pegin.eth_address),
-            multisig_id: pegin.multisig_id.into(),
+        .map(|pegin| {
+            let multisig_id: u32 = pegin.multisig_id.into();
+            info!(
+                "get_utxos_from_staged_pegins: vout={}, value={}, multisig_id={}",
+                pegin.vout, pegin.value, multisig_id,
+            );
+            Utxo {
+                outpoint: Some(botanix_btc_server_client::OutPoint {
+                    txid: pegin.txid,
+                    vout: pegin.vout as u32,
+                }),
+                output: Some(TxOut {
+                    value: pegin.value,
+                    script_pubkey: Some(ScriptBuf { script: pegin.script_pubkey }),
+                }),
+                eth_address: hex::encode(pegin.eth_address),
+                multisig_id,
+            }
         })
         .collect()
 }
