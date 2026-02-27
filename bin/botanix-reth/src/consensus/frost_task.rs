@@ -949,14 +949,32 @@ where
         .await
         .wrap_err("Failed to validate PSBT by Ids")?;
 
-        // TODO: Support multi-federation setup.
+        // Route signing messages to the multisig that owns the signing session.
+        // This mirrors the UTXO source selection: degrading multisig if one
+        // exists (its UTXOs are being spent), otherwise the funding multisig.
+        let active = self
+            .storage
+            .botanix_database_factory
+            .get_active_multisigs()?;
+
+        let funding_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Funding);
+
+        let degrading_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Degrading);
+
+        let signing_multisig_id = degrading_entry
+            .or(funding_entry)
+            .ok_or_else(|| eyre::eyre!("No active multisig found for signing"))?
+            .multisig_id;
+
         let multisig = self
             .multisigs
-            .get_mut(&LEGACY_MULTISIG_ID)
-            .ok_or(eyre::eyre!("No multisig entry found for Id {}", LEGACY_MULTISIG_ID))?;
+            .get_mut(&signing_multisig_id)
+            .ok_or(eyre::eyre!("No multisig entry found for Id {}", signing_multisig_id))?;
 
-        // TODO: Maybe the signing state machine should take the deserialized
-        // `Psbt` structure directly?
         match response_type {
             SigningEventResponseType::SignerRound1SigningPackage => {
                 multisig
