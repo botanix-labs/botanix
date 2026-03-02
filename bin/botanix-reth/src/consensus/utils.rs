@@ -31,6 +31,7 @@ use btcserverlib::{
     rpc::DkgEvent,
     wallet::psbt::{PsbtExt, PsbtOutputExt},
 };
+use frost_secp256k1_tr as frost;
 use futures_util::Future;
 use reth_network::{NetworkHandle, NetworkInfo};
 use reth_node_types::Block;
@@ -213,6 +214,7 @@ fn utxo_from_pegin_meta(
         .output
         .get(pegin_meta.outpoint().vout as usize)
         .expect("valid vout");
+
     let serialized_script_pub_key =
         bitcoin::consensus::serialize(&tx_out.script_pubkey);
 
@@ -249,6 +251,7 @@ fn utxo_from_pegin_meta(
     })
 }
 
+// TODO: This should return an error!
 pub(crate) fn get_staged_pegins_from_pegin_meta(
     pegins: &[PeginMeta],
     aggregate_public_keys: &BTreeMap<MultisigId, secp256k1::PublicKey>,
@@ -1027,6 +1030,46 @@ fn hash_slow(header: &Header) -> B256 {
 pub fn seal_slow(header: &Header) -> SealedHeader {
     let hash = hash_slow(header);
     SealedHeader::new(header.clone(), hash)
+}
+
+/// Deserializes a [`DkgAttestation`] into the typed components needed by
+/// [`MultisigSubmitter::submit_attestation`].
+///
+/// Returns `None` if any individual deserialization step fails.
+pub fn deserialize_dkg_attestation(
+    att: &botanix_btc_server_client::DkgAttestation,
+) -> Option<(
+    frost::keys::PublicKeyPackage,
+    frost::SigningPackage,
+    BTreeMap<
+        frost::Identifier,
+        (frost::round2::SignatureShare, secp256k1::ecdsa::Signature),
+    >,
+)> {
+    let public_key_package =
+        frost::keys::PublicKeyPackage::deserialize(&att.public_key_package)
+            .ok()?;
+
+    let signing_package =
+        frost::SigningPackage::deserialize(&att.signing_package).ok()?;
+
+    let signatures = att
+        .signatures
+        .iter()
+        .map(|s| {
+            let frost_id = frost::Identifier::deserialize(&s.frost_id).ok()?;
+            let sig_share =
+                frost::round2::SignatureShare::deserialize(&s.signature_share)
+                    .ok()?;
+            let att_sig = secp256k1::ecdsa::Signature::from_compact(
+                &s.attestation_signature,
+            )
+            .ok()?;
+            Some((frost_id, (sig_share, att_sig)))
+        })
+        .collect::<Option<_>>()?;
+
+    Some((public_key_package, signing_package, signatures))
 }
 
 #[cfg(test)]

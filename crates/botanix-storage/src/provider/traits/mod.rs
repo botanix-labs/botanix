@@ -18,6 +18,7 @@
 
 mod activation_manager;
 mod factory;
+mod multisig_manager;
 mod runtime_transitions;
 mod snapshot;
 mod staged_header;
@@ -25,6 +26,7 @@ mod wallet_state_sync;
 
 pub use activation_manager::*;
 pub use factory::*;
+pub use multisig_manager::*;
 pub use runtime_transitions::*;
 pub use snapshot::*;
 pub use staged_header::*;

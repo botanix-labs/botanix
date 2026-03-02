@@ -101,6 +101,8 @@ where
     bitcoin_network: bitcoin::Network,
     /// Blockchain provider
     provider: Arc<DatabaseProviderRO<RethDB, N>>,
+    /// Active multisigs that pegins can be minted to
+    active_agg_pks: Vec<secp256k1::PublicKey>,
 }
 
 /// A basic Ethereum block executor.
@@ -132,6 +134,7 @@ where
         state: State<DB>,
         bitcoind_factory: Arc<FallbackBitcoindClient>,
         bitcoin_network: bitcoin::Network,
+        active_agg_pks: Vec<secp256k1::PublicKey>,
         provider: Arc<DatabaseProviderRO<RethDB, N>>,
     ) -> Self {
         Self {
@@ -140,6 +143,7 @@ where
                 evm_config,
                 bitcoind_factory,
                 bitcoin_network,
+                active_agg_pks,
                 provider,
             },
             state,
@@ -561,75 +565,84 @@ where
                 tx_hash
             );
 
+            let mut bitcoin_checkpoint = consensus_pkg.bitcoin_checkpoint;
+
             // Get the reference block hash from the pegin metadata.
             // This is used to avoid the growing list of headers in the pegin metadata
             // by using a bitcoin checkpoint that is close to the pegin block height.
             // The reference block hash is only provided for version v1.
-            let mut bitcoin_checkpoint = consensus_pkg.bitcoin_checkpoint;
-            let (version, ref_block_hash) = if let Some(meta) =
-                pegin_data.meta.first()
-            {
-                match (meta.version(), meta.ref_block_hash()) {
-                    (1, None) => {
-                        return Err(MintContractError::InvalidPeginData {
-                            error: "Reference block hash cannot be found".to_string(),
-                            revert_address: pegin_data.account,
-                            revert_amount: pegin_data.amount,
-                        })
-                    }
-                    (1, Some(hash)) => {
-                        match provider.find_block_by_hash(hash, reth_provider::BlockSource::Any) {
-                            Ok(Some(block)) => {
-                                let header = block.header();
-                                let package = header
-                                    .botanix_consensus_package(
-                                        self.bitcoin_network,
-                                        self.bitcoind_factory.clone(),
-                                    )
-                                    .map_err(|_| MintContractError::InvalidPeginData {
-                                        error: "Failed to get botanix consensus package"
-                                            .to_string(),
-                                        revert_address: pegin_data.account,
-                                        revert_amount: pegin_data.amount,
-                                    })?;
-                                bitcoin_checkpoint = package.bitcoin_checkpoint;
-
-                                tracing::debug!(
-                                    pegin_meta_version = meta.version(),
-                                    ref_eth_block_hash = %hash,
-                                    overridden_btc_checkpoint_hash = %bitcoin_checkpoint.0.block_hash(),
-                                    overridden_btc_checkpoint_height = %bitcoin_checkpoint.1,
-                                    "overridden bitcoin checkpoint for V1 pegin via ref_block_hash"
-                                );
-                            }
-                            Ok(None) => {
-                                return Err(MintContractError::InvalidPeginData {
-                                    error: "No block found for reference block hash".to_string(),
-                                    revert_address: pegin_data.account,
-                                    revert_amount: pegin_data.amount,
-                                })
-                            }
-                            Err(_) => panic!("Database error fetching reference block hash"),
-                        };
-                    }
-                    (0, Some(_)) => {
-                        return Err(MintContractError::InvalidPeginData {
-                            error: "Not expecting reference block hash in proof version 0"
-                                .to_string(),
-                            revert_address: pegin_data.account,
-                            revert_amount: pegin_data.amount,
-                        })
-                    }
-                    _ => {}
-                };
-                (meta.version(), meta.ref_block_hash())
-            } else {
+            let Some(meta) = pegin_data.meta.first() else {
                 return Err(MintContractError::InvalidPeginData {
                     error: "No proofs found in pegin data".to_string(),
                     revert_address: pegin_data.account,
                     revert_amount: pegin_data.amount,
                 });
             };
+
+            match (meta.version(), meta.ref_block_hash()) {
+                (1, None) => {
+                    return Err(MintContractError::InvalidPeginData {
+                        error: "Reference block hash cannot be found".to_string(),
+                        revert_address: pegin_data.account,
+                        revert_amount: pegin_data.amount,
+                    })
+                }
+                (1, Some(hash)) => {
+                    match provider.find_block_by_hash(hash, reth_provider::BlockSource::Any) {
+                        Ok(Some(block)) => {
+                            let header = block.header();
+                            let package = header
+                                .botanix_consensus_package(
+                                    self.bitcoin_network,
+                                    self.bitcoind_factory.clone(),
+                                )
+                                .map_err(|_| MintContractError::InvalidPeginData {
+                                    error: "Failed to get botanix consensus package"
+                                        .to_string(),
+                                    revert_address: pegin_data.account,
+                                    revert_amount: pegin_data.amount,
+                                })?;
+                            bitcoin_checkpoint = package.bitcoin_checkpoint;
+
+                            tracing::debug!(
+                                pegin_meta_version = meta.version(),
+                                ref_eth_block_hash = %hash,
+                                overridden_btc_checkpoint_hash = %bitcoin_checkpoint.0.block_hash(),
+                                overridden_btc_checkpoint_height = %bitcoin_checkpoint.1,
+                                "overridden bitcoin checkpoint for V1 pegin via ref_block_hash"
+                            );
+                        }
+                        Ok(None) => {
+                            return Err(MintContractError::InvalidPeginData {
+                                error: "No block found for reference block hash".to_string(),
+                                revert_address: pegin_data.account,
+                                revert_amount: pegin_data.amount,
+                            })
+                        }
+                        Err(_) => {
+                            return Err(MintContractError::InvalidPeginData {
+                                error: "Database error fetching reference block hash".to_string(),
+                                revert_address: pegin_data.account,
+                                revert_amount: pegin_data.amount,
+                            })
+                        }
+                    };
+                }
+                (0, Some(_)) => {
+                    return Err(MintContractError::InvalidPeginData {
+                        error: "Not expecting reference block hash in proof version 0"
+                            .to_string(),
+                        revert_address: pegin_data.account,
+                        revert_amount: pegin_data.amount,
+                    })
+                }
+                _ => {}
+            };
+
+            // set the primary records
+            let version = meta.version();
+            let ref_block_hash = meta.ref_block_hash();
+            let aggregate_publickey = meta.aggregate_publickey();
 
             for meta in &pegin_data.meta {
                 if meta.version() != version {
@@ -648,6 +661,16 @@ where
                         revert_amount: pegin_data.amount,
                     });
                 }
+
+                // TODO: Is this restriction appropriate?
+                if meta.aggregate_publickey() != aggregate_publickey {
+                    return Err(MintContractError::InvalidPeginData {
+                        error: "Proofs have mismatching aggregate publickeys"
+                            .to_string(),
+                        revert_address: pegin_data.account,
+                        revert_amount: pegin_data.amount,
+                    });
+                }
             }
 
             // the pegin height must be equal or less than the required block depth (checkpoint)
@@ -661,9 +684,22 @@ where
                     revert_amount: pegin_data.amount,
                 });
             }
-            let aggregate_public_key = consensus_pkg.aggregate_public_key;
-            match pegin_data
-                .validate(&bitcoin_checkpoint, &aggregate_public_key)
+
+            // the pegin aggregate publickey must be activated, according to
+            // consensus
+            if !self.active_agg_pks.contains(&aggregate_publickey) {
+                return Err(MintContractError::InvalidPeginData {
+                    error: format!(
+                        "pegin aggregate publickey {} is not active: {:?}",
+                        aggregate_publickey, self.active_agg_pks,
+                    ),
+                    revert_address: pegin_data.account,
+                    revert_amount: pegin_data.amount,
+                });
+            }
+
+            // validate the bitcoin inclusion proof
+            match pegin_data.validate(&bitcoin_checkpoint, &aggregate_publickey)
             {
                 Ok(aggregate_value) => {
                     if pegin_data.amount >= aggregate_value {

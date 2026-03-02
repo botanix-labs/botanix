@@ -277,6 +277,42 @@ impl Telemetry {
         });
     }
 
+    pub fn update_round4_dkg_metrics(
+        &self,
+        btc_chain: bitcoin::Network,
+        self_id: u16,
+        latency_millis: u128,
+    ) {
+        self.maybe_use_metrics(|metrics| {
+            // update latency histogram
+            metrics
+                .round4_dkg_latency_histogram
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
+                .observe(latency_millis as f64);
+
+            // Increment total received packages
+            metrics
+                .total_received_round4_dkg_packages
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
+                .inc();
+
+            // Increment throughput for sessionid
+            metrics
+                .round4_dkg_throughput
+                .with_label_values(&[
+                    &btc_chain.to_string(),
+                    &self_id.to_string(),
+                ])
+                .inc();
+        });
+    }
+
     pub fn update_dkg_error_metrics(
         &self,
         btc_chain: bitcoin::Network,

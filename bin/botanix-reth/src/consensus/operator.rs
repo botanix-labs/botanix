@@ -1,30 +1,29 @@
 use crate::{
     consensus::{
         frost_task::FrostTask,
+        multisig_manager::MultisigSubmitter,
         wallet_state_sync::{WalletStateSync, WalletStateSyncEngine},
         Storage,
     },
     node::network::BotanixNetworkPrimitives,
-    services::frost::MultisigConfig,
+    services::frost::AuthorityMultisigConfig,
 };
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
 use botanix_btc_server_client::{
-    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GetPublicKeyRequest,
-    GrpcClientFactory, SubscribeToDynafedNotificationsStream,
+    BtcServerExtendedApi, BtcServerExtendedClient, Empty, GrpcClientFactory,
+    SubscribeToDynafedNotificationsStream,
 };
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
-use botanix_cli_args::state_sync::WALLET_STATE_SYNC_CHUNK_SIZE;
 use botanix_comet_bft_rpc::{
     Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory,
 };
 use botanix_data_parser::{DataParser, SerializationType};
 use botanix_storage::{
-    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
-    WalletStateSyncWriter,
+    MultisigManagerReader, StagedHeaderReader, StagedHeaderWriter,
+    WalletStateSyncReader, WalletStateSyncWriter,
 };
-use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use futures::{pin_mut, StreamExt};
 use reth_network::{frost::manager::ToFrostManager, NetworkHandle};
 use reth_primitives::NodePrimitives;
@@ -34,21 +33,38 @@ use reth_provider::{
 };
 use reth_storage_api::NodePrimitivesProvider;
 use reth_tasks::TaskExecutor;
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tracing::info;
 
-/// Builder type for configuring the setup
-#[allow(dead_code)]
+/// Builder type for configuring and assembling the authority operator for
+/// federation/multisig members.
+///
+/// Collects all dependencies needed to construct a [`FrostTask`] and its
+/// supporting background tasks (health monitoring, dynafed notification
+/// forwarding, wallet state sync). Only federation members run this.
+#[allow(missing_debug_implementations)]
 pub struct OperatorBuilder<RDB, BDB, ToFrostMan, Source> {
+    /// Reth and Botanix storage backends.
     storage: Storage<RDB, BDB>,
+    /// Factory for establishing gRPC connections to the btc-server.
     btc_server_factory: GrpcClientFactory,
+    /// P2P network handle for broadcasting and receiving messages.
     network_handle: NetworkHandle<BotanixNetworkPrimitives>,
+    /// Handle for sending commands to the FROST signing manager.
     frost_handle: ToFrostMan,
+    /// Handle for submitting multisig lifecycle transitions.
+    multisig_handle: MultisigSubmitter,
+    /// Executor for spawning critical background tasks.
     task_executor: TaskExecutor,
-    multisig_configs: Vec<MultisigConfig>,
+    /// Per-multisig authority configurations .
+    multisig_configs: Vec<AuthorityMultisigConfig>,
+    /// Factory for creating CometBFT RPC clients.
     cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
+    /// Provider of randomness for the remote signing protocol.
     random_source_provider: Source,
+    /// Shared authority metrics.
     metrics: Arc<AuthorityMetrics>,
+    /// Bitcoin Core RPC client.
     bitcoind_client: Arc<FallbackBitcoindClient>,
 }
 
@@ -74,6 +90,7 @@ where
         > + 'static,
     BDB: StagedHeaderReader
         + StagedHeaderWriter
+        + MultisigManagerReader
         + WalletStateSyncWriter
         + WalletStateSyncReader
         + Clone
@@ -87,8 +104,9 @@ where
         btc_server_factory: GrpcClientFactory,
         network_handle: NetworkHandle<BotanixNetworkPrimitives>,
         frost_handle: ToFrostMan,
+        multisig_handle: MultisigSubmitter,
         task_executor: TaskExecutor,
-        multisig_configs: Vec<MultisigConfig>,
+        multisig_configs: Vec<AuthorityMultisigConfig>,
         cometbft_rpc_factory: HttpCometBFTRpcClientFactory,
         random_source_provider: Source,
         bitcoind_client: Arc<FallbackBitcoindClient>,
@@ -98,6 +116,7 @@ where
             btc_server_factory,
             network_handle,
             frost_handle,
+            multisig_handle,
             task_executor,
             multisig_configs,
             cometbft_rpc_factory,
@@ -124,6 +143,7 @@ where
             storage,
             network_handle,
             frost_handle,
+            multisig_handle,
             task_executor,
             multisig_configs,
             cometbft_rpc_factory,
@@ -135,24 +155,19 @@ where
         let parser = DataParser::default()
             .with_serialization_type(SerializationType::Postcard);
 
-        let mut btc_server = btc_server_factory
+        let btc_server = btc_server_factory
             .build_and_connect()
             .await
             .expect("Failed to build and connect to btc server")
             .into();
 
         // TODO:
-        let legacy = multisig_configs
-            .iter()
-            .find(|m| m.multisig_id == LEGACY_MULTISIG_ID)
-            .unwrap();
-
         let wallet_sync = WalletStateSyncEngine::new(
             storage.clone(),
             btc_server.clone(),
             frost_handle.clone(),
             task_executor.clone(),
-            legacy.min_signers as u64,
+            2, // TODO
         );
 
         // create frost and block production tasks if btc_server is available:
@@ -167,6 +182,7 @@ where
             btc_server.clone(),
             network_handle.clone(),
             frost_handle.clone(),
+            multisig_handle,
             multisig_configs.clone(),
             storage.clone(),
             parser.clone(),
@@ -278,65 +294,6 @@ where
                 }
             }),
         );
-
-        // TODO: Revisit this; the logic below assumes that only federation
-        // members must know the multisigs, which is incorrect. This logic must
-        // be applied to both regular nodes and federation members in
-        // [`super::AuthorityConsensusBuilder`].
-        //
-        // load all multisig ids and aggregated public keys into the storage
-        let multisig_ids = match btc_server.list_multisigs(Empty {}).await {
-			Ok(multisig_ids) => {
-				info!(target: "reth::authority", "Found {} multisig ids", multisig_ids.ids.len());
-				multisig_ids
-			}
-			Err(e) => {
-				tracing::error!(target: "reth::authority", "Error getting multisig ids: {}", e);
-				panic!("Error getting multisig ids: {}", e);
-			}
-		}
-		.ids;
-
-        let mut aggregated_pub_keys = vec![];
-        for multisig_id in multisig_ids {
-            match btc_server
-                .get_public_key(GetPublicKeyRequest { multisig_id })
-                .await
-            {
-                Ok(resp) => {
-                    if let Ok(pk) =
-                        secp256k1::PublicKey::from_str(&resp.publickey)
-                    {
-                        let multisig_id: MultisigId = multisig_id.into();
-                        aggregated_pub_keys.push((multisig_id, pk));
-                    } else {
-                        tracing::error!(target: "reth::authority", "Error parsing public key for multisig id: {}", multisig_id);
-                        panic!(
-                            "Error parsing public key for multisig id: {}",
-                            multisig_id
-                        );
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(target: "reth::authority", "Error retrieving public key for multisig id: {}, e = {}", multisig_id, e);
-                    panic!("Error retrieving public key for multisig id: {}, e = {}", multisig_id, e);
-                }
-            }
-        }
-
-        if !aggregated_pub_keys.is_empty() {
-            let mut storage = storage.write().await;
-            match storage.aggregate_public_key.as_mut() {
-                Some(storage_pub_keys) => {
-                    storage_pub_keys.extend(aggregated_pub_keys)
-                }
-                None => {
-                    storage.aggregate_public_key =
-                        Some(aggregated_pub_keys.into_iter().collect())
-                }
-            }
-            drop(storage);
-        }
 
         frost_task
     }

@@ -1,19 +1,20 @@
 use crate::{
     models::{
-        ChunkId, HeaderWithPegs, PeerID, RuntimeVersion, Snapshot,
-        SnapshotChunk, SnapshotId, SnapshotSync, SnapshotSyncId, UuidID,
-        WalletStateSyncRecord,
+        AttestedMultisigEntry, ChunkId, HeaderWithPegs, MultisigRecord, PeerID,
+        RuntimeVersion, Snapshot, SnapshotChunk, SnapshotId, SnapshotSync,
+        SnapshotSyncId, StagedMultisigEntry, UuidID, WalletStateSyncRecord,
     },
     provider::database::provider::{
         BotanixDatabaseProvider, BotanixDatabaseProviderRO,
         BotanixDatabaseProviderRW,
     },
     DatabaseProviderFactoryRO, DatabaseProviderFactoryRW,
-    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
-    StagedHeaderReader, StagedHeaderWriter, WalletStateSyncReader,
-    WalletStateSyncWriter,
+    MultisigManagerReader, MultisigManagerWriter, RuntimeTransitionsReadWrite,
+    SnapshotReader, SnapshotWriter, StagedHeaderReader, StagedHeaderWriter,
+    WalletStateSyncReader, WalletStateSyncWriter,
 };
 use alloy_primitives::{BlockNumber, Bytes, B256};
+use botanix_types::MultisigId;
 use reth_db_api::database::Database;
 use reth_node_types::NodeTypes;
 use reth_provider::providers::NodeTypesForProvider;
@@ -57,7 +58,7 @@ use std::{collections::HashSet, ops::RangeInclusive, sync::Arc};
 /// let snapshot_id = provider_rw.create_new_snapshot(block_number, block_hash)?;
 /// provider_rw.commit()?;
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BotanixProviderFactory<DB, N: NodeTypes> {
     /// Database instance wrapped in Arc for thread-safe sharing
     db: Arc<DB>,
@@ -71,6 +72,21 @@ pub struct BotanixProviderFactory<DB, N: NodeTypes> {
     storage: Arc<N::Storage>,
     /// Marker for node types
     _node_types: std::marker::PhantomData<N>,
+}
+
+// Manual Clone implementation so that the type parameters wrapped in Arc do not
+// require the Clone bound as well.
+impl<DB, N: NodeTypes> Clone for BotanixProviderFactory<DB, N> {
+    fn clone(&self) -> Self {
+        Self {
+            db: Arc::clone(&self.db),
+            chain_spec: Arc::clone(&self.chain_spec),
+            static_file_provider: self.static_file_provider.clone(),
+            prune_modes: self.prune_modes.clone(),
+            storage: Arc::clone(&self.storage),
+            _node_types: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<DB, N: NodeTypes> BotanixProviderFactory<DB, N> {
@@ -630,5 +646,72 @@ impl<DB: Database, N: NodeTypes + NodeTypesForProvider>
         &self,
     ) -> ProviderResult<Option<RuntimeVersion>> {
         self.provider_rw()?.get_last_runtime_version()
+    }
+}
+
+impl<DB: Database, N: NodeTypes + NodeTypesForProvider> MultisigManagerReader
+    for BotanixProviderFactory<DB, N>
+{
+    #[inline(always)]
+    fn get_staging_multisig(
+        &self,
+        id: MultisigId,
+    ) -> ProviderResult<Option<StagedMultisigEntry>> {
+        self.provider()?.get_staging_multisig(id)
+    }
+
+    #[inline(always)]
+    fn get_attested_multisig(
+        &self,
+        id: MultisigId,
+    ) -> ProviderResult<Option<AttestedMultisigEntry>> {
+        self.provider()?.get_attested_multisig(id)
+    }
+
+    #[inline(always)]
+    fn get_active_multisigs(
+        &self,
+    ) -> ProviderResult<Vec<AttestedMultisigEntry>> {
+        self.provider()?.get_active_multisigs()
+    }
+
+    #[inline(always)]
+    fn get_multisig_records(&self) -> ProviderResult<Vec<MultisigRecord>> {
+        self.provider()?.get_multisig_records()
+    }
+}
+
+impl<DB: Database, N: NodeTypes + NodeTypesForProvider> MultisigManagerWriter
+    for BotanixProviderFactory<DB, N>
+{
+    fn insert_staging_multisig(
+        &self,
+        id: MultisigId,
+        entry: StagedMultisigEntry,
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_staging_multisig(id, entry)?;
+        provider.commit()?;
+        Ok(())
+    }
+
+    fn insert_attested_multisig(
+        &self,
+        id: MultisigId,
+        entry: AttestedMultisigEntry,
+    ) -> ProviderResult<()> {
+        let provider = self.provider_rw()?;
+        provider.insert_attested_multisig(id, entry)?;
+        provider.commit()?;
+        Ok(())
+    }
+
+    fn remove_multisig(&self, id: MultisigId) -> ProviderResult<bool> {
+        let provider = self.provider_rw()?;
+        let removed = provider.remove_multisig(id)?;
+        if removed {
+            provider.commit()?;
+        }
+        Ok(removed)
     }
 }

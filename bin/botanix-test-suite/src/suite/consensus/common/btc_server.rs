@@ -302,6 +302,7 @@ pub fn spawn_n_btc_server_processes(
         multisig_configs.push(MultisigTomlConfig::new(
             multisig_id,
             global_context.min_signers,
+            None,
             fed_members,
         ));
     }

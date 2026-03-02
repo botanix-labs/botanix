@@ -4,14 +4,12 @@ use async_trait as _;
 use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_chainspec::BotanixChainSpec;
 
-use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use bytes as _;
 use displaydoc as _;
 use reth_network_peers as _;
 use reth_node_core as _;
 use serde_json as _;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::Arc;
 mod builder;
 mod operator;
 
@@ -19,6 +17,7 @@ mod operator;
 pub mod comet_bft;
 mod execution_utils;
 mod frost_task;
+pub mod multisig_manager;
 mod signing;
 pub mod snapshot_manager;
 pub mod utils;
@@ -35,10 +34,11 @@ pub const MAXIMUM_EXTRA_DATA_SIZE: usize = 256;
 
 /// Max EDH size; for specific details see [ExtraDataHeader]
 pub const MAX_EDH_SIZE: usize = 93;
+
 /// In memory storage
-/// All this struct does is provide a rwlock wrapper around the storage inner
-#[allow(dead_code)]
+/// TODO: Consider deprecating this entirely.
 #[derive(Clone)]
+#[allow(missing_debug_implementations)]
 pub struct Storage<RDB, BDB> {
     /// Reth Database Provider Factory
     pub(crate) reth_database: RDB,
@@ -52,8 +52,6 @@ pub struct Storage<RDB, BDB> {
     pub(crate) bitcoind_factory: Arc<FallbackBitcoindClient>,
     /// Chain spec
     pub(crate) chain_spec: Arc<BotanixChainSpec>,
-    // The inner storage, everything here is rw locked
-    pub(crate) inner: Arc<RwLock<StorageInner>>,
 }
 
 impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
@@ -61,24 +59,12 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         btc_network: bitcoin::Network,
-        aggregate_public_key: Option<secp256k1::PublicKey>,
         evm_config: BotanixEvmConfig,
         chain_spec: Arc<BotanixChainSpec>,
         bitcoind_factory: Arc<FallbackBitcoindClient>,
         reth_database: RDB,
         botanix_database_factory: BDB,
     ) -> Self {
-        // TODO: use the correct multisig_id
-        let aggregate_public_key = if let Some(aggregate_public_key) =
-            aggregate_public_key
-        {
-            Some(BTreeMap::from([(LEGACY_MULTISIG_ID, aggregate_public_key)]))
-        } else {
-            None
-        };
-
-        let storage_inner = StorageInner { aggregate_public_key };
-
         Self {
             reth_database,
             botanix_database_factory,
@@ -86,28 +72,6 @@ impl<RDB: Clone, BDB: Clone> Storage<RDB, BDB> {
             evm_config,
             chain_spec,
             bitcoind_factory,
-            inner: Arc::new(RwLock::new(storage_inner)),
         }
     }
-
-    /// Returns the write lock of the storage
-    pub(crate) async fn write(&self) -> RwLockWriteGuard<'_, StorageInner> {
-        self.inner.write().await
-    }
-
-    #[allow(dead_code)]
-    /// Returns the read lock of the storage
-    pub(crate) async fn read(&self) -> RwLockReadGuard<'_, StorageInner> {
-        self.inner.read().await
-    }
-}
-
-#[derive(Debug)]
-/// In-memory storage for the chain the authority seal engine is building.
-/// data shared amongst the different tasks should be stored here and protected by a rwlock
-pub(crate) struct StorageInner {
-    /// The aggregate public key of the FROST threshold signature scheme
-    /// Should get populated after DKG
-    pub(crate) aggregate_public_key:
-        Option<BTreeMap<MultisigId, secp256k1::PublicKey>>,
 }

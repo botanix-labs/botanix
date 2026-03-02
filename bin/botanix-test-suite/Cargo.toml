@@ -33,7 +33,7 @@ botanix-authority-edh = { workspace = true }
 botanix-authority-peg = { workspace = true, features = ["secp256k1"] }
 
 # Bitcoin related dependencies
-ciborium = "0.2.1"
+ciborium = { workspace = true }
 
 # Botanix
 botanix-btc-server = { workspace = true }

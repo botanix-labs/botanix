@@ -135,7 +135,21 @@ fn dkg_complete_stage_two() {
         alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
     );
 
-    let (_alice, _bob, _eve) = complete_stage_two(
+    let (alice, bob, eve) = complete_stage_two(
         alice_addr, bob_addr, eve_addr, alice, bob, eve, now,
     );
+
+    // Key packages are ready: all member reproduced the same public key!
+    let (_, alice_pub) = alice.aggregate_key_packages().unwrap();
+    let (_, bob_pub) = bob.aggregate_key_packages().unwrap();
+    let (_, eve_pub) = eve.aggregate_key_packages().unwrap();
+
+    assert_eq!(alice_pub, bob_pub);
+    assert_eq!(alice_pub, eve_pub);
+    assert_eq!(bob_pub, eve_pub);
+
+    // Attestations are not ready yet.
+    assert!(alice.attestation().is_none());
+    assert!(bob.attestation().is_none());
+    assert!(eve.attestation().is_none());
 }

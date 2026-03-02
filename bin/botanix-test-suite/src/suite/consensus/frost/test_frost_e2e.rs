@@ -6,10 +6,7 @@ use ethers::providers::{Http, Provider};
 use crate::{
     it_info_print,
     suite::consensus::{
-        common::{
-            pegin::{run_pegin, PeginResult},
-            pegout::run_pegout,
-        },
+        common::{pegin::run_pegin, pegout::run_pegout},
         ConsensusIntegrationTestSuite,
     },
 };

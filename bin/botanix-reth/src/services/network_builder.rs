@@ -194,7 +194,6 @@ pub async fn setup_network_builder(
         // such that there is no confusion about this behavior.
         let authorities = frost_setup_result.authorities();
         if authorities.is_empty() {
-            // This should never occur if [TODO]
             return Err(eyre::eyre!("authority list is empty"));
         }
 

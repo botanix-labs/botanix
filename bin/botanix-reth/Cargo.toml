@@ -228,6 +228,10 @@ tonic = { workspace = true }
 tracing.workspace = true
 uuid = { version = "1.8.0", features = ["v4"] }
 
+# multisig manager
+ciborium = { workspace = true }
+merlin = { workspace = true }
+
 [dev-dependencies]
 botanix-storage = { workspace = true, features = ["test-utils"] }
 rand = { workspace = true }

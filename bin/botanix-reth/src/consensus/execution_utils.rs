@@ -1,7 +1,10 @@
 pub(crate) mod authority_execution_utils {
-    use crate::node::{
-        primitives::{BotanixBlock, BotanixBlockBody},
-        BotanixNode,
+    use crate::{
+        consensus::comet_bft::non_deterministic_data::NonDeterministicData,
+        node::{
+            primitives::{BotanixBlock, BotanixBlockBody},
+            BotanixNode,
+        },
     };
     use alloy_consensus::{
         constants::{EMPTY_RECEIPTS, EMPTY_TRANSACTIONS},
@@ -19,26 +22,20 @@ pub(crate) mod authority_execution_utils {
         header_ext::HeaderExt,
     };
     use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
-    use botanix_btc_wallet::{
-        bitcoind::BitcoindFactory, fallback::FallbackBitcoindClient,
-    };
+    use botanix_btc_wallet::fallback::FallbackBitcoindClient;
     use botanix_chainspec::BotanixChainSpec;
-    use botanix_storage::models::RuntimeVersion;
     use reth_chainspec::{ChainSpec, EthereumHardforks};
-    use reth_db::{Database, DatabaseEnv};
+    use reth_db::DatabaseEnv;
     use reth_ethereum_primitives::BlockBody;
     use reth_execution_errors::InternalBlockExecutionError;
     use reth_node_builder::NodeTypesWithDBAdapter;
-    use reth_node_ethereum::EthEvmConfig;
-    use reth_node_types::Block as BlockTrait;
     use reth_primitives::{
         Header, Receipt, ReceiptWithBloom, RecoveredBlock, TransactionSigned,
     };
     use reth_primitives_traits::proofs;
     use reth_provider::{
-        providers::ProviderNodeTypes, BlockHashReader, BlockNumReader,
-        DatabaseProviderFactory, ExecutionOutcome, HeaderProvider,
-        OriginalValuesKnown, ProviderFactory,
+        BlockHashReader, BlockNumReader, DatabaseProviderFactory,
+        ExecutionOutcome, HeaderProvider, OriginalValuesKnown, ProviderFactory,
     };
     use reth_revm::{database::StateProviderDatabase, db::State};
     use reth_trie::{HashedPostState, StateRoot};
@@ -46,7 +43,6 @@ pub(crate) mod authority_execution_utils {
     use reth_trie_db::DatabaseStateRoot;
 
     use crate::node::evm::config::BotanixEvmConfig;
-    use botanix_activation_manager::NetworkUpgradePayload;
     use botanix_evm::{
         error::{BlockExecutionError, BlockValidationError},
         execute::{BotanixBlockExecutionOutput, EthBlockExecutor},
@@ -64,8 +60,7 @@ pub(crate) mod authority_execution_utils {
     pub(crate) fn build_and_execute(
         transactions: Vec<TransactionSigned>,
         chain_spec: Arc<BotanixChainSpec>,
-        runtime_version: RuntimeVersion,
-        network_upgrade_payload: Option<NetworkUpgradePayload>,
+        non_deterministic_data: NonDeterministicData,
         floor_base_fee: Option<u64>,
         block_fee_recipient_address: &Address,
         evm_config: BotanixEvmConfig,
@@ -74,17 +69,24 @@ pub(crate) mod authority_execution_utils {
         >,
         bitcoind_factory: Arc<FallbackBitcoindClient>,
         bitcoin_network: bitcoin::Network,
-        bitcoin_checkpoint_block_hash: &bitcoin::BlockHash,
-        agg_pk: &secp256k1::PublicKey,
+        funding_agg_pk: &secp256k1::PublicKey,
+        active_agg_pks: Vec<secp256k1::PublicKey>,
         timestamp: Timestamp,
     ) -> Result<BlockWithContext<BotanixBlock>, BlockExecutionError> {
         let start_execution_time = std::time::Instant::now();
+
+        // Retrieve more context about execution conditions
+        let runtime_version = non_deterministic_data.runtime_version();
+        let network_upgrade_payload =
+            non_deterministic_data.network_upgrade_payload();
+        let bitcoin_checkpoint_block_hash =
+            &non_deterministic_data.bitcoin_block_hash();
 
         tracing::info!(
             block_time = timestamp.seconds,
             transactions_count = transactions.len(),
             block_fee_recipient_address = %block_fee_recipient_address,
-            aggregated_public_key = %agg_pk,
+            aggregated_public_key = %funding_agg_pk,
             %bitcoin_checkpoint_block_hash,
             "Build and execute an ethereum block with {} transactions",
             transactions.len()
@@ -96,7 +98,7 @@ pub(crate) mod authority_execution_utils {
             database_provider,
             bitcoin_checkpoint_block_hash,
             chain_spec.inner_arc(),
-            agg_pk,
+            funding_agg_pk,
             timestamp,
             block_fee_recipient_address,
         )?;
@@ -141,6 +143,7 @@ pub(crate) mod authority_execution_utils {
             Some(*block_fee_recipient_address),
             bitcoind_factory,
             bitcoin_network,
+            active_agg_pks,
             chain_spec,
             evm_config,
         )?;
@@ -151,7 +154,7 @@ pub(crate) mod authority_execution_utils {
             block_exec_output.gas_used,
             *bitcoin_checkpoint_block_hash,
             database_provider,
-            agg_pk,
+            funding_agg_pk,
         )?;
 
         // Replace header with the one that is completed and create new recovered block
@@ -188,8 +191,7 @@ pub(crate) mod authority_execution_utils {
 
         let block_with_context = BlockWithContext {
             sealed_block_with_peg,
-            runtime_version,
-            network_upgrade_payload,
+            non_deterministic_data,
             exec_outcome,
             trie_updates,
         };
@@ -227,8 +229,8 @@ pub(crate) mod authority_execution_utils {
                     block_slow_hash = ?block.hash_slow(),
                     block_sealed_hash = ?block.hash(),
                     eth_block = ?block,
-                    runtimve_version = ?block_with_context.runtime_version,
-                    network_upgrade_payload = ?block_with_context.network_upgrade_payload,
+                    runtimve_version = ?runtime_version,
+                    network_upgrade_payload = ?network_upgrade_payload,
                     pegins = ?block_with_pegs.pegins(),
                     pegouts = ?block_with_pegs.pegouts(),
                     receipts = ?exec_outcome.receipts,
@@ -478,6 +480,7 @@ pub(crate) mod authority_execution_utils {
         _block_fee_recipient_address: Option<Address>,
         bitcoind_factory: Arc<FallbackBitcoindClient>,
         bitcoin_network: bitcoin::Network,
+        active_agg_pks: Vec<secp256k1::PublicKey>,
         chain_spec: Arc<BotanixChainSpec>,
         evm_config: BotanixEvmConfig,
     ) -> Result<BotanixBlockExecutionOutput<Receipt>, BlockExecutionError> {
@@ -507,6 +510,7 @@ pub(crate) mod authority_execution_utils {
             db,
             bitcoind_factory.clone(),
             bitcoin_network,
+            active_agg_pks,
             Arc::new(blockchain_provider),
         );
         let exec_results = executor.execute(&block)?;

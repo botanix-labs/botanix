@@ -1,46 +1,72 @@
 //! The purpose of this module is to provide a bridge between the CometBFT and
 //! the EVM application state
+use crate::consensus::{
+    comet_bft::non_deterministic_data::{
+        NonDeterministicData, RUNTIME_VERSION_GENESIS,
+    },
+    comet_bft::proto_debug::{
+        RequestApplySnapshotChunkTruncatedDebug,
+        RequestFinalizeBlockTruncatedDebug,
+        RequestProcessProposalTruncatedDebug,
+        ResponseLoadSnapshotChunkTruncatedDebug,
+        ResponsePrepareProposalTruncatedDebug,
+    },
+    execution_utils::authority_execution_utils::build_and_execute,
+    multisig_manager::{self, BotanixMultisigManager},
+    snapshot_manager::{SnapshotManagerError, SnapshotManagerStateLock},
+    utils::{
+        get_staged_pegins_from_pegin_meta, get_staged_pegouts_from_pegout_data,
+        transactions_signed_from_bytes,
+    },
+    Storage,
+};
+use crate::node::{
+    consensus::BotanixConsensus, primitives::BotanixBlock, BotanixNode,
+};
 use alloy_consensus::BlockHeader;
 use alloy_eips::{Encodable2718, NumHash};
-use botanix_authority_edh::header_ext::HeaderExt;
+use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, B256};
+use alloy_rpc_types_engine::{ForkchoiceState, PayloadAttributes};
+use alloy_rpc_types_eth::BlockId;
+use botanix_activation_manager::{
+    ActivationManager, NetworkUpgradePayload, OnFinalizeBlockDecision,
+    OnProcessProposalDecision, VoteWatcher,
+};
+use botanix_authority_metrics::AuthorityMetrics;
+use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
+use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
 use botanix_chainspec::{
     constants::BOTANIX_TESTNET_CHAIN_ID, BotanixChainSpec,
 };
-use botanix_evm::error::{ConsensusError, InvalidAggregatedPublicKeyError};
+use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
+use botanix_consensus_common::utils::unix_timestamp;
+use botanix_data_parser::DataParser;
+use botanix_evm::error::ConsensusError;
+use botanix_evm::payload::default_ethereum_payload;
 use botanix_storage::models::RuntimeVersion;
-use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
+use botanix_storage::{
+    models::{
+        HeaderWithPegs, PeginData, PegoutData, SnapshotSync, SnapshotSyncId,
+    },
+    BotanixProviderFactory, DatabaseProviderFactoryRW,
+    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
+    StagedHeaderWriter,
+};
+use botanix_types::MultisigId;
+use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
+use reth_chain_state::CanonStateNotification;
 use reth_chain_state::{
     ExecutedBlock, ExecutedBlockWithTrieUpdates, ExecutedTrieUpdates,
 };
+use reth_consensus::Consensus;
+use reth_consensus::HeaderValidator;
 use reth_db::DatabaseEnv;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_node_builder::NodeTypesWithDBAdapter;
 use reth_node_types::Block;
-use reth_primitives_traits::Block as BlockTrait;
-use reth_trie::updates::TrieUpdates;
-use reth_trie_common::KeccakKeyHasher;
-use std::{
-    collections::BTreeMap,
-    error::Error,
-    io,
-    sync::{Arc, RwLock},
-};
-use thiserror::Error;
-use tokio::sync::Mutex;
-
-use alloy_primitives::{Address, BlockHash, BlockNumber, Bytes, B256};
-use alloy_rpc_types_engine::{ForkchoiceState, PayloadAttributes};
-use alloy_rpc_types_eth::BlockId;
-use botanix_authority_peg::block_with_peg::SealedBlockWithPeg;
-use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
-use botanix_consensus_common::utils::unix_timestamp;
-use botanix_data_parser::DataParser;
-use botanix_evm::payload::default_ethereum_payload;
-use reth_basic_payload_builder::{BuildArguments, PayloadConfig};
-use reth_chain_state::CanonStateNotification;
-use reth_consensus::Consensus;
 use reth_payload_builder::EthPayloadBuilderAttributes;
 use reth_primitives::{BlockWithSenders, RecoveredBlock};
+use reth_primitives_traits::Block as BlockTrait;
 use reth_provider::{
     providers::BlockchainProvider, BlockReaderIdExt, BlockWriter,
     CanonChainTracker, Chain, ExecutionOutcome, ProviderError, ProviderFactory,
@@ -49,8 +75,16 @@ use reth_provider::{
 use reth_revm::primitives::FixedBytes;
 use reth_tasks::{TaskExecutor, TaskSpawner};
 use reth_transaction_pool::TransactionPool;
+use reth_trie::updates::TrieUpdates;
+use reth_trie_common::KeccakKeyHasher;
 use schnellru::{ByLength, LruMap};
-
+use std::{
+    collections::BTreeMap,
+    error::Error,
+    io,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 use tendermint_abci::{Application, ServerBuilder};
 use tendermint_proto::{
     abci::{
@@ -66,15 +100,9 @@ use tendermint_proto::{
         ResponseOfferSnapshot, Snapshot,
     },
 };
-
-use crate::{
-    consensus::comet_bft::non_deterministic_data::{
-        NonDeterministicData, RUNTIME_VERSION_GENESIS,
-    },
-    node::{
-        consensus::BotanixConsensus, primitives::BotanixBlock, BotanixNode,
-    },
-};
+use thiserror::Error;
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, instrument, trace, warn};
 
 /// Runtime version 0.1 that Botanix launched with.
 pub const RUNTIME_VERSION_V1: RuntimeVersion = RUNTIME_VERSION_GENESIS;
@@ -118,6 +146,7 @@ enum SnapshotOfferResult {
 }
 
 /// Apply Snapshot Results
+#[derive(Debug, Clone, Copy)]
 pub enum ApplySnapshotResult {
     /// Unknown result, abort all snapshot restoration
     Unknown = 0,
@@ -132,38 +161,6 @@ pub enum ApplySnapshotResult {
     /// Reject this snapshot, try others
     RejectSnapshot = 5,
 }
-use crate::consensus::{
-    comet_bft::proto_debug::{
-        RequestApplySnapshotChunkTruncatedDebug,
-        RequestFinalizeBlockTruncatedDebug,
-        RequestProcessProposalTruncatedDebug,
-        ResponseLoadSnapshotChunkTruncatedDebug,
-        ResponsePrepareProposalTruncatedDebug,
-    },
-    execution_utils::authority_execution_utils::build_and_execute,
-    snapshot_manager::{SnapshotManagerError, SnapshotManagerStateLock},
-    utils::{
-        get_staged_pegins_from_pegin_meta, get_staged_pegouts_from_pegout_data,
-        transactions_signed_from_bytes,
-    },
-    Storage,
-};
-use botanix_activation_manager::{
-    ActivationManager, NetworkUpgradePayload, OnFinalizeBlockDecision,
-    OnProcessProposalDecision, VoteWatcher,
-};
-use botanix_authority_metrics::AuthorityMetrics;
-use botanix_bitcoin_checkpoint::BitcoinCheckpointsChain;
-use botanix_storage::{
-    models::{
-        HeaderWithPegs, PeginData, PegoutData, SnapshotSync, SnapshotSyncId,
-    },
-    BotanixProviderFactory, DatabaseProviderFactoryRW,
-    RuntimeTransitionsReadWrite, SnapshotReader, SnapshotWriter,
-    StagedHeaderWriter,
-};
-use reth_consensus::HeaderValidator;
-use tracing::{debug, error, info, instrument, trace, warn};
 
 /// Consts
 const SUCCESS: u32 = 0;
@@ -237,17 +234,15 @@ impl SnapshotSyncStateLock {
 
 /// Block with execution context, trie updates and botanix peg data
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockWithContext<
+pub(crate) struct BlockWithContext<
     B: BlockTrait = alloy_consensus::Block<
         alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
     >,
 > {
     /// The sealed block with peg data
     pub sealed_block_with_peg: SealedBlockWithPeg<B>,
-    /// The Botanix runtime version.
-    pub runtime_version: RuntimeVersion,
-    /// The optional network upgrade payload.
-    pub network_upgrade_payload: Option<NetworkUpgradePayload>,
+    /// The non-deterministic data
+    pub non_deterministic_data: NonDeterministicData,
     /// The execution outcome
     pub exec_outcome: ExecutionOutcome,
     /// The trie updates
@@ -258,9 +253,11 @@ type BotanixNodeTypes = NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>;
 
 /// ABCI client builder
 #[derive(Clone)]
+#[allow(missing_debug_implementations)]
 pub struct ABCIClientBuilder<RDB, BDB> {
     storage: Storage<RDB, BDB>,
     activation_manager: ActivationManager<VoteWatcher, Address>,
+    multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     botanix_consensus: BotanixConsensus<BotanixChainSpec>,
     cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
@@ -294,6 +291,7 @@ where
     pub(crate) fn new(
         storage: Storage<RDB, BDB>,
         activation_manager: ActivationManager<VoteWatcher, Address>,
+        multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         botanix_consensus: BotanixConsensus<BotanixChainSpec>,
         cbft_rpc_client_factory: HttpCometBFTRpcClientFactory,
@@ -326,6 +324,7 @@ where
         Self {
             storage,
             activation_manager,
+            multisig_manager,
             bitcoin_checkpoints,
             botanix_consensus,
             cbft_rpc_client_factory,
@@ -345,6 +344,7 @@ where
         }
     }
 
+    /// Returns the in-memory storage
     pub fn storage(&self) -> Storage<RDB, BDB> {
         self.storage.clone()
     }
@@ -370,6 +370,7 @@ where
             self.storage.clone(),
             tx_pool,
             self.activation_manager.clone(),
+            self.multisig_manager.clone(),
             self.bitcoin_checkpoints.clone(),
             self.abci_driver_tx.clone(),
             self.cbft_rpc_client_factory.clone(),
@@ -392,21 +393,73 @@ where
         let server =
             server_builder.bind(format!("{abci_host}:{abci_port}"), app)?;
 
-        if self.is_fed_node {
+        let mut interval = tokio::time::interval(Duration::from_millis(5_000));
+
+        let funding_multisig: Option<_> = self
+            .multisig_manager
+            .guard_rollback(|m| m.get_funding_multisig())
+            .expect("db must not fail");
+
+        // If this is a fed node and no funding multisig is available yet, we
+        // wait until the DKG process has been completed off-chain and let it
+        // activate here.
+        if self.is_fed_node && funding_multisig.is_none() {
             loop {
-                let storage = self.storage.inner.read().await;
-                if storage.aggregate_public_key.is_some() {
-                    info!(
-                        "Aggregate public key is stored in the storage continuing to start ABCI server"
+                // Pause loop (first tick completes immediately)...
+                interval.tick().await;
+
+                // Attempt to receive the attestation submission from the FrostTask...
+                let Some(message) = self
+                    .multisig_manager
+                    .guard_rollback(|m| Ok(m.send()))
+                    .expect("db must not fail")
+                else {
+                    warn!(
+                        "Waiting for the DKG process to complete and the attestations to be submitted, retrying later...",
                     );
-                    break;
+
+                    continue;
+                };
+
+                // Explicitly mandate that this message variant is an
+                // attestation.
+                let multisig_manager::Message::Attestation {
+                    multisig_id,
+                    public_key_package,
+                    signing_package,
+                    signatures,
+                } = message.clone()
+                else {
+                    warn!(
+                        "Insisting on explicit DKG attestation submission before starting ABCI server, retrying later..."
+                    );
+
+                    continue;
+                };
+
+                // Validate the payload, but do not commit it yet.
+                if let Err(err) = self //.
+                    .multisig_manager
+                    .guard_rollback(|m| m.recv(message))
+                {
+                    error!("Failed to validate DKG attestation: {err:?}");
+                    continue;
                 }
-                info!(
-                    "Waiting for aggregate public key to be stored in the storage before starting ABCI server"
+
+                // Resubmit the DKG attestation such that it gets included in
+                // the genesis block proposal.
+                let _ = self.multisig_manager.submitter().submit_attestation(
+                    multisig_id,
+                    public_key_package,
+                    signing_package,
+                    signatures,
                 );
-                drop(storage);
-                tokio::time::sleep(tokio::time::Duration::from_millis(5_000))
-                    .await;
+
+                info!(
+                    "DKG process has been completed and attestations have been successfully verified, continuing to start the ABCI server..."
+                );
+
+                break;
             }
         }
 
@@ -447,6 +500,7 @@ pub(crate) struct ABCIClient<RDB, DBD, Pool> {
     storage: Storage<RDB, DBD>,
     pool: Pool,
     activation_manager: ActivationManager<VoteWatcher, Address>,
+    multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
     bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
     block_cache: Arc<RwLock<BlockCache>>,
     driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
@@ -487,6 +541,7 @@ where
         storage: Storage<RDB, DBD>,
         pool: Pool,
         activation_manager: ActivationManager<VoteWatcher, Address>,
+        multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
         bitcoin_checkpoints: Arc<BitcoinCheckpointsChain>,
         driver_tx: tokio::sync::mpsc::Sender<ABCIDriverMessage>,
         cbft_rpc_provider: HttpCometBFTRpcClientFactory,
@@ -514,6 +569,7 @@ where
             storage: storage.clone(),
             pool,
             activation_manager,
+            multisig_manager,
             bitcoin_checkpoints,
             // Saving the last 5 blocks that were proposed
             block_cache,
@@ -583,23 +639,23 @@ where
 
     pub(crate) fn non_deterministic_data(
         &self,
+        funding_agg_pk: secp256k1::PublicKey,
         runtime_version: RuntimeVersion,
         network_upgrade_payload: Option<NetworkUpgradePayload>,
+        multisig_message: Option<multisig_manager::Message>,
     ) -> Result<NonDeterministicData, ConsensusError> {
-        // TODO: use the correct multisig_id
-        let aggregate_public_key =
-            self.aggregate_public_key(LEGACY_MULTISIG_ID)?;
         let block_fee_recipient_address = self
             .block_fee_recipient_address
             .ok_or(ConsensusError::MissingBlockFeeRecipientAddress)?;
 
-        // Construct a NDD using version 2.
-        let ndd = NonDeterministicData::new_v2(
+        // Construct a NDD using version 3.
+        let ndd = NonDeterministicData::new_v3(
             self.bitcoin_blockhash()?,
-            aggregate_public_key,
+            funding_agg_pk,
             block_fee_recipient_address,
             runtime_version,
             network_upgrade_payload,
+            multisig_message,
         );
 
         Ok(ndd)
@@ -621,6 +677,7 @@ where
     pub(crate) fn validate_block(
         &self,
         block: &RecoveredBlock<BotanixBlock>,
+        funding_agg_pk: secp256k1::PublicKey,
     ) -> ResponseProcessProposal {
         match self
             .botanix_consensus
@@ -643,18 +700,9 @@ where
         }
 
         // poa validation
-        // TODO: use the correct multisig_id
-        let agg_pk = match self.aggregate_public_key(LEGACY_MULTISIG_ID) {
-            Ok(pk) => pk,
-            Err(e) => {
-                error!("Error getting aggregate public key: {:?}", e);
-                return ResponseProcessProposal { status: VERIFY_REJECT };
-            }
-        };
-
         match self
             .botanix_consensus
-            .validate_header_standalone(block.header(), Some(&agg_pk))
+            .validate_header_standalone(block.header(), Some(&funding_agg_pk))
         {
             Ok(_) => {}
             Err(e) => {
@@ -663,25 +711,6 @@ where
             }
         }
         return ResponseProcessProposal { status: VERIFY_ACCEPTED };
-    }
-
-    pub(crate) fn aggregate_public_key(
-        &self,
-        multisig_id: MultisigId,
-    ) -> Result<secp256k1::PublicKey, ConsensusError> {
-        match &self.storage.inner.blocking_read().aggregate_public_key {
-            Some(pkeys) => {
-                pkeys
-                    .get(&multisig_id)
-                    .cloned()
-                    .ok_or(ConsensusError::InvalidAggregatedPublicKey(
-                    InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
-                ))
-            }
-            None => Err(ConsensusError::InvalidAggregatedPublicKey(
-                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
-            )),
-        }
     }
 
     pub(crate) fn bitcoin_blockhash(
@@ -1600,13 +1629,41 @@ where
             .expect("db cannot fail");
 
         let use_version = decision.version;
-        let upgrade_vote = decision.vote;
+        let upgrade_vote: Option<_> = decision.vote;
 
-        // Construct the NDD version 2 with a runtime version indicator
-        // and an (optional) network upgrade payload.
-        let non_deterministic_data = match self
-            .non_deterministic_data(use_version, upgrade_vote)
-        {
+        // Multisig Manager: Pickup any submitted multisig message and retrieve
+        // the active funding multisig => rollback changes!
+        let (multisig_msg, funding_agg_pk) = self
+            .multisig_manager
+            .guard_rollback(|m| {
+                // Pickup locally produced multisig proposal..
+                let multisig_msg = if let Some(msg) = m.send() {
+                    // ..and process it immediately.
+                    m.recv(msg.clone())
+                        .expect("local proposal is always valid");
+
+                    Some(msg)
+                } else {
+                    None
+                };
+
+                let funding = m //.
+                    .get_funding_multisig()?
+                    .expect("funding multisig must be available")
+                    .aggregate_public_key();
+
+                Ok((multisig_msg, funding))
+            })
+            .expect("db must not fail");
+
+        // Construct the NDD version 2 with a runtime version indicator, an
+        // optional network upgrade payload and an optional multisig message.
+        let non_deterministic_data = match self.non_deterministic_data(
+            funding_agg_pk,
+            use_version,
+            upgrade_vote,
+            multisig_msg,
+        ) {
             Ok(ndd) => ndd,
             Err(e) => {
                 panic!(
@@ -1638,10 +1695,9 @@ where
             Ok(bytes) => bytes,
             Err(e) => {
                 panic!(
-                        "Error serializing non-deterministic data bytes for proposal on height {}:
-        {:?}",
-                        request.height, e
-                    );
+                    "Error serializing non-deterministic data bytes for proposal on height {}: {:?}",
+                    request.height, e
+                );
             }
         };
 
@@ -1654,8 +1710,7 @@ where
             // We should panic bc there is a critical bug and there should be a
             // chain halt.
             panic!(
-                "Non-deterministic data size to propose for height {}: {} exceeds the max tx
-        bytes allowed size {}",
+                "Non-deterministic data size to propose for height {}: {} exceeds the max tx bytes allowed size {}",
                 request.height, non_deterministic_data_bytes_len, max_tx_bytes
             );
         };
@@ -1690,7 +1745,7 @@ where
             return response;
         }
 
-        let mut payload_config = match self.payload_builder_arguments() {
+        let payload_config = match self.payload_builder_arguments() {
             Ok(payload_config) => payload_config,
             Err(e) => {
                 panic!(
@@ -1731,8 +1786,7 @@ where
                     } => {
                         // TODO: Aborted why, shall we just propose NDD?
                         panic!(
-                            "aborted payload building because resulted in worse block wrt. fees
-        {} for height {}",
+                            "aborted payload building because resulted in worse block wrt. fees {} for height {}",
                             fees, request.height
                         );
                     }
@@ -1830,47 +1884,6 @@ where
         let execution_start_time = std::time::Instant::now();
         trace!("request={:?}", RequestProcessProposalTruncatedDebug(&request));
 
-        let txs_len = request.txs.len();
-        // TODO: pass the exact multisig id
-        let agg_pk = match self.aggregate_public_key(LEGACY_MULTISIG_ID) {
-            Ok(pk) => pk,
-            Err(_) => {
-                // Fed nodes must always have an aggregate public key
-                if self.is_fed_node {
-                    warn!("Aggregate public key for fed node is not set in process proposal");
-                }
-
-                // Rpc nodes will have an aggregate public key above block
-                // height 1
-                if request.height > 1 {
-                    warn!("Aggregate public key for rpc node is not set in process proposal");
-                }
-
-                if tracing::enabled!(tracing::Level::WARN) {
-                    let execution_time =
-                        execution_start_time.elapsed().as_secs_f32();
-                    let app_hash = match self
-                        .application_hash(&self.storage.reth_database)
-                    {
-                        Ok(app_hash) => app_hash,
-                        Err(e) => {
-                            panic!("failed to get application hash on process proposal: {:?}", e);
-                        }
-                    };
-
-                    warn!(
-                        app_hash = hex::encode(&app_hash),
-                        execution_time,
-                        "A proposal with {} transactions is rejected in {} seconds",
-                        request.txs.len(),
-                        execution_time
-                    );
-                }
-
-                return ResponseProcessProposal { status: VERIFY_REJECT };
-            }
-        };
-
         // Extract block time: this must come from the CBFT block header NOT the
         // system time As that will be underministic
         let block_time = match request.time {
@@ -1885,6 +1898,7 @@ where
             FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
 
         // extract first tx which contains non-deterministic data and validate
+        let txs_len = request.txs.len();
         let txs_bytes = request.txs;
         let non_deterministic_data_bytes = match txs_bytes.first() {
             Some(tx) => tx.clone(),
@@ -2044,36 +2058,6 @@ where
             return ResponseProcessProposal { status: VERIFY_REJECT };
         }
 
-        if agg_pk != non_deterministic_data.aggregated_public_key() {
-            warn!("Aggregate public key mismatch");
-
-            if tracing::enabled!(tracing::Level::WARN) {
-                let execution_time =
-                    execution_start_time.elapsed().as_secs_f32();
-                let app_hash = match self
-                    .application_hash(&self.storage.reth_database)
-                {
-                    Ok(app_hash) => app_hash,
-                    Err(e) => {
-                        panic!("failed to get application hash on process proposal: {:?}", e);
-                    }
-                };
-
-                warn!(
-                    app_hash = hex::encode(&app_hash),
-                    block_time = block_time.seconds,
-                    execution_time,
-                    cbft_transactions_count = txs_len,
-                    eth_transactions_count = txs_len - 1,
-                    "A proposal with {} transactions is rejected in {} seconds",
-                    txs_len,
-                    execution_time
-                );
-            }
-
-            return ResponseProcessProposal { status: VERIFY_REJECT };
-        }
-
         // get txs skipping the first non-deterministic data tx
         let txs = match transactions_signed_from_bytes(
             txs_bytes.iter().skip(1).cloned(),
@@ -2115,8 +2099,6 @@ where
         let floor_base_fee_per_gas;
         let comet_height = request.height as u64;
         let runtime_version = non_deterministic_data.runtime_version();
-        let network_upgrade_payload =
-            non_deterministic_data.network_upgrade_payload().copied();
         //
         match self
             .activation_manager
@@ -2156,6 +2138,125 @@ where
             }
         }
 
+        // Multisig Manager: Process and validate the multisig consensus message
+        // if present, and retrieve the funding and active multisigs for block
+        // finalization => rollback changes!
+        let Ok((funding_agg_pk, active_agg_pks)) =
+            self.multisig_manager.guard_rollback(|m| {
+                // Retrieve NDD payload and process it, if available.
+                if let Some(msg) = non_deterministic_data.multisig_message() {
+                    m.recv(msg.clone())?;
+                }
+
+                let funding = m //.
+                    .get_funding_multisig()?
+                    .map(|f| f.aggregate_public_key());
+
+                let active = m
+                    .get_active_multisigs()?
+                    .into_iter()
+                    .map(|a| a.aggregate_public_key())
+                    .collect();
+
+                Ok((funding, active))
+            })
+        else {
+            warn!("Proposed multisig message from the NDD is invalid");
+
+            if tracing::enabled!(tracing::Level::WARN) {
+                let execution_time =
+                    execution_start_time.elapsed().as_secs_f32();
+                let app_hash = match self
+                    .application_hash(&self.storage.reth_database)
+                {
+                    Ok(app_hash) => app_hash,
+                    Err(e) => {
+                        panic!("failed to get application hash on process proposal: {:?}", e);
+                    }
+                };
+
+                warn!(
+                    app_hash = hex::encode(&app_hash),
+                    execution_time,
+                    "A proposal with {} transactions is rejected in {} seconds",
+                    txs_len,
+                    execution_time
+                );
+            }
+
+            return ResponseProcessProposal { status: VERIFY_REJECT };
+        };
+
+        let Some(funding_agg_pk) = funding_agg_pk else {
+            // Fed nodes must always have an aggregate public key
+            //
+            // TODO: Clarify this => we also mandate that the block at genesis
+            // contains the DKG attestation in the NDD payload.
+            if self.is_fed_node {
+                warn!("Aggregate public key for fed node is not set in process proposal");
+            }
+
+            // Rpc nodes will have an aggregate public key above block
+            // height 1
+            if request.height > 1 {
+                warn!("Aggregate public key for rpc node is not set in process proposal");
+            }
+
+            if tracing::enabled!(tracing::Level::WARN) {
+                let execution_time =
+                    execution_start_time.elapsed().as_secs_f32();
+                let app_hash = match self
+                    .application_hash(&self.storage.reth_database)
+                {
+                    Ok(app_hash) => app_hash,
+                    Err(e) => {
+                        panic!("failed to get application hash on process proposal: {:?}", e);
+                    }
+                };
+
+                warn!(
+                    app_hash = hex::encode(&app_hash),
+                    execution_time,
+                    "A proposal with {} transactions is rejected in {} seconds",
+                    txs_len,
+                    execution_time
+                );
+            }
+
+            return ResponseProcessProposal { status: VERIFY_REJECT };
+        };
+
+        // Validate that the local funding multisig matches the proposer's.
+        if funding_agg_pk != non_deterministic_data.aggregated_public_key() {
+            warn!("Aggregate public key mismatch");
+
+            if tracing::enabled!(tracing::Level::WARN) {
+                let execution_time =
+                    execution_start_time.elapsed().as_secs_f32();
+                let app_hash = match self
+                    .application_hash(&self.storage.reth_database)
+                {
+                    Ok(app_hash) => app_hash,
+                    Err(e) => {
+                        panic!("failed to get application hash on process proposal: {:?}", e);
+                    }
+                };
+
+                warn!(
+                    app_hash = hex::encode(&app_hash),
+                    block_time = block_time.seconds,
+                    execution_time,
+                    cbft_transactions_count = txs_len,
+                    eth_transactions_count = txs_len - 1,
+                    "A proposal with {} transactions is rejected in {} seconds",
+                    txs_len,
+                    execution_time
+                );
+            }
+
+            return ResponseProcessProposal { status: VERIFY_REJECT };
+        }
+
         // Validation done as a result of this call:
         // - botanix consensus package created on the fly and compared to the
         //   incoming block EDH
@@ -2166,16 +2267,15 @@ where
         match build_and_execute(
             txs,
             self.storage.chain_spec.clone(),
-            runtime_version,
-            network_upgrade_payload,
+            non_deterministic_data,
             floor_base_fee_per_gas,
             &block_fee_recipient_address,
             self.storage.evm_config.clone(),
             &self.reth_provider_factory,
             self.storage.bitcoind_factory.clone(),
             self.storage.btc_network,
-            &non_deterministic_data.bitcoin_block_hash(),
-            &agg_pk,
+            &funding_agg_pk,
+            active_agg_pks,
             block_time,
         ) {
             Ok(block_with_context) => {
@@ -2183,7 +2283,7 @@ where
 
                 // validate block before caching
                 if !matches!(
-                    self.validate_block(block),
+                    self.validate_block(block, funding_agg_pk),
                     ResponseProcessProposal { status: VERIFY_ACCEPTED }
                 ) {
                     // we have logs inside validate_block so no need to repeat
@@ -2334,6 +2434,7 @@ where
 
         let cbft_block_hash =
             FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
+
         let mut block_cache_write = match self.block_cache.write() {
             Ok(block_cache_write) => block_cache_write,
             Err(e) => {
@@ -2409,16 +2510,14 @@ where
                             .0,
                         );
 
-                        debug!(%address, "use a proposer address as the block fee recipient
-        address (testnet)");
+                        debug!(%address, "use a proposer address as the block fee recipient address (testnet)");
 
                         address
                     }
                     None => {
                         panic!(
-                                "Block fee recipient address is not set in finalize block for
-        mainnet"
-                            );
+                            "Block fee recipient address is not set in finalize block for mainnet"
+                        );
                     }
                 };
 
@@ -2443,12 +2542,9 @@ where
                 };
 
                 let runtime_version = non_deterministic_data.runtime_version();
-                let network_upgrade_payload =
-                    non_deterministic_data.network_upgrade_payload().copied();
 
                 debug!(
-                    "finalize_block: Finalizing block with runtime version:
-        {runtime_version}"
+                    "finalize_block: Finalizing block with runtime version: {runtime_version}"
                 );
 
                 let floor_base_fee_per_gas = match runtime_version {
@@ -2463,24 +2559,65 @@ where
                     // upcoming `ActivationManager::on_finalize_block(..)` call.
                     _ => {
                         warn!("finalize_block: Unrecognized runtime version: {runtime_version}");
-                        Some(FLOOR_BASE_FEE_PER_GAS_V3) // just apply the latest
-                                                        // change.
+                        // just apply the latest change.
+                        Some(FLOOR_BASE_FEE_PER_GAS_V3)
                     }
                 };
+
+                // Multisig Manager: Process and validate the multisig consensus
+                // message if present, and retrieve the funding and active
+                // multisigs for block finalization.
+                //
+                // NOTE that any changes are rolled-back, as state commitment
+                // happens explicitly in the `ABCIClient::commit` method.
+                let (funding_agg_pk, active_agg_pks) = self
+                    .multisig_manager
+                    .guard_rollback(|m| {
+                        if let Some(msg) =
+                            non_deterministic_data.multisig_message()
+                        {
+                            m.recv(msg.clone())
+                                .expect("NDD multisig payload must be valid");
+                        }
+
+                        let funding = m //.
+                            .get_funding_multisig()?
+                            .expect("funding multisig must be available")
+                            .aggregate_public_key();
+
+                        let active: Vec<_> = m
+                            .get_active_multisigs()?
+                            .into_iter()
+                            .map(|a| a.aggregate_public_key())
+                            .collect();
+
+                        debug_assert!(active.contains(&funding));
+
+                        Ok((funding, active))
+                    })
+                    .expect("db must not fail");
+
+                // Sanity check: validate that the local funding multisig
+                // matches the one from the proposer's non-deterministic data.
+                if funding_agg_pk
+                    != non_deterministic_data.aggregated_public_key()
+                {
+                    panic!("Local funding multisig does not match NDD provided multisig")
+                }
 
                 match build_and_execute(
                     txs,
                     self.storage.chain_spec.clone(),
-                    runtime_version,
-                    network_upgrade_payload,
+                    non_deterministic_data,
                     floor_base_fee_per_gas,
                     &block_fee_recipient_address,
                     self.storage.evm_config.clone(),
                     &self.reth_provider_factory,
                     self.storage.bitcoind_factory.clone(),
                     self.storage.btc_network,
-                    &non_deterministic_data.bitcoin_block_hash(),
-                    &non_deterministic_data.aggregated_public_key(),
+                    &funding_agg_pk,
+                    // TODO: Could this be a ref?
+                    active_agg_pks,
                     block_time,
                 ) {
                     Ok(block_with_context) => {
@@ -2520,9 +2657,11 @@ where
         // behavior), whether - from their perspective - the upgrade conditions
         // are met or not.
         let comet_height = request.height as u64;
-        let runtime_version = block_with_context.runtime_version;
+        let runtime_version =
+            block_with_context.non_deterministic_data.runtime_version();
         let proposer_address = Address::from_slice(&request.proposer_address);
-        let proposer_vote = block_with_context.network_upgrade_payload;
+        let proposer_vote =
+            block_with_context.non_deterministic_data.network_upgrade_payload();
 
         match self
             .activation_manager
@@ -2540,11 +2679,11 @@ where
             OnFinalizeBlockDecision::RejectBlockDeadEnd { version } => {
                 error!(
                     "finalize_block: Rejecting finalized block with Botanix runtime version:
-        {version}"
+                    {version}"
                 );
                 panic!(
                     "finalize_block: Rejecting Botanix upgrade
-        '{version}' - can no longer proceed..."
+                    '{version}' - can no longer proceed..."
                 );
             }
         }
@@ -2572,42 +2711,12 @@ where
         // Track the finalized block hash for the commit stage.
         block_cache_write.tracked_final = Some(cbft_block_hash);
 
-        // Rpc node needs to store aggregate public key from block height 1
-        let block_height =
-            block_with_context.sealed_block_with_peg.block().number;
-        let sealed_block_with_peg_binding =
-            block_with_context.sealed_block_with_peg.clone();
-        let sealed_block_with_senders = sealed_block_with_peg_binding.block();
-        // TODO: Shouldn't it be done on block commit?
-        if !self.is_fed_node && block_height == 1 {
-            let edh = match sealed_block_with_senders
-                .deserialize_extra_data_header()
-            {
-                Ok(edh) => edh,
-                Err(e) => {
-                    panic!("Error deserializing extra data header in finalize block: {:?}", e);
-                }
-            };
-
-            // TODO: use the correct multisig_id
-            let mut storage = self.storage.inner.blocking_write();
-            if let Some(aggregate_public_keys) =
-                storage.aggregate_public_key.as_mut()
-            {
-                aggregate_public_keys
-                    .entry(LEGACY_MULTISIG_ID)
-                    .or_insert(edh.aggregated_public_key);
-            } else {
-                storage.aggregate_public_key = Some(BTreeMap::from([(
-                    LEGACY_MULTISIG_ID,
-                    edh.aggregated_public_key,
-                )]));
-            }
-        }
-
         if matches!(
             self.validate_block(
-                block_with_context.sealed_block_with_peg.block()
+                block_with_context.sealed_block_with_peg.block(),
+                block_with_context
+                    .non_deterministic_data
+                    .aggregated_public_key(),
             ),
             ResponseProcessProposal { status: VERIFY_REJECT }
         ) {
@@ -2782,12 +2891,11 @@ pub enum ABCIDriverMessage {
 /// finalization Once a finalize block is received the drive is responsible for
 /// * Updating the canonical chain via DB
 /// * Sending pegins / pegouts to the btc server
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ABCIDriver {
     driver_rx: Arc<Mutex<tokio::sync::mpsc::Receiver<ABCIDriverMessage>>>,
     // TODO: BlockchainProvider2 already contains ProviderFactory so we can get
-    // it from there  instead of duplicating it here
+    // it from there instead of duplicating it here
     reth_database_provider_factory:
         BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
     botanix_database_provider_factory:
@@ -2795,12 +2903,7 @@ pub struct ABCIDriver {
     blockchain_provider: BlockchainProvider<
         NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
     >,
-    storage: Storage<
-        BlockchainProvider<
-            NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
-        >,
-        BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
-    >,
+    multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
 }
 
 impl ABCIDriver {
@@ -2818,19 +2921,14 @@ impl ABCIDriver {
         blockchain_provider: BlockchainProvider<
             NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
         >,
-        storage: Storage<
-            BlockchainProvider<
-                NodeTypesWithDBAdapter<BotanixNode, Arc<DatabaseEnv>>,
-            >,
-            BotanixProviderFactory<Arc<DatabaseEnv>, BotanixNode>,
-        >,
+        multisig_manager: BotanixMultisigManager<Arc<DatabaseEnv>, BotanixNode>,
     ) -> Self {
         Self {
             driver_rx: Arc::new(Mutex::new(driver_rx)),
             reth_database_provider_factory,
             botanix_database_provider_factory,
             blockchain_provider,
-            storage,
+            multisig_manager,
         }
     }
 
@@ -2843,19 +2941,6 @@ impl ABCIDriver {
                         sealed_block_with_context,
                         commit_tx,
                     )) => {
-                        // Read aggregate public keys FIRST, before entering tracing span
-                        // This avoids holding EnteredSpan (not Send) across .await
-                        let aggregate_public_keys = self
-                            .storage
-                            .inner
-                            .read()
-                            .await
-                            .aggregate_public_key
-                            .clone()
-                            .expect(
-                                "aggregate_public_keys must be set after DKG",
-                            );
-
                         let _span = tracing::trace_span!(
                             "ABCI driver commit block",
                             eth_block_height =
@@ -2946,6 +3031,41 @@ impl ABCIDriver {
                         };
                         debug!("Pegout bytes: {:?}", pegout_bytes);
 
+                        // Multisig Manager: Process and validate the multisig
+                        // consensus message if present, and retrieve the active
+                        // multisigs for pegin extraction.
+                        //
+                        // Any state changes are COMMITTED.
+                        let active_multisigs: BTreeMap<
+                            MultisigId,
+                            secp256k1::PublicKey,
+                        > = self
+                            .multisig_manager
+                            .guard_commit(|m| {
+                                if let Some(msg) = sealed_block_with_context
+                                    .non_deterministic_data
+                                    .multisig_message()
+                                {
+                                    m.recv(msg.clone()).expect(
+                                        "NDD multisig payload must be valid",
+                                    );
+                                }
+
+                                let active = m
+                                    .get_active_multisigs()?
+                                    .into_iter()
+                                    .map(|m| {
+                                        (
+                                            m.multisig_id,
+                                            m.aggregate_public_key(),
+                                        )
+                                    })
+                                    .collect();
+
+                                Ok(active)
+                            })
+                            .expect("db must not fail");
+
                         // Prepare the staged entries for insertion into the
                         // database; this ensures that no pegins or pegouts are
                         // ever accidentally dropped during a shutdown or
@@ -2954,12 +3074,12 @@ impl ABCIDriver {
                         // Those staged entries are removed from the database
                         // once the Frost task has successfully initiated a new
                         // checkpoint on the btc-server.
-
                         let staged_pegins: Vec<PeginData> =
                             get_staged_pegins_from_pegin_meta(
                                 &pegins,
-                                &aggregate_public_keys,
+                                &active_multisigs,
                             );
+
                         let staged_pegouts: Vec<PegoutData> =
                             get_staged_pegouts_from_pegout_data(
                                 &sealed_block_with_peg.pegouts(),
@@ -3003,9 +3123,7 @@ impl ABCIDriver {
                             .provider_rw()
                             .unwrap_or_else(|e| {
                                 panic!(
-                                    "Error getting database rw
-                        provider: {:?}",
-                                    e
+                                    "Error getting database rw provider: {e:?}",
                                 );
                             });
 
@@ -3021,7 +3139,9 @@ impl ABCIDriver {
 
                         botanix_db_rw.insert_runtime_upgrade_version(
                             new_header.number,
-                            sealed_block_with_context.runtime_version,
+                            sealed_block_with_context
+                                .non_deterministic_data
+                                .runtime_version(),
                         )?;
 
                         botanix_db_rw.commit().unwrap_or_else(|err| {
@@ -3112,6 +3232,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::consensus::multisig_manager::MultisigManager;
     use crate::consensus::Storage;
     use crate::node::consensus::BotanixConsensus;
     use crate::node::evm::config::BotanixEvmConfig;
@@ -3135,6 +3256,7 @@ mod tests {
     };
     use botanix_chainspec::constants::{BOTANIX_MAINNET, BOTANIX_TESTNET};
     use botanix_comet_bft_rpc::HttpCometBFTRpcClientFactory;
+    use botanix_storage::tables::create_botanix_tables;
     use botanix_storage::BotanixProviderFactory;
     use reth_cli_runner::tokio_runtime;
     use reth_db::test_utils::{
@@ -3176,11 +3298,7 @@ mod tests {
 
     /// Build the db and the ABCI client
     fn abci_client_builder() -> ABCIClientType {
-        let secp = secp256k1::Secp256k1::new();
-        let sk = secp256k1::SecretKey::new(&mut secp256k1::rand::thread_rng());
-        let pk = secp256k1::PublicKey::from_secret_key(&secp, &sk);
-
-        // setup db client
+        // Setup db client
         let reth_db = Arc::new(
             Arc::try_unwrap(create_test_rw_db()).unwrap().into_inner_db(),
         );
@@ -3200,9 +3318,13 @@ mod tests {
         let reth_provider = BlockchainProvider::new(factory.clone())
             .expect("to create blockchain provider");
 
-        let botanix_db = Arc::new(
+        let mut botanix_db = Arc::new(
             Arc::try_unwrap(create_test_rw_db()).unwrap().into_inner_db(),
         );
+
+        // Initialize custom Botanix tables
+        create_botanix_tables(Arc::get_mut(&mut botanix_db).unwrap()).unwrap();
+
         let (_, botanix_static_path) = create_test_static_files_dir();
         let botanix_static_file_provider =
             StaticFileProvider::read_write(botanix_static_path)
@@ -3243,7 +3365,6 @@ mod tests {
 
         let storage = Storage::new(
             bitcoin::Network::Regtest,
-            Some(pk),
             evm_config,
             spec.clone(),
             bitcoind_client,
@@ -3277,12 +3398,31 @@ mod tests {
         )
         .build_ignore_network_upgrade();
 
+        // Setup MultisigManager. Do note that for those tests here, the values
+        // can just be random.
+        let legacy_multisig = multisig_manager::test_data::preload_legacy();
+        let (multisig_manager, _h) = MultisigManager::new_botanix(
+            botanix_provider_factory.clone(),
+            Some(legacy_multisig.clone()),
+        )
+        .unwrap();
+
+        // Validate that the legacy funding aggregate key is correctly initialized.
+        let funding_agg_pk = multisig_manager
+            .guard_rollback(|m| m.get_funding_multisig())
+            .unwrap()
+            .unwrap()
+            .aggregate_public_key();
+
+        assert_eq!(funding_agg_pk, legacy_multisig.aggregate_public_key());
+
         let bitcoin_checkpoints_chain =
             BitcoinCheckpointsChain::try_new(1, 0, 0)
                 .expect("create a valid chain");
 
         let bitcoin_checkpoint =
             BitcoinCheckpoint::new(bitcoin_header.clone(), 0);
+
         bitcoin_checkpoints_chain
             .push(bitcoin_checkpoint)
             .expect("push a checkpoint");
@@ -3297,6 +3437,7 @@ mod tests {
             storage,
             transaction_pool,
             activation_manager,
+            multisig_manager,
             Arc::new(bitcoin_checkpoints_chain),
             driver_tx,
             cometbft_rpc_factory,
@@ -3317,9 +3458,23 @@ mod tests {
     fn non_deterministic_data_bytes(
         client: &ABCIClientType,
     ) -> Result<prost::bytes::Bytes, ConsensusError> {
-        client.non_deterministic_data(RUNTIME_VERSION_V1, None).and_then(
-            |ndd| client.serialize_non_deterministic_data_to_bytes(ndd),
-        )
+        let funding_agg_pk = client
+            .multisig_manager
+            .guard_rollback(|m| m.get_funding_multisig())
+            .expect("db must not fail")
+            .expect("funding multisig must be set")
+            .aggregate_public_key();
+
+        client
+            .non_deterministic_data(
+                funding_agg_pk,
+                RUNTIME_VERSION_V1,
+                None,
+                None,
+            )
+            .and_then(|ndd| {
+                client.serialize_non_deterministic_data_to_bytes(ndd)
+            })
     }
 
     #[test]
@@ -3388,13 +3543,17 @@ mod tests {
 
         let response = abci_client.prepare_proposal(request);
 
-        let expected_ndd = NonDeterministicData::new_v2(
+        let expected_ndd = NonDeterministicData::new_v3(
             abci_client.bitcoin_blockhash().expect("to have bitcoin blockhash"),
             abci_client
-                .aggregate_public_key(LEGACY_MULTISIG_ID)
-                .expect("to have agg pk"),
+                .multisig_manager
+                .guard_rollback(|m| m.get_funding_multisig())
+                .expect("to have funding agg pk")
+                .unwrap()
+                .aggregate_public_key(),
             Address::ZERO,
             RUNTIME_VERSION_GENESIS,
+            None,
             None,
         );
         let response_ndd_bytes =
@@ -3441,8 +3600,11 @@ mod tests {
                 .bitcoin_blockhash()
                 .expect("to have agg bitcoin blockhash"),
             abci_client
-                .aggregate_public_key(LEGACY_MULTISIG_ID)
-                .expect("to have agg pk"),
+                .multisig_manager
+                .guard_rollback(|m| m.get_funding_multisig())
+                .expect("to have funding agg pk")
+                .unwrap()
+                .aggregate_public_key(),
             Address::ZERO,
         );
         let response_ndd_bytes =
@@ -3574,10 +3736,23 @@ mod tests {
 
         let mut request = RequestFinalizeBlock::default();
 
+        let funding_agg_pk = abci_client
+            .multisig_manager
+            .guard_rollback(|m| m.get_funding_multisig())
+            .expect("db must not fail")
+            .expect("funding multisig must be set")
+            .aggregate_public_key();
+
         // first tx should be non-deterministic data
         let ndd = abci_client
-            .non_deterministic_data(RUNTIME_VERSION_V1, None)
+            .non_deterministic_data(
+                funding_agg_pk,
+                RUNTIME_VERSION_V1,
+                None,
+                None,
+            )
             .expect("to have ndd");
+
         let ndd_bytes = abci_client
             .serialize_non_deterministic_data_to_bytes(ndd)
             .expect("to serialize ndd");

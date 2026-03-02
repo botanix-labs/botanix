@@ -29,11 +29,16 @@
 
 use super::models::*;
 use alloy_primitives::{BlockNumber, B256};
+use botanix_types::MultisigId;
 use reth_db::{
     tables, DatabaseEnv, DatabaseError, TableSet, TableType, TableViewer,
 };
 use reth_db_api::table::TableInfo;
 use std::fmt;
+
+// Aliases for better readability.
+type UKey<T> = UnoptimizedKey<T>;
+type UVal<T> = UnoptimizedValue<T>;
 
 tables! {
     /// Store snapshot id to snapshot data.
@@ -109,6 +114,17 @@ tables! {
     table SnapshotSyncs {
         type Key = SnapshotSyncId;
         type Value = SnapshotSync;
+    }
+
+    /// Stores multisig federation lifecycle states.
+    ///
+    /// This table tracks the lifecycle of each multisig federation, from
+    /// initial staging through activation and eventual sunset. Each entry
+    /// represents a federation identified by its [`MultisigId`] and stores the
+    /// current [`MultisigRecord`] state.
+    table Multisigs {
+        type Key = UKey<MultisigId>;
+        type Value = UVal<MultisigRecord>;
     }
 }
 
