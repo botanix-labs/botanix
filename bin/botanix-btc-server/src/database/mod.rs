@@ -1766,6 +1766,8 @@ impl TryFrom<RpcUtxo> for Utxo {
     type Error = Error;
 
     fn try_from(value: RpcUtxo) -> Result<Self, Self::Error> {
+        let rpc_multisig_id = value.multisig_id;
+
         // outpoint
         let outpoint = value
             .outpoint
@@ -1784,6 +1786,12 @@ impl TryFrom<RpcUtxo> for Utxo {
         })?;
         let script = parse_p2tr_script_with_fallback(&script_pubkey.script);
 
+        let resolved_multisig_id: MultisigId = rpc_multisig_id.into();
+        log::info!(
+            "TryFrom<RpcUtxo>: txid={}, vout={}, value={}, rpc_multisig_id(u32)={}, resolved_multisig_id={}",
+            txid, vout, tx_out_val, rpc_multisig_id, resolved_multisig_id,
+        );
+
         // create the utxo
         Ok(Utxo::new(
             OutPoint::new(txid, vout),
@@ -1796,7 +1804,7 @@ impl TryFrom<RpcUtxo> for Utxo {
                 })?)
             },
             Some(UtxoVersion::V1),
-            value.multisig_id.into(),
+            resolved_multisig_id,
         ))
     }
 }

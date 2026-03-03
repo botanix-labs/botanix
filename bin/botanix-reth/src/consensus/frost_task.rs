@@ -31,6 +31,7 @@ use botanix_data_parser::{
     prost_parser::{ProstError, ProstMessageSerdelizer},
     DataParser, Error as DataParserError,
 };
+use botanix_storage::models::MultisigStatus;
 use botanix_storage::{
     MultisigManagerReader, StagedHeaderReader, StagedHeaderWriter,
 };
@@ -784,11 +785,38 @@ where
             return Ok(());
         }
 
-        // TODO: Support multi-federation setup.
+        // Determine which multisig to spend UTXOs from and where change goes.
+        // A Degrading multisig has UTXOs that need draining first; otherwise use
+        // the Funding multisig. Change always goes to the current Funding multisig.
+        let active = self
+            .storage
+            .botanix_database_factory
+            .get_active_multisigs()?;
+
+        let funding_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Funding)
+            .ok_or_else(|| eyre::eyre!("No funding multisig found"))?;
+
+        let degrading_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Degrading);
+
+        let utxo_source_id = degrading_entry
+            .map(|m| m.multisig_id)
+            .unwrap_or(funding_entry.multisig_id);
+        let change_target_id = funding_entry.multisig_id;
+
+        info!(
+            target: "consensus::authority::frost_task::handle_canon_state_commit",
+            "Pegout UTXO source: multisig_id={}, change target: multisig_id={}",
+            utxo_source_id, change_target_id,
+        );
+
         let multisig = self
             .multisigs
-            .get_mut(&LEGACY_MULTISIG_ID)
-            .ok_or(eyre::eyre!("No multisig entry found for Id {}", LEGACY_MULTISIG_ID))?;
+            .get_mut(&utxo_source_id)
+            .ok_or(eyre::eyre!("No multisig entry found for Id {}", utxo_source_id))?;
 
         if !multisig.signing_sm.is_coordinator() {
             info!(
@@ -799,13 +827,12 @@ where
             return Ok(());
         }
 
-        // Create psbt and send init signing message.
         let psbt_payload = crate::consensus::utils::get_psbt(
             &mut self.btc_server,
             &header_hash,
             cp_block_hash,
-            LEGACY_MULTISIG_ID, // TODO: replace
-            LEGACY_MULTISIG_ID, // TODO: replace
+            utxo_source_id,
+            change_target_id,
         )
         .await
         .wrap_err("Failed to retrieve PSBT from the BTC server")?;
@@ -922,14 +949,32 @@ where
         .await
         .wrap_err("Failed to validate PSBT by Ids")?;
 
-        // TODO: Support multi-federation setup.
+        // Route signing messages to the multisig that owns the signing session.
+        // This mirrors the UTXO source selection: degrading multisig if one
+        // exists (its UTXOs are being spent), otherwise the funding multisig.
+        let active = self
+            .storage
+            .botanix_database_factory
+            .get_active_multisigs()?;
+
+        let funding_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Funding);
+
+        let degrading_entry = active
+            .iter()
+            .find(|m| m.status == MultisigStatus::Degrading);
+
+        let signing_multisig_id = degrading_entry
+            .or(funding_entry)
+            .ok_or_else(|| eyre::eyre!("No active multisig found for signing"))?
+            .multisig_id;
+
         let multisig = self
             .multisigs
-            .get_mut(&LEGACY_MULTISIG_ID)
-            .ok_or(eyre::eyre!("No multisig entry found for Id {}", LEGACY_MULTISIG_ID))?;
+            .get_mut(&signing_multisig_id)
+            .ok_or(eyre::eyre!("No multisig entry found for Id {}", signing_multisig_id))?;
 
-        // TODO: Maybe the signing state machine should take the deserialized
-        // `Psbt` structure directly?
         match response_type {
             SigningEventResponseType::SignerRound1SigningPackage => {
                 multisig

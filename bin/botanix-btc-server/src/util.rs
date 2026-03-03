@@ -505,12 +505,6 @@ pub(crate) fn validate_outputs(
         ));
     }
 
-    // check aggregated public key exists
-    // TODO: Check what the target multisig is and use that instead of the legacy multisig
-    let public_key_package = db
-        .get_public_key_package_by_id(LEGACY_MULTISIG_ID)?
-        .ok_or(ValidateOutputsError::MissingKeyPackage)?;
-
     let mut psbt_pegout_ids: Vec<PegoutId> =
         Vec::with_capacity(psbt.outputs.len());
     let mut change_output: Option<usize> = None;
@@ -566,26 +560,35 @@ pub(crate) fn validate_outputs(
         return Err(ValidateOutputsError::DuplicateOutputs);
     }
 
-    // if a change output exists, check if it is valid
+    // TODO: ideally we get the 'Funding' multisig_id from reth, so we know with certainty which
+    // multisig_id the change output is for. As a temporary workaround, if a change output exists, check if it is valid against the highest
+    // or second-highest multisig_id (the 'Funding' or 'Degrading' multisig).
     if let Some(idx) = change_output {
-        // TxOut scriptpubkey should be scriptpubkey derived from aggregated public key
-        let agg_pk = public_key_package
-            .verifying_key()
-            .to_secp_pk()
-            .expect("valid secp pk");
-        let serialized_agg_pkey = agg_pk.serialize();
-        let expected_script_pubkey =
-            generate_taproot_change_scriptpubkey(serialized_agg_pkey);
-
         let change_output = psbt
             .unsigned_tx
             .output
             .get(idx)
             .ok_or(ValidateOutputsError::InvalidChangeOutput)?;
 
-        let has_correct_change =
-            change_output.script_pubkey == expected_script_pubkey;
-        if !has_correct_change {
+        let mut multisig_ids = db.list_multisig_ids()?;
+        multisig_ids.sort();
+
+        let candidates: Vec<_> = multisig_ids.iter().rev().take(2).collect();
+
+        let mut matched = false;
+        for multisig_id in candidates {
+            if let Some(pkg) = db.get_public_key_package_by_id(*multisig_id)? {
+                let agg_pk =
+                    pkg.verifying_key().to_secp_pk().expect("valid secp pk");
+                let expected_spk =
+                    generate_taproot_change_scriptpubkey(agg_pk.serialize());
+                if change_output.script_pubkey == expected_spk {
+                    matched = true;
+                    break;
+                }
+            }
+        }
+        if !matched {
             return Err(ValidateOutputsError::InvalidChangeOutput);
         }
     }
