@@ -13,7 +13,7 @@ use crate::{
             create_sweep_psbt, InputDTO, PsbtExt as BtcPsbtExt, PsbtInputExt,
         },
         util::{calculate_signed_tx_weight, calculate_sweep_fee},
-        MAX_PEGOUT_TX_WEIGHT,
+        MAX_PEGOUT_TX_WEIGHT, MAX_PEGOUT_TX_INPUTS,
     },
 };
 use bitcoin::{psbt::Psbt, FeeRate, OutPoint, ScriptBuf, TxOut};
@@ -133,12 +133,12 @@ pub fn make_tx(
             multisig_id,
         )?;
         let tx_weight = calculate_signed_tx_weight(&psbt)?;
-        if tx_weight.to_wu() <= MAX_PEGOUT_TX_WEIGHT {
-            info!(
-                "expected pegout tx weight: {}, num outputs: {}",
-                tx_weight,
-                attempted_outputs.len()
-            );
+        info!("expected pegout tx weight: {}, num outputs: {}, num inputs: {}", tx_weight, attempted_outputs.len(), psbt.inputs.len());
+        
+        let weight_exceeds_limit = tx_weight.to_wu() > MAX_PEGOUT_TX_WEIGHT;
+        let inputs_exceeds_limit = psbt.inputs.len() > MAX_PEGOUT_TX_INPUTS as usize;
+        info!("weight exceeds limit: {}, inputs exceeds limit: {}", weight_exceeds_limit, inputs_exceeds_limit);
+        if !weight_exceeds_limit && !inputs_exceeds_limit {
             return Ok(psbt);
         }
 
