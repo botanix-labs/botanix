@@ -47,6 +47,9 @@ pub const PER_OUTPUT_MAX_WEIGHT: u64 = 8 * 4 + 1 * 4 + 34 * 4;
 // Conservatively setting this to 50,000 to allow for ~100s of pegouts in a single tx
 pub const MAX_PEGOUT_TX_WEIGHT: u64 = 50_000;
 
+// Our largest successful pegout transaction had 85 inputs, so we set the limit to 80 to be safe.
+pub const MAX_PEGOUT_TX_INPUTS: u64 = 80;
+
 #[cfg(test)]
 mod test {
     use super::*;
