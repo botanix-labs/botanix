@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::{
+    dkg,
     pegout_id::PegoutId,
     pegout_scheduler::{self},
     rpc::{
@@ -162,8 +163,7 @@ pub struct ExportedKeyPackage {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct AttestionEntry {
-    // TODO: implement from https://github.com/botanix-labs/botanix/pull/94
-    pub attestation: (),
+    pub attestation: dkg::Attestation,
     pub marked_finalized: bool,
 }
 
@@ -435,15 +435,29 @@ impl Db {
         self.set_pubkey_package_by_id(LEGACY_MULTISIG_ID, pk_package)
     }
 
-    // TODO: Document
+    /// Stores a DKG attestation for a multisig in the database.
+    ///
+    /// The attestation is initially stored as non-finalized. Call
+    /// [`Self::mark_multisig_attestation_finalized`] once the multisig is ready
+    /// to be used for pegins and pegouts.
+    ///
+    /// # Arguments
+    ///
+    /// * `multisig_id` - The identifier of the multisig federation.
+    /// * `attestation` - The completed DKG attestation to store.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on success, or `Err` if serialization or storage fails.
     pub fn set_multisig_attestation(
         &self,
         multisig_id: MultisigId,
-        attestation: (),
+        attestation: dkg::Attestation,
     ) -> Result<(), Error> {
-        let key = multisig_id.as_u32().to_le_bytes();
         let entry = AttestionEntry { attestation, marked_finalized: false };
+        debug_assert_eq!(entry.marked_finalized, false);
 
+        let key = multisig_id.as_u32().to_le_bytes();
         let mut bytes = Vec::new();
         ciborium::into_writer(&entry, &mut bytes).expect("writing to buffer");
 
@@ -451,7 +465,21 @@ impl Db {
         Ok(())
     }
 
-    // TODO: Document
+    /// Marks a stored DKG attestation as finalized for the given multisig.
+    ///
+    /// Finalization signals that the multisig is fully set up and ready for use
+    /// in pegin and pegout operations. The attestation must have been
+    /// previously stored via [`Self::set_multisig_attestation`].
+    ///
+    /// # Arguments
+    ///
+    /// * `multisig_id` - The identifier of the multisig federation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MultisigAttestationNotFound`] if no attestation exists
+    /// for the given `multisig_id`. Returns `Err` on serialization or storage
+    /// failures.
     pub fn mark_multisig_attestation_finalized(
         &self,
         multisig_id: MultisigId,
@@ -471,7 +499,20 @@ impl Db {
         Ok(())
     }
 
-    // TODO: Document
+    /// Retrieves the DKG attestation entry for the given multisig.
+    ///
+    /// The returned [`AttestionEntry`] includes the attestation itself and a
+    /// flag indicating whether it has been marked as finalized.
+    ///
+    /// # Arguments
+    ///
+    /// * `multisig_id` - The identifier of the multisig federation.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(Some(entry))` if an attestation exists for the given
+    /// `multisig_id`, `Ok(None)` if none has been stored yet, or `Err` on
+    /// deserialization or storage failures.
     pub fn get_multisig_attestation(
         &self,
         multisig_id: MultisigId,
