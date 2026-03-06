@@ -13,8 +13,8 @@ use std::{
 
 use base64::{engine::general_purpose, Engine};
 use bitcoin::{
-    consensus::Decodable, hashes::Hash, secp256k1, Amount, BlockHash, Psbt,
-    ScriptBuf, Transaction, TxOut,
+    consensus::Decodable, hashes::Hash, Amount, BlockHash, Psbt, ScriptBuf,
+    Transaction, TxOut,
 };
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
@@ -29,7 +29,8 @@ use btcserverlib::{
     coordinator::{self},
     database::{self},
     dkg::{
-        self, DkgNotification, DynafedSubscriptionMessage, SweepNotification,
+        self, DkgNotification, DynafedSubscriptionMessage,
+        MultisigNotification, SweepNotification,
     },
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -1347,6 +1348,39 @@ where
                             };
                             tx.send(Ok(payload)).await
                         }
+                        DynafedSubscriptionMessage::Multisig(
+                            MultisigNotification::Sunset {
+                                multisig_id,
+                                signature,
+                            },
+                        ) => {
+                            trace!("Sunsetting multisig {}", multisig_id);
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Multisig(rpc::MultisigNotification {
+                                    event: rpc::MultisigEvent::MultisigSunset as i32,
+                                    multisig_id: *multisig_id,
+                                    signature: signature.serialize_compact().to_vec(),
+                                }))
+                            };
+                            tx.send(Ok(payload)).await
+                        }
+                        DynafedSubscriptionMessage::Multisig(
+                            MultisigNotification::Expire {
+                                multisig_id,
+                                signature,
+                            },
+                        ) => {
+                            trace!("Expiring multisig {}", multisig_id);
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Multisig(rpc::MultisigNotification {
+                                    event: rpc::MultisigEvent::MultisigExpire as i32,
+                                    multisig_id: *multisig_id,
+                                    signature: signature.serialize_compact().to_vec(),
+                                }))
+                            };
+                            tx.send(Ok(payload)).await
+                        }
+                        // TODO: Consider making Sweep part of Multisig?
                         DynafedSubscriptionMessage::Sweep(sweep) => {
                             let SweepNotification {
                                 multisig_id_from,
@@ -3061,41 +3095,129 @@ where
 
         Ok(tonic::Response::new(rpc::Empty {}))
     }
-    async fn new_multisig_attestation(
+
+    async fn sunset_multisig(
         &self,
-        req: tonic::Request<rpc::DkgAttestation>,
-    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        req: tonic::Request<rpc::SunsetMultisigRequest>,
+    ) -> Result<tonic::Response<rpc::SunsetMultisigResponse>, tonic::Status>
+    {
         self.validate_jwt(&req)?;
 
         let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
-        let Some(tracked) =
-            self.db.get_multisig_attestation(multisig_id).to_status()?
+        // Multisig config must exist.
+        let multisig_conf = self
+            .federation
+            .get_config_by_multisig_id(&multisig_id)
+            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .to_status()?;
+
+        // TODO
+        let my_frost_id = 0;
+
+        // Must be the coordinator for the multisig.
+        if my_frost_id != multisig_conf.coordinator {
+            return Err(tonic::Status::failed_precondition(format!(
+                "Not the coordinator for multisig_id {}",
+                multisig_id
+            )));
+        }
+
+        // Must have the public key package available.
+        let Some(public_key_package) =
+            self.db.get_public_key_package_by_id(multisig_id).to_status()?
         else {
             return Err(tonic::Status::not_found(format!(
-                "DKG session not found for multisig_id {}",
+                "No public key package exists for multisig_id {}",
                 multisig_id
             )));
         };
 
-        if tracked.marked_finalized {
-            return Err(tonic::Status::not_found(format!(
-                "DKG session not found for multisig_id {}",
+        // Produce the signature to be submitted to consensus, where it's
+        // checked against the coordinators' public key and where the necessary
+        // state conditions are validated.
+        let signature = dkg::AttestationManager::coordinator_sunset_multisig(
+            multisig_id,
+            &public_key_package,
+            &self.p2p_secret_key,
+        );
+
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Multisig(
+                MultisigNotification::Sunset { multisig_id, signature },
+            ),
+        ) {
+            return Err(tonic::Status::internal(format!(
+                "Failed to submit sunsetting notification to dynafed queue for multisig_id {}: {}",
+                multisig_id, e
+            )));
+        }
+
+        Ok(tonic::Response::new(rpc::SunsetMultisigResponse {
+            signature: signature.serialize_compact().to_vec(),
+        }))
+    }
+
+    async fn expire_multisig(
+        &self,
+        req: tonic::Request<rpc::SunsetMultisigRequest>,
+    ) -> Result<tonic::Response<rpc::ExpireMultisigResponse>, tonic::Status>
+    {
+        self.validate_jwt(&req)?;
+
+        let multisig_id: MultisigId = req.into_inner().multisig_id.into();
+
+        // Multisig config must exist.
+        let multisig_conf = self
+            .federation
+            .get_config_by_multisig_id(&multisig_id)
+            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .to_status()?;
+
+        // TODO
+        let my_frost_id = 0;
+
+        // Must be the coordinator for the multisig.
+        if my_frost_id != multisig_conf.coordinator {
+            return Err(tonic::Status::failed_precondition(format!(
+                "Not the coordinator for multisig_id {}",
                 multisig_id
             )));
         }
 
-        // We can now officially mark the multisig as finalized and is hence
-        // ready to be used for pegins and pegouts.
-        self.db.mark_multisig_attestation_finalized(multisig_id).to_status()?;
+        // Must have the public key package available.
+        let Some(public_key_package) =
+            self.db.get_public_key_package_by_id(multisig_id).to_status()?
+        else {
+            return Err(tonic::Status::not_found(format!(
+                "No public key package exists for multisig_id {}",
+                multisig_id
+            )));
+        };
 
-        // Cleanup the DKG session state.
-        let mut sessions = self.dkg_sessions.lock().await;
-        if sessions.remove(&multisig_id).is_none() {
-            // TODO: We can just skip/ignore this.
+        // Produce the signature to be submitted to consensus, where it's
+        // checked against the coordinators' public key and where the necessary
+        // state conditions are validated.
+        let signature = dkg::AttestationManager::coordinator_expire_multisig(
+            multisig_id,
+            &public_key_package,
+            &self.p2p_secret_key,
+        );
+
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Multisig(
+                MultisigNotification::Expire { multisig_id, signature },
+            ),
+        ) {
+            return Err(tonic::Status::internal(format!(
+                "Failed to submit expiration notification to dynafed queue for multisig_id {}: {}",
+                multisig_id, e
+            )));
         }
 
-        Ok(tonic::Response::new(rpc::Empty {}))
+        Ok(tonic::Response::new(rpc::ExpireMultisigResponse {
+            signature: signature.serialize_compact().to_vec(),
+        }))
     }
 
     async fn initiate_sweep(
