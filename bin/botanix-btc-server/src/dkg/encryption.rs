@@ -1,5 +1,4 @@
 use super::{Initiator, Target};
-use bitcoin::secp256k1;
 use botanix_types::MultisigId;
 use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, KeyInit, Nonce};
 use frost::keys::dkg::{round1, round2};
@@ -127,7 +126,7 @@ impl DkgHandshakeManager {
             return Err(Error::SelfNotInFederation);
         }
 
-        let mut t = Transcript::new(b"Botanix_Macbeth_DKG_Setup_v1");
+        let mut t = Transcript::new(b"botanix/dkg-handshake/v1");
         t.append_message(b"context", context);
         t.append_u64(b"nonce", nonce);
 
@@ -605,7 +604,7 @@ impl AttestationManager {
     }
     pub fn finalize(&mut self) -> Result<frost::Signature, Error> {
         if self.signature_shares.len() != self.fed_members.len() {
-            todo!()
+            return Err(Error::InsufficientSamples);
         }
 
         // Verify each participants signature share and aggregate the final
@@ -622,5 +621,55 @@ impl AttestationManager {
             .verify(self.signing_package.message(), &aggr_sig)?;
 
         Ok(aggr_sig)
+    }
+    // Utility function for the coordinator to create a signature required for
+    // sunsetting a multisig.
+    //
+    // This method does no formal validation of any state conditions, which is
+    // handled on the consensus layer.
+    pub fn coordinator_sunset_multisig(
+        multisig_id: MultisigId,
+        public_key_package: &frost::keys::PublicKeyPackage,
+        sec_key: &secp256k1::SecretKey,
+    ) -> secp256k1::ecdsa::Signature {
+        let mut commit = [0; 32];
+        let mut t = Transcript::new(b"botanix/multisig-sunsetting/v1");
+        t.append_u64(b"multisig_id", multisig_id.as_u32() as u64);
+        t.append_message(
+            b"public_key_package",
+            &public_key_package.serialize().unwrap(),
+        );
+        t.challenge_bytes(b"sunsetting_commit", &mut commit);
+
+        let secp = secp256k1::Secp256k1::new();
+        let msg =
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+
+        secp.sign_ecdsa(&msg, &sec_key)
+    }
+    // Utility function for the coordinator to create a signature required for
+    // expiring a multisig.
+    //
+    // This method does no formal validation of any state conditions, which is
+    // handled on the consensus layer.
+    pub fn coordinator_expire_multisig(
+        multisig_id: MultisigId,
+        public_key_package: &frost::keys::PublicKeyPackage,
+        sec_key: &secp256k1::SecretKey,
+    ) -> secp256k1::ecdsa::Signature {
+        let mut commit = [0; 32];
+        let mut t = Transcript::new(b"botanix/multisig-expiration/v1");
+        t.append_u64(b"multisig_id", multisig_id.as_u32() as u64);
+        t.append_message(
+            b"public_key_package",
+            &public_key_package.serialize().unwrap(),
+        );
+        t.challenge_bytes(b"expiration_commit", &mut commit);
+
+        let secp = secp256k1::Secp256k1::new();
+        let msg =
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+
+        secp.sign_ecdsa(&msg, &sec_key)
     }
 }
