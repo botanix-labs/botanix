@@ -988,7 +988,7 @@ where
     /// dispatches to the appropriate signing state machine round
     /// (round1/round2, signer/coordinator).
     async fn on_peer_msg_signing(&mut self, frost_identifier: frost::Identifier, signing_response: SigningResponse) -> eyre::Result<()> {
-        let SigningResponse { response_type, signing_session_id, psbt } =
+        let SigningResponse { response_type, signing_session_id, psbt, multisig_id } =
             signing_response;
 
         let signing_session_id = FixedBytes::try_from(
