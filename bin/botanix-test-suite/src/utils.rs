@@ -73,6 +73,7 @@ pub async fn send_pegout_notification(
                 checkpoint_block_hash,
                 pegins: vec![],
                 pending_pegouts,
+                active_multisigs: vec![],
             },
         )
         .await
@@ -116,6 +117,7 @@ pub async fn send_pegin_notification(
                 checkpoint_block_hash,
                 pegins: utxos,
                 pending_pegouts: vec![],
+                active_multisigs: vec![],
             },
         )
         .await
@@ -168,6 +170,7 @@ pub async fn send_pegins_notifications(
                 checkpoint_block_hash,
                 pegins: utxos,
                 pending_pegouts: vec![],
+                active_multisigs: vec![],
             },
         )
         .await

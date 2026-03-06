@@ -239,6 +239,7 @@ pub async fn test_track_mempool(
                     checkpoint_block_hash: checkpoint_block_hash.clone(),
                     pegins: vec![],
                     pending_pegouts: vec![],
+                    active_multisigs: vec![],
                 },
             )
             .await
