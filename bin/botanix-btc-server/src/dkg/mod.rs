@@ -986,23 +986,7 @@ impl DkgStateMachine {
     /// An optional `Duration` until the next timeout event. If `None`, there
     /// are no pending timeout events.
     pub fn timeout(&self, now: Instant) -> Option<Duration> {
-        let mut session_timeout = None;
-
-        // If we're the coordinator and the DKG session has not been finalized...
-        // TODO: session-timeout should be reset on each stage transition!
-        if self.is_coordinator() && self.stage() != Stage::Finalized {
-            // And if a max session timeout has been configured...
-            if let Some(max) = self.config.pending_session_timeout {
-                // And if a DKG session has started...
-                if let Some(session_activated) = self.session_activated {
-                    let t = (session_activated + max)
-                        .saturating_duration_since(now);
-                    session_timeout = Some(t);
-                }
-            }
-        }
-
-        let t = match &self.state {
+        match &self.state {
             StageState::RoundOne { out_round1_packages, .. } => {
                 min_timer_optional::<(), _>(out_round1_packages.values(), now)
             }
@@ -1016,13 +1000,6 @@ impl DkgStateMachine {
                 min_timer_optional::<(), _>(out_round4_packages.values(), now)
             }
             _ => None,
-        };
-
-        match (t, session_timeout) {
-            (Some(t), Some(s)) => Some(t.min(s)),
-            (Some(t), None) => Some(t),
-            (None, Some(x)) => Some(x),
-            (None, None) => None,
         }
     }
     /// Processes timeout events for outgoing messages.
@@ -1037,32 +1014,6 @@ impl DkgStateMachine {
     /// * `now` - The current time
     pub fn on_timeout(&mut self, now: Instant) {
         let self_is_coordinator = self.is_coordinator();
-
-        // If we're the coordinator and the DKG session has not been finalized...
-        //
-        // TODO: We need to be more tolerant regarding attestation submission,
-        // since that might require some time...
-        if self_is_coordinator && self.stage() != Stage::Finalized {
-            // And if a max session timeout has been configured...
-            if let Some(max) = self.config.pending_session_timeout {
-                // And if a DKG session has started...
-                if let Some(session_activated) = self.session_activated {
-                    // And if the timeout has expired...
-                    if now >= session_activated + max {
-                        // Increment nonce.
-                        let nonce = self
-                            .session_nonce
-                            .as_ref()
-                            .expect("nonce tracker must be set");
-                        let nonce = nonce.wrapping_add(1);
-
-                        // Start a new session.
-                        self.init_new_session(nonce)
-                            .expect("failed to init new session");
-                    }
-                }
-            }
-        }
 
         // Helper to check if a timer has expired.
         let timer_expired = |timer: Option<Instant>| -> bool {
