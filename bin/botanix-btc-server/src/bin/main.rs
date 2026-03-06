@@ -2917,11 +2917,18 @@ where
             });
         }
 
+        // Check for aggregated key package state and optionally save to
+        // database.
         if let Some((sec_key, pub_key)) = dkg.machine.aggregate_key_packages() {
             let multisig_id = dkg.machine.multisig_id();
+
             if self.db.get_key_package_by_id(multisig_id).to_status()?.is_none()
             {
-                info!("DKG completed successfully for multisig_id {}, saving key packages...", multisig_id);
+                info!(
+                    "DKG completed successfully for multisig_id {}, saving to database...",
+                    multisig_id
+                );
+
                 if let Err(e) = self
                     .db
                     .set_key_package_by_id(multisig_id, sec_key.clone())
@@ -3041,6 +3048,7 @@ where
                 multisig_id
             ));
         }
+
         let mut sessions = self.dkg_sessions.lock().await;
         if sessions.contains_key(&multisig_id) {
             return Err(already_exists!(
