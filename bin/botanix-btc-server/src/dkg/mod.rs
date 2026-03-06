@@ -1,8 +1,5 @@
-use bitcoin::secp256k1;
 use botanix_types::MultisigId;
-use encryption::{
-    AttestationManager, DkgHandshakeManager, SecureChannelManager,
-};
+use encryption::{DkgHandshakeManager, SecureChannelManager};
 use frost::keys::{
     dkg::{round1, round2},
     PublicKeyPackage,
@@ -17,13 +14,12 @@ use std::{
 };
 use thiserror::Error;
 
+// Export the Attestation Manager
+pub use encryption::AttestationManager;
+
 mod encryption;
 #[cfg(test)]
 mod tests;
-
-// NOTE: As of now, the session context is always the same constant. In
-// the future this may change, and might be handled differently.
-pub const SESSION_CONTEXT: &[u8] = b"static-dkg-session-context";
 
 /// Wrapper type for FROST identifiers used in the DKG protocol.
 #[derive(
@@ -1157,7 +1153,8 @@ impl DkgStateMachine {
     ///
     /// # Arguments
     ///
-    /// * `now` - The current time, used for setting timeouts for outgoing messages
+    /// * `now` - The current time, used for setting timeouts for outgoing
+    ///   messages
     ///
     /// # Returns
     ///
@@ -1173,6 +1170,7 @@ impl DkgStateMachine {
                     else {
                         continue;
                     };
+
                     let Some(Some(entry)) = out_round1_packages
                         .get_mut(&(initiator, payload.recipient))
                     else {
@@ -1189,6 +1187,7 @@ impl DkgStateMachine {
                     else {
                         continue;
                     };
+
                     let Some(Some(entry)) =
                         out_round2_packages.get_mut(&(initiator, target))
                     else {
@@ -1206,6 +1205,7 @@ impl DkgStateMachine {
                     else {
                         continue;
                     };
+
                     let Some(entry) =
                         out_round3_packages.get_mut(&payload.recipient)
                     else {
@@ -1222,6 +1222,7 @@ impl DkgStateMachine {
                     else {
                         continue;
                     };
+
                     let Some(Some(entry)) = out_round4_packages
                         .get_mut(&(initiator, payload.recipient))
                     else {
@@ -1458,11 +1459,11 @@ impl DkgStateMachine {
 
         // Verification succeeded, the new session is accepted!
 
+        // TODO: Clean this up a little
         // Set new session params.
         let context = their_context;
         let nonce = their_nonce;
         //
-        self.session_activated = None;
         self.session_nonce = Some(nonce);
         self.queue.i.clear();
 
@@ -1886,29 +1887,27 @@ impl DkgStateMachine {
         match &mut self.state {
             StageState::RoundFour {
                 auth,
-                signing_package,
-                secret_package,
-                public_key_package,
                 in_round4_packages,
                 out_round4_packages,
+                ..
             } => {
-                // TODO: Replace signing-package in this case? Or do some other validation?
                 if in_round4_packages.contains_key(&initiator) {
                     self.queue.send_round4_ack(initiator, sender);
                     return Ok(());
                 }
 
+                // AUTHENTICATION: Validate signature share.
                 auth.validate_signature_share(
                     initiator.0,
                     their_signature_share,
                     their_attestation_sig,
-                )
-                .unwrap();
+                )?;
 
                 in_round4_packages.insert(
                     initiator,
                     (their_signature_share, their_attestation_sig),
                 );
+
                 self.queue.send_round4_ack(initiator, sender);
 
                 if self_is_coordinator {
@@ -1939,7 +1938,8 @@ impl DkgStateMachine {
                             recipient,
                             msg: DkgMessage::Round4 {
                                 initiator,
-                                // TODO: Comment on this
+                                // No need to resend the signing package as the
+                                // member should already have it.
                                 signing_package: None,
                                 signature_share: their_signature_share,
                                 attestation_sig: their_attestation_sig,
@@ -1958,14 +1958,17 @@ impl DkgStateMachine {
             } => {
                 debug_assert!(!self_is_coordinator);
 
+                // Expecting the coordinator to include their signing package,
+                // as it is required to setup the [`AttestationManager`].
                 let Some(signing_package) = their_signing_package else {
-                    todo!()
+                    return Err(Error::ExpectedSigningPackage);
                 };
 
                 if signing_package.message() != dkg_commit {
-                    todo!()
+                    return Err(Error::BadSigningPackageMsg);
                 }
 
+                // AUTHENTICATION: Setup the attestation manager.
                 let mut auth = AttestationManager::new(
                     self.multisig_id,
                     self.my_frost_id,
@@ -1973,27 +1976,47 @@ impl DkgStateMachine {
                     self.members.clone(),
                     signing_package.clone(),
                     public_key_package.clone(),
-                )
-                .unwrap();
+                )?;
 
-                let our_signature_share = frost::round2::sign(
-                    &signing_package,
-                    &signing_nonces,
-                    secret_package,
-                )
-                .unwrap();
-
-                let our_attestation_sig =
-                    auth.commit_signature_share(our_signature_share).unwrap();
-
+                // AUTHENTICATION: Validate and track the coordinators signature
+                // share and attestation.
                 auth.validate_signature_share(
                     initiator.0,
                     their_signature_share,
                     their_attestation_sig,
-                )
-                .unwrap();
+                )?;
+
+                // Generate the signing-round2 signature share.
+                let our_signature_share = frost::round2::sign(
+                    &signing_package,
+                    &signing_nonces,
+                    secret_package,
+                )?;
+
+                // AUTHENTICATION: Commit to the signature share by producing
+                // the attestation signature, to be sent to the coordinator.
+                let our_attestation_sig =
+                    auth.commit_signature_share(our_signature_share)?;
+
                 self.queue.send_round4_ack(initiator, sender);
 
+                let mut in_round4_packages = BTreeMap::new();
+
+                // Track our own signature share and attestation.
+                in_round4_packages.insert(
+                    Initiator(self.my_frost_id),
+                    (our_signature_share, our_attestation_sig),
+                );
+
+                // Track the coordinators signature share and attestation.
+                in_round4_packages.insert(
+                    initiator,
+                    (their_signature_share, their_attestation_sig),
+                );
+
+                let mut out_round4_packages = BTreeMap::new();
+
+                // Track our outbound message.
                 let out_entry = OutEntryRoundFour {
                     signature_share: our_signature_share,
                     attestation_sig: our_attestation_sig,
@@ -2001,19 +2024,6 @@ impl DkgStateMachine {
                     attempts: 0,
                 };
 
-                let mut in_round4_packages = BTreeMap::new();
-
-                in_round4_packages.insert(
-                    Initiator(self.my_frost_id),
-                    (our_signature_share, our_attestation_sig),
-                );
-
-                in_round4_packages.insert(
-                    initiator,
-                    (their_signature_share, their_attestation_sig),
-                );
-
-                let mut out_round4_packages = BTreeMap::new();
                 out_round4_packages.insert(
                     (Initiator(self.my_frost_id), self.coordinator),
                     Some(out_entry),
@@ -2338,8 +2348,7 @@ impl DkgStateMachine {
                 &signing_package,
                 &signing_nonces,
                 secret_package,
-            )
-            .unwrap();
+            )?;
 
             // AUTHENTICATION: Setup attestation manager.
             let mut auth = AttestationManager::new(
@@ -2349,13 +2358,12 @@ impl DkgStateMachine {
                 self.members.clone(),
                 signing_package.clone(),
                 public_key_package.clone(),
-            )
-            .unwrap();
+            )?;
 
             // Commit our own signature share and construct our attestation
             // signature--both of which are part of the round4 package payload.
             let attestation_sig =
-                auth.commit_signature_share(signature_share).unwrap();
+                auth.commit_signature_share(signature_share)?;
 
             // Track our own round4 package.
             let mut in_round4_packages = BTreeMap::new();
@@ -2471,7 +2479,7 @@ impl DkgStateMachine {
         // aggregated signature with each members signature share and verify it
         // against the aggregated public key. On success, this confirms that the
         // multisig setup works reliably and correctly.
-        let aggregated_sig = auth.finalize().unwrap();
+        let aggregated_sig = auth.finalize()?;
 
         let attestations = std::mem::take(in_round4_packages)
             .into_iter()
@@ -2488,8 +2496,8 @@ impl DkgStateMachine {
         };
 
         // Reset session parameters.
+        // TODO: Should we?
         self.session_nonce = None;
-        self.session_activated = None;
 
         Ok(())
     }
