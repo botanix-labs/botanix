@@ -506,6 +506,7 @@ where
                         response_type,
                         signing_session_id: signing_session_id.clone(),
                         psbt: psbt.clone(),
+                        multisig_id: self.multisig_config.multisig_id.as_u32(),
                     });
                     connected_peer
                         .peer_commands_tx
@@ -680,6 +681,7 @@ where
                     .signing_session_id
                     .clone(),
                 psbt: signing_package_round1.psbt.clone(),
+                multisig_id: self.multisig_config.multisig_id.as_u32(),
             });
 
             retry_future(
@@ -853,6 +855,7 @@ where
                 .signing_session_id
                 .clone(),
             psbt: signing_package_round2.psbt.clone(),
+            multisig_id: self.multisig_config.multisig_id.as_u32(),
         });
 
         retry_future(
