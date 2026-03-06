@@ -20,7 +20,7 @@ pub fn complete_stage_four(
     assert!(bob.send(now).is_none());
     assert!(eve.send(now).is_none());
 
-    assert!(alice.timeout(now).is_some());
+    assert!(alice.timeout(now).is_none());
     assert!(bob.timeout(now).is_none());
     assert!(eve.timeout(now).is_none());
 
@@ -64,7 +64,7 @@ pub fn complete_stage_four(
         alice.recv(e2).unwrap();
     }
 
-    assert!(alice.timeout(now).is_some());
+    assert!(alice.timeout(now).is_none());
     assert!(bob.timeout(now).is_some());
     assert!(eve.timeout(now).is_some());
 
