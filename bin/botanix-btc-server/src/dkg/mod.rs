@@ -612,6 +612,16 @@ pub enum Error {
     Frost(#[from] frost::Error),
     #[error("Encryption error: {0}")]
     Encryption(#[from] encryption::Error),
+    #[error("Expected signing package to be included")]
+    ExpectedSigningPackage,
+    #[error("Provided signing package message is invalid")]
+    BadSigningPackageMsg,
+    #[error("Only the coordinator may restart the session")]
+    OnlyCoordinatorMayRestartSession,
+    #[error("Bad session context")]
+    BadSessionContext,
+    #[error("No session once set")]
+    NoSessionNonceSet,
 }
 
 /// The DKG state machine handles distributed key generation across multiple participants.
@@ -624,38 +634,34 @@ pub struct DkgStateMachine {
     members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
     queue: Queue,
     state: StageState,
+    session_context: Vec<u8>,
     session_nonce: Option<u64>,
-    session_activated: Option<Instant>,
 }
 
 impl DkgStateMachine {
     /// Creates a new DKG state machine.
     ///
-    /// This constructor initializes a new DKG state machine with the specified
-    /// participant identifiers and configuration parameters.
+    /// - **Coordinator**: if a nonce is provided, immediately starts round 1.
+    ///   Otherwise stays idle until [`Self::init_new_session`] is called.
     ///
-    /// When created, the state machine behavior differs based on whether this participant
-    /// is the coordinator:
-    ///
-    /// - If this participant is the coordinator (`my_frost_id == coordinator`), the state machine
-    ///   enters the `RoundOne` stage by immediately sending the round1 packages to all other
-    ///   participants. These initial packages can be retrieved by calling `send()`.
-    ///
-    /// - If this participant is not the coordinator, the state machine sets the `pending` flag to
-    ///   `true`. It generates its round1 package but doesn't send it yet. Instead, it waits to
-    ///   receive the coordinator's round1 package before becoming active and sending any messages.
+    /// - **Non-coordinator**: stays idle until the coordinator's round 1
+    ///   message arrives, at which point authentication and round 1 packages
+    ///   are initialized.
     ///
     /// # Arguments
     ///
     /// * `my_frost_id` - The FROST identifier of this participant.
     /// * `coordinator` - The FROST identifier of the designated coordinator.
-    /// * `members` - A list of all participant FROST identifiers in the DKG process, including this
+    /// * `members` - All participant FROST identifiers, including this
     ///   participant and the coordinator.
     /// * `config` - Configuration parameters for the DKG process.
-    /// * `session_nonce` - An increasing value that uniquely identifies this DKG session. Only the
-    ///   coordinator should provide this value (typically using Unix time in seconds).
-    ///   Non-coordinators should pass `None` and will accept the nonce from the coordinator's
-    ///   initial message. The nonce increases automatically when sessions timeout and restart.
+    /// * `session_context` - Opaque context bytes bound into the
+    ///   authentication layer. Must be agreed upon by all participants
+    ///   upfront and must not be empty.
+    /// * `session_nonce` - Monotonically increasing value that uniquely
+    ///   identifies this DKG session. Only the coordinator may set this
+    ///   (typically Unix time in seconds); non-coordinators must pass `None`
+    ///   and will accept the nonce from the coordinator's initial message.
     pub fn new(
         my_frost_id: frost::Identifier,
         my_static_sec: secp256k1::SecretKey,
@@ -663,6 +669,7 @@ impl DkgStateMachine {
         coordinator: frost::Identifier,
         members: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         config: Config,
+        session_context: Vec<u8>,
         session_nonce: Option<u64>,
     ) -> Result<Self, Error> {
         if !members.contains_key(&my_frost_id) {
@@ -689,9 +696,16 @@ impl DkgStateMachine {
             ));
         }
 
-        if my_frost_id == coordinator && session_nonce.is_none() {
+        if session_context.is_empty() {
             return Err(Error::BadConfig(
-                "coordinator must provide a session nonce".to_string(),
+                "session context must not be empty".to_string(),
+            ));
+        }
+
+        // We're purposely overly strict here.
+        if my_frost_id != coordinator && session_nonce.is_some() {
+            return Err(Error::BadConfig(
+                "only the coordinator can initialize a session".to_string(),
             ));
         }
 
@@ -707,37 +721,62 @@ impl DkgStateMachine {
             members,
             queue,
             state: StageState::AwaitingInit,
-            session_nonce: None,
-            session_activated: None,
+            session_nonce,
+            session_context,
         };
 
-        // The coordinator immediately starts the DKG process by sending a
-        // `DkgMessage::NewSession` followed by the actual `DkgMessage::Round1`
-        // package to each participant.
+        // The coordinator immediately start the DKG process by sending a
+        // [`DkgMessage::Round1`] payload, if a nonce value is passed on. If the
+        // nonce is left empty, The coordinator has to manually call
+        // [`Self::init_new_session`].
         //
-        // Non-coordinators wait for the coordinator to send this message, and
-        // initialize the round1 package and authentication layer then.
+        // Non-coordinators wait for the coordinator to send the [`DkgMessage::Round1`]
+        // payload, and initialize their round1 packages and authentication
+        // layers then.
         if this.is_coordinator() {
-            let nonce = session_nonce.expect("session nonce must be provided");
-            this.init_new_session(nonce)?;
+            if let Some(nonce) = session_nonce {
+                // Explicitly use the passed-on nonce for the first session, not
+                // the incremented one.
+                this.init_new_session(Some(nonce))?;
 
-            debug_assert_eq!(this.stage(), Stage::RoundOne);
+                debug_assert_eq!(this.stage(), Stage::RoundOne);
+            }
         }
 
         Ok(this)
     }
-    /// Initializes a new DKG session with the given nonce by resetting the
-    /// stage, setting up a new authentication layer, generating a new round1
-    /// package, and sending it to all participants.
+    /// Initializes a new DKG session by resetting the stage, setting up a new
+    /// authentication layer, generating a round 1 package, and sending it to
+    /// all participants.
     ///
-    /// Only the coordinator must call this method.
-    fn init_new_session(&mut self, nonce: u64) -> Result<(), Error> {
-        debug_assert!(self.is_coordinator());
+    /// If `session_nonce` is `Some`, that nonce is used directly. If `None`,
+    /// the current nonce is incremented by one.
+    ///
+    /// Only the coordinator may call this method.
+    pub fn init_new_session(
+        &mut self,
+        session_nonce: Option<u64>,
+    ) -> Result<(), Error> {
+        if !self.is_coordinator() {
+            return Err(Error::OnlyCoordinatorMayRestartSession);
+        }
 
-        let context = SESSION_CONTEXT.to_vec();
-        //
-        self.session_activated = None;
-        self.session_nonce = Some(nonce);
+        let session_nonce = match session_nonce {
+            Some(n) => n,
+            None => {
+                // Increment the current nonce by one.
+                let n = self
+                    .session_nonce
+                    .ok_or(Error::NoSessionNonceSet)?
+                    .checked_add(1)
+                    .unwrap();
+
+                self.session_nonce = Some(n);
+                n
+            }
+        };
+
+        // Clear any pending outbound messages.
         self.queue.i.clear();
 
         // Generate the secret package and our round1 package
@@ -750,8 +789,8 @@ impl DkgStateMachine {
 
         // AUTHENTICATION: Setup authentication and encryption layer.
         let mut auth = DkgHandshakeManager::new(
-            &context,
-            nonce,
+            &self.session_context,
+            session_nonce,
             self.my_frost_id,
             self.my_static_sec,
             self.members.clone(),
@@ -816,8 +855,8 @@ impl DkgStateMachine {
                     recipient,
                     msg: DkgMessage::Round1 {
                         initiator: Initiator(self.my_frost_id),
-                        context: context.clone(),
-                        nonce,
+                        context: self.session_context.clone(),
+                        nonce: session_nonce,
                         ephemeral_pub: our_eph_pub,
                         signature: our_sig,
                         package: sealed_round1_package.clone(),
@@ -829,12 +868,14 @@ impl DkgStateMachine {
         }
 
         self.state = StageState::RoundOne {
-            nonce,
+            // TODO: Is this even needed here?
+            nonce: session_nonce,
             auth,
             secret_package,
             in_round1_packages: BTreeMap::new(),
             out_round1_packages,
-            context,
+            // TODO: Is this even needed here?
+            context: self.session_context.clone(),
         };
 
         Ok(())
@@ -1153,10 +1194,6 @@ impl DkgStateMachine {
                         continue;
                     };
 
-                    if self.session_activated.is_none() {
-                        self.session_activated = Some(now);
-                    }
-
                     entry.timer =
                         Some(now + self.config.round1_package_timeout);
                     entry.attempts += 1;
@@ -1399,8 +1436,8 @@ impl DkgStateMachine {
             return Ok(false);
         }
 
-        if their_context != SESSION_CONTEXT {
-            return Ok(false);
+        if their_context != self.session_context {
+            return Err(Error::BadSessionContext);
         }
 
         if let Some(last) = self.session_nonce {
@@ -1528,8 +1565,8 @@ impl DkgStateMachine {
             return Ok(());
         }
 
-        if their_context != SESSION_CONTEXT {
-            return Ok(());
+        if their_context != self.session_context {
+            return Err(Error::BadSessionContext);
         }
 
         // Do a simple check to determine whether we should start the new
@@ -1568,6 +1605,8 @@ impl DkgStateMachine {
         {
             // A coordinator never reaches this point.
             debug_assert!(!self.is_coordinator());
+            // Session nonce is updated.
+            debug_assert_eq!(self.session_nonce.unwrap(), their_nonce);
 
             // New session accepted!
             return Ok(());

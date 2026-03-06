@@ -502,6 +502,13 @@ where
             None
         };
 
+        // Use the reproducible config checksum as the session context. This
+        // must be equal for all members.
+        let session_context = multisig_conf
+            .checksum()
+            .expect("failed to serialize multisig config")
+            .to_vec();
+
         let machine = dkg::DkgStateMachine::new(
             frost_identifier,
             p2p_secret_key,
@@ -509,6 +516,7 @@ where
             coordinator,
             members,
             dkg_config,
+            session_context,
             session_nonce,
         )?;
 
