@@ -49,6 +49,7 @@ botanix-fs-util = { workspace = true }
 botanix-types.workspace = true
 chacha20poly1305 = "0.10.1"
 ciborium = { workspace = true }
+secp256k1.workspace = true
 clap = { version = "4.3.22", features = ["derive"] }
 confy = "0.6"
 const_format = { version = "0.2.32", features = ["rust_1_64"] }
