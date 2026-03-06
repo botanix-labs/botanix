@@ -5,25 +5,12 @@ use reth_codecs::{add_arbitrary_tests, Compact};
 use reth_primitives::Header;
 use serde::{Deserialize, Serialize};
 
-/// A header with associated pegins and pegouts.
+/// A finalized header with its associated pegins, pegouts, and active
+/// multisig state.
 ///
-/// This structure represents a blockchain header along with its associated
-/// Bitcoin pegin and pegout transaction data. It is used in the staged header
-/// system to persist pegin/pegout data after finalizing a block, ensuring
-/// that no Bitcoin bridge transactions are lost during block processing.
-///
-/// ## Usage
-///
-/// Staged headers are created when a block is finalized and contains Bitcoin
-/// pegin or pegout operations. The header along with the extracted pegin/pegout
-/// data is staged for later processing, allowing the system to handle Bitcoin
-/// bridge operations reliably.
-///
-/// ## Fields
-///
-/// - `pegins`: Bitcoin-to-Botanix bridge operations found in this block
-/// - `pegouts`: Botanix-to-Bitcoin bridge operations found in this block
-/// - `header`: The original blockchain header containing these operations
+/// Staged after a block is finalized to ensure no bridge transactions are lost
+/// during shutdown or interruption. The staged entry is removed once the Frost
+/// task successfully forwards it to the btc-server as a consensus checkpoint.
 #[derive(
     Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize, Compact,
 )]
@@ -43,6 +30,15 @@ pub struct HeaderWithPegs {
     /// Each pegout represents tokens being burned on the Botanix network
     /// to unlock equivalent Bitcoin on the Bitcoin network.
     pub pegouts: Vec<PegoutData>,
+
+    /// IDs of multisigs that can receive pegins at the time this header was
+    /// finalized (excludes staging, sunset, and expired multisigs).
+    ///
+    /// Retrieved from the `MultisigManager` after processing any multisig
+    /// transition messages from the block's non-deterministic data (NDD).
+    /// Forwarded to the btc-server when initiating a consensus checkpoint.
+    #[serde(default)]
+    pub active_multisigs: Vec<MultisigId>,
 
     /// The header to which these pegins and pegouts are associated.
     ///
