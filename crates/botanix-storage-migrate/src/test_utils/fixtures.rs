@@ -81,6 +81,7 @@ pub fn create_test_staged_headers<TX: DbTxMut>(
             },
             pegins: vec![],
             pegouts: vec![],
+            active_multisigs: vec![],
         };
         cursor.append(block_hash, &header)?;
     }
