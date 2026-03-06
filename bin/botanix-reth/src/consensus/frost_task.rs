@@ -418,19 +418,20 @@ where
 
                 match msg {
                     DkgNotification::Start { multisig_id } => {
-                        self.on_dynafed_dkg_start(multisig_id)?;
+                        self.on_dynafed_dkg_start(multisig_id)
                     }
                     DkgNotification::Abort { multisig_id } => {
-                        self.on_dynafed_dkg_abort(multisig_id)?;
+                        self.on_dynafed_dkg_abort(multisig_id)
                     }
                 }
             }
+            DynafedSubscriptionMessage::Multisig(notification) => {
+                self.on_dynafed_multisig(notification).await
+            }
             DynafedSubscriptionMessage::Sweep(notification) => {
-                self.on_dynafed_sweep(notification).await?;
+                self.on_dynafed_sweep(notification).await
             }
         }
-
-        Ok(())
     }
     /// Routes an incoming peer message to the appropriate handler based on its
     /// type (DKG, signing, wallet state, or error).
@@ -516,6 +517,25 @@ where
 
         debug_assert!(multisig.dkg_task.is_none());
         Ok(())
+    }
+    /// Forwards a dynafed multisig lifecycle notification to the multisig
+    /// manager, which transitions the multisig through sunsetting or
+    /// expiration.
+    async fn on_dynafed_multisig(&mut self, notification: MultisigNotification) -> eyre::Result<()> {
+        match notification {
+            MultisigNotification::Sunset { multisig_id, signature } => {
+                self
+                    .multisig_handle
+                    .submit_sunsetting(multisig_id, signature).await
+                    .wrap_err("Failed to submit a multisig sunsetting request")
+            }
+            MultisigNotification::Expire { multisig_id, signature } => {
+                self
+                    .multisig_handle
+                    .submit_expiration(multisig_id, signature).await
+                    .wrap_err("Failed to submit a multisig expiration request")
+            }
+        }
     }
     /// Handles a sweep notification by fetching and validating the sweep PSBT
     /// from the btc-server, then initiating a signing session (coordinator

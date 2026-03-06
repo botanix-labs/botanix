@@ -26,9 +26,12 @@ use botanix_btc_server_client::{
 use botanix_storage::models;
 use botanix_types::MultisigId;
 use btcserverlib::{
-    dkg::{DkgNotification, DynafedSubscriptionMessage, SweepNotification},
+    dkg::{
+        DkgNotification, DynafedSubscriptionMessage, MultisigNotification,
+        SweepNotification,
+    },
     pegout_id::PegoutId,
-    rpc::DkgEvent,
+    rpc::{DkgEvent, MultisigEvent},
     wallet::psbt::{PsbtExt, PsbtOutputExt},
 };
 use frost_secp256k1_tr as frost;
@@ -324,6 +327,20 @@ pub(crate) fn get_dynafed_sub_msg_from_notification(
             };
 
             DynafedSubscriptionMessage::Dkg(dkg_notification)
+        }
+        botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Multisig(multisig) => {
+            let multisig_notification = match MultisigEvent::try_from(multisig.event)? {
+                MultisigEvent::MultisigSunset => MultisigNotification::Sunset {
+                    multisig_id: multisig.multisig_id.into(),
+                    signature: secp256k1::ecdsa::Signature::from_compact(&multisig.signature)?,
+                },
+                MultisigEvent::MultisigExpire => MultisigNotification::Expire {
+                    multisig_id: multisig.multisig_id.into(),
+                    signature: secp256k1::ecdsa::Signature::from_compact(&multisig.signature)?,
+                },
+            };
+
+            DynafedSubscriptionMessage::Multisig(multisig_notification)
         }
         botanix_btc_server_client::subscribe_to_dynafed_notifications_stream::Notification::Sweep(sweep) => {
             DynafedSubscriptionMessage::Sweep(SweepNotification {
