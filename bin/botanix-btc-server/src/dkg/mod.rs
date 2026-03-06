@@ -106,6 +106,8 @@ mod sealed_pkg {
 pub enum DynafedSubscriptionMessage {
     /// DKG-related notifications
     Dkg(DkgNotification),
+    /// Multisig-related notifications
+    Multisig(MultisigNotification),
     /// Sweep-related notifications
     Sweep(SweepNotification),
 }
@@ -116,6 +118,14 @@ pub enum DkgNotification {
     Start { multisig_id: MultisigId },
     /// Abort a DKG session
     Abort { multisig_id: MultisigId },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MultisigNotification {
+    /// Sunset a multisig
+    Sunset { multisig_id: MultisigId, signature: secp256k1::ecdsa::Signature },
+    /// Expire a multisig
+    Expire { multisig_id: MultisigId, signature: secp256k1::ecdsa::Signature },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,6 +157,27 @@ impl Display for DkgNotification {
     }
 }
 
+impl Display for MultisigNotification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MultisigNotification::Sunset { multisig_id, .. } => {
+                write!(
+                    f,
+                    "Multisig Sunsetting {{ multisig_id: {} }}",
+                    multisig_id
+                )
+            }
+            MultisigNotification::Expire { multisig_id, .. } => {
+                write!(
+                    f,
+                    "Multisig Expiration {{ multisig_id: {} }}",
+                    multisig_id
+                )
+            }
+        }
+    }
+}
+
 impl Display for SweepNotification {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -161,6 +192,9 @@ impl Display for DynafedSubscriptionMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DynafedSubscriptionMessage::Dkg(dkg) => write!(f, "{}", dkg),
+            DynafedSubscriptionMessage::Multisig(multisig) => {
+                write!(f, "{}", multisig)
+            }
             DynafedSubscriptionMessage::Sweep(sweep) => {
                 write!(f, "{}", sweep)
             }
