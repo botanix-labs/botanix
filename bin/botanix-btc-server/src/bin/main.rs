@@ -940,10 +940,43 @@ where
         Ok(())
     }
 
+    // TODO: This needs updating => there's no global coordinator now.
     pub fn is_coordinator(&self) -> bool {
         let coordinator_id =
             self.config.coordinator.unwrap_or(DEFAULT_COORDINATOR_ID);
         self.config.identifier == coordinator_id
+    }
+
+    /// Marks the given multisig attestation as finalized, according to
+    /// consensus. This method is noop if no such attestation exists or if it
+    /// already has been marked as finalized.
+    async fn mark_multisig_finalized(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<(), database::Error> {
+        // Skip multisig that doesn't exist locally, which can happen during
+        // multisig transitions or historic sync.
+        let Some(tracked) = self.db.get_multisig_attestation(multisig_id)?
+        else {
+            return Ok(());
+        };
+
+        // Multisig already marked finalized, in case of a replay.
+        if tracked.marked_finalized {
+            return Ok(());
+        }
+
+        // We can now officially mark the multisig as finalized and is hence
+        // ready to be used for pegins and pegouts.
+        self.db.mark_multisig_attestation_finalized(multisig_id)?;
+
+        // Cleanup the DKG session state.
+        let mut sessions = self.dkg_sessions.lock().await;
+        sessions.remove(&multisig_id);
+
+        self.db.flush()?;
+
+        Ok(())
     }
 }
 
@@ -1125,6 +1158,13 @@ where
 
         self.db.store_pending_pegouts(&pegouts_refs).to_status()?;
         self.db.flush().to_status()?;
+
+        // Mark any multisig attestation as finalized, if available.
+        for id in req.active_multisigs {
+            let multisig_id = MultisigId::from(id);
+            self.mark_multisig_finalized(multisig_id).await.to_status()?;
+        }
+
         info!("stored pegouts.len(): {:?}", pegouts.len());
         if let Some(telemetry) = self.telemetry.as_ref() {
             let current_pending_pegouts =
