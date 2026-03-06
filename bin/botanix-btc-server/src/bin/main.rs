@@ -2891,13 +2891,58 @@ where
             }
         }
 
-        let attestation: Option<rpc::DkgAttestation> =
-            dkg.machine.attestation().map(|att| {
-                att.try_into().expect("attestation format must be valid")
-            });
+        // Check for attestation state and optionally save to
+        // database.
+        let attestation = dkg.machine.attestation();
+
+        if let Some(attestation) = attestation.as_ref() {
+            let multisig_id = dkg.machine.multisig_id();
+
+            if self
+                .db
+                .get_multisig_attestation(multisig_id)
+                .to_status()?
+                .is_none()
+            {
+                info!(
+                    "Attestations completed successfully for multisig_id {}, saving to database...",
+                    multisig_id
+                );
+
+                if let Err(e) = self
+                    .db
+                    .set_multisig_attestation(multisig_id, attestation.clone())
+                    .to_status()
+                {
+                    if let Some(telemetry) = self.telemetry.as_ref() {
+                        telemetry.update_dkg_error_metrics(
+                            self.btc_network,
+                            self.config.identifier,
+                            &e.to_string(),
+                        );
+                    }
+                    return Err(e);
+                }
+
+                if let Err(e) = self.db.flush().to_status() {
+                    if let Some(telemetry) = self.telemetry.as_ref() {
+                        telemetry.update_dkg_error_metrics(
+                            self.btc_network,
+                            self.config.identifier,
+                            &e.to_string(),
+                        );
+                    }
+                    return Err(e);
+                }
+            }
+        }
 
         // Set any timers, and retrieve next timeout event.
         let timeout = dkg.machine.timeout(Instant::now());
+        // Convert attestation type.
+        let attestation = attestation.map(|att| {
+            att.try_into().expect("attestation format must be valid")
+        });
 
         let resp = rpc::DkgPayloads {
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
