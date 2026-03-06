@@ -1,6 +1,6 @@
 //! Extended bitcoin server client with authentication
 use crate::{
-    btc_server::{
+    BtcServerClient, MarkMultisigRequest, StartNewDkgRequest, btc_server::{
         AbortDkgRequest, ConsensusCheckpointRequest, DkgPayload, DkgPayloads,
         Empty, FinalizeSignerRequest, FinalizeSigningRequest,
         FinalizeSigningResponse, GetAllUtxosResponse, GetDkgPayloadsRequest,
@@ -14,9 +14,7 @@ use crate::{
         ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
         SubscribeToDynafedNotificationsStream, ToSignRequest,
         WalletStateResponse,
-    },
-    jwt::{Claims, JwtSecret},
-    BtcServerClient, StartNewDkgRequest,
+    }, jwt::{Claims, JwtSecret}
 };
 use displaydoc::Display as DisplayDoc;
 use futures_util::future::BoxFuture;
