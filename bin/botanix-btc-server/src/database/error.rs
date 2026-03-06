@@ -57,6 +57,8 @@ pub enum Error {
     BadExportedPackageFormatVersion,
     #[error("Invalid multisig_id key length in database: expected 4 bytes, got {0} bytes")]
     InvalidMultisigIdKeyLength(usize),
+    #[error("No finalized multisig found among the last two multisig IDs; database state is inconsistent")]
+    NoFinalizedMultisigFound,
 }
 
 impl PartialEq for Error {
