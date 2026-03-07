@@ -579,8 +579,8 @@ impl Db {
     }
 
     /// Attempts to match a script pubkey against known multisig change addresses.
-    /// Checks the current multisig first, then falls back to the previous multisig
-    /// (for transactions created before/during migration).
+    /// Checks the funding multisig first, then falls back to the second-to-last
+    /// multisig (for transactions created during migration).
     ///
     /// Returns:
     /// - `Ok(Some(multisig_id))` if the script matches a known multisig change address
@@ -590,25 +590,16 @@ impl Db {
         &self,
         script_pubkey: &ScriptBuf,
     ) -> Result<Option<MultisigId>, ChangeOutputError> {
-        // TODO: Query current_multisig_id and previous_multisig_id from migration state in db.
-        let current_multisig_id = LEGACY_MULTISIG_ID;
-        let previous_multisig_id: Option<MultisigId> = None; // TODO: Query from db
+        let ids = self.list_multisig_ids()?;
+        let candidates: Vec<_> = ids.into_iter().rev().take(2).collect();
 
-        // Try current multisig first (most common case)
-        let current_spk = self.get_change_spk(current_multisig_id)?;
-        if script_pubkey == &current_spk {
-            return Ok(Some(current_multisig_id));
-        }
-
-        // Fallback: check previous multisig (for txs created before/during migration)
-        if let Some(prev_id) = previous_multisig_id {
-            let prev_spk = self.get_change_spk(prev_id)?;
-            if script_pubkey == &prev_spk {
-                return Ok(Some(prev_id));
+        for id in candidates {
+            let spk = self.get_change_spk(id)?;
+            if script_pubkey == &spk {
+                return Ok(Some(id));
             }
         }
 
-        // No match found
         Ok(None)
     }
 
@@ -3393,8 +3384,7 @@ mod tests {
 
         // Add multisig_ids 1, 2, 3 with key packages
         for mid in [1, 2, 3] {
-            db.set_key_package_by_id(mid.into(), key_package.clone())
-                .unwrap();
+            db.set_key_package_by_id(mid.into(), key_package.clone()).unwrap();
             db.set_pubkey_package_by_id(mid.into(), pk_package.clone())
                 .unwrap();
             db.set_multisig_attestation(mid.into(), ()).unwrap();
