@@ -49,7 +49,6 @@ botanix-fs-util = { workspace = true }
 botanix-types.workspace = true
 chacha20poly1305 = "0.10.1"
 ciborium = { workspace = true }
-secp256k1.workspace = true
 clap = { version = "4.3.22", features = ["derive"] }
 confy = "0.6"
 const_format = { version = "0.2.32", features = ["rust_1_64"] }
@@ -76,6 +75,7 @@ prost-types = "0.13.5"
 rand = "0.8.5"
 rpassword = "7.4.0"
 rust_decimal = { version = "1.13" }
+secp256k1.workspace = true
 serde = "1.0.171"
 serde_json = "1.0"
 serde_prometheus = { version = "0.2" }
