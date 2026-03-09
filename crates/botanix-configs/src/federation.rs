@@ -1,3 +1,4 @@
+use bitcoin::secp256k1::hashes::{sha256, Hash};
 use botanix_types::MultisigId;
 use displaydoc::Display as DisplayDoc;
 use serde::{Deserialize, Serialize};
@@ -124,6 +125,18 @@ impl MultisigTomlConfig {
                 Ok((public_key, addr))
             })
             .collect()
+    }
+
+    /// Convert the config to a string
+    pub fn to_string(&self) -> Result<String, Error> {
+        toml::to_string(self).map_err(Error::ParseSerializeConfig)
+    }
+
+    /// Compute a SHA-256 checksum of the serialized TOML config.
+    pub fn checksum(&self) -> Result<[u8; 32], Error> {
+        let s = self.to_string()?;
+        let h = sha256::Hash::hash(s.as_bytes()).to_byte_array();
+        Ok(h)
     }
 }
 
