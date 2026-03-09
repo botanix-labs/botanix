@@ -526,12 +526,24 @@ pub fn create_sweep_psbt(
 pub fn setup_key_packages(db: &database::Db, multisig_ids: &[MultisigId]) {
     for &multisig_id in multisig_ids {
         let (shares, pk_package) = trusted_dealer_setup(2, 2);
-        let _key_package =
+        let key_package =
             frost::keys::KeyPackage::try_from(shares[&frost_id!(1)].clone())
                 .expect("valid key package");
+        db.set_key_package_by_id(multisig_id, key_package)
+            .expect("set key package");
         db.set_pubkey_package_by_id(multisig_id, pk_package)
             .expect("set public key package");
     }
+}
+
+/// Mark a multisig as the funding multisig by setting its attestation as finalized.
+///
+/// Must be called after `setup_key_packages` for the given multisig.
+pub fn setup_funding_multisig(db: &database::Db, multisig_id: MultisigId) {
+    db.set_multisig_attestation(multisig_id, ())
+        .expect("set multisig attestation");
+    db.mark_multisig_attestation_finalized(multisig_id)
+        .expect("mark attestation finalized");
 }
 
 pub fn create_change(

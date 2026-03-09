@@ -484,6 +484,32 @@ impl Db {
             .map_err(Into::into)
     }
 
+    /// Returns the funding multisig ID: the highest multisig_id among the last
+    /// two that is finalized. The funding multisig should always be the last
+    /// or second-to-last multisig.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(multisig_id)` if a finalized multisig exists among the
+    /// last two multisig IDs.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(NoFinalizedMultisigFound)` if neither the last nor
+    /// second-to-last multisig is finalized.
+    pub fn get_funding_multisig_id(&self) -> Result<MultisigId, Error> {
+        let ids = self.list_multisig_ids()?;
+        let candidates: Vec<_> = ids.into_iter().rev().take(2).collect();
+        for id in candidates {
+            if let Some(entry) = self.get_multisig_attestation(id)? {
+                if entry.marked_finalized {
+                    return Ok(id);
+                }
+            }
+        }
+        Err(Error::NoFinalizedMultisigFound)
+    }
+
     /// Retrieves a key package by multisig_id from the multi-key storage.
     ///
     /// # Arguments
@@ -553,8 +579,8 @@ impl Db {
     }
 
     /// Attempts to match a script pubkey against known multisig change addresses.
-    /// Checks the current multisig first, then falls back to the previous multisig
-    /// (for transactions created before/during migration).
+    /// Checks the funding multisig first, then falls back to the second-to-last
+    /// multisig (for transactions created during migration).
     ///
     /// Returns:
     /// - `Ok(Some(multisig_id))` if the script matches a known multisig change address
@@ -564,25 +590,16 @@ impl Db {
         &self,
         script_pubkey: &ScriptBuf,
     ) -> Result<Option<MultisigId>, ChangeOutputError> {
-        // TODO: Query current_multisig_id and previous_multisig_id from migration state in db.
-        let current_multisig_id = LEGACY_MULTISIG_ID;
-        let previous_multisig_id: Option<MultisigId> = None; // TODO: Query from db
+        let ids = self.list_multisig_ids()?;
+        let candidates: Vec<_> = ids.into_iter().rev().take(2).collect();
 
-        // Try current multisig first (most common case)
-        let current_spk = self.get_change_spk(current_multisig_id)?;
-        if script_pubkey == &current_spk {
-            return Ok(Some(current_multisig_id));
-        }
-
-        // Fallback: check previous multisig (for txs created before/during migration)
-        if let Some(prev_id) = previous_multisig_id {
-            let prev_spk = self.get_change_spk(prev_id)?;
-            if script_pubkey == &prev_spk {
-                return Ok(Some(prev_id));
+        for id in candidates {
+            let spk = self.get_change_spk(id)?;
+            if script_pubkey == &spk {
+                return Ok(Some(id));
             }
         }
 
-        // No match found
         Ok(None)
     }
 
@@ -3350,6 +3367,39 @@ mod tests {
         // List should be sorted
         let ids = db.list_multisig_ids().unwrap();
         assert_eq!(ids, vec![1.into(), 5.into(), 10.into()]);
+    }
+
+    #[test]
+    fn test_get_funding_multisig_id() {
+        let (db, _temp_dir) = setup_db();
+
+        let id =
+            frost::Identifier::derive(0_u16.to_le_bytes().as_slice()).unwrap();
+        let (shares, pk_package) = trusted_dealer_setup(2, 3);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&id].clone()).unwrap();
+
+        // Empty db: no multisig IDs, should error
+        assert!(db.get_funding_multisig_id().is_err());
+
+        // Add multisig_ids 1, 2, 3 with key packages
+        for mid in [1, 2, 3] {
+            db.set_key_package_by_id(mid.into(), key_package.clone()).unwrap();
+            db.set_pubkey_package_by_id(mid.into(), pk_package.clone())
+                .unwrap();
+            db.set_multisig_attestation(mid.into(), ()).unwrap();
+        }
+
+        // None finalized: neither last (3) nor second-to-last (2) finalized, should error
+        assert!(db.get_funding_multisig_id().is_err());
+
+        // Finalize only 5: funding multisig is 5 (second-to-last, last 3 not finalized)
+        db.mark_multisig_attestation_finalized(2.into()).unwrap();
+        assert_eq!(db.get_funding_multisig_id().unwrap(), 2.into());
+
+        // Finalize 3: funding multisig is now 3 (last and finalized)
+        db.mark_multisig_attestation_finalized(3.into()).unwrap();
+        assert_eq!(db.get_funding_multisig_id().unwrap(), 3.into());
     }
 
     // Test-only helper methods to replicate the state of the database before dynafed.

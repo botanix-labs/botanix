@@ -13,7 +13,6 @@ use bitcoin::{
     psbt::{ExtractTxError, Psbt},
     Amount, FeeRate, OutPoint,
 };
-use botanix_types::LEGACY_MULTISIG_ID;
 use frost_secp256k1_tr as frost;
 use futures_util::Future;
 use log::{error, info};
@@ -300,19 +299,12 @@ pub fn validate_psbt(
         let change_spk = &psbt.unsigned_tx.output[0].script_pubkey;
         let target_multisig_id = db.match_change_spk_to_multisig(change_spk)?;
 
-        // TODO: Validate sweep transaction
-        // - query multisig manager to check that we are expecting to do a sweep
-        //      - i.e. we are only accepting pegins to m2.
-        //      - & a sweep is not already in progress.
-        // - verify source and target multisigs match multsig manager's state
-        // add unit tests to verify the above
-        // e.g.
-        // let migration_state = db.get_migration_state()?;
-        // assert!(migration_state.is_sweeping);
-        // let expected_target_multisig_id = migration_state.target_multisig_id;
-        let expected_target_multisig_id = Some(LEGACY_MULTISIG_ID);
+        let expected_target_multisig_id = db
+            .get_funding_multisig_id()
+            .map_err(database::ChangeOutputError::from)
+            .map_err(ValidatePSBTError::from)?;
 
-        if target_multisig_id != expected_target_multisig_id {
+        if target_multisig_id != Some(expected_target_multisig_id) {
             return Err(ValidatePSBTError::InvalidTargetMultisigId);
         }
     } else {
@@ -686,8 +678,8 @@ mod tests {
         test_utils::{
             create_psbt, create_random_pegout_id, create_tx,
             eth_vector_to_fixed_bytes, get_change, random_p2wpkh_script,
-            setup_db, setup_key_packages, store_pending_pegout,
-            trusted_dealer_setup,
+            setup_db, setup_funding_multisig, setup_key_packages,
+            store_pending_pegout, trusted_dealer_setup,
         },
         util::*,
     };
@@ -1989,12 +1981,11 @@ mod tests {
     #[test]
     fn test_validate_psbt_detects_sweep_transaction() {
         let db = db_setup();
-        // TODO: update this to use the multisig manager's state
-        let source_multisig_id = LEGACY_MULTISIG_ID;
-        let target_multisig_id = LEGACY_MULTISIG_ID;
+        let source_multisig_id = TEST_LEGACY_MULTISIG_ID;
+        let target_multisig_id = TEST_LEGACY_MULTISIG_ID;
 
-        // Set up key packages for both source and target multisigs
         setup_key_packages(&db, &[source_multisig_id, target_multisig_id]);
+        setup_funding_multisig(&db, target_multisig_id);
 
         let change =
             create_change(&db, target_multisig_id, Amount::from_sat(1000));
@@ -2027,12 +2018,11 @@ mod tests {
     #[test]
     fn test_sweep_psbt_detects_unknown_change_scriptpubkey() {
         let db = db_setup();
-        // TODO: update this to use the multisig manager's state
-        let source_multisig_id = LEGACY_MULTISIG_ID;
-        let target_multisig_id = LEGACY_MULTISIG_ID;
+        let source_multisig_id = TEST_LEGACY_MULTISIG_ID;
+        let target_multisig_id = TEST_LEGACY_MULTISIG_ID;
 
-        // Set up key packages for both source and target multisigs
         setup_key_packages(&db, &[source_multisig_id, target_multisig_id]);
+        setup_funding_multisig(&db, target_multisig_id);
 
         let unknown_change = TxOut {
             value: Amount::from_sat(1000),
