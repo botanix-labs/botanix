@@ -42,11 +42,11 @@ pub struct GetFinalizedPegoutIdsResponse {
     #[prost(bool, tag = "4")]
     pub is_final: bool,
 }
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SubscribeToDynafedNotificationsStream {
     #[prost(
         oneof = "subscribe_to_dynafed_notifications_stream::Notification",
-        tags = "1, 2"
+        tags = "1, 2, 3"
     )]
     pub notification: ::core::option::Option<
         subscribe_to_dynafed_notifications_stream::Notification,
@@ -54,11 +54,13 @@ pub struct SubscribeToDynafedNotificationsStream {
 }
 /// Nested message and enum types in `SubscribeToDynafedNotificationsStream`.
 pub mod subscribe_to_dynafed_notifications_stream {
-    #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Notification {
         #[prost(message, tag = "1")]
         Dkg(super::DkgNotification),
         #[prost(message, tag = "2")]
+        Multisig(super::MultisigNotification),
+        #[prost(message, tag = "3")]
         Sweep(super::SweepNotification),
     }
 }
@@ -68,6 +70,15 @@ pub struct DkgNotification {
     pub event: i32,
     #[prost(uint32, tag = "2")]
     pub multisig_id: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MultisigNotification {
+    #[prost(enumeration = "MultisigEvent", tag = "1")]
+    pub event: i32,
+    #[prost(uint32, tag = "2")]
+    pub multisig_id: u32,
+    #[prost(bytes = "vec", tag = "3")]
+    pub signature: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct SweepNotification {
@@ -126,6 +137,9 @@ pub struct ConsensusCheckpointRequest {
     /// Pending pegout requests
     #[prost(message, repeated, tag = "3")]
     pub pending_pegouts: ::prost::alloc::vec::Vec<PendingPegout>,
+    /// Active multisigs at checkpoint time
+    #[prost(uint32, repeated, tag = "4")]
+    pub active_multisigs: ::prost::alloc::vec::Vec<u32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ScriptBuf {
@@ -273,6 +287,31 @@ pub struct StartNewDkgRequest {
 pub struct AbortDkgRequest {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct MarkMultisigRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SunsetMultisigRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct ExpireMultisigRequest {
+    #[prost(uint32, tag = "1")]
+    pub multisig_id: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SunsetMultisigResponse {
+    #[prost(bytes = "vec", tag = "1")]
+    pub signature: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExpireMultisigResponse {
+    #[prost(bytes = "vec", tag = "1")]
+    pub signature: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
@@ -436,6 +475,42 @@ impl DkgEvent {
         match value {
             "DKG_START" => Some(Self::DkgStart),
             "DKG_ABORT" => Some(Self::DkgAbort),
+            _ => None,
+        }
+    }
+}
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    ::prost::Enumeration,
+)]
+#[repr(i32)]
+pub enum MultisigEvent {
+    MultisigSunset = 0,
+    MultisigExpire = 1,
+}
+impl MultisigEvent {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::MultisigSunset => "MULTISIG_SUNSET",
+            Self::MultisigExpire => "MULTISIG_EXPIRE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MULTISIG_SUNSET" => Some(Self::MultisigSunset),
+            "MULTISIG_EXPIRE" => Some(Self::MultisigExpire),
             _ => None,
         }
     }
@@ -785,11 +860,13 @@ pub mod btc_server_client {
                 .insert(GrpcMethod::new("btc_server.BtcServer", "AbortDkg"));
             self.inner.unary(req, path, codec).await
         }
-        pub async fn new_multisig_attestation(
+        pub async fn sunset_multisig(
             &mut self,
-            request: impl tonic::IntoRequest<super::DkgAttestation>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
-        {
+            request: impl tonic::IntoRequest<super::SunsetMultisigRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SunsetMultisigResponse>,
+            tonic::Status,
+        > {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::unknown(format!(
                     "Service was not ready: {}",
@@ -798,12 +875,36 @@ pub mod btc_server_client {
             })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/btc_server.BtcServer/NewMultisigAttestation",
+                "/btc_server.BtcServer/SunsetMultisig",
             );
             let mut req = request.into_request();
             req.extensions_mut().insert(GrpcMethod::new(
                 "btc_server.BtcServer",
-                "NewMultisigAttestation",
+                "SunsetMultisig",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn expire_multisig(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SunsetMultisigRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ExpireMultisigResponse>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/ExpireMultisig",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "ExpireMultisig",
             ));
             self.inner.unary(req, path, codec).await
         }

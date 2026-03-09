@@ -381,6 +381,7 @@ async fn sync_checkpoint(
                     checkpoint_block_hash: checkpoint_block_hash.clone(),
                     pegins: vec![],
                     pending_pegouts: vec![],
+                    active_multisigs: vec![],
                 },
             )
             .await

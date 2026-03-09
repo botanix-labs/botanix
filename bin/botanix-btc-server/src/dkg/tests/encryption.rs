@@ -1,8 +1,4 @@
-use crate::dkg::{
-    encryption::{DkgHandshakeManager, Error},
-    SESSION_CONTEXT,
-};
-use bitcoin::secp256k1;
+use crate::dkg::encryption::{AttestationManager, DkgHandshakeManager, Error};
 use frost::keys::dkg::{round1, round2};
 use frost_secp256k1_tr as frost;
 use std::collections::BTreeMap;
@@ -56,6 +52,7 @@ TODO: Additional test:
 * Different session IDs
 * Incremental `.commit_*` calls
 * Incremental `.validate_*` calls
+* Add convenience functions for completing rounds, similar to the other stage_* tests
 */
 
 fn setup() -> (DkgHandshakeManager, DkgHandshakeManager, DkgHandshakeManager) {
@@ -83,11 +80,12 @@ fn setup() -> (DkgHandshakeManager, DkgHandshakeManager, DkgHandshakeManager) {
     fed_members.insert(eve_addr, eve_pub);
 
     // Setup encryption layer for round one.
+    let session_context = b"TODO".as_slice();
     let nonce = 0;
 
     #[rustfmt::skip]
     let alice = DkgHandshakeManager::new(
-        SESSION_CONTEXT,
+        session_context,
         nonce,
         alice_addr,
         alice_sec,
@@ -97,7 +95,7 @@ fn setup() -> (DkgHandshakeManager, DkgHandshakeManager, DkgHandshakeManager) {
 
     #[rustfmt::skip]
     let bob = DkgHandshakeManager::new(
-        SESSION_CONTEXT,
+        session_context,
         nonce,
         bob_addr,
         bob_sec,
@@ -107,7 +105,7 @@ fn setup() -> (DkgHandshakeManager, DkgHandshakeManager, DkgHandshakeManager) {
 
     #[rustfmt::skip]
     let eve = DkgHandshakeManager::new(
-        SESSION_CONTEXT,
+        session_context,
         nonce,
         eve_addr,
         eve_sec,
@@ -139,6 +137,7 @@ fn encryption_complete_all_rounds() {
         let (bob_eph, bob_sig) = bob.commit_round1(&round1_dkg).unwrap();
         let (eve_eph, eve_sig) = eve.commit_round1(&round1_dkg).unwrap();
 
+        // Alice validates Bobs' and Eves' packages.
         alice
             .validate_round1(bob_addr.into(), bob_eph, bob_sig, &round1_dkg)
             .unwrap();
@@ -146,6 +145,7 @@ fn encryption_complete_all_rounds() {
             .validate_round1(eve_addr.into(), eve_eph, eve_sig, &round1_dkg)
             .unwrap();
 
+        // Bob validates Alices' and Eves' packages.
         bob.validate_round1(
             alice_addr.into(),
             alice_eph,
@@ -156,6 +156,7 @@ fn encryption_complete_all_rounds() {
         bob.validate_round1(eve_addr.into(), eve_eph, eve_sig, &round1_dkg)
             .unwrap();
 
+        // Eve validates Alices' and Bobs' packages.
         eve.validate_round1(
             alice_addr.into(),
             alice_eph,
@@ -219,38 +220,15 @@ fn encryption_complete_all_rounds() {
         assert_eq!(res6, round2_dkg);
     }
 
-    // Transition to round three.
-    let mut alice = alice.finalize().unwrap();
-    let mut bob = bob.finalize().unwrap();
-    let mut eve = eve.finalize().unwrap();
+    // Finalize the DKG process, resulting in the final commitment which is
+    // equal for all members.
+    let alice_dkg_commit = alice.finalize().unwrap();
+    let bob_dkg_commit = bob.finalize().unwrap();
+    let eve_dkg_commit = eve.finalize().unwrap();
 
-    {
-        let round3_dkg =
-            frost::keys::PublicKeyPackage::deserialize(ROUND3_DKG).unwrap();
-
-        let alice_sig = alice.commit_round3(&round3_dkg).unwrap();
-        let bob_sig = bob.commit_round3(&round3_dkg).unwrap();
-        let eve_sig = eve.commit_round3(&round3_dkg).unwrap();
-
-        alice.validate_round3(bob_addr.into(), bob_sig).unwrap();
-        alice.validate_round3(eve_addr.into(), eve_sig).unwrap();
-
-        bob.validate_round3(alice_addr.into(), alice_sig).unwrap();
-        bob.validate_round3(eve_addr.into(), eve_sig).unwrap();
-
-        eve.validate_round3(alice_addr.into(), alice_sig).unwrap();
-        eve.validate_round3(bob_addr.into(), bob_sig).unwrap();
-    }
-
-    // Finalize the DKG process, resulting in the final commit which is equal
-    // for all members.
-    let alice_final_commit = alice.finalize().unwrap();
-    let bob_final_commit = bob.finalize().unwrap();
-    let eve_final_commit = eve.finalize().unwrap();
-
-    assert_eq!(alice_final_commit, bob_final_commit);
-    assert_eq!(alice_final_commit, eve_final_commit);
-    assert_eq!(bob_final_commit, eve_final_commit);
+    assert_eq!(alice_dkg_commit, bob_dkg_commit);
+    assert_eq!(alice_dkg_commit, eve_dkg_commit);
+    assert_eq!(bob_dkg_commit, eve_dkg_commit);
 }
 
 #[test]
@@ -500,6 +478,8 @@ fn encryption_validate_round2_nonce_increments() {
     {
         let round2_dkg = round2::Package::deserialize(ROUND2_DKG).unwrap();
 
+        // Repeated commits for the same member increment the symmetric nonce
+        // used for encryption.
         let (_, nonce) =
             bob.commit_round2(&alice_addr.into(), &round2_dkg).unwrap();
         assert_eq!(nonce, 0);
@@ -517,150 +497,4 @@ fn encryption_validate_round2_nonce_increments() {
             bob.commit_round2(&eve_addr.into(), &round2_dkg).unwrap();
         assert_eq!(nonce, 0);
     }
-}
-
-#[test]
-fn encryption_validate_round3_properties() {
-    let alice_addr =
-        frost::Identifier::derive(0u16.to_le_bytes().as_slice()).unwrap();
-    let bob_addr =
-        frost::Identifier::derive(1u16.to_le_bytes().as_slice()).unwrap();
-    let eve_addr =
-        frost::Identifier::derive(2u16.to_le_bytes().as_slice()).unwrap();
-    //
-    let invalid_addr =
-        frost::Identifier::derive(100u16.to_le_bytes().as_slice()).unwrap();
-
-    let (mut alice, mut bob, mut eve) = setup();
-
-    // NOTE: We use the same packages for all three members; we're just testing
-    // the encryption layer and don't bother finalizing the actual DKG process.
-
-    {
-        let round1_dkg = round1::Package::deserialize(ROUND1_DKG).unwrap();
-
-        let (alice_eph, alice_sig) = alice.commit_round1(&round1_dkg).unwrap();
-        let (bob_eph, bob_sig) = bob.commit_round1(&round1_dkg).unwrap();
-        let (eve_eph, eve_sig) = eve.commit_round1(&round1_dkg).unwrap();
-
-        alice
-            .validate_round1(bob_addr.into(), bob_eph, bob_sig, &round1_dkg)
-            .unwrap();
-        alice
-            .validate_round1(eve_addr.into(), eve_eph, eve_sig, &round1_dkg)
-            .unwrap();
-
-        bob.validate_round1(
-            alice_addr.into(),
-            alice_eph,
-            alice_sig,
-            &round1_dkg,
-        )
-        .unwrap();
-        bob.validate_round1(eve_addr.into(), eve_eph, eve_sig, &round1_dkg)
-            .unwrap();
-
-        eve.validate_round1(
-            alice_addr.into(),
-            alice_eph,
-            alice_sig,
-            &round1_dkg,
-        )
-        .unwrap();
-        eve.validate_round1(bob_addr.into(), bob_eph, bob_sig, &round1_dkg)
-            .unwrap();
-    }
-
-    // Transition to round two.
-    let mut alice = alice.finalize().unwrap();
-    let mut bob = bob.finalize().unwrap();
-    let mut eve = eve.finalize().unwrap();
-
-    {
-        let round2_dkg = round2::Package::deserialize(ROUND2_DKG).unwrap();
-
-        let alice_to_bob =
-            alice.commit_round2(&bob_addr.into(), &round2_dkg).unwrap();
-        let alice_to_eve =
-            alice.commit_round2(&eve_addr.into(), &round2_dkg).unwrap();
-
-        let bob_to_alice =
-            bob.commit_round2(&alice_addr.into(), &round2_dkg).unwrap();
-        let bob_to_eve =
-            bob.commit_round2(&eve_addr.into(), &round2_dkg).unwrap();
-
-        let eve_to_alice =
-            eve.commit_round2(&alice_addr.into(), &round2_dkg).unwrap();
-        let eve_to_bob =
-            eve.commit_round2(&bob_addr.into(), &round2_dkg).unwrap();
-
-        let res1 = alice
-            .validate_round2(bob_addr.into(), bob_to_alice.1, &bob_to_alice.0)
-            .unwrap();
-        let res2 = alice
-            .validate_round2(eve_addr.into(), eve_to_alice.1, &eve_to_alice.0)
-            .unwrap();
-
-        let res3 = bob
-            .validate_round2(alice_addr.into(), alice_to_bob.1, &alice_to_bob.0)
-            .unwrap();
-        let res4 = bob
-            .validate_round2(eve_addr.into(), eve_to_bob.1, &eve_to_bob.0)
-            .unwrap();
-
-        let res5 = eve
-            .validate_round2(alice_addr.into(), alice_to_eve.1, &alice_to_eve.0)
-            .unwrap();
-        let res6 = eve
-            .validate_round2(bob_addr.into(), bob_to_eve.1, &bob_to_eve.0)
-            .unwrap();
-
-        assert_eq!(res1, round2_dkg);
-        assert_eq!(res2, round2_dkg);
-        assert_eq!(res3, round2_dkg);
-        assert_eq!(res4, round2_dkg);
-        assert_eq!(res5, round2_dkg);
-        assert_eq!(res6, round2_dkg);
-    }
-
-    // Transition to round three.
-    let mut alice = alice.finalize().unwrap();
-    let mut bob = bob.finalize().unwrap();
-    let mut eve = eve.finalize().unwrap();
-
-    {
-        let round3_dkg =
-            frost::keys::PublicKeyPackage::deserialize(ROUND3_DKG).unwrap();
-
-        let bob_sig = bob.commit_round3(&round3_dkg).unwrap();
-        let eve_sig = eve.commit_round3(&round3_dkg).unwrap();
-
-        // VALIDATE: Awaiting challenge generation
-        let res = alice.validate_round3(bob_addr.into(), bob_sig);
-        assert_eq!(res.unwrap_err(), Error::AwaitingChallengeGeneration);
-
-        // By committing the round3 package, we generate the challenge bytes and
-        // can hence validate incoming signatures.
-        let _alice_sig = alice.commit_round3(&round3_dkg).unwrap();
-
-        // VALIDATE: None-member address!
-        let res = alice.validate_round3(invalid_addr.into(), bob_sig);
-        assert_eq!(res.unwrap_err(), Error::NotAFedMember);
-
-        // VALIDATE: Wrong address!
-        let res = alice.validate_round3(eve_addr.into(), bob_sig);
-        assert_eq!(res.unwrap_err(), Error::SignatureVerificationFailed);
-
-        // VALIDATE: Wrong signature!
-        let res = alice.validate_round3(bob_addr.into(), eve_sig);
-        assert_eq!(res.unwrap_err(), Error::SignatureVerificationFailed);
-
-        // VALIDATE: Original package is valid.
-        let res = alice.validate_round3(bob_addr.into(), bob_sig);
-        assert!(res.is_ok());
-    }
-
-    // VALIDATE: Insufficient number of packages processed.
-    let res = alice.finalize();
-    assert_eq!(res.unwrap_err(), Error::InsufficientSamples);
 }

@@ -3086,10 +3086,16 @@ impl ABCIDriver {
                                 new_header.number,
                             );
 
+                        let active_multisigs = active_multisigs
+                            .into_iter()
+                            .map(|(id, _)| id)
+                            .collect();
+
                         let header_with_pegs = HeaderWithPegs {
                             pegins: staged_pegins,
                             pegouts: staged_pegouts,
                             header: new_header.clone(),
+                            active_multisigs,
                         };
 
                         // Commit block data to both reth and botanix databases

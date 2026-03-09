@@ -23,8 +23,8 @@ use botanix_authority_peg::peg_contract::{PeginMeta, PegoutWithId};
 use botanix_authority_rsp::RandomSource;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, ConsensusCheckpointRequest, DkgPayloads,
-    GrpcClientError, PendingPegout, SubscribeToDynafedNotificationsStream,
-    Utxo,
+    GrpcClientError, MarkMultisigRequest, PendingPegout,
+    SubscribeToDynafedNotificationsStream, Utxo,
 };
 use botanix_comet_bft_rpc::{CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_data_parser::{
@@ -37,7 +37,10 @@ use botanix_storage::{
 };
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use btcserverlib::{
-    dkg::{DkgNotification, DynafedSubscriptionMessage, SweepNotification},
+    dkg::{
+        DkgNotification, DynafedSubscriptionMessage, MultisigNotification,
+        SweepNotification,
+    },
     wallet::psbt::frost_id_from_bytes,
 };
 use eyre::{eyre, Context, ContextCompat};
@@ -62,7 +65,7 @@ use reth_provider::{
 use reth_revm::primitives::FixedBytes;
 use reth_storage_api::NodePrimitivesProvider;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -105,6 +108,8 @@ pub struct FrostTask<RDB, BDB, ToFrostMan, Source, BtcServerClient> {
         MultisigId,
         MultisigEntry<ToFrostMan, Source, BtcServerClient>,
     >,
+    //
+    multisigs_active: HashSet<MultisigId>,
     /// Pre-configured data-parser
     compressor: DataParser,
     /// btc server client
@@ -185,6 +190,18 @@ where
             })
             .collect();
 
+        // Retrieve the list of active multisigs. The
+        // [`Self::on_canon_state_commit`] method will use this to detect any
+        // newly finalized multisigs and mark those as "finalized" on the
+        // btc-server.
+        let multisigs_active: HashSet<_> = storage
+            .botanix_database_factory
+            .get_active_multisigs()
+            .expect("db must not fail")
+            .into_iter()
+            .map(|e| e.multisig_id)
+            .collect();
+
         // TODO: Return error instead?
         let cbft_rpc_provider =
             cometbft_rpc_factory.build_and_connect().expect("light client to connect");
@@ -194,6 +211,7 @@ where
             frost_handle,
             multisig_handle,
             multisigs,
+            multisigs_active,
             storage,
             btc_server,
             check_staged_headers: true,
@@ -330,7 +348,13 @@ where
             let pegouts =
                 get_pending_pegouts_from_staged_pegouts(entry.pegouts, header.timestamp);
 
-            self.handle_canon_state_commit(header_hash, &header, pegins, pegouts).await?;
+            self.handle_canon_state_commit(
+                header_hash,
+                &header,
+                pegins,
+                pegouts,
+                entry.active_multisigs
+            ).await?;
         }
 
         Ok(())
@@ -418,19 +442,20 @@ where
 
                 match msg {
                     DkgNotification::Start { multisig_id } => {
-                        self.on_dynafed_dkg_start(multisig_id)?;
+                        self.on_dynafed_dkg_start(multisig_id)
                     }
                     DkgNotification::Abort { multisig_id } => {
-                        self.on_dynafed_dkg_abort(multisig_id)?;
+                        self.on_dynafed_dkg_abort(multisig_id)
                     }
                 }
             }
+            DynafedSubscriptionMessage::Multisig(notification) => {
+                self.on_dynafed_multisig(notification).await
+            }
             DynafedSubscriptionMessage::Sweep(notification) => {
-                self.on_dynafed_sweep(notification).await?;
+                self.on_dynafed_sweep(notification).await
             }
         }
-
-        Ok(())
     }
     /// Routes an incoming peer message to the appropriate handler based on its
     /// type (DKG, signing, wallet state, or error).
@@ -516,6 +541,25 @@ where
 
         debug_assert!(multisig.dkg_task.is_none());
         Ok(())
+    }
+    /// Forwards a dynafed multisig lifecycle notification to the multisig
+    /// manager, which transitions the multisig through sunsetting or
+    /// expiration.
+    async fn on_dynafed_multisig(&mut self, notification: MultisigNotification) -> eyre::Result<()> {
+        match notification {
+            MultisigNotification::Sunset { multisig_id, signature } => {
+                self
+                    .multisig_handle
+                    .submit_sunsetting(multisig_id, signature).await
+                    .wrap_err("Failed to submit a multisig sunsetting request")
+            }
+            MultisigNotification::Expire { multisig_id, signature } => {
+                self
+                    .multisig_handle
+                    .submit_expiration(multisig_id, signature).await
+                    .wrap_err("Failed to submit a multisig expiration request")
+            }
+        }
     }
     /// Handles a sweep notification by fetching and validating the sweep PSBT
     /// from the btc-server, then initiating a signing session (coordinator
@@ -604,9 +648,6 @@ where
         );
 
         match notification {
-            // TODO: This should contain an attestation report such that the
-            // multisig can get _activated_ on the btc-server side => requires
-            // upstream changes to the `reth` repo.
             CanonStateNotification::Commit { new, pegins, pegouts } => {
                 self.on_canon_state_commit(new, pegins, pegouts).await?;
             }
@@ -688,11 +729,17 @@ where
             )
         });
 
+        let active_multisigs = active_multisigs
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+
         self.handle_canon_state_commit(
             header_hash,
             header,
             pegins,
             pending_pegouts,
+            active_multisigs,
         )
         .await?;
 
@@ -710,6 +757,7 @@ where
         header: &H,
         pegins: Vec<Utxo>,
         pending_pegouts: Vec<PendingPegout>,
+        active_multisigs: Vec<MultisigId>
     ) -> eyre::Result<()>
     where
         H: BlockHeader + Sealable + HeaderExt,
@@ -727,23 +775,30 @@ where
         let mut block_hash_writer = vec![];
         cp_block_hash.consensus_encode(&mut block_hash_writer).wrap_err("Failed to encode checkpoint block hash")?;
 
-        let btc_server_capture = self.btc_server.clone();
-        let block_hash_writer = block_hash_writer.clone();
+        let btc_server = self.btc_server.clone();
+        let checkpoint_block_hash = block_hash_writer.clone();
         let pegins = pegins.clone();
         let pending_pegouts = pending_pegouts.clone();
+        let active_multisigs = active_multisigs
+            .iter()
+            .map(|id| id.as_u32())
+            .collect::<Vec<u32>>();
 
         let fut = move || {
-            let mut btc_server = btc_server_capture.clone();
-            let block_hash = block_hash_writer.clone();
-            let pegins_data = pegins.clone();
-            let pending_data = pending_pegouts.clone();
+            // Clones are necessary because [`retry_exec`] wants `Fn` and not `FnOnce`.
+            let mut btc_server = btc_server.clone();
+            let checkpoint_block_hash = checkpoint_block_hash.clone();
+            let pegins = pegins.clone();
+            let pending_pegouts = pending_pegouts.clone();
+            let active_multisigs = active_multisigs.clone();
 
             async move {
                 btc_server
                     .new_consensus_checkpoint(ConsensusCheckpointRequest {
-                        checkpoint_block_hash: block_hash,
-                        pegins: pegins_data,
-                        pending_pegouts: pending_data,
+                        checkpoint_block_hash,
+                        pegins,
+                        pending_pegouts,
+                        active_multisigs,
                     })
                     .await
             }
@@ -788,6 +843,8 @@ where
         // Determine which multisig to spend UTXOs from and where change goes.
         // A Degrading multisig has UTXOs that need draining first; otherwise use
         // the Funding multisig. Change always goes to the current Funding multisig.
+        //
+        // TODO (lamafab): Add convenience methods for this logic.
         let active = self
             .storage
             .botanix_database_factory
@@ -931,7 +988,7 @@ where
     /// dispatches to the appropriate signing state machine round
     /// (round1/round2, signer/coordinator).
     async fn on_peer_msg_signing(&mut self, frost_identifier: frost::Identifier, signing_response: SigningResponse) -> eyre::Result<()> {
-        let SigningResponse { response_type, signing_session_id, psbt } =
+        let SigningResponse { response_type, signing_session_id, psbt, multisig_id } =
             signing_response;
 
         let signing_session_id = FixedBytes::try_from(

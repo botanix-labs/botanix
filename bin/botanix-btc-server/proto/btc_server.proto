@@ -24,7 +24,9 @@ service BtcServer {
 
     rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
 
-    rpc NewMultisigAttestation(DkgAttestation) returns(Empty) {}
+    rpc SunsetMultisig(SunsetMultisigRequest) returns(SunsetMultisigResponse) {}
+
+    rpc ExpireMultisig(SunsetMultisigRequest) returns(ExpireMultisigResponse) {}
 
     rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
@@ -112,7 +114,8 @@ message GetFinalizedPegoutIdsResponse {
 message SubscribeToDynafedNotificationsStream {
     oneof notification {
         DkgNotification dkg = 1;
-        SweepNotification sweep = 2;
+        MultisigNotification multisig = 2;
+        SweepNotification sweep = 3;
     }
 }
 
@@ -124,6 +127,17 @@ enum DkgEvent {
 message DkgNotification {
     DkgEvent event = 1;
     uint32 multisig_id = 2;
+}
+
+enum MultisigEvent {
+    MULTISIG_SUNSET = 0;
+    MULTISIG_EXPIRE = 1;
+}
+
+message MultisigNotification {
+    MultisigEvent event = 1;
+    uint32 multisig_id = 2;
+    bytes signature = 3;
 }
 
 message SweepNotification {
@@ -167,6 +181,8 @@ message ConsensusCheckpointRequest {
     repeated Utxo pegins = 2;
     // Pending pegout requests
     repeated PendingPegout pending_pegouts = 3;
+    // Active multisigs at checkpoint time
+    repeated uint32 active_multisigs = 4;
 }
 
 message ScriptBuf {
@@ -273,6 +289,26 @@ message StartNewDkgRequest {
 
 message AbortDkgRequest {
     uint32 multisig_id = 1;
+}
+
+message MarkMultisigRequest {
+    uint32 multisig_id = 1;
+}
+
+message SunsetMultisigRequest {
+    uint32 multisig_id = 1;
+}
+
+message ExpireMultisigRequest {
+    uint32 multisig_id = 1;
+}
+
+message SunsetMultisigResponse {
+    bytes signature = 1;
+}
+
+message ExpireMultisigResponse {
+    bytes signature = 1;
 }
 
 message DkgPayloads {

@@ -13,8 +13,8 @@ use std::{
 
 use base64::{engine::general_purpose, Engine};
 use bitcoin::{
-    consensus::Decodable, hashes::Hash, secp256k1, Amount, BlockHash, Psbt,
-    ScriptBuf, Transaction, TxOut,
+    consensus::Decodable, hashes::Hash, Amount, BlockHash, Psbt, ScriptBuf,
+    Transaction, TxOut,
 };
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
@@ -29,7 +29,8 @@ use btcserverlib::{
     coordinator::{self},
     database::{self},
     dkg::{
-        self, DkgNotification, DynafedSubscriptionMessage, SweepNotification,
+        self, DkgNotification, DynafedSubscriptionMessage,
+        MultisigNotification, SweepNotification,
     },
     federation_args::FederationTomlConfig,
     frost_id, handle_signing_error,
@@ -502,6 +503,13 @@ where
             None
         };
 
+        // Use the reproducible config checksum as the session context. This
+        // must be equal for all members.
+        let session_context = multisig_conf
+            .checksum()
+            .expect("failed to serialize multisig config")
+            .to_vec();
+
         let machine = dkg::DkgStateMachine::new(
             frost_identifier,
             p2p_secret_key,
@@ -509,6 +517,7 @@ where
             coordinator,
             members,
             dkg_config,
+            session_context,
             session_nonce,
         )?;
 
@@ -931,10 +940,43 @@ where
         Ok(())
     }
 
+    // TODO: This needs updating => there's no global coordinator now.
     pub fn is_coordinator(&self) -> bool {
         let coordinator_id =
             self.config.coordinator.unwrap_or(DEFAULT_COORDINATOR_ID);
         self.config.identifier == coordinator_id
+    }
+
+    /// Marks the given multisig attestation as finalized, according to
+    /// consensus. This method is noop if no such attestation exists or if it
+    /// already has been marked as finalized.
+    async fn mark_multisig_finalized(
+        &self,
+        multisig_id: MultisigId,
+    ) -> Result<(), database::Error> {
+        // Skip multisig that doesn't exist locally, which can happen during
+        // multisig transitions or historic sync.
+        let Some(tracked) = self.db.get_multisig_attestation(multisig_id)?
+        else {
+            return Ok(());
+        };
+
+        // Multisig already marked finalized, in case of a replay.
+        if tracked.marked_finalized {
+            return Ok(());
+        }
+
+        // We can now officially mark the multisig as finalized and is hence
+        // ready to be used for pegins and pegouts.
+        self.db.mark_multisig_attestation_finalized(multisig_id)?;
+
+        // Cleanup the DKG session state.
+        let mut sessions = self.dkg_sessions.lock().await;
+        sessions.remove(&multisig_id);
+
+        self.db.flush()?;
+
+        Ok(())
     }
 }
 
@@ -1116,6 +1158,13 @@ where
 
         self.db.store_pending_pegouts(&pegouts_refs).to_status()?;
         self.db.flush().to_status()?;
+
+        // Mark any multisig attestation as finalized, if available.
+        for id in req.active_multisigs {
+            let multisig_id = MultisigId::from(id);
+            self.mark_multisig_finalized(multisig_id).await.to_status()?;
+        }
+
         info!("stored pegouts.len(): {:?}", pegouts.len());
         if let Some(telemetry) = self.telemetry.as_ref() {
             let current_pending_pegouts =
@@ -1339,6 +1388,39 @@ where
                             };
                             tx.send(Ok(payload)).await
                         }
+                        DynafedSubscriptionMessage::Multisig(
+                            MultisigNotification::Sunset {
+                                multisig_id,
+                                signature,
+                            },
+                        ) => {
+                            trace!("Sunsetting multisig {}", multisig_id);
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Multisig(rpc::MultisigNotification {
+                                    event: rpc::MultisigEvent::MultisigSunset as i32,
+                                    multisig_id: *multisig_id,
+                                    signature: signature.serialize_compact().to_vec(),
+                                }))
+                            };
+                            tx.send(Ok(payload)).await
+                        }
+                        DynafedSubscriptionMessage::Multisig(
+                            MultisigNotification::Expire {
+                                multisig_id,
+                                signature,
+                            },
+                        ) => {
+                            trace!("Expiring multisig {}", multisig_id);
+                            let payload = rpc::SubscribeToDynafedNotificationsStream {
+                                notification: Some(rpc::subscribe_to_dynafed_notifications_stream::Notification::Multisig(rpc::MultisigNotification {
+                                    event: rpc::MultisigEvent::MultisigExpire as i32,
+                                    multisig_id: *multisig_id,
+                                    signature: signature.serialize_compact().to_vec(),
+                                }))
+                            };
+                            tx.send(Ok(payload)).await
+                        }
+                        // TODO: Consider making Sweep part of Multisig?
                         DynafedSubscriptionMessage::Sweep(sweep) => {
                             let SweepNotification {
                                 multisig_id_from,
@@ -2835,11 +2917,18 @@ where
             });
         }
 
+        // Check for aggregated key package state and optionally save to
+        // database.
         if let Some((sec_key, pub_key)) = dkg.machine.aggregate_key_packages() {
             let multisig_id = dkg.machine.multisig_id();
+
             if self.db.get_key_package_by_id(multisig_id).to_status()?.is_none()
             {
-                info!("DKG completed successfully for multisig_id {}, saving key packages...", multisig_id);
+                info!(
+                    "DKG completed successfully for multisig_id {}, saving to database...",
+                    multisig_id
+                );
+
                 if let Err(e) = self
                     .db
                     .set_key_package_by_id(multisig_id, sec_key.clone())
@@ -2883,13 +2972,58 @@ where
             }
         }
 
-        let attestation: Option<rpc::DkgAttestation> =
-            dkg.machine.attestation().map(|att| {
-                att.try_into().expect("attestation format must be valid")
-            });
+        // Check for attestation state and optionally save to
+        // database.
+        let attestation = dkg.machine.attestation();
+
+        if let Some(attestation) = attestation.as_ref() {
+            let multisig_id = dkg.machine.multisig_id();
+
+            if self
+                .db
+                .get_multisig_attestation(multisig_id)
+                .to_status()?
+                .is_none()
+            {
+                info!(
+                    "Attestations completed successfully for multisig_id {}, saving to database...",
+                    multisig_id
+                );
+
+                if let Err(e) = self
+                    .db
+                    .set_multisig_attestation(multisig_id, attestation.clone())
+                    .to_status()
+                {
+                    if let Some(telemetry) = self.telemetry.as_ref() {
+                        telemetry.update_dkg_error_metrics(
+                            self.btc_network,
+                            self.config.identifier,
+                            &e.to_string(),
+                        );
+                    }
+                    return Err(e);
+                }
+
+                if let Err(e) = self.db.flush().to_status() {
+                    if let Some(telemetry) = self.telemetry.as_ref() {
+                        telemetry.update_dkg_error_metrics(
+                            self.btc_network,
+                            self.config.identifier,
+                            &e.to_string(),
+                        );
+                    }
+                    return Err(e);
+                }
+            }
+        }
 
         // Set any timers, and retrieve next timeout event.
         let timeout = dkg.machine.timeout(Instant::now());
+        // Convert attestation type.
+        let attestation = attestation.map(|att| {
+            att.try_into().expect("attestation format must be valid")
+        });
 
         let resp = rpc::DkgPayloads {
             timeout: timeout.map(|t| t.as_millis() as u64).unwrap_or(u64::MAX),
@@ -2914,6 +3048,7 @@ where
                 multisig_id
             ));
         }
+
         let mut sessions = self.dkg_sessions.lock().await;
         if sessions.contains_key(&multisig_id) {
             return Err(already_exists!(
@@ -3008,41 +3143,129 @@ where
 
         Ok(tonic::Response::new(rpc::Empty {}))
     }
-    async fn new_multisig_attestation(
+
+    async fn sunset_multisig(
         &self,
-        req: tonic::Request<rpc::DkgAttestation>,
-    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        req: tonic::Request<rpc::SunsetMultisigRequest>,
+    ) -> Result<tonic::Response<rpc::SunsetMultisigResponse>, tonic::Status>
+    {
         self.validate_jwt(&req)?;
 
         let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
-        let Some(tracked) =
-            self.db.get_multisig_attestation(multisig_id).to_status()?
+        // Multisig config must exist.
+        let multisig_conf = self
+            .federation
+            .get_config_by_multisig_id(&multisig_id)
+            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .to_status()?;
+
+        // TODO
+        let my_frost_id = 0;
+
+        // Must be the coordinator for the multisig.
+        if my_frost_id != multisig_conf.coordinator {
+            return Err(tonic::Status::failed_precondition(format!(
+                "Not the coordinator for multisig_id {}",
+                multisig_id
+            )));
+        }
+
+        // Must have the public key package available.
+        let Some(public_key_package) =
+            self.db.get_public_key_package_by_id(multisig_id).to_status()?
         else {
             return Err(tonic::Status::not_found(format!(
-                "DKG session not found for multisig_id {}",
+                "No public key package exists for multisig_id {}",
                 multisig_id
             )));
         };
 
-        if tracked.marked_finalized {
-            return Err(tonic::Status::not_found(format!(
-                "DKG session not found for multisig_id {}",
+        // Produce the signature to be submitted to consensus, where it's
+        // checked against the coordinators' public key and where the necessary
+        // state conditions are validated.
+        let signature = dkg::AttestationManager::coordinator_sunset_multisig(
+            multisig_id,
+            &public_key_package,
+            &self.p2p_secret_key,
+        );
+
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Multisig(
+                MultisigNotification::Sunset { multisig_id, signature },
+            ),
+        ) {
+            return Err(tonic::Status::internal(format!(
+                "Failed to submit sunsetting notification to dynafed queue for multisig_id {}: {}",
+                multisig_id, e
+            )));
+        }
+
+        Ok(tonic::Response::new(rpc::SunsetMultisigResponse {
+            signature: signature.serialize_compact().to_vec(),
+        }))
+    }
+
+    async fn expire_multisig(
+        &self,
+        req: tonic::Request<rpc::SunsetMultisigRequest>,
+    ) -> Result<tonic::Response<rpc::ExpireMultisigResponse>, tonic::Status>
+    {
+        self.validate_jwt(&req)?;
+
+        let multisig_id: MultisigId = req.into_inner().multisig_id.into();
+
+        // Multisig config must exist.
+        let multisig_conf = self
+            .federation
+            .get_config_by_multisig_id(&multisig_id)
+            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .to_status()?;
+
+        // TODO
+        let my_frost_id = 0;
+
+        // Must be the coordinator for the multisig.
+        if my_frost_id != multisig_conf.coordinator {
+            return Err(tonic::Status::failed_precondition(format!(
+                "Not the coordinator for multisig_id {}",
                 multisig_id
             )));
         }
 
-        // We can now officially mark the multisig as finalized and is hence
-        // ready to be used for pegins and pegouts.
-        self.db.mark_multisig_attestation_finalized(multisig_id).to_status()?;
+        // Must have the public key package available.
+        let Some(public_key_package) =
+            self.db.get_public_key_package_by_id(multisig_id).to_status()?
+        else {
+            return Err(tonic::Status::not_found(format!(
+                "No public key package exists for multisig_id {}",
+                multisig_id
+            )));
+        };
 
-        // Cleanup the DKG session state.
-        let mut sessions = self.dkg_sessions.lock().await;
-        if sessions.remove(&multisig_id).is_none() {
-            // TODO: We can just skip/ignore this.
+        // Produce the signature to be submitted to consensus, where it's
+        // checked against the coordinators' public key and where the necessary
+        // state conditions are validated.
+        let signature = dkg::AttestationManager::coordinator_expire_multisig(
+            multisig_id,
+            &public_key_package,
+            &self.p2p_secret_key,
+        );
+
+        if let Err(e) = self.dynafed_notifications_tx.send(
+            DynafedSubscriptionMessage::Multisig(
+                MultisigNotification::Expire { multisig_id, signature },
+            ),
+        ) {
+            return Err(tonic::Status::internal(format!(
+                "Failed to submit expiration notification to dynafed queue for multisig_id {}: {}",
+                multisig_id, e
+            )));
         }
 
-        Ok(tonic::Response::new(rpc::Empty {}))
+        Ok(tonic::Response::new(rpc::ExpireMultisigResponse {
+            signature: signature.serialize_compact().to_vec(),
+        }))
     }
 
     async fn initiate_sweep(
@@ -3836,23 +4059,29 @@ mod tests {
     /// separately.
     #[tokio::test]
     async fn basic_dkg_interface() {
+        const SESSION_CONTEXT: &[u8] = &[
+            45, 149, 144, 139, 60, 249, 107, 180, 91, 208, 53, 95, 17, 11, 125,
+            0, 84, 140, 144, 117, 192, 17, 40, 33, 254, 36, 108, 141, 102, 130,
+            100, 159,
+        ];
+
         const SAMPLE_ROUND_PKG: &[u8] = &[
-            0, 35, 15, 138, 179, 2, 2, 120, 88, 85, 71, 235, 157, 87, 39, 38,
-            125, 191, 226, 130, 130, 109, 33, 101, 203, 186, 92, 8, 192, 49,
-            14, 162, 200, 99, 210, 81, 193, 116, 35, 3, 3, 106, 54, 33, 158,
-            157, 204, 101, 31, 134, 240, 213, 83, 120, 7, 193, 132, 135, 1,
-            209, 27, 29, 108, 85, 16, 2, 41, 11, 129, 48, 199, 108, 64, 82,
-            233, 151, 145, 38, 39, 23, 230, 84, 196, 216, 128, 145, 22, 182,
-            69, 191, 243, 11, 111, 220, 94, 34, 101, 66, 1, 34, 206, 187, 151,
-            84, 248, 127, 11, 173, 110, 104, 72, 32, 73, 170, 148, 211, 170,
-            108, 244, 232, 37, 117, 104, 172, 111, 16, 249, 70, 33, 22, 18,
-            156, 178, 255, 134, 99, 134,
+            0, 35, 15, 138, 179, 2, 3, 167, 73, 139, 150, 33, 198, 92, 67, 245,
+            190, 12, 2, 30, 222, 218, 112, 69, 142, 150, 82, 126, 171, 239, 91,
+            123, 219, 115, 71, 95, 147, 125, 49, 3, 232, 24, 61, 2, 81, 111,
+            211, 227, 97, 95, 11, 127, 197, 215, 68, 97, 235, 240, 81, 239, 85,
+            206, 31, 3, 201, 103, 219, 155, 119, 219, 191, 32, 64, 207, 154,
+            46, 112, 186, 5, 184, 138, 24, 251, 246, 216, 51, 79, 208, 19, 136,
+            253, 227, 116, 218, 93, 250, 6, 110, 78, 16, 50, 134, 84, 78, 142,
+            60, 188, 68, 87, 210, 232, 12, 77, 184, 80, 208, 225, 183, 101,
+            121, 57, 249, 51, 45, 109, 1, 41, 217, 129, 198, 229, 234, 142, 98,
+            99, 76, 57,
         ];
 
         const SAMPLE_EPH_PUB: &[u8] = &[
-            3, 132, 131, 44, 133, 229, 63, 171, 246, 209, 196, 34, 121, 0, 121,
-            231, 3, 132, 160, 221, 29, 145, 119, 9, 4, 200, 46, 76, 45, 21, 99,
-            42, 11,
+            3, 155, 57, 155, 77, 21, 38, 166, 112, 241, 120, 87, 180, 249, 39,
+            223, 172, 103, 189, 60, 129, 202, 5, 50, 1, 73, 235, 90, 160, 133,
+            154, 235, 83,
         ];
 
         // Sample signature generated with private key:
@@ -3861,13 +4090,14 @@ mod tests {
         // Corresponding public key:
         // 038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140
         //
-        // Respectively, the second entry in the temporary federation config.
+        // Respectively, the second entry (Frost Id `1`) in the temporary
+        // federation config as defined in [`setup`].
         const SAMPLE_SIG: &[u8] = &[
-            82, 169, 233, 140, 210, 93, 174, 189, 154, 236, 130, 97, 121, 221,
-            140, 74, 98, 56, 114, 223, 112, 103, 88, 29, 209, 127, 21, 46, 128,
-            93, 97, 170, 15, 165, 91, 19, 97, 103, 12, 84, 50, 209, 217, 240,
-            124, 55, 62, 188, 29, 90, 73, 22, 206, 224, 205, 49, 218, 85, 134,
-            54, 192, 124, 24, 125,
+            47, 71, 206, 104, 24, 152, 252, 103, 98, 151, 101, 177, 185, 139,
+            251, 187, 145, 81, 101, 99, 8, 0, 172, 202, 2, 48, 25, 23, 175,
+            192, 190, 220, 111, 200, 99, 29, 247, 196, 228, 50, 27, 80, 230,
+            76, 58, 26, 110, 207, 74, 4, 125, 147, 113, 207, 137, 213, 227,
+            164, 177, 145, 59, 79, 182, 102,
         ];
 
         // Setup Alice (coordinator), Bob, and Eve.
@@ -3896,7 +4126,7 @@ mod tests {
                 panic!("Expected Round1 message");
             };
 
-            assert_eq!(context, dkg::SESSION_CONTEXT);
+            assert_eq!(context, SESSION_CONTEXT);
             assert_eq!(nonce, 0);
             //
             assert_eq!(p1.sender, frost_id!(0).serialize());
@@ -3909,7 +4139,7 @@ mod tests {
                 panic!("Expected Round1 message");
             };
 
-            assert_eq!(context, dkg::SESSION_CONTEXT);
+            assert_eq!(context, SESSION_CONTEXT);
             assert_eq!(nonce, 0);
             //
             assert_eq!(p2.sender, frost_id!(0).serialize());
@@ -3933,7 +4163,7 @@ mod tests {
             }
 
             let msg = Embedded::Round1 {
-                context: dkg::SESSION_CONTEXT.to_vec(),
+                context: SESSION_CONTEXT.to_vec(),
                 nonce: 0,
                 initiator: frost_id!(1),
                 ephemeral_pub,
@@ -4098,6 +4328,7 @@ mod tests {
                 .to_vec(),
             pegins: pegins.clone(),
             pending_pegouts: pending_pegouts.clone(),
+            active_multisigs: vec![],
         });
         let _res = app.new_consensus_checkpoint(req).await.unwrap();
 
@@ -4197,6 +4428,7 @@ mod tests {
                 .to_vec(),
             pegins: pegins.clone(),
             pending_pegouts: vec![],
+            active_multisigs: vec![],
         });
         let _res = app.new_consensus_checkpoint(req).await.unwrap();
 
@@ -4229,6 +4461,7 @@ mod tests {
                 .to_vec(),
             pegins: vec![],
             pending_pegouts: vec![pending_pegout],
+            active_multisigs: vec![],
         });
         let _res = app.new_consensus_checkpoint(req).await.unwrap();
 

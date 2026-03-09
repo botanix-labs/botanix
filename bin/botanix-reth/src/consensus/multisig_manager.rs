@@ -391,6 +391,21 @@ impl MultisigSubmitter {
             signatures,
         })
     }
+    /// Submits a sunsetting request for a degrading multisig.
+    ///
+    /// Returns a callback that resolves once the manager has processed the
+    /// submission. If the manager has shut down, the callback resolves
+    /// immediately with `Error::Shutdown`.
+    pub fn submit_sunsetting(
+        &self,
+        multisig_id: MultisigId,
+        coordinator_signature: secp256k1::ecdsa::Signature,
+    ) -> SubmissionCallback {
+        self.send_message(Message::Sunsetting {
+            multisig_id,
+            coordinator_signature,
+        })
+    }
     /// Submits an expiration request for a sunset multisig.
     ///
     /// Returns a callback that resolves once the manager has processed the

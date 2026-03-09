@@ -19,6 +19,7 @@ use botanix_data_parser::{
 use botanix_storage::{
     models::uuid_to_b256, WalletStateSyncReader, WalletStateSyncWriter,
 };
+use botanix_types::LEGACY_MULTISIG_ID;
 use btcserverlib::pegout_id::PegoutId;
 use once_cell::sync::Lazy;
 use reth_network::frost::{
@@ -427,8 +428,13 @@ where
                     }
                     // Request the wallet state from all peers for poa epoch blocks only
                     let uuid = uuid::Uuid::new_v4();
+                    let multisig_id = LEGACY_MULTISIG_ID.as_u32(); // TODO!
+
                     if let Err(e) = self.to_frost_manager.send_command(
-                        FrostCommand::GetWalletStateFromPeer(uuid),
+                        FrostCommand::GetWalletStateFromPeer((
+                            uuid,
+                            multisig_id,
+                        )),
                     ) {
                         error!(target: "consensus::authority::sync_wallet_state", ?e, "Failed to send get wallet state command to frost manager");
                     }
