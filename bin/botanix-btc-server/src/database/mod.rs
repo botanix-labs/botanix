@@ -1950,7 +1950,7 @@ mod tests {
         pegout_scheduler::{PegoutRequest, Tx},
         test_utils::{
             create_random_pegout_id, create_tx, random_p2wpkh_scriptpubkey,
-            setup_db, trusted_dealer_setup,
+            sample_dkg_attestation, setup_db, trusted_dealer_setup,
         },
     };
     use std::{collections::HashSet, time::SystemTime};
@@ -3428,7 +3428,8 @@ mod tests {
             db.set_key_package_by_id(mid.into(), key_package.clone()).unwrap();
             db.set_pubkey_package_by_id(mid.into(), pk_package.clone())
                 .unwrap();
-            db.set_multisig_attestation(mid.into(), ()).unwrap();
+            db.set_multisig_attestation(mid.into(), sample_dkg_attestation())
+                .unwrap();
         }
 
         // None finalized: neither last (3) nor second-to-last (2) finalized, should error
