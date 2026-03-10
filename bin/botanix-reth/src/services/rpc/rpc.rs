@@ -11,7 +11,6 @@ use crate::{
 };
 use botanix_chainspec::BotanixChainSpec;
 use botanix_rpc_config::botanix_config::Botanix;
-use futures::TryFutureExt;
 use reth::{
     args::RpcServerArgs, rpc::builder::config::RethRpcServerConfig,
     tasks::TaskExecutor,
@@ -22,13 +21,13 @@ use reth_ethereum::{
     provider::{db::DatabaseEnv, providers::BlockchainProvider},
     rpc::{
         builder::{
-            RethRpcModule, RpcModuleBuilder, RpcServerHandle,
-            TransportRpcModuleConfig,
+            RethRpcModule, RpcModuleBuilder, RpcModuleSelection,
+            RpcServerHandle, TransportRpcModuleConfig,
         },
         EthApiBuilder,
     },
 };
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 /// Sets up and runs the RPC server for the Botanix node, wiring providers,
 /// network and transaction pool, configuring transports (HTTP/WS/IPC), and
@@ -67,10 +66,19 @@ where
     )
     .build();
 
-    // Pick which namespaces to expose.
+    // Restrict RPC namespaces per transport
+    let http_modules = rpc_server_args
+        .http_api
+        .clone()
+        .unwrap_or(RpcModuleSelection::Standard);
+    let ws_modules = rpc_server_args
+        .ws_api
+        .clone()
+        .unwrap_or(RpcModuleSelection::Standard);
+
     let module_config = TransportRpcModuleConfig::default()
-        .with_http(RethRpcModule::all_variants())
-        .with_ws(RethRpcModule::all_variants())
+        .with_http(http_modules)
+        .with_ws(ws_modules)
         .with_ipc(RethRpcModule::all_variants());
 
     let mut server = rpc_builder.build(module_config, eth_api.clone());
