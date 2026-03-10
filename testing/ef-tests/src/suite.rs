@@ -33,13 +33,17 @@ pub trait Suite {
             .join(self.suite_name());
 
         // Verify that the path exists
-        assert!(suite_path.exists(), "Test suite path does not exist: {suite_path:?}");
+        assert!(
+            suite_path.exists(),
+            "Test suite path does not exist: {suite_path:?}"
+        );
 
         // Find all files with the ".json" extension in the test suite directory
         let test_cases = find_all_files_with_extension(&suite_path, ".json")
             .into_iter()
             .map(|test_case_path| {
-                let case = Self::Case::load(&test_case_path).expect("test case should load");
+                let case = Self::Case::load(&test_case_path)
+                    .expect("test case should load");
                 (test_case_path, case)
             })
             .collect();

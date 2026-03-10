@@ -8,7 +8,11 @@ macro_rules! general_state_test {
         #[test]
         fn $test_name() {
             reth_tracing::init_test_tracing();
-            BlockchainTests::new(format!("GeneralStateTests/{}", stringify!($dir))).run();
+            BlockchainTests::new(format!(
+                "GeneralStateTests/{}",
+                stringify!($dir)
+            ))
+            .run();
         }
     };
 }
@@ -27,13 +31,19 @@ mod general_state_tests {
         st_call_delegate_codes_call_code_homestead,
         stCallDelegateCodesCallCodeHomestead
     );
-    general_state_test!(st_call_delegate_codes_homestead, stCallDelegateCodesHomestead);
+    general_state_test!(
+        st_call_delegate_codes_homestead,
+        stCallDelegateCodesHomestead
+    );
     general_state_test!(st_chain_id, stChainId);
     general_state_test!(st_code_copy_test, stCodeCopyTest);
     general_state_test!(st_code_size_limit, stCodeSizeLimit);
     general_state_test!(st_create2, stCreate2);
     general_state_test!(st_create, stCreateTest);
-    general_state_test!(st_delegate_call_test_homestead, stDelegatecallTestHomestead);
+    general_state_test!(
+        st_delegate_call_test_homestead,
+        stDelegatecallTestHomestead
+    );
     general_state_test!(st_eip150_gas_prices, stEIP150singleCodeGasPrices);
     general_state_test!(st_eip150, stEIP150Specific);
     general_state_test!(st_eip158, stEIP158Specific);
@@ -45,7 +55,10 @@ mod general_state_tests {
     general_state_test!(st_homestead, stHomesteadSpecific);
     general_state_test!(st_init_code, stInitCodeTest);
     general_state_test!(st_log, stLogTests);
-    general_state_test!(st_mem_expanding_eip150_calls, stMemExpandingEIP150Calls);
+    general_state_test!(
+        st_mem_expanding_eip150_calls,
+        stMemExpandingEIP150Calls
+    );
     general_state_test!(st_memory_stress, stMemoryStressTest);
     general_state_test!(st_memory, stMemoryTest);
     general_state_test!(st_non_zero_calls, stNonZeroCallsTest);
