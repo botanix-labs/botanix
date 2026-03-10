@@ -1865,6 +1865,11 @@ where
             }
         };
 
+        if request.hash.len() != 32 {
+            error!("Invalid block hash length: {}", request.hash.len());
+            return ResponseProcessProposal { status: VERIFY_REJECT };
+        }
+
         let cbft_block_hash =
             FixedBytes::<32>::from_slice(request.hash.to_vec().as_slice());
 
