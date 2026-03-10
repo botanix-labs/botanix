@@ -13,9 +13,12 @@ pub async fn create_btc_server_client(
 ) -> eyre::Result<Option<(GrpcClientFactory, BtcServerExtendedClient)>> {
     match poa_cfg.federation_mode {
         true => {
+            let jwt_secret = bitcoind_cfg.btc_signing_server_jwt_secret()
+                .map_err(|e| eyre::eyre!("Failed to load BTC server JWT secret: {}", e))?
+                .ok_or_else(|| eyre::eyre!("BTC server JWT secret path is required in federation mode"))?;
             let btc_server_factory = GrpcClientFactory::new(
                 bitcoind_cfg.btc_server.clone().expect("btc_server exists"),
-                bitcoind_cfg.btc_signing_server_jwt_secret().ok().flatten(),
+                jwt_secret.into(),
             );
 
             let fut = || async { btc_server_factory.build_and_connect().await };
