@@ -2391,11 +2391,13 @@ where
                     // Need to extract from `request.proposer_address` which is
                     // legacy block building behavior
                     None if self.is_testnet => {
-                        let address = Address::new(
-                            FixedBytes::<20>::from_slice(
-                                request.proposer_address.to_vec().as_slice(),
+                        let address = Address::from(
+                            <[u8; 20]>::try_from(
+                                request.proposer_address.as_ref(),
                             )
-                            .0,
+                            .expect(
+                                "proposer_address must be exactly 20 bytes",
+                            ),
                         );
 
                         debug!(%address, "use a proposer address as the block fee recipient
@@ -2510,7 +2512,10 @@ where
         // are met or not.
         let comet_height = request.height as u64;
         let runtime_version = block_with_context.runtime_version;
-        let proposer_address = Address::from_slice(&request.proposer_address);
+        let proposer_address = Address::from(
+            <[u8; 20]>::try_from(request.proposer_address.as_ref())
+                .expect("proposer_address must be exactly 20 bytes"),
+        );
         let proposer_vote = block_with_context.network_upgrade_payload;
 
         match self
