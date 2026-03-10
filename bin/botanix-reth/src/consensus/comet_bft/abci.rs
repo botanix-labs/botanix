@@ -1578,9 +1578,13 @@ where
 
         // Activation Manager: decide whether we should build for the current or
         // upgraded runtime version.
+        let comet_height: u64 = request
+            .height
+            .try_into()
+            .expect("CometBFT height must be positive");
         let decision = self
             .activation_manager
-            .on_prepare_proposal(request.height as u64)
+            .on_prepare_proposal(comet_height)
             .expect("db cannot fail");
 
         let use_version = decision.version;
@@ -2102,7 +2106,10 @@ where
         // Activation Manager: decide whether we should process for the current
         // or upgraded runtime version.
         let floor_base_fee_per_gas;
-        let comet_height = request.height as u64;
+        let comet_height: u64 = request
+            .height
+            .try_into()
+            .expect("CometBFT height must be positive");
         let runtime_version = non_deterministic_data.runtime_version();
         let network_upgrade_payload =
             non_deterministic_data.network_upgrade_payload().copied();
@@ -2510,7 +2517,10 @@ where
         // long as they're specifically configured to do so (non-default
         // behavior), whether - from their perspective - the upgrade conditions
         // are met or not.
-        let comet_height = request.height as u64;
+        let comet_height: u64 = request
+            .height
+            .try_into()
+            .expect("CometBFT height must be positive");
         let runtime_version = block_with_context.runtime_version;
         let proposer_address = Address::from(
             <[u8; 20]>::try_from(request.proposer_address.as_ref())
