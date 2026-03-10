@@ -218,12 +218,10 @@ impl BitcoinCheckpointsChainSynchronizer {
             // Verify the header's proof-of-work is valid (defense-in-depth
             // against a compromised or spoofed bitcoind RPC).
             if !header.target().is_met_by(header.block_hash()) {
-                return Err(
-                    BitcoinCheckpointError::InvalidProofOfWork {
-                        block_hash: header.block_hash(),
-                        height,
-                    },
-                );
+                return Err(BitcoinCheckpointError::InvalidProofOfWork {
+                    block_hash: header.block_hash(),
+                    height,
+                });
             }
 
             // Create, report and push the checkpoint
@@ -480,12 +478,16 @@ mod tests {
         BlockHash as BitcoinBlockHash, CompactTarget, TxMerkleNode,
     };
     use bitcoincore_rpc::json::GetBlockResult;
-    use botanix_btc_wallet::{bitcoind::EstimateSmartFeeResult, error::BitcoindError};
+    use botanix_btc_wallet::{
+        bitcoind::EstimateSmartFeeResult, error::BitcoindError,
+    };
     use mockall::{mock, predicate::*};
 
     mod sync_new_blocks {
-        use botanix_btc_wallet::fallback::{BitcoindClientWrapper, ClientSelection};
         use botanix_btc_wallet::bitcoind::BitcoindClient;
+        use botanix_btc_wallet::fallback::{
+            BitcoindClientWrapper, ClientSelection,
+        };
 
         use super::*;
 
@@ -502,8 +504,10 @@ mod tests {
             let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
                 Arc::clone(&chain),
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
             syncer.last_synced_height = Some(100);
@@ -532,8 +536,10 @@ mod tests {
             let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
                 Arc::clone(&chain),
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
             syncer.last_synced_height = Some(100);
@@ -563,8 +569,10 @@ mod tests {
             let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
                 Arc::clone(&chain),
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
             syncer.last_synced_height = Some(100);
@@ -589,8 +597,10 @@ mod tests {
             let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
                 chain,
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
 
@@ -626,11 +636,9 @@ mod tests {
             mock.expect_get_block_hash_rpc()
                 .with(eq(1u64))
                 .returning(move |_| Ok(h1));
-            mock.expect_get_block_header_rpc()
-                .with(eq(h1))
-                .returning(|_| {
-                    Ok(create_header(BitcoinBlockHash::all_zeros()))
-                });
+            mock.expect_get_block_header_rpc().with(eq(h1)).returning(|_| {
+                Ok(create_header(BitcoinBlockHash::all_zeros()))
+            });
 
             mock.expect_get_block_hash_rpc()
                 .with(eq(2u64))
@@ -642,8 +650,10 @@ mod tests {
             let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
                 chain,
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
             syncer.last_synced_height = Some(1);
@@ -677,9 +687,9 @@ mod tests {
                 nonce: Default::default(),
             };
 
-            let h = BitcoinBlockHash::from_byte_array([1u8; 32]);
+            let h = bad_header.block_hash();
             mock.expect_get_block_hash_rpc()
-                .with(eq(7u64))
+                .with(eq(1u64))
                 .returning(move |_| Ok(h));
             mock.expect_get_block_header_rpc()
                 .with(eq(h))
@@ -688,11 +698,9 @@ mod tests {
             let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
                 Arc::clone(&chain),
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(
-                        Arc::new(BitcoindClient::new_boxed(
-                            Box::new(mock),
-                        )),
-                    )],
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
                     ClientSelection::Fallback,
                 )),
             );
@@ -701,18 +709,18 @@ mod tests {
 
             assert!(matches!(
                 result,
-                Err(BitcoinCheckpointError::InvalidProofOfWork {
-                    ..
-                })
+                Err(BitcoinCheckpointError::InvalidProofOfWork { .. })
             ));
             assert_eq!(chain.len(), 0);
         }
     }
 
     mod handle_new_blocks_sync_result {
-        use botanix_btc_wallet::error::{BitcoindError, BitcoindAdapterError};
-        use botanix_btc_wallet::fallback::{BitcoindClientWrapper, ClientSelection};
         use botanix_btc_wallet::bitcoind::BitcoindClient;
+        use botanix_btc_wallet::error::{BitcoindAdapterError, BitcoindError};
+        use botanix_btc_wallet::fallback::{
+            BitcoindClientWrapper, ClientSelection,
+        };
 
         use super::*;
 
@@ -726,9 +734,7 @@ mod tests {
 
             let initial_header = create_header(BitcoinBlockHash::all_zeros());
             let initial_checkpoint = BitcoinCheckpoint::new(initial_header, 1);
-            chain
-                .push(initial_checkpoint)
-                .expect("push initial checkpoint");
+            chain.push(initial_checkpoint).expect("push initial checkpoint");
 
             let mock = MockRpc::new();
 
@@ -736,8 +742,10 @@ mod tests {
             let syncer = BitcoinCheckpointsChainSynchronizer::new(
                 Arc::clone(&chain),
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
 
@@ -774,8 +782,10 @@ mod tests {
             let syncer = BitcoinCheckpointsChainSynchronizer::new(
                 Arc::clone(&chain),
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
             let syncer_lock = Arc::new(Mutex::new(syncer));
@@ -811,16 +821,19 @@ mod tests {
             let syncer = BitcoinCheckpointsChainSynchronizer::new(
                 Arc::clone(&chain),
                 Arc::new(FallbackBitcoindClient::new(
-                    vec![BitcoindClientWrapper::Provider1(Arc::new(BitcoindClient::new_boxed(Box::new(mock))))],
-                    ClientSelection::Fallback
+                    vec![BitcoindClientWrapper::Provider1(Arc::new(
+                        BitcoindClient::new_boxed(Box::new(mock)),
+                    ))],
+                    ClientSelection::Fallback,
                 )),
             );
             let syncer_lock = Arc::new(Mutex::new(syncer));
 
             // Create an RPC error
             let result = Err(BitcoinCheckpointError::SyncRpcError {
-                error:
-                    BitcoindAdapterError::BitcoindRpc(BitcoindError::EmptyBlockTip),
+                error: BitcoindAdapterError::BitcoindRpc(
+                    BitcoindError::EmptyBlockTip,
+                ),
                 procedure_name: "get_block_count".to_string(),
             });
 
@@ -1091,63 +1104,119 @@ mod tests {
     #[async_trait::async_trait]
     impl botanix_btc_wallet::bitcoind::BitcoindRpc for MockRpc {
         async fn is_synced(&self) -> Result<bool, BitcoindError> {
-            Self::is_synced(self).await
-                .map_err(|e| BitcoindError::BlockchainInfoFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+            Self::is_synced(self).await.map_err(|e| {
+                BitcoindError::BlockchainInfoFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
         async fn wait_until_synced(&self) {
             Self::wait_until_synced(self).await
         }
 
-        fn get_best_block_hash_rpc(&self) -> Result<bitcoin::BlockHash, BitcoindError> {
-            Self::get_best_block_hash_rpc(self)
-                .map_err(|e| BitcoindError::BestBlockHashRetrievalFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+        fn get_best_block_hash_rpc(
+            &self,
+        ) -> Result<bitcoin::BlockHash, BitcoindError> {
+            Self::get_best_block_hash_rpc(self).map_err(|e| {
+                BitcoindError::BestBlockHashRetrievalFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
-        fn get_block_header_rpc(&self, h: &bitcoin::BlockHash) -> Result<bitcoin::blockdata::block::Header, BitcoindError> {
-            Self::get_block_header_rpc(self, h)
-                .map_err(|e| BitcoindError::BlockHeaderRetrievalFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+        fn get_block_header_rpc(
+            &self,
+            h: &bitcoin::BlockHash,
+        ) -> Result<bitcoin::blockdata::block::Header, BitcoindError> {
+            Self::get_block_header_rpc(self, h).map_err(|e| {
+                BitcoindError::BlockHeaderRetrievalFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
-        fn get_block_hash_rpc(&self, height: u64) -> Result<bitcoin::BlockHash, BitcoindError> {
-            Self::get_block_hash_rpc(self, height)
-                .map_err(|e| BitcoindError::BlockHashRetrievalFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+        fn get_block_hash_rpc(
+            &self,
+            height: u64,
+        ) -> Result<bitcoin::BlockHash, BitcoindError> {
+            Self::get_block_hash_rpc(self, height).map_err(|e| {
+                BitcoindError::BlockHashRetrievalFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
-        fn get_txids_rpc(&self, h: &bitcoin::BlockHash) -> Result<Vec<bitcoin::Txid>, BitcoindError> {
-            Self::get_txids_rpc(self, h)
-                .map_err(|e| BitcoindError::BlockHeaderRetrievalFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+        fn get_txids_rpc(
+            &self,
+            h: &bitcoin::BlockHash,
+        ) -> Result<Vec<bitcoin::Txid>, BitcoindError> {
+            Self::get_txids_rpc(self, h).map_err(|e| {
+                BitcoindError::BlockHeaderRetrievalFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
-        fn get_estimate_smart_fee_rpc(&self) -> Result<EstimateSmartFeeResult, BitcoindError> {
-            Self::get_estimate_smart_fee_rpc(self)
-                .map_err(|e| BitcoindError::EstimateSmartFeeFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+        fn get_estimate_smart_fee_rpc(
+            &self,
+        ) -> Result<EstimateSmartFeeResult, BitcoindError> {
+            Self::get_estimate_smart_fee_rpc(self).map_err(|e| {
+                BitcoindError::EstimateSmartFeeFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
-        fn get_block_info_rpc(&self, block_hash: &bitcoin::BlockHash) -> Result<GetBlockResult, BitcoindError> {
-            Self::get_block_info_rpc(self, block_hash)
-                .map_err(|e| BitcoindError::BlockInfoRetrievalFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+        fn get_block_info_rpc(
+            &self,
+            block_hash: &bitcoin::BlockHash,
+        ) -> Result<GetBlockResult, BitcoindError> {
+            Self::get_block_info_rpc(self, block_hash).map_err(|e| {
+                BitcoindError::BlockInfoRetrievalFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
         fn get_block_count_rpc(&self) -> Result<u64, BitcoindError> {
-            Self::get_block_count_rpc(self)
-                .map_err(|e| BitcoindError::BlockCountFailed(
-                    bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::error::Error::Transport(format!("{:?}", e).into()))
-                ))
+            Self::get_block_count_rpc(self).map_err(|e| {
+                BitcoindError::BlockCountFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
     }
 
@@ -1159,7 +1228,7 @@ mod tests {
             prev_blockhash: prev_hash,
             merkle_root: TxMerkleNode::all_zeros(),
             time: Default::default(),
-            bits: CompactTarget::from_consensus(0x207f_ffff),
+            bits: CompactTarget::from_consensus(0x2100_ffff),
             nonce: Default::default(),
         }
     }

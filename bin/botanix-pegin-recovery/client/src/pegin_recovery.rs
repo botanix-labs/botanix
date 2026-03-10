@@ -62,10 +62,10 @@ pub mod pegin_recovery_service_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct PeginRecoveryServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -103,30 +103,42 @@ pub mod pegin_recovery_service_client {
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
-            T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-                Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+            T:
+                tonic::codegen::Service<
+                    http::Request<tonic::body::BoxBody>,
+                    Response = http::Response<
+                        <T as tonic::client::GrpcService<
+                            tonic::body::BoxBody,
+                        >>::ResponseBody,
+                    >,
                 >,
-            >,
             <T as tonic::codegen::Service<
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
-            PeginRecoveryServiceClient::new(InterceptedService::new(inner, interceptor))
+            PeginRecoveryServiceClient::new(InterceptedService::new(
+                inner,
+                interceptor,
+            ))
         }
         /// Compress requests with the given encoding.
         ///
         /// This requires the server to support it otherwise it might respond with an
         /// error.
         #[must_use]
-        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+        pub fn send_compressed(
+            mut self,
+            encoding: CompressionEncoding,
+        ) -> Self {
             self.inner = self.inner.send_compressed(encoding);
             self
         }
         /// Enable decompressing responses.
         #[must_use]
-        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+        pub fn accept_compressed(
+            mut self,
+            encoding: CompressionEncoding,
+        ) -> Self {
             self.inner = self.inner.accept_compressed(encoding);
             self
         }
@@ -149,51 +161,46 @@ pub mod pegin_recovery_service_client {
         pub async fn health_check(
             &mut self,
             request: impl tonic::IntoRequest<super::Empty>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/pegin_recovery.PeginRecoveryService/HealthCheck",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("pegin_recovery.PeginRecoveryService", "HealthCheck"),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "pegin_recovery.PeginRecoveryService",
+                "HealthCheck",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Import a key share from btc-server's encrypted export format
         pub async fn import_key_share(
             &mut self,
             request: impl tonic::IntoRequest<super::ImportKeyShareRequest>,
-        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/pegin_recovery.PeginRecoveryService/ImportKeyShare",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "pegin_recovery.PeginRecoveryService",
-                        "ImportKeyShare",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "pegin_recovery.PeginRecoveryService",
+                "ImportKeyShare",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// Recover a pegin by constructing and signing a transaction
@@ -204,26 +211,21 @@ pub mod pegin_recovery_service_client {
             tonic::Response<super::RecoverPeginResponse>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/pegin_recovery.PeginRecoveryService/RecoverPegin",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "pegin_recovery.PeginRecoveryService",
-                        "RecoverPegin",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "pegin_recovery.PeginRecoveryService",
+                "RecoverPegin",
+            ));
             self.inner.unary(req, path, codec).await
         }
     }

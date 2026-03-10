@@ -17,31 +17,31 @@ asm-keccak = ["alloy-primitives/asm-keccak", "revm/asm-keccak"]
 
 [dependencies]
 reth-chainspec.workspace = true
-reth-ethereum-primitives.workspace = true
-reth-primitives-traits.workspace = true
 reth-consensus.workspace = true
 reth-db = { workspace = true, features = ["mdbx", "test-utils"] }
 reth-db-api.workspace = true
 reth-db-common.workspace = true
-reth-provider = { workspace = true, features = ["test-utils"] }
+reth-ethereum-consensus.workspace = true
+reth-ethereum-primitives.workspace = true
 reth-evm.workspace = true
 reth-evm-ethereum.workspace = true
-reth-ethereum-consensus.workspace = true
+reth-primitives-traits.workspace = true
+reth-provider = { workspace = true, features = ["test-utils"] }
 reth-revm.workspace = true
 reth-tracing.workspace = true
 reth-trie.workspace = true
 reth-trie-db.workspace = true
 revm = { workspace = true, features = ["secp256k1", "c-kzg"] }
 
-alloy-rlp.workspace = true
-alloy-primitives.workspace = true
-alloy-eips.workspace = true
 alloy-consensus.workspace = true
+alloy-eips.workspace = true
 alloy-genesis.workspace = true
+alloy-primitives.workspace = true
+alloy-rlp.workspace = true
 
-walkdir.workspace = true
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-rayon.workspace = true
 tracing.workspace = true
+walkdir.workspace = true

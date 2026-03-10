@@ -46,9 +46,7 @@ pub enum BitcoinCheckpointError {
 
     /// Block header proof-of-work is invalid (block hash does not meet
     /// the difficulty target declared in the header).
-    #[error(
-        "Invalid proof-of-work for block {block_hash} at height {height}"
-    )]
+    #[error("Invalid proof-of-work for block {block_hash} at height {height}")]
     InvalidProofOfWork {
         /// The block hash that failed PoW validation
         block_hash: BitcoinBlockHash,
