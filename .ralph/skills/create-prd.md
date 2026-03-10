@@ -30,6 +30,7 @@ Ask questions to understand what the user wants to build, then generate `.ralph/
 ### 3. What are the main features?
 
 For each feature:
+
 - What does it do?
 - What does "done" look like?
 - Are there specific requirements?
@@ -88,6 +89,7 @@ Generate `.ralph/PRD.md`:
 **Description:** [What it does in 1-2 sentences]
 
 **Acceptance Criteria:**
+
 - [ ] Specific, testable criterion
 - [ ] Another criterion
 - [ ] Edge cases to handle
@@ -97,6 +99,7 @@ Generate `.ralph/PRD.md`:
 **Description:** [What it does]
 
 **Acceptance Criteria:**
+
 - [ ] Criterion 1
 - [ ] Criterion 2
 
@@ -105,12 +108,14 @@ Generate `.ralph/PRD.md`:
 ## Data Models
 
 ### [Entity Name]
+
 - `id`: UUID, primary key
 - `field_name`: type, constraints
 - `created_at`: timestamp
 - `updated_at`: timestamp
 
 ### [Another Entity]
+
 - `id`: UUID, primary key
 - `entity_id`: UUID, foreign key to Entity
 - ...
@@ -181,6 +186,7 @@ Next steps:
 **If the user's answer is unclear, vague, or incomplete - ASK FOLLOW-UP QUESTIONS.**
 
 **DO NOT:**
+
 - Fill in blanks with assumptions
 - Skip questions because you think you know the answer
 - Create a PRD with placeholder values
@@ -188,15 +194,16 @@ Next steps:
 
 **Examples of when to probe deeper:**
 
-| User says | Problem | Ask |
-|-----------|---------|-----|
-| "Standard auth" | Ambiguous | "Email/password? OAuth? SSO? What auth methods specifically?" |
-| "REST API" | Incomplete | "What endpoints? What authentication? Who are the consumers?" |
-| "Use Postgres" | Missing details | "Any specific version? Hosted or local? Do you have it set up already?" |
-| "It should be fast" | Unmeasurable | "What response time is acceptable? <100ms? <500ms?" |
-| "Handle errors gracefully" | Vague | "Show error messages? Retry? Log and alert? What's graceful for your users?" |
+| User says                  | Problem         | Ask                                                                          |
+| -------------------------- | --------------- | ---------------------------------------------------------------------------- |
+| "Standard auth"            | Ambiguous       | "Email/password? OAuth? SSO? What auth methods specifically?"                |
+| "REST API"                 | Incomplete      | "What endpoints? What authentication? Who are the consumers?"                |
+| "Use Postgres"             | Missing details | "Any specific version? Hosted or local? Do you have it set up already?"      |
+| "It should be fast"        | Unmeasurable    | "What response time is acceptable? <100ms? <500ms?"                          |
+| "Handle errors gracefully" | Vague           | "Show error messages? Retry? Log and alert? What's graceful for your users?" |
 
 **Before generating the PRD, confirm:**
+
 ```
 Before I create the PRD, let me confirm I have everything:
 

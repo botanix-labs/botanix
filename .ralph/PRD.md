@@ -26,6 +26,7 @@
 **Description:** [What it does]
 
 **Acceptance Criteria:**
+
 - [ ] Criterion 1
 - [ ] Criterion 2
 - [ ] Criterion 3
@@ -35,6 +36,7 @@
 **Description:** [What it does]
 
 **Acceptance Criteria:**
+
 - [ ] Criterion 1
 - [ ] Criterion 2
 

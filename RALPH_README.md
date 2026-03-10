@@ -23,16 +23,16 @@ cd your-project
 ralph init my-project
 
 # Create PRD and generate features
-ralph prd                     # Interactive PRD creation
-ralph plan                    # Generate features from PRD
+ralph prd  # Interactive PRD creation
+ralph plan # Generate features from PRD
 
 # Initialize feature branch
 ralph branch
 
 # Run Ralph
-ralph run                     # Sequential
-ralph parallel 3              # Parallel with 3 agents
-ralph auto                    # Autonomous planning loop
+ralph run        # Sequential
+ralph parallel 3 # Parallel with 3 agents
+ralph auto       # Autonomous planning loop
 
 # Check progress
 ralph status
@@ -69,10 +69,10 @@ cd your-repo
 vim .ralph/config.yaml
 
 # Run scripts directly
-ralph prd                          # Create PRD
-ralph plan                         # Generate features
-ralph branch                       # Init feature branch
-ralph run                          # Run
+ralph prd    # Create PRD
+ralph plan   # Generate features
+ralph branch # Init feature branch
+ralph run    # Run
 ```
 
 ## Prerequisites
@@ -92,12 +92,14 @@ brew install jq yq gh
 ```
 
 **Required:**
+
 - `jq` - JSON parsing for features.json
 - `yq` - YAML parsing for config.yaml
 - `gh` - GitHub CLI for PR creation
 - An AI CLI tool (claude, droid, openai-cli, etc.)
 
 **Optional:**
+
 - `postgresql` - Only if your project needs isolated DBs per agent
 - `parallel` - Slightly better parallel execution; bash backgrounding works without it
 
@@ -107,56 +109,57 @@ Edit `.ralph/config.yaml`:
 
 ```yaml
 project:
-  name: my-project
-  language: rust  # rust, typescript, python, go
+    name: my-project
+    language: rust # rust, typescript, python, go
 
 # Different models for different agent types
 models:
-  planner:
-    provider: "claude"
-    model: "claude-opus-4"      # Best for architecture/planning
-  coding:
-    provider: "claude"
-    model: "claude-sonnet-4"    # Good balance for coding
-  merger:
-    provider: "openai"
-    model: "gpt-4o"             # Or use claude
-  default:
-    provider: "claude"
-    model: "claude-sonnet-4"
+    planner:
+        provider: "claude"
+        model: "claude-opus-4" # Best for architecture/planning
+    coding:
+        provider: "claude"
+        model: "claude-sonnet-4" # Good balance for coding
+    merger:
+        provider: "openai"
+        model: "gpt-4o" # Or use claude
+    default:
+        provider: "claude"
+        model: "claude-sonnet-4"
 
 # CLI commands per provider
 cli:
-  claude: "claude --print --model {model}"
-  openai: "openai-cli chat --model {model}"
-  droid: "droid exec -m {model} --auto high -f {prompt_file}"
+    claude: "claude --print --model {model}"
+    openai: "openai-cli chat --model {model}"
+    droid: "droid exec -m {model} --auto high -f {prompt_file}"
 
 parallelization:
-  max_agents: 3
-  pr_workflow: true
+    max_agents: 3
+    pr_workflow: true
 
 validators:
-  check: "cargo check"
-  lint: "cargo clippy --fix --allow-dirty"
-  format: "cargo fmt --all"
-  test: "cargo test --lib"
+    check: "cargo check"
+    lint: "cargo clippy --fix --allow-dirty"
+    format: "cargo fmt --all"
+    test: "cargo test --lib"
 ```
 
 ### Model Selection Tips
 
-| Agent | Recommended | Why |
-|-------|-------------|-----|
+| Agent   | Recommended           | Why                                     |
+| ------- | --------------------- | --------------------------------------- |
 | Planner | claude-opus-4, gpt-4o | Needs strong reasoning for architecture |
-| Coding | claude-sonnet-4 | Good balance of speed and quality |
-| Merger | claude-sonnet-4 | Git operations, conflict resolution |
+| Coding  | claude-sonnet-4       | Good balance of speed and quality       |
+| Merger  | claude-sonnet-4       | Git operations, conflict resolution     |
 
 For cost optimization, use cheaper models for simpler tasks:
+
 ```yaml
 models:
-  planner:
-    model: "claude-opus-4"      # Expensive but worth it for planning
-  coding:
-    model: "claude-sonnet-4"    # Mid-tier for implementation
+    planner:
+        model: "claude-opus-4" # Expensive but worth it for planning
+    coding:
+        model: "claude-sonnet-4" # Mid-tier for implementation
 ```
 
 ## Example Workflows
@@ -270,16 +273,16 @@ Parallel with 3 agents (~35 min):
 
 The planner marks each feature with `parallel_safe: true/false`:
 
-| Feature Type | Parallel Safe? | Reason |
-|--------------|----------------|--------|
-| `scaffold-*` | Usually yes | Directory structure, no conflicts |
-| `db-*` | **No** | Migrations must run in order |
-| `foundation-*` | Depends | False if other features import from it |
-| `model-*` | Yes | After schema exists, models are independent |
-| `service-*` | Yes | Different files, no cross-imports |
-| `handler-*` | Yes | Independent API endpoints |
-| `test-*` | Yes | Tests don't modify shared state |
-| `final-*` | **No** | Cleanup/formatting needs all code present |
+| Feature Type   | Parallel Safe? | Reason                                      |
+| -------------- | -------------- | ------------------------------------------- |
+| `scaffold-*`   | Usually yes    | Directory structure, no conflicts           |
+| `db-*`         | **No**         | Migrations must run in order                |
+| `foundation-*` | Depends        | False if other features import from it      |
+| `model-*`      | Yes            | After schema exists, models are independent |
+| `service-*`    | Yes            | Different files, no cross-imports           |
+| `handler-*`    | Yes            | Independent API endpoints                   |
+| `test-*`       | Yes            | Tests don't modify shared state             |
+| `final-*`      | **No**         | Cleanup/formatting needs all code present   |
 
 ### Execution Order
 
@@ -300,10 +303,12 @@ Each parallel agent gets:
 3. **Shared Build Cache**: Cargo/npm target directories are shared (read-heavy)
 
 **Database isolation** (only if needed - most projects can skip this):
+
 ```yaml
 # In .ralph/config.yaml - only for projects with Postgres that need test isolation
 database:
-  from_env: "DATABASE_URL"  # Reads from your .env file
+    from_env: "DATABASE_URL" # Reads from your .env file
+
 
 # WARNING: Only use LOCAL/DEV databases! Never production.
 ```
@@ -330,6 +335,7 @@ database:
 ### PR Workflow
 
 Each completed feature becomes a PR:
+
 - **Source**: Agent's working branch (`pr/service-001`)
 - **Target**: Feature branch (`ralph/my-feature`), NOT main
 - **Validation**: Must pass check, lint, format, test before PR
@@ -366,11 +372,11 @@ This keeps `main` clean until the entire feature set is complete.
 
 ## Resource Usage
 
-| Component | Count | RAM |
-|-----------|-------|-----|
-| PostgreSQL | 1 | ~200MB |
-| Agent DBs | N | ~0MB each (copy-on-write) |
-| Cargo target | 1 | Shared |
+| Component    | Count | RAM                       |
+| ------------ | ----- | ------------------------- |
+| PostgreSQL   | 1     | ~200MB                    |
+| Agent DBs    | N     | ~0MB each (copy-on-write) |
+| Cargo target | 1     | Shared                    |
 
 Run 10-20 parallel agents on a 16GB Mac.
 

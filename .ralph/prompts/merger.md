@@ -14,12 +14,13 @@ You merge completed PRs into main and update feature status.
 
 ```bash
 gh pr list --state open --json number,title,mergeable,statusCheckRollup \
-  --jq '.[] | {number, title, mergeable, checks: .statusCheckRollup.state}'
+    --jq '.[] | {number, title, mergeable, checks: .statusCheckRollup.state}'
 ```
 
 ### Step 2: Merge Ready PRs
 
 For each PR where:
+
 - `mergeable` is `MERGEABLE`
 - All status checks pass
 
@@ -64,12 +65,12 @@ PR_NUMBER=101
 FEATURE_ID=$(jq -r ".features[] | select(.pr==\"#$PR_NUMBER\") | .id" .ralph/state/features.json)
 
 if [[ -n "$FEATURE_ID" ]]; then
-  # Mark as passing
-  jq "(.features[] | select(.id==\"$FEATURE_ID\")).passes = true" \
-    .ralph/state/features.json > /tmp/features.json && \
-    mv /tmp/features.json .ralph/state/features.json
+    # Mark as passing
+    jq "(.features[] | select(.id==\"$FEATURE_ID\")).passes = true" \
+        .ralph/state/features.json > /tmp/features.json \
+        && mv /tmp/features.json .ralph/state/features.json
 
-  echo "Marked $FEATURE_ID as passing"
+    echo "Marked $FEATURE_ID as passing"
 fi
 ```
 
@@ -112,12 +113,12 @@ When multiple PRs are ready, merge in dependency order:
 # Auto-merge all ready PRs
 
 gh pr list --state open --json number,mergeable \
-  --jq '.[] | select(.mergeable=="MERGEABLE") | .number' | \
-while read pr; do
-  echo "Merging PR #$pr"
-  gh pr merge $pr --squash --delete-branch || echo "Failed to merge #$pr"
-  sleep 2
-done
+    --jq '.[] | select(.mergeable=="MERGEABLE") | .number' \
+    | while read pr; do
+        echo "Merging PR #$pr"
+        gh pr merge $pr --squash --delete-branch || echo "Failed to merge #$pr"
+        sleep 2
+    done
 ```
 
 ## Rules

@@ -35,42 +35,48 @@ Extract and categorize:
 
 Based on PRD, identify needed patterns:
 
-| Pattern | Trigger | Files to Create |
-|---------|---------|-----------------|
-| Provider trait | Multiple external services | `providers/traits.rs`, `providers/registry.rs` |
-| Shared crypto | Encryption, PII | `common/crypto.rs` |
-| Error handling | Any project | `common/error.rs` |
-| Database models | Has database | `models/*.rs` |
+| Pattern         | Trigger                    | Files to Create                                |
+| --------------- | -------------------------- | ---------------------------------------------- |
+| Provider trait  | Multiple external services | `providers/traits.rs`, `providers/registry.rs` |
+| Shared crypto   | Encryption, PII            | `common/crypto.rs`                             |
+| Error handling  | Any project                | `common/error.rs`                              |
+| Database models | Has database               | `models/*.rs`                                  |
 
 ### Step 4: Generate Features
 
 Create features in this order:
 
 #### Phase 1: Scaffold (parallel_safe: true)
+
 - Directory structure
 - Empty modules with declarations
 - Dependencies in Cargo.toml/package.json
 
 #### Phase 2: Database (parallel_safe: false)
+
 - Single migration with all tables OR
 - Ordered migrations respecting FK dependencies
 - Schema generation (diesel print-schema, prisma generate)
 
 #### Phase 3: Foundation (parallel_safe: varies)
+
 - Shared error types
 - Common traits/interfaces
 - Utility functions
 
 #### Phase 4: Implementation (parallel_safe: true)
+
 - Models (after schema)
 - Services (after models)
 - Handlers (after services)
 
 #### Phase 5: Tests (parallel_safe: true)
+
 - Unit tests
 - Integration tests
 
 #### Phase 6: Final (parallel_safe: false)
+
 - Format entire codebase
 - Lint fixes
 - Final validation
@@ -79,48 +85,48 @@ Create features in this order:
 
 ```json
 {
-  "meta": {
-    "prd_source": ".ralph/PRD.md",
-    "generated_at": "2024-01-22T12:00:00Z",
-    "total_features": 45,
-    "parallel_features": 32,
-    "sequential_features": 13,
-    "estimated_phases": 6
-  },
-  "features": [
-    {
-      "id": "scaffold-001",
-      "category": "scaffold",
-      "description": "Create project directory structure",
-      "depends_on": [],
-      "parallel_safe": true,
-      "pr": null,
-      "passes": false,
-      "steps": [
-        "mkdir -p src/{models,services,handlers,common}",
-        "Create src/lib.rs with module declarations",
-        "Create src/main.rs with basic setup",
-        "Run cargo check - verify compiles"
-      ]
+    "meta": {
+        "prd_source": ".ralph/PRD.md",
+        "generated_at": "2024-01-22T12:00:00Z",
+        "total_features": 45,
+        "parallel_features": 32,
+        "sequential_features": 13,
+        "estimated_phases": 6
     },
-    {
-      "id": "db-001",
-      "category": "database",
-      "description": "Create database migration with all tables",
-      "depends_on": ["scaffold-001"],
-      "parallel_safe": false,
-      "pr": null,
-      "passes": false,
-      "steps": [
-        "Run diesel migration generate create_tables",
-        "Add CREATE TABLE statements for all entities",
-        "Add indexes and constraints",
-        "Run diesel migration run",
-        "Run diesel migration redo - verify rollback works",
-        "Run diesel print-schema > src/schema.rs"
-      ]
-    }
-  ]
+    "features": [
+        {
+            "id": "scaffold-001",
+            "category": "scaffold",
+            "description": "Create project directory structure",
+            "depends_on": [],
+            "parallel_safe": true,
+            "pr": null,
+            "passes": false,
+            "steps": [
+                "mkdir -p src/{models,services,handlers,common}",
+                "Create src/lib.rs with module declarations",
+                "Create src/main.rs with basic setup",
+                "Run cargo check - verify compiles"
+            ]
+        },
+        {
+            "id": "db-001",
+            "category": "database",
+            "description": "Create database migration with all tables",
+            "depends_on": ["scaffold-001"],
+            "parallel_safe": false,
+            "pr": null,
+            "passes": false,
+            "steps": [
+                "Run diesel migration generate create_tables",
+                "Add CREATE TABLE statements for all entities",
+                "Add indexes and constraints",
+                "Run diesel migration run",
+                "Run diesel migration redo - verify rollback works",
+                "Run diesel print-schema > src/schema.rs"
+            ]
+        }
+    ]
 }
 ```
 
@@ -178,6 +184,7 @@ Next steps:
 ## Feature Writing Rules
 
 ### ID Format
+
 ```
 {category}-{NNN}
 
@@ -194,11 +201,13 @@ final-001
 ### Step Quality
 
 Every step must be:
+
 - **Binary** - Pass or fail, no "mostly works"
 - **Specific** - Exact command, exact file, exact verification
 - **Executable** - Agent can run it without interpretation
 
 **Good steps:**
+
 ```json
 "steps": [
   "Create src/models/user.rs with User struct",
@@ -209,6 +218,7 @@ Every step must be:
 ```
 
 **Bad steps:**
+
 ```json
 "steps": [
   "Create the user model",

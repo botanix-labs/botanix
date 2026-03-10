@@ -7,8 +7,8 @@ set -e
 CONFIG=".ralph/config.yaml"
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "ERROR: Config not found at $CONFIG"
-  exit 1
+    echo "ERROR: Config not found at $CONFIG"
+    exit 1
 fi
 
 DEFAULT_BRANCH=$(yq '.git.default_branch // "main"' "$CONFIG")
@@ -25,22 +25,22 @@ git checkout "$DEFAULT_BRANCH"
 git pull origin "$DEFAULT_BRANCH"
 
 # Check if feature branch already exists
-if git show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH" 2>/dev/null; then
-  echo "Feature branch '$FEATURE_BRANCH' already exists locally."
-  read -p "Switch to it? (Y/n) " -n 1 -r
-  echo
-  if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    git checkout "$FEATURE_BRANCH"
-    git pull origin "$FEATURE_BRANCH" 2>/dev/null || echo "Branch not on remote yet."
-  fi
-elif git show-ref --verify --quiet "refs/remotes/origin/$FEATURE_BRANCH" 2>/dev/null; then
-  echo "Feature branch '$FEATURE_BRANCH' exists on remote."
-  git checkout -b "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH"
+if git show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH" 2> /dev/null; then
+    echo "Feature branch '$FEATURE_BRANCH' already exists locally."
+    read -p "Switch to it? (Y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        git checkout "$FEATURE_BRANCH"
+        git pull origin "$FEATURE_BRANCH" 2> /dev/null || echo "Branch not on remote yet."
+    fi
+elif git show-ref --verify --quiet "refs/remotes/origin/$FEATURE_BRANCH" 2> /dev/null; then
+    echo "Feature branch '$FEATURE_BRANCH' exists on remote."
+    git checkout -b "$FEATURE_BRANCH" "origin/$FEATURE_BRANCH"
 else
-  echo "Creating new feature branch '$FEATURE_BRANCH' from '$DEFAULT_BRANCH'..."
-  git checkout -b "$FEATURE_BRANCH"
-  git push -u origin "$FEATURE_BRANCH"
-  echo "Feature branch created and pushed."
+    echo "Creating new feature branch '$FEATURE_BRANCH' from '$DEFAULT_BRANCH'..."
+    git checkout -b "$FEATURE_BRANCH"
+    git push -u origin "$FEATURE_BRANCH"
+    echo "Feature branch created and pushed."
 fi
 
 echo ""

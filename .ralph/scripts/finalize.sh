@@ -7,8 +7,8 @@ set -e
 CONFIG=".ralph/config.yaml"
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "ERROR: Config not found at $CONFIG"
-  exit 1
+    echo "ERROR: Config not found at $CONFIG"
+    exit 1
 fi
 
 DEFAULT_BRANCH=$(yq '.git.default_branch // "main"' "$CONFIG")
@@ -27,33 +27,33 @@ PENDING=$(jq '[.features[] | select(.passes==false)] | length' .ralph/state/feat
 echo "Feature status: $PASSING / $TOTAL complete"
 
 if [[ "$PENDING" -gt 0 ]]; then
-  echo ""
-  echo "WARNING: $PENDING features are not complete!"
-  echo ""
-  jq -r '.features[] | select(.passes==false) | "  - \(.id): \(.description)"' .ralph/state/features.json
-  echo ""
-  read -p "Continue anyway? (y/N) " -n 1 -r
-  echo
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 1
-  fi
+    echo ""
+    echo "WARNING: $PENDING features are not complete!"
+    echo ""
+    jq -r '.features[] | select(.passes==false) | "  - \(.id): \(.description)"' .ralph/state/features.json
+    echo ""
+    read -p "Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 1
+    fi
 fi
 
 # Check for open PRs
-OPEN_PRS=$(gh pr list --base "$FEATURE_BRANCH" --state open --json number -q 'length' 2>/dev/null || echo "0")
+OPEN_PRS=$(gh pr list --base "$FEATURE_BRANCH" --state open --json number -q 'length' 2> /dev/null || echo "0")
 if [[ "$OPEN_PRS" -gt 0 ]]; then
-  echo ""
-  echo "WARNING: $OPEN_PRS open PRs targeting $FEATURE_BRANCH"
-  gh pr list --base "$FEATURE_BRANCH" --state open
-  echo ""
-  read -p "Merge them first? (Y/n) " -n 1 -r
-  echo
-  if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    gh pr list --base "$FEATURE_BRANCH" --state open --json number -q '.[].number' | \
-      xargs -I {} gh pr merge {} --squash --delete-branch
-    echo "PRs merged."
-  fi
+    echo ""
+    echo "WARNING: $OPEN_PRS open PRs targeting $FEATURE_BRANCH"
+    gh pr list --base "$FEATURE_BRANCH" --state open
+    echo ""
+    read -p "Merge them first? (Y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        gh pr list --base "$FEATURE_BRANCH" --state open --json number -q '.[].number' \
+            | xargs -I {} gh pr merge {} --squash --delete-branch
+        echo "PRs merged."
+    fi
 fi
 
 # Ensure feature branch is up to date
@@ -69,10 +69,10 @@ echo "Creating PR to merge $FEATURE_BRANCH into $DEFAULT_BRANCH..."
 PROJECT_NAME=$(yq '.project.name // "Ralph Project"' "$CONFIG")
 
 PR_URL=$(gh pr create \
-  --title "feat: $PROJECT_NAME - Complete implementation" \
-  --base "$DEFAULT_BRANCH" \
-  --head "$FEATURE_BRANCH" \
-  --body "## Summary
+    --title "feat: $PROJECT_NAME - Complete implementation" \
+    --base "$DEFAULT_BRANCH" \
+    --head "$FEATURE_BRANCH" \
+    --body "## Summary
 
 Complete implementation of $PROJECT_NAME via Ralph.
 
@@ -84,9 +84,9 @@ $PASSING / $TOTAL features implemented.
 $(jq -r '.features[] | select(.passes==true) | "- [x] \(.id): \(.description)"' .ralph/state/features.json)
 
 $(if [[ "$PENDING" -gt 0 ]]; then
-  echo "### Incomplete Features"
-  jq -r '.features[] | select(.passes==false) | "- [ ] \(.id): \(.description)"' .ralph/state/features.json
-fi)
+        echo "### Incomplete Features"
+        jq -r '.features[] | select(.passes==false) | "- [ ] \(.id): \(.description)"' .ralph/state/features.json
+    fi)
 
 ## Verification
 

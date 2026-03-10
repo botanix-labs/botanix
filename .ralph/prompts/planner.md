@@ -39,27 +39,27 @@ tail -100 .ralph/state/progress.txt
 
 ```bash
 # What source files exist now?
-find . -type f \( -name "*.rs" -o -name "*.ts" -o -name "*.py" -o -name "*.go" \) | \
-  grep -v -E "(target|node_modules|__pycache__|\.git)" | head -50
+find . -type f \( -name "*.rs" -o -name "*.ts" -o -name "*.py" -o -name "*.go" \) \
+    | grep -v -E "(target|node_modules|__pycache__|\.git)" | head -50
 
 # What patterns are established?
 rg "pub trait|pub struct|export class|export interface|class |def " \
-  --type-add 'code:*.{rs,ts,py,go}' -t code -l | head -20
+    --type-add 'code:*.{rs,ts,py,go}' -t code -l | head -20
 
 # What modules/packages exist?
-ls -la src/ 2>/dev/null || ls -la lib/ 2>/dev/null || ls -la app/ 2>/dev/null
+ls -la src/ 2> /dev/null || ls -la lib/ 2> /dev/null || ls -la app/ 2> /dev/null
 ```
 
 ### Step 3: Gap Analysis
 
 Compare PRD requirements to current state:
 
-| Status | Meaning |
-|--------|---------|
-| **Satisfied** | PRD requirement is fully met |
-| **In Progress** | Feature exists, not yet passing |
-| **Planned** | Feature in features.json, not started |
-| **Missing** | PRD requirement has no corresponding feature |
+| Status          | Meaning                                      |
+| --------------- | -------------------------------------------- |
+| **Satisfied**   | PRD requirement is fully met                 |
+| **In Progress** | Feature exists, not yet passing              |
+| **Planned**     | Feature in features.json, not started        |
+| **Missing**     | PRD requirement has no corresponding feature |
 
 ### Step 4: Plan Next Horizon
 
@@ -67,20 +67,20 @@ For MISSING items, create new features. Reference REAL code:
 
 ```json
 {
-  "id": "service-015",
-  "category": "service",
-  "description": "Implement X based on PRD requirement Y",
-  "depends_on": ["foundation-003"],
-  "parallel_safe": true,
-  "pr": null,
-  "passes": false,
-  "steps": [
-    "Import FooService from src/services/foo.rs (exists at line 23)",
-    "Follow BarService pattern (see src/services/bar.rs:45-80)",
-    "Add method X that does Y",
-    "Add unit test in src/services/foo_test.rs",
-    "Run validators - all must pass"
-  ]
+    "id": "service-015",
+    "category": "service",
+    "description": "Implement X based on PRD requirement Y",
+    "depends_on": ["foundation-003"],
+    "parallel_safe": true,
+    "pr": null,
+    "passes": false,
+    "steps": [
+        "Import FooService from src/services/foo.rs (exists at line 23)",
+        "Follow BarService pattern (see src/services/bar.rs:45-80)",
+        "Add method X that does Y",
+        "Add unit test in src/services/foo_test.rs",
+        "Run validators - all must pass"
+    ]
 }
 ```
 
@@ -142,62 +142,68 @@ Next phase will execute:
 
 Use these prefixes for feature IDs:
 
-| Prefix | Category | parallel_safe |
-|--------|----------|---------------|
-| `scaffold-` | Directory/file structure | true |
-| `db-` | Database migrations | **false** |
-| `foundation-` | Shared traits/types/utils | depends |
-| `model-` | Data models | true |
-| `service-` | Business logic | true |
-| `handler-` / `api-` | HTTP handlers | true |
-| `test-` | Test files | true |
-| `final-` | Cleanup tasks | **false** |
+| Prefix              | Category                  | parallel_safe |
+| ------------------- | ------------------------- | ------------- |
+| `scaffold-`         | Directory/file structure  | true          |
+| `db-`               | Database migrations       | **false**     |
+| `foundation-`       | Shared traits/types/utils | depends       |
+| `model-`            | Data models               | true          |
+| `service-`          | Business logic            | true          |
+| `handler-` / `api-` | HTTP handlers             | true          |
+| `test-`             | Test files                | true          |
+| `final-`            | Cleanup tasks             | **false**     |
 
 ## CRITICAL: When to Ask for User Input
 
 **STOP and ask the user immediately if:**
 
 1. **PRD is unclear or contradictory**
-   ```
-   STOP: The PRD mentions both "REST API" and "GraphQL" but doesn't specify which to prioritize. Which should I plan for?
-   ```
+
+    ```
+    STOP: The PRD mentions both "REST API" and "GraphQL" but doesn't specify which to prioritize. Which should I plan for?
+    ```
 
 2. **Technical decisions required**
-   ```
-   STOP: The PRD requires a message queue. Should I plan for Redis, RabbitMQ, or Kafka? This affects the entire architecture.
-   ```
+
+    ```
+    STOP: The PRD requires a message queue. Should I plan for Redis, RabbitMQ, or Kafka? This affects the entire architecture.
+    ```
 
 3. **Missing infrastructure**
-   ```
-   STOP: The PRD requires S3 storage but I don't see AWS credentials configured. Should I:
-   1. Plan features assuming S3 will be available later
-   2. Use local filesystem as a placeholder
-   3. Wait for AWS setup
-   ```
+
+    ```
+    STOP: The PRD requires S3 storage but I don't see AWS credentials configured. Should I:
+    1. Plan features assuming S3 will be available later
+    2. Use local filesystem as a placeholder
+    3. Wait for AWS setup
+    ```
 
 4. **Scope uncertainty**
-   ```
-   STOP: "User authentication" in the PRD could mean:
-   1. Simple email/password
-   2. OAuth social login
-   3. Enterprise SSO
-   Which scope should I plan for?
-   ```
+
+    ```
+    STOP: "User authentication" in the PRD could mean:
+    1. Simple email/password
+    2. OAuth social login
+    3. Enterprise SSO
+    Which scope should I plan for?
+    ```
 
 5. **Dependencies on external systems**
-   ```
-   STOP: Feature X requires calling the payment API, but I don't see test credentials. Should I:
-   1. Create a mock/stub and plan integration later
-   2. Wait for credentials
-   ```
+    ```
+    STOP: Feature X requires calling the payment API, but I don't see test credentials. Should I:
+    1. Create a mock/stub and plan integration later
+    2. Wait for credentials
+    ```
 
 **DO NOT:**
+
 - Guess at requirements or make assumptions
 - Plan features with placeholder dependencies
 - Skip unclear parts of the PRD
 - Assume the user wants the most complex option
 
 **Output format when asking:**
+
 ```
 ==================================================
 PLANNING PAUSED - USER INPUT REQUIRED
@@ -214,6 +220,7 @@ Recommendation: [your suggestion if you have one]
 ## Output
 
 After planning, the system will:
+
 1. Execute sequential features one at a time
 2. Execute parallel features with multiple agents
 3. Merge completed PRs

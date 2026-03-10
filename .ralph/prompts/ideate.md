@@ -20,38 +20,38 @@ Topic: ${RALPH_IDEATION_TOPIC:-"New feature or project (ask user for details)"}
 Start by understanding what the user wants to build:
 
 1. **The Vision**
-   - What problem are you solving?
-   - Who is this for?
-   - What does success look like?
+    - What problem are you solving?
+    - Who is this for?
+    - What does success look like?
 
 2. **The Context**
-   - Is this a new project or adding to existing code?
-   - What's the tech stack?
-   - What constraints exist?
+    - Is this a new project or adding to existing code?
+    - What's the tech stack?
+    - What constraints exist?
 
 3. **The Scope**
-   - What's the minimum viable version?
-   - What's the full vision?
-   - What's explicitly out of scope?
+    - What's the minimum viable version?
+    - What's the full vision?
+    - What's explicitly out of scope?
 
 ### Phase 2: Research (Explore Options)
 
 Based on the answers, help explore:
 
 1. **Similar Solutions**
-   - What existing tools/libraries solve similar problems?
-   - What patterns are commonly used?
-   - What can we learn from others?
+    - What existing tools/libraries solve similar problems?
+    - What patterns are commonly used?
+    - What can we learn from others?
 
 2. **Technical Approaches**
-   - What are the main architectural options?
-   - What are the tradeoffs?
-   - What fits this context best?
+    - What are the main architectural options?
+    - What are the tradeoffs?
+    - What fits this context best?
 
 3. **Potential Challenges**
-   - What could go wrong?
-   - What are the unknowns?
-   - What needs more research?
+    - What could go wrong?
+    - What are the unknowns?
+    - What needs more research?
 
 ### Phase 3: Synthesis (Organize Findings)
 
@@ -61,20 +61,25 @@ Compile insights into a structured summary:
 ## Ideation Summary
 
 ### The Idea
+
 [1-2 sentence description]
 
 ### Key Insights
+
 - [Insight 1]
 - [Insight 2]
 - [Insight 3]
 
 ### Recommended Approach
+
 [High-level technical approach]
 
 ### Open Questions
+
 - [Question that still needs answering]
 
 ### Next Steps
+
 1. [Concrete next action]
 2. [Another action]
 ```

@@ -26,11 +26,13 @@ cat .ralph/state/features.json | jq '[.features[] | .category] | group_by(.) | m
 ### Step 2: Check Task Granularity
 
 For each feature, verify:
+
 - [ ] Is it ONE logical change?
 - [ ] Can it complete in a single session?
 - [ ] Does it have 3-8 steps (not too few, not too many)?
 
 **Red flags:**
+
 - Tasks with "and" in description (should be split)
 - More than 8 steps
 - Tasks touching many unrelated files
@@ -38,12 +40,14 @@ For each feature, verify:
 ### Step 3: Check Step Quality
 
 For each feature's steps:
+
 - [ ] Are steps concrete and runnable?
 - [ ] Do steps include verification?
 - [ ] Are file paths explicit?
 - [ ] Do steps reference actual commands?
 
 **Good:**
+
 ```json
 "steps": [
   "Create src/services/user.rs with UserService struct",
@@ -55,6 +59,7 @@ For each feature's steps:
 ```
 
 **Bad:**
+
 ```json
 "steps": [
   "Implement user service",
@@ -65,6 +70,7 @@ For each feature's steps:
 ### Step 4: Check Dependencies
 
 Verify dependency graph:
+
 - [ ] No circular dependencies
 - [ ] Foundation features have no deps
 - [ ] DB features depend on scaffold
@@ -76,18 +82,19 @@ Verify dependency graph:
 
 Review `parallel_safe` assignments:
 
-| Category | Expected | Verify |
-|----------|----------|--------|
-| scaffold | true | Unless creating shared imports |
-| db | **false** | Always sequential |
-| foundation | varies | False if others import from it |
-| model | true | After schema generated |
-| service | true | Different files |
-| handler | true | Different endpoints |
-| test | true | Independent tests |
-| final | **false** | Always sequential |
+| Category   | Expected  | Verify                         |
+| ---------- | --------- | ------------------------------ |
+| scaffold   | true      | Unless creating shared imports |
+| db         | **false** | Always sequential              |
+| foundation | varies    | False if others import from it |
+| model      | true      | After schema generated         |
+| service    | true      | Different files                |
+| handler    | true      | Different endpoints            |
+| test       | true      | Independent tests              |
+| final      | **false** | Always sequential              |
 
 Look for:
+
 - Features marked parallel that share files
 - Features marked sequential that could be parallel
 - Missing dependencies that would cause race conditions
@@ -95,6 +102,7 @@ Look for:
 ### Step 6: Check Ordering
 
 Features should be ordered by:
+
 1. Scaffold (no deps)
 2. Database (depends on scaffold)
 3. Foundation (depends on db)
@@ -107,6 +115,7 @@ Features should be ordered by:
 ### Step 7: Estimate Execution
 
 Calculate:
+
 - Total features
 - Sequential features (critical path)
 - Parallel features
@@ -124,6 +133,7 @@ Speedup: [X]x
 ## Features.json Review
 
 ### Summary
+
 - Total features: X
 - Categories: scaffold (N), db (N), model (N), ...
 - Sequential: N features (critical path)
@@ -131,64 +141,76 @@ Speedup: [X]x
 - Estimated: ~Y sessions with 3 agents
 
 ### Strengths
+
 - [What's good about this features.json]
 - [Another positive]
 
 ### Issues Found
 
 #### Critical (must fix)
+
 - Feature X has circular dependency with Y
 - Feature Z has vague steps
 
 #### Warnings (should fix)
+
 - Feature A could be split into smaller pieces
 - Feature B is missing verification step
 
 #### Suggestions (nice to have)
+
 - Consider marking feature C as parallel_safe
 - Add explicit file paths in feature D steps
 
 ### Parallelization Analysis
+
 - Could be parallel but marked sequential: [list]
 - Marked parallel but shares files: [list]
 - Missing dependencies: [list]
 
 ### Recommended Changes
+
 1. [Specific change with feature ID]
 2. [Another specific change]
 3. [...]
 
 ### Execution Plan
-Phase 1 (sequential): scaffold-*, db-*
-Phase 2 (parallel x3): model-*, foundation-*
-Phase 3 (parallel x3): service-*
-Phase 4 (parallel x3): handler-*, test-*
-Phase 5 (sequential): final-*
+
+Phase 1 (sequential): scaffold-_, db-_
+Phase 2 (parallel x3): model-_, foundation-_
+Phase 3 (parallel x3): service-_
+Phase 4 (parallel x3): handler-_, test-_
+Phase 5 (sequential): final-_
 ```
 
 ## Common Issues
 
 ### 1. Too Many Dependencies
+
 If most features have long `depends_on` lists, the graph may be over-constrained.
 
 **Fix:** Only include direct dependencies, not transitive ones.
 
 ### 2. Too Few Dependencies
+
 If parallel features don't have proper deps, they may race.
 
 **Fix:** Add dependencies for any feature that imports from another.
 
 ### 3. Giant Features
+
 Features with 10+ steps are hard to complete reliably.
 
 **Fix:** Split into smaller features with explicit handoff.
 
 ### 4. Missing Verification
+
 Steps without verification can't be marked as passing.
 
 **Fix:** Add "Run X - verify Y" steps after each action.
 
 ### 5. Wrong Parallel Safety
+
 Features touching shared files marked as parallel.
 
 **Fix:** Mark as sequential OR split file ownership.
