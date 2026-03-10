@@ -215,6 +215,17 @@ impl BitcoinCheckpointsChainSynchronizer {
                 get_block_header_rpc(&confirmed_hash)
             )?;
 
+            // Verify the header's proof-of-work is valid (defense-in-depth
+            // against a compromised or spoofed bitcoind RPC).
+            if !header.target().is_met_by(header.block_hash()) {
+                return Err(
+                    BitcoinCheckpointError::InvalidProofOfWork {
+                        block_hash: header.block_hash(),
+                        height,
+                    },
+                );
+            }
+
             // Create, report and push the checkpoint
             let bitcoin_checkpoint =
                 BitcoinCheckpoint::new(header, height as u32);
@@ -466,7 +477,7 @@ mod tests {
     use super::*;
     use bitcoin::{
         block::Header as BitcoinHeader, hashes::Hash,
-        BlockHash as BitcoinBlockHash, TxMerkleNode,
+        BlockHash as BitcoinBlockHash, CompactTarget, TxMerkleNode,
     };
     use bitcoincore_rpc::json::GetBlockResult;
     use botanix_btc_wallet::{bitcoind::EstimateSmartFeeResult, error::BitcoindError};
@@ -643,6 +654,58 @@ mod tests {
                 result,
                 Err(BitcoinCheckpointError::StaleBlockAdded { .. })
             ));
+        }
+
+        #[tokio::test]
+        async fn test_invalid_pow_rejected() {
+            let chain = Arc::new(
+                BitcoinCheckpointsChain::try_new(6, 4, 2)
+                    .expect("create valid chain"),
+            );
+
+            let mut mock = MockRpc::new();
+            mock.expect_get_block_count_rpc().returning(|| Ok(10));
+
+            // Create a header with impossibly hard target
+            // (target = 0, no hash can satisfy it)
+            let bad_header = BitcoinHeader {
+                version: Default::default(),
+                prev_blockhash: BitcoinBlockHash::all_zeros(),
+                merkle_root: TxMerkleNode::all_zeros(),
+                time: Default::default(),
+                bits: CompactTarget::from_consensus(0),
+                nonce: Default::default(),
+            };
+
+            let h = BitcoinBlockHash::from_byte_array([1u8; 32]);
+            mock.expect_get_block_hash_rpc()
+                .with(eq(7u64))
+                .returning(move |_| Ok(h));
+            mock.expect_get_block_header_rpc()
+                .with(eq(h))
+                .returning(move |_| Ok(bad_header));
+
+            let mut syncer = BitcoinCheckpointsChainSynchronizer::new(
+                Arc::clone(&chain),
+                Arc::new(FallbackBitcoindClient::new(
+                    vec![BitcoindClientWrapper::Provider1(
+                        Arc::new(BitcoindClient::new_boxed(
+                            Box::new(mock),
+                        )),
+                    )],
+                    ClientSelection::Fallback,
+                )),
+            );
+
+            let result = syncer.sync_new_blocks().await;
+
+            assert!(matches!(
+                result,
+                Err(BitcoinCheckpointError::InvalidProofOfWork {
+                    ..
+                })
+            ));
+            assert_eq!(chain.len(), 0);
         }
     }
 
@@ -1088,14 +1151,15 @@ mod tests {
         }
     }
 
-    /// Small helper to make a fake header
+    /// Small helper to make a fake header with a permissive PoW target
+    /// (regtest max target) so any block hash passes validation.
     fn create_header(prev_hash: BitcoinBlockHash) -> BitcoinHeader {
         BitcoinHeader {
             version: Default::default(),
             prev_blockhash: prev_hash,
             merkle_root: TxMerkleNode::all_zeros(),
             time: Default::default(),
-            bits: Default::default(),
+            bits: CompactTarget::from_consensus(0x207f_ffff),
             nonce: Default::default(),
         }
     }

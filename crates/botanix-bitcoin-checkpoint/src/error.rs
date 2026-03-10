@@ -44,6 +44,18 @@ pub enum BitcoinCheckpointError {
         strong_confirmation_depth: usize,
     },
 
+    /// Block header proof-of-work is invalid (block hash does not meet
+    /// the difficulty target declared in the header).
+    #[error(
+        "Invalid proof-of-work for block {block_hash} at height {height}"
+    )]
+    InvalidProofOfWork {
+        /// The block hash that failed PoW validation
+        block_hash: BitcoinBlockHash,
+        /// The height of the block
+        height: u64,
+    },
+
     /// Chain configuration parameters would cause numeric overflow.
     #[error("Chain configuration values are too big: strong_confirmation_depth={strong_confirmation_depth}, historical_checkpoints_count={historical_checkpoints_count}, weak_checkpoints_count={weak_checkpoints_count}")]
     ChainParamsTooLarge {
