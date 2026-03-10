@@ -32,7 +32,9 @@ pub enum Error {
         err: Box<dyn std::error::Error + Send + Sync>,
     },
     /// An IO error occurred
-    #[error("an error occurred interacting with the file system at {path}: {error}")]
+    #[error(
+        "an error occurred interacting with the file system at {path}: {error}"
+    )]
     Io {
         /// The path to the file or directory
         path: PathBuf,
@@ -89,13 +91,21 @@ pub struct CaseResult {
 
 impl CaseResult {
     /// Create a new test result.
-    pub fn new(path: &Path, case: &impl Case, result: Result<(), Error>) -> Self {
+    pub fn new(
+        path: &Path,
+        case: &impl Case,
+        result: Result<(), Error>,
+    ) -> Self {
         Self { desc: case.description(), path: path.into(), result }
     }
 }
 
 /// Assert that all the given tests passed and print the results to stdout.
-pub(crate) fn assert_tests_pass(suite_name: &str, path: &Path, results: &[CaseResult]) {
+pub(crate) fn assert_tests_pass(
+    suite_name: &str,
+    path: &Path,
+    results: &[CaseResult],
+) {
     let (passed, failed, skipped) = categorize_results(results);
 
     print_results(suite_name, path, &passed, &failed, &skipped);
@@ -145,6 +155,11 @@ pub(crate) fn print_results(
 
     for case in failed {
         let error = case.result.as_ref().unwrap_err();
-        println!("[!] Case {} failed (description: {}): {}", case.path.display(), case.desc, error);
+        println!(
+            "[!] Case {} failed (description: {}): {}",
+            case.path.display(),
+            case.desc,
+            error
+        );
     }
 }

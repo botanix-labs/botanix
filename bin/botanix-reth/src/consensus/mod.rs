@@ -118,4 +118,3 @@ pub(crate) struct StorageInner {
     /// Suggests if we are currently syncing blocks
     pub(crate) is_block_syncing: bool,
 }
-

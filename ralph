@@ -1,0 +1,483 @@
+#!/bin/bash
+# Ralph CLI - Parallel Agent Task Runner
+# Usage: ralph <command> [options]
+
+set -e
+
+RALPH_VERSION="1.0.0"
+RALPH_DIR=".ralph"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Global options (parsed before command)
+RALPH_MODEL=""
+RALPH_PROVIDER=""
+
+print_help() {
+  cat << EOF
+Ralph v$RALPH_VERSION - Parallel Agent Task Runner
+
+Usage: ralph [global options] <command> [command options]
+
+Global Options:
+  --model <model>       Specify AI model (e.g., claude-opus-4, gpt-4o, codex)
+  --provider <provider> Specify provider (claude, openai, droid, custom)
+
+Commands:
+  init [name]           Initialize Ralph in current directory
+  ideate [topic]        Start an ideation session for a new feature/project
+  prd                   Create/refine PRD interactively with AI assistance
+  plan                  Generate features from PRD
+  review                Review and refine features.json
+  status                Show project status and progress
+  run [n]               Run sequential loop (n = max iterations)
+  parallel [n]          Run parallel agents (n = agents, default 3)
+  auto [n]              Run autonomous planning loop (n = phases)
+  retry [id]            Retry a specific feature
+  branch                Initialize/switch to feature branch
+  finalize              Merge feature branch to main
+  reset [id]            Reset a feature to pending
+  clean                 Clean logs and reset state
+  help                  Show this help message
+
+Examples:
+  ralph init my-project                    # Initialize Ralph
+  ralph --model claude-opus-4 ideate       # Ideation with specific model
+  ralph --provider droid prd               # Create PRD using Droid
+  ralph plan                               # Generate features from PRD
+  ralph --model gpt-4o plan                # Plan with GPT-4o
+  ralph parallel 3                         # Run with 3 parallel agents
+
+Workflow:
+  1. ralph init my-project     # Setup Ralph
+  2. ralph ideate              # Brainstorm and research (optional)
+  3. ralph prd                 # Create/refine PRD
+  4. ralph plan                # Generate features
+  5. ralph review              # Review features (optional)
+  6. ralph branch              # Create feature branch
+  7. ralph run / parallel      # Execute features
+  8. ralph finalize            # Merge to main
+
+Documentation: https://github.com/sqds/ralph
+EOF
+}
+
+# Run AI with optional model/provider override
+run_ai() {
+  local AGENT_TYPE="$1"
+  local PROMPT_FILE="$2"
+  shift 2
+
+  # Build environment overrides
+  local ENV_VARS=""
+  if [[ -n "$RALPH_MODEL" ]]; then
+    ENV_VARS="RALPH_MODEL_OVERRIDE=$RALPH_MODEL"
+  fi
+  if [[ -n "$RALPH_PROVIDER" ]]; then
+    ENV_VARS="$ENV_VARS RALPH_PROVIDER_OVERRIDE=$RALPH_PROVIDER"
+  fi
+
+  if [[ -n "$ENV_VARS" ]]; then
+    env $ENV_VARS .ralph/scripts/run-agent.sh "$AGENT_TYPE" "$PROMPT_FILE" "$@"
+  else
+    .ralph/scripts/run-agent.sh "$AGENT_TYPE" "$PROMPT_FILE" "$@"
+  fi
+}
+
+cmd_init() {
+  local PROJECT_NAME="${1:-$(basename $(pwd))}"
+
+  if [[ -d "$RALPH_DIR" ]]; then
+    echo -e "${YELLOW}Ralph already initialized in this directory${NC}"
+    read -p "Reinitialize? This will overwrite config. (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      exit 0
+    fi
+  fi
+
+  echo -e "${BLUE}Initializing Ralph for: $PROJECT_NAME${NC}"
+  echo ""
+
+  # Copy template files
+  if [[ -d "$SCRIPT_DIR/.ralph" ]]; then
+    # Running from ralph repo
+    cp -r "$SCRIPT_DIR/.ralph" .
+    [[ -d "$SCRIPT_DIR/.factory" ]] && cp -r "$SCRIPT_DIR/.factory" .
+  else
+    echo -e "${RED}Error: Ralph template not found${NC}"
+    echo "Make sure you're running from the Ralph directory or it's in your PATH"
+    exit 1
+  fi
+
+  # Update config with project name
+  if command -v yq >/dev/null; then
+    yq -i ".project.name = \"$PROJECT_NAME\"" .ralph/config.yaml
+  else
+    sed -i.bak "s/name: \"my-project\"/name: \"$PROJECT_NAME\"/" .ralph/config.yaml
+    rm -f .ralph/config.yaml.bak
+  fi
+
+  # Detect language
+  if [[ -f "Cargo.toml" ]]; then
+    LANG="rust"
+  elif [[ -f "package.json" ]]; then
+    LANG="typescript"
+  elif [[ -f "pyproject.toml" ]] || [[ -f "setup.py" ]]; then
+    LANG="python"
+  elif [[ -f "go.mod" ]]; then
+    LANG="go"
+  else
+    LANG="rust"
+  fi
+
+  if command -v yq >/dev/null; then
+    yq -i ".project.language = \"$LANG\"" .ralph/config.yaml
+  fi
+
+  echo -e "${GREEN}Ralph initialized!${NC}"
+  echo ""
+  echo "Project: $PROJECT_NAME"
+  echo "Language: $LANG"
+  echo ""
+  echo "Next steps:"
+  echo "  1. Edit .ralph/config.yaml with your settings"
+  echo "  2. Create PRD: ralph plan (or use /ralph-prd)"
+  echo "  3. Initialize branch: ralph branch"
+  echo "  4. Run Ralph: ralph run"
+}
+
+cmd_status() {
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    echo "Run 'ralph init' to initialize"
+    exit 1
+  fi
+  .ralph/scripts/status.sh
+}
+
+cmd_ideate() {
+  local TOPIC="$1"
+
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+
+  echo -e "${CYAN}=== Ralph Ideation Session ===${NC}"
+  if [[ -n "$RALPH_MODEL" ]]; then
+    echo -e "Model: ${BLUE}$RALPH_MODEL${NC}"
+  fi
+  if [[ -n "$RALPH_PROVIDER" ]]; then
+    echo -e "Provider: ${BLUE}$RALPH_PROVIDER${NC}"
+  fi
+  echo ""
+
+  # If topic provided, include it in the session
+  if [[ -n "$TOPIC" ]]; then
+    echo -e "Topic: ${GREEN}$TOPIC${NC}"
+    echo ""
+    export RALPH_IDEATION_TOPIC="$TOPIC"
+  fi
+
+  echo "Starting ideation session..."
+  echo "This will help you research, brainstorm, and refine your idea."
+  echo "At the end, you'll have a clear direction for your PRD."
+  echo ""
+
+  run_ai ideate .ralph/prompts/ideate.md
+
+  echo ""
+  echo -e "${GREEN}Ideation complete!${NC}"
+  echo "Next: Run 'ralph prd' to create your PRD"
+}
+
+cmd_prd() {
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+
+  echo -e "${CYAN}=== Ralph PRD Creator ===${NC}"
+  if [[ -n "$RALPH_MODEL" ]]; then
+    echo -e "Model: ${BLUE}$RALPH_MODEL${NC}"
+  fi
+  echo ""
+
+  if [[ -f ".ralph/PRD.md" ]]; then
+    # Check if PRD has been modified from template
+    if grep -q "^\[2-3 sentence description" .ralph/PRD.md 2>/dev/null; then
+      echo "PRD template found. Starting interactive creation..."
+    else
+      echo "Existing PRD found. Refining..."
+    fi
+  else
+    echo "Creating new PRD..."
+  fi
+  echo ""
+
+  run_ai prd .ralph/skills/create-prd.md
+
+  echo ""
+  echo -e "${GREEN}PRD saved to .ralph/PRD.md${NC}"
+  echo ""
+
+  # Ask if user wants to run plan
+  read -p "Generate features from PRD now? (Y/n) " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    echo ""
+    echo -e "${CYAN}Starting feature planning in new session...${NC}"
+    echo ""
+    # Run plan in a separate harness context
+    run_ai planner .ralph/skills/prd-to-features.md
+    echo ""
+    echo -e "${GREEN}Features saved to .ralph/state/features.json${NC}"
+    echo "Run 'ralph review' to check them, or 'ralph branch' to start"
+  else
+    echo "Run 'ralph plan' when ready to generate features"
+  fi
+}
+
+cmd_plan() {
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+
+  echo -e "${CYAN}=== Ralph Feature Planning ===${NC}"
+  if [[ -n "$RALPH_MODEL" ]]; then
+    echo -e "Model: ${BLUE}$RALPH_MODEL${NC}"
+  fi
+  echo ""
+
+  if [[ ! -f ".ralph/PRD.md" ]]; then
+    echo -e "${YELLOW}No PRD found. Run 'ralph prd' first.${NC}"
+    exit 1
+  fi
+
+  echo "Analyzing PRD and generating features..."
+  echo ""
+
+  run_ai planner .ralph/skills/prd-to-features.md
+
+  echo ""
+  echo -e "${GREEN}Features saved to .ralph/state/features.json${NC}"
+  echo "Run 'ralph review' to check them, or 'ralph branch' to start"
+}
+
+cmd_review() {
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+
+  if [[ ! -f ".ralph/state/features.json" ]]; then
+    echo -e "${YELLOW}No features.json found. Run 'ralph plan' first.${NC}"
+    exit 1
+  fi
+
+  echo -e "${CYAN}=== Ralph Feature Review ===${NC}"
+  if [[ -n "$RALPH_MODEL" ]]; then
+    echo -e "Model: ${BLUE}$RALPH_MODEL${NC}"
+  fi
+  echo ""
+
+  echo "Reviewing features for quality, parallelization, and completeness..."
+  echo ""
+
+  run_ai reviewer .ralph/skills/review-features.md
+}
+
+cmd_run() {
+  local MAX="${1:-50}"
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+  .ralph/scripts/loop.sh "$MAX"
+}
+
+cmd_parallel() {
+  local AGENTS="${1:-3}"
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+  .ralph/scripts/parallel-loop.sh "$AGENTS"
+}
+
+cmd_auto() {
+  local PHASES="${1:-20}"
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+  .ralph/scripts/planning-loop.sh .ralph/PRD.md "$PHASES"
+}
+
+cmd_retry() {
+  local FEATURE="$1"
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+  .ralph/scripts/retry.sh "$FEATURE"
+}
+
+cmd_branch() {
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+  .ralph/scripts/init-feature-branch.sh
+}
+
+cmd_finalize() {
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+  .ralph/scripts/finalize.sh
+}
+
+cmd_reset() {
+  local FEATURE="$1"
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+
+  if [[ -z "$FEATURE" ]]; then
+    echo "Usage: ralph reset <feature-id>"
+    exit 1
+  fi
+
+  jq "(.features[] | select(.id==\"$FEATURE\")).passes = false | (.features[] | select(.id==\"$FEATURE\")).pr = null" \
+    .ralph/state/features.json > /tmp/features.json && \
+    mv /tmp/features.json .ralph/state/features.json
+
+  echo -e "${GREEN}Reset $FEATURE to pending${NC}"
+}
+
+cmd_clean() {
+  if [[ ! -f "$RALPH_DIR/config.yaml" ]]; then
+    echo -e "${RED}Not a Ralph project${NC}"
+    exit 1
+  fi
+
+  echo -e "${YELLOW}This will:${NC}"
+  echo "  - Delete all log files"
+  echo "  - Reset progress.txt"
+  echo "  - Optionally reset features.json"
+  echo ""
+  read -p "Continue? (y/N) " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    exit 0
+  fi
+
+  rm -f .ralph/logs/*.log
+  echo "Logs cleaned"
+
+  read -p "Also reset features.json? (y/N) " -n 1 -r
+  echo
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    jq '.features[].passes = false | .features[].pr = null' \
+      .ralph/state/features.json > /tmp/features.json && \
+      mv /tmp/features.json .ralph/state/features.json
+    echo "Features reset"
+  fi
+
+  PROJECT=$(yq '.project.name // "Unknown"' .ralph/config.yaml)
+  cat > .ralph/state/progress.txt << EOF
+=== Ralph Progress Log ===
+Project: $PROJECT
+Reset: $(date -Iseconds)
+
+--- Sessions Below ---
+EOF
+  echo "Progress reset"
+
+  echo -e "${GREEN}Clean complete${NC}"
+}
+
+# Parse global options
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model)
+      RALPH_MODEL="$2"
+      shift 2
+      ;;
+    --provider)
+      RALPH_PROVIDER="$2"
+      shift 2
+      ;;
+    --model=*)
+      RALPH_MODEL="${1#*=}"
+      shift
+      ;;
+    --provider=*)
+      RALPH_PROVIDER="${1#*=}"
+      shift
+      ;;
+    -*)
+      # Check if it's a help/version flag
+      if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+        print_help
+        exit 0
+      elif [[ "$1" == "-v" || "$1" == "--version" ]]; then
+        echo "Ralph v$RALPH_VERSION"
+        exit 0
+      else
+        echo -e "${RED}Unknown option: $1${NC}"
+        print_help
+        exit 1
+      fi
+      ;;
+    *)
+      # Not an option, must be command
+      break
+      ;;
+  esac
+done
+
+# Get command
+COMMAND="${1:-help}"
+shift 2>/dev/null || true
+
+# Export for subprocesses
+export RALPH_MODEL
+export RALPH_PROVIDER
+
+case "$COMMAND" in
+  init)     cmd_init "$@" ;;
+  ideate)   cmd_ideate "$@" ;;
+  prd)      cmd_prd ;;
+  plan)     cmd_plan ;;
+  review)   cmd_review ;;
+  status)   cmd_status ;;
+  run)      cmd_run "$@" ;;
+  parallel) cmd_parallel "$@" ;;
+  auto)     cmd_auto "$@" ;;
+  retry)    cmd_retry "$@" ;;
+  branch)   cmd_branch ;;
+  finalize) cmd_finalize ;;
+  reset)    cmd_reset "$@" ;;
+  clean)    cmd_clean ;;
+  help)     print_help ;;
+  version)  echo "Ralph v$RALPH_VERSION" ;;
+  *)
+    echo -e "${RED}Unknown command: $COMMAND${NC}"
+    echo ""
+    print_help
+    exit 1
+    ;;
+esac
