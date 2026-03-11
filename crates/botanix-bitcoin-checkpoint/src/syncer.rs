@@ -1024,7 +1024,8 @@ mod tests {
                 -> Result<BitcoinHeader, botanix_btc_wallet::error::BitcoindAdapterError>;
 
             async fn is_synced(&self) -> Result<bool, botanix_btc_wallet::error::BitcoindAdapterError>;
-            async fn wait_until_synced(&self);
+            async fn wait_until_synced(&self)
+                -> Result<(), botanix_btc_wallet::error::BitcoindAdapterError>;
 
             fn get_best_block_hash_rpc(
                 &self,
@@ -1058,8 +1059,18 @@ mod tests {
             })
         }
 
-        async fn wait_until_synced(&self) {
-            Self::wait_until_synced(self).await
+        async fn wait_until_synced(
+            &self,
+        ) -> Result<(), BitcoindError> {
+            Self::wait_until_synced(self).await.map_err(|e| {
+                BitcoindError::BlockchainInfoFailed(
+                    bitcoincore_rpc::Error::JsonRpc(
+                        bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                            format!("{:?}", e).into(),
+                        ),
+                    ),
+                )
+            })
         }
 
         fn get_best_block_hash_rpc(

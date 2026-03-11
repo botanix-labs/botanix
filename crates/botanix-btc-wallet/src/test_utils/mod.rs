@@ -34,7 +34,9 @@ impl BitcoindRpc for MockBitcoind {
         Ok(true)
     }
 
-    async fn wait_until_synced(&self) {}
+    async fn wait_until_synced(&self) -> Result<(), BitcoindError> {
+        Ok(())
+    }
 
     fn get_best_block_hash_rpc(
         &self,

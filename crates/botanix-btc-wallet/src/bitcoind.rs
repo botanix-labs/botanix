@@ -49,7 +49,7 @@ impl BitcoindConfig {
 #[async_trait]
 pub trait BitcoindRpc: Send + Sync {
     async fn is_synced(&self) -> Result<bool, BitcoindError>;
-    async fn wait_until_synced(&self);
+    async fn wait_until_synced(&self) -> Result<(), BitcoindError>;
 
     fn get_best_block_hash_rpc(
         &self,
@@ -88,17 +88,20 @@ impl BitcoindRpc for Client {
             Ok(res) => Ok(!res.initialblockdownload),
             Err(e) => {
                 tracing::error!("getblockchaininfo failed: {e:?}");
-                Ok(false)
+                return Err(BitcoindError::BlockchainInfoFailed(e));
             }
         }
     }
 
-    async fn wait_until_synced(&self) {
+    async fn wait_until_synced(&self) -> Result<(), BitcoindError> {
         use std::time::Duration;
         loop {
             match self.is_synced().await {
-                Ok(true) => break,
-                _ => tokio::time::sleep(Duration::from_secs(5)).await,
+                Ok(true) => return Ok(()),
+                Ok(false) => {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+                Err(e) => return Err(e),
             }
         }
     }
