@@ -2322,6 +2322,7 @@ where
         &self,
         request: RequestFinalizeBlock,
     ) -> ResponseFinalizeBlock {
+        let execution_start_time = std::time::Instant::now();
         trace!("request={:?}", RequestFinalizeBlockTruncatedDebug(&request));
 
         if request.txs.is_empty() {
@@ -2654,7 +2655,7 @@ where
             block_with_context.sealed_block_with_peg.block().hash();
         self.metrics.commet_finalized_blocks.increment(1);
 
-        let execution_time = std::time::Instant::now().elapsed().as_secs_f32();
+        let execution_time = execution_start_time.elapsed().as_secs_f32();
 
         let eth_block_hash_hex = hex::encode(block_hash);
 
