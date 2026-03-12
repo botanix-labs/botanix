@@ -1050,8 +1050,7 @@ impl Suite for ConsensusIntegrationTestSuite {
 
             // Pre-save all multisigs except the last one, which will undergo DKG
             let presave_multisigs = if create_test_config.num_multisigs > 1 {
-                multisig_memberships
-                    [..multisig_memberships.len() - 1]
+                multisig_memberships[..multisig_memberships.len() - 1]
                     .iter()
                     .map(|(id, _)| *id)
                     .collect::<Vec<_>>()
