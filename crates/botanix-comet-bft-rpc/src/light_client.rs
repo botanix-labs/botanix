@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use super::{Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory};
+use eyre::Context;
 use tendermint_light_client::{
     builder::LightClientBuilder,
     instance::Instance,
@@ -36,17 +37,17 @@ impl LightCBFTClientBuilder {
     }
 
     /// Build and verify the light client starting at block height 1
-    pub async fn build_and_verify(&self) -> Instance {
+    pub async fn build_and_verify(&self) -> eyre::Result<Instance> {
         let light_store = Box::new(MemoryStore::new());
 
         let rpc_client = self
             .rpc_client_factory
             .build_and_connect()
-            .expect("should connect to RPC client");
+            .context("Failed to connect to RPC client")?;
         let node_id = rpc_client
             .status()
             .await
-            .expect("Failed to get node info")
+            .context("Failed to get node info")?
             .node_info
             .id;
 
@@ -54,7 +55,7 @@ impl LightCBFTClientBuilder {
         let block_hash = rpc_client
             .block(trusted_block_height)
             .await
-            .expect("to have first block")
+            .context("to have first block")?
             .block
             .header
             .hash();
@@ -77,10 +78,13 @@ impl LightCBFTClientBuilder {
             Ok(light_client) => light_client,
             Err(e) => {
                 tracing::error!("Failed to create light client: {:?}", e);
-                panic!("Failed to create light client: {}", e);
+                return Err(eyre::eyre!(
+                    "Failed to create light client: {}",
+                    e
+                ));
             }
         };
 
-        light_client.build()
+        Ok(light_client.build())
     }
 }
