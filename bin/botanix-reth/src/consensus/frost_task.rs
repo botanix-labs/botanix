@@ -482,21 +482,28 @@ where
 
         let mut peer_messages_rx = match self
             .frost_handle
-            .send_command(FrostCommand::GetPeerMessagesStream(peer_messages_tx))
-        {
+            .send_command(FrostCommand::GetPeerMessagesStream(
+                peer_messages_tx,
+            )) {
             Ok(_) => {
                 // only await on the receiver if the send was successful
                 match peer_messages_rx.await {
                     Ok(rx) => rx,
                     Err(e) => {
-                        error!(target: "consensus::authority::frost_task::start_task", "Error getting receiver handle = {:?}", e);
-                        panic!("Error getting receiver handle. Error - {e:?}");
+                        error!(
+                            target: "consensus::authority::frost_task::start_task",
+                            "Error getting receiver handle = {:?}", e
+                        );
+                        return;
                     }
                 }
             }
             Err(e) => {
-                error!(target: "consensus::authority::frost_task::start_task", "Failed to send GetPeerMessagesStream frost command {}", e);
-                panic!("Failed to send GetPeerMessagesStream frost command - {e:?}");
+                error!(
+                    target: "consensus::authority::frost_task::start_task",
+                    "Failed to send GetPeerMessagesStream frost command: {}", e
+                );
+                return;
             }
         };
 
