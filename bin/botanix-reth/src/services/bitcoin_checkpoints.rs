@@ -40,8 +40,14 @@ pub async fn setup_bitcoin_checkpoints(
     )
     .await
     {
-        std::result::Result::Ok(_) => {
+        std::result::Result::Ok(std::result::Result::Ok(())) => {
             tracing::info!(target: "reth::cli", "Bitcoind client synced");
+        }
+        std::result::Result::Ok(Err(e)) => {
+            tracing::error!(target: "reth::cli", "Bitcoind sync check failed: {e:?}");
+            return Err(eyre::eyre!(
+                "Bitcoind client sync check failed: {e:?}"
+            ));
         }
         Err(_) => {
             tracing::error!(target: "reth::cli", "Bitcoind client could not achieve synced status within 60 secs. Exiting...");

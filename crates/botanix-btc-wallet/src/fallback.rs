@@ -190,15 +190,19 @@ impl FallbackBitcoindClient {
     pub async fn wait_until_synced(&self) -> BitcoindAdapterResult<()> {
         self.execute_with_fallback_async(|client| async move {
             match client {
-                BitcoindClientWrapper::Provider1(rpc) => {
-                    Ok(rpc.get_rpc_client_dyn().wait_until_synced().await)
-                }
-                BitcoindClientWrapper::Provider2(rpc) => {
-                    Ok(rpc.get_rpc_client_dyn().wait_until_synced().await)
-                }
+                BitcoindClientWrapper::Provider1(rpc) => rpc
+                    .get_rpc_client_dyn()
+                    .wait_until_synced()
+                    .await
+                    .map_err(BitcoindAdapterError::BitcoindRpc),
+                BitcoindClientWrapper::Provider2(rpc) => rpc
+                    .get_rpc_client_dyn()
+                    .wait_until_synced()
+                    .await
+                    .map_err(BitcoindAdapterError::BitcoindRpc),
                 #[cfg(test)]
                 BitcoindClientWrapper::Mock(mock) => {
-                    Ok(mock.wait_until_synced().await)
+                    mock.wait_until_synced().await
                 }
             }
         })
@@ -365,7 +369,9 @@ mod tests {
     #[async_trait]
     pub trait MockableRpcClient: Send + Sync {
         async fn is_synced(&self) -> BitcoindAdapterResult<bool>;
-        async fn wait_until_synced(&self);
+        async fn wait_until_synced(
+            &self,
+        ) -> BitcoindAdapterResult<()>;
 
         fn get_best_block_hash_rpc(
             &self,
@@ -398,7 +404,7 @@ mod tests {
         #[async_trait]
         impl MockableRpcClient for RpcClient {
             async fn is_synced(&self) -> BitcoindAdapterResult<bool>;
-            async fn wait_until_synced(&self);
+            async fn wait_until_synced(&self) -> BitcoindAdapterResult<()>;
             fn get_best_block_hash_rpc(&self) -> BitcoindAdapterResult<bitcoin::BlockHash>;
             fn get_block_header_rpc(&self, h: &bitcoin::BlockHash,) -> BitcoindAdapterResult<bitcoin::blockdata::block::Header>;
             fn get_block_hash_rpc(&self, height: u64) -> BitcoindAdapterResult<bitcoin::BlockHash>;
@@ -424,8 +430,21 @@ mod tests {
             })
         }
 
-        async fn wait_until_synced(&self) {
-            MockableRpcClient::wait_until_synced(self).await
+        async fn wait_until_synced(
+            &self,
+        ) -> Result<(), BitcoindError> {
+            MockableRpcClient::wait_until_synced(self)
+                .await
+                .map_err(|e| match e {
+                    BitcoindAdapterError::BitcoindRpc(err) => err,
+                    _ => BitcoindError::BlockchainInfoFailed(
+                        bitcoincore_rpc::Error::JsonRpc(
+                            bitcoincore_rpc::jsonrpc::error::Error::Transport(
+                                "Mock error".to_string().into(),
+                            ),
+                        ),
+                    ),
+                })
         }
 
         fn get_best_block_hash_rpc(
