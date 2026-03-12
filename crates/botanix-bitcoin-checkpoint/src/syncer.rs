@@ -281,75 +281,102 @@ impl BitcoinCheckpointsChainSynchronizer {
     /// - Uses interior mutability to safely share state between async tasks that may signal or run
     ///   synchronizations.
     /// - Synces at startup to ensure no missed blocks prior to beginning event stream consumption.
-    pub async fn sync(self, bitcoin_block_hash_stream: BitcoinHashBlockStream) {
-        // We need interior mutability so that we can move `self` into async tasks
+    pub async fn sync(
+        self,
+        bitcoin_block_hash_stream: BitcoinHashBlockStream,
+    ) {
+        // We need interior mutability so that we can move `self`
+        // into async tasks
         let syncer_lock = Arc::new(Mutex::new(self));
 
-        // Create a channel to signal when we need to sync checkpoints
-        // We use a bounded channel for throttling: if sync is already in progress,
-        // we don't trigger sync until the previous one is processed.
+        // Bounded channel for throttling: if sync is already in
+        // progress, extra triggers are coalesced.
         let (tx, mut rx) = mpsc::channel::<()>(1);
-
-        // Spawn a task to consume the ZMQ stream and signal sync needs
-        tokio::spawn(handle_hash_block_stream_messages(
-            bitcoin_block_hash_stream,
-            tx.clone(),
-        ));
 
         // Sync at the start to ensure we have the latest checkpoints
         tracing::debug!("Syncing bitcoin checkpoints at the start");
-        trigger_checkpoints_sync(tx.clone());
+        trigger_checkpoints_sync(&tx);
 
-        while rx.recv().await.is_some() {
-            let syncer_lock_clone = Arc::clone(&syncer_lock);
+        // Run the ZMQ stream handler concurrently with the sync
+        // loop. If either side exits the whole task terminates,
+        // which is visible to spawn_critical.
+        let zmq_handler = handle_hash_block_stream_messages(
+            bitcoin_block_hash_stream,
+            tx.clone(),
+        );
+        tokio::pin!(zmq_handler);
 
-            let result = {
-                let mut syncer = syncer_lock_clone.lock().await;
-                syncer.sync_new_blocks().await
-            };
-
-            match handle_new_blocks_sync_result(
-                result,
-                Arc::clone(&syncer_lock),
-            )
-            .await
-            {
-                SyncLoopControl::WaitForNewBlock => {
-                    tracing::trace!(
-                        "Waiting for new block to sync checkpoints"
+        loop {
+            tokio::select! {
+                _ = &mut zmq_handler => {
+                    tracing::error!(
+                        "Bitcoin block hash stream handler exited, \
+                         stopping checkpoint sync"
                     );
+                    break;
                 }
-                SyncLoopControl::Sync => {
-                    tracing::trace!(
-                        "Immediately syncing checkpoints requested"
-                    );
+                msg = rx.recv() => {
+                    if msg.is_none() {
+                        break;
+                    }
 
-                    trigger_checkpoints_sync(tx.clone())
+                    let result = {
+                        let mut syncer =
+                            syncer_lock.lock().await;
+                        syncer.sync_new_blocks().await
+                    };
+
+                    match handle_new_blocks_sync_result(
+                        result,
+                        Arc::clone(&syncer_lock),
+                    )
+                    .await
+                    {
+                        SyncLoopControl::WaitForNewBlock => {
+                            tracing::trace!(
+                                "Waiting for new block to sync \
+                                 checkpoints"
+                            );
+                        }
+                        SyncLoopControl::Sync => {
+                            tracing::trace!(
+                                "Immediately syncing checkpoints \
+                                 requested"
+                            );
+                            trigger_checkpoints_sync(&tx);
+                        }
+                    };
+
+                    tokio::time::sleep(SAFE_DELAY).await;
                 }
-            };
-
-            tokio::time::sleep(SAFE_DELAY).await;
+            }
         }
     }
 }
 
-fn trigger_checkpoints_sync(tx: mpsc::Sender<()>) {
+/// Signals the sync loop that new checkpoints may be available.
+///
+/// Returns `false` if the channel is closed (receiver dropped),
+/// meaning the sync loop has exited and the caller should stop.
+fn trigger_checkpoints_sync(tx: &mpsc::Sender<()>) -> bool {
     match tx.try_send(()) {
         Ok(_) => {
-            // If we successfully sent a message, we can proceed to sync
             tracing::trace!("Trigger checkpoint sync task");
+            true
         }
         Err(mpsc::error::TrySendError::Full(_)) => {
-            // If the channel is full, we skip this message
             tracing::trace!(
                 "Sync task is busy, skipping new block hash message"
             );
+            true
         }
         Err(mpsc::error::TrySendError::Closed(_)) => {
-            // If the channel is closed, we stop processing messages
-            panic!("Checkpoints sync task channel is closed, stopping processing bitcoin block hash messages");
+            tracing::error!(
+                "Checkpoints sync task channel is closed"
+            );
+            false
         }
-    };
+    }
 }
 
 async fn handle_hash_block_stream_messages<S, E>(
@@ -371,7 +398,9 @@ async fn handle_hash_block_stream_messages<S, E>(
                         "Received new bitcoin block hash message"
                     );
 
-                    trigger_checkpoints_sync(tx.clone());
+                    if !trigger_checkpoints_sync(&tx) {
+                        return;
+                    }
                 }
                 Ok(SocketMessage::Message(message)) => {
                     tracing::warn!(
@@ -854,9 +883,8 @@ mod tests {
         fn test_trigger_sync_successful() {
             let (tx, mut rx) = mpsc::channel::<()>(1);
 
-            trigger_checkpoints_sync(tx);
+            assert!(trigger_checkpoints_sync(&tx));
 
-            // Channel should have the message
             let try_recv = rx.try_recv();
             assert!(try_recv.is_ok());
         }
@@ -868,8 +896,8 @@ mod tests {
             // Fill the channel
             let _ = tx.try_send(());
 
-            // This should not panic even with a full channel
-            trigger_checkpoints_sync(tx.clone());
+            // Should not panic, returns true (still operational)
+            assert!(trigger_checkpoints_sync(&tx));
         }
 
         #[test]
@@ -879,12 +907,8 @@ mod tests {
             // Close the channel
             drop(rx);
 
-            // This should panic, but we'll catch it
-            let result = std::panic::catch_unwind(|| {
-                trigger_checkpoints_sync(tx);
-            });
-
-            assert!(result.is_err());
+            // Should return false instead of panicking
+            assert!(!trigger_checkpoints_sync(&tx));
         }
     }
 
