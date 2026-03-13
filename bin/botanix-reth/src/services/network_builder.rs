@@ -159,7 +159,7 @@ pub async fn setup_network_builder(
     // Frost sub protocol is only supported by federation nodes
     if poa_cfg.federation_mode {
         let (protocol_events_tx, protocol_events_rx) =
-            tokio::sync::mpsc::channel(10_000);
+            tokio::sync::mpsc::channel(1024);
         let my_peer_id = pk2id(&secret_key.public_key(SECP256K1));
         let protocol_handler =
             FrostProtoHandler { my_peer_id, protocol_events_tx };
