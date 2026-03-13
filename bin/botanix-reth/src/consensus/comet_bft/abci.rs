@@ -1585,7 +1585,10 @@ where
         let decision = self
             .activation_manager
             .on_prepare_proposal(comet_height)
-            .expect("db cannot fail");
+            .unwrap_or_else(|e| {
+                error!("prepare_proposal: activation manager error: {e}");
+                panic!("prepare_proposal: activation manager error: {e}");
+            });
 
         let use_version = decision.version;
         let upgrade_vote = decision.vote;
@@ -2113,12 +2116,21 @@ where
         let runtime_version = non_deterministic_data.runtime_version();
         let network_upgrade_payload =
             non_deterministic_data.network_upgrade_payload().copied();
-        //
-        match self
+
+        let activation_decision = match self
             .activation_manager
             .on_process_proposal(comet_height, runtime_version)
-            .expect("db cannot fail")
         {
+            Ok(decision) => decision,
+            Err(e) => {
+                error!("process_proposal: activation manager error: {e}");
+                return ResponseProcessProposal {
+                    status: VERIFY_REJECT,
+                };
+            }
+        };
+
+        match activation_decision {
             OnProcessProposalDecision::Process { version, conditions: _ } => {
                 debug!("process_proposal: Processing with version: {version}");
 
@@ -2537,7 +2549,10 @@ where
                 proposer_address,
                 proposer_vote,
             )
-            .expect("db cannot fail")
+            .unwrap_or_else(|e| {
+                error!("finalize_block: activation manager error: {e}");
+                panic!("finalize_block: activation manager error: {e}");
+            })
         {
             OnFinalizeBlockDecision::Finalize { version: _ } => {
                 // Continue...
@@ -2560,7 +2575,10 @@ where
         if let Some((upgrade_version, polling)) = self
             .activation_manager
             .get_upgrade_polling()
-            .expect("db cannot fail")
+            .unwrap_or_else(|e| {
+                error!("finalize_block: activation manager error: {e}");
+                panic!("finalize_block: activation manager error: {e}");
+            })
         {
             // Track the raw vote by the proposer. Note that the proposer might
             // be voting for a different version than the one we're interested
