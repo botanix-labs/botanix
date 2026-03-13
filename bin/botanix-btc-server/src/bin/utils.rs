@@ -1,9 +1,14 @@
+use botanix_btc_server_client::{
+    jwt::JwtSecret, BtcServerClient, BtcServerExtendedApi,
+    BtcServerExtendedClient, Empty, ExpireMultisigRequest,
+    SunsetMultisigRequest,
+};
 use btcserverlib::{
     database,
     util::parse_eth_address,
     wallet::address::{generate_taproot_address, generate_tweaked_public_key},
 };
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use zeroize::Zeroizing;
 
@@ -23,7 +28,7 @@ pub struct Cli {
     pub cmd: Commands,
 }
 
-#[derive(Clone, Debug, Parser)]
+#[derive(Clone, Debug, Subcommand)]
 pub enum Commands {
     /// Export encrypted key packages to a file.
     #[command(name = "export-key-package")]
@@ -34,6 +39,8 @@ pub enum Commands {
     #[command(name = "compute-gateway-address")]
     /// Compute the gateway pegin address for a given Botanix address.
     ComputeGatewayAddress(ComputeGatewayAddress),
+    #[command(name = "multisig")]
+    Multisig(MultisigArgs),
 }
 
 #[derive(Clone, Debug, Parser)]
@@ -104,6 +111,51 @@ impl ComputeGatewayAddress {
 
         Ok(gateway_address.to_string())
     }
+}
+
+#[derive(Clone, Debug, clap::Args)]
+pub struct MultisigArgs {
+    #[command(subcommand)]
+    pub cmd: MultisigCmd,
+}
+
+// TODO: Cleanup this parameter structure => unify where possible
+#[derive(Clone, Debug, Subcommand)]
+pub enum MultisigCmd {
+    #[command(name = "list")]
+    List(MultisigList),
+    #[command(name = "sunset")]
+    Sunset(MultisigSunset),
+    #[command(name = "expire")]
+    Expire(MultisigExpire),
+}
+
+#[derive(Clone, Debug, Parser)]
+pub struct MultisigList {
+    #[arg(long)]
+    pub server: String,
+    #[arg(long)]
+    pub jwt_secret: String,
+}
+
+#[derive(Clone, Debug, Parser)]
+pub struct MultisigSunset {
+    #[arg(long)]
+    pub multisig_id: u32,
+    #[arg(long)]
+    pub server: String,
+    #[arg(long)]
+    pub jwt_secret: String,
+}
+
+#[derive(Clone, Debug, Parser)]
+pub struct MultisigExpire {
+    #[arg(long)]
+    pub multisig_id: u32,
+    #[arg(long)]
+    pub server: String,
+    #[arg(long)]
+    pub jwt_secret: String,
 }
 
 fn get_passphrase(
@@ -205,6 +257,51 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
             let gateway_address = c.compute_gateway_address()?;
             println!("{}", gateway_address.to_string());
         }
+        Commands::Multisig(MultisigArgs { cmd }) => match cmd {
+            MultisigCmd::List(c) => {
+                let jwt_secret = JwtSecret::from_file(c.jwt_secret.as_ref())?;
+                let mut btc_server =
+                    BtcServerExtendedClient::new(c.server, Some(jwt_secret))
+                        .await?;
+
+                let resp = btc_server // .
+                    .list_multisig_info(Empty {})
+                    .await?;
+
+                dbg!(resp.entries.len());
+                for entry in resp.entries {
+                    dbg!(entry.multisig_id, entry.is_final);
+                }
+            }
+            MultisigCmd::Sunset(c) => {
+                let jwt_secret = JwtSecret::from_file(c.jwt_secret.as_ref())?;
+                let mut btc_server =
+                    BtcServerExtendedClient::new(c.server, Some(jwt_secret))
+                        .await?;
+
+                let resp = btc_server
+                    .sunset_multisig(SunsetMultisigRequest {
+                        multisig_id: c.multisig_id,
+                    })
+                    .await?;
+
+                dbg!(resp);
+            }
+            MultisigCmd::Expire(c) => {
+                let jwt_secret = JwtSecret::from_file(c.jwt_secret.as_ref())?;
+                let mut btc_server =
+                    BtcServerExtendedClient::new(c.server, Some(jwt_secret))
+                        .await?;
+
+                let resp = btc_server
+                    .expire_multisig(ExpireMultisigRequest {
+                        multisig_id: c.multisig_id,
+                    })
+                    .await?;
+
+                dbg!(resp);
+            }
+        },
     }
 
     Ok(())
