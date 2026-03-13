@@ -2814,6 +2814,7 @@ dependencies = [
  "botanix-types",
  "displaydoc",
  "eyre",
+ "frost-secp256k1-tr",
  "reth-chainspec",
  "reth-cli-util",
  "reth-primitives",

@@ -16,6 +16,7 @@ askama = { workspace = true }
 bitcoin = { workspace = true }
 displaydoc = { version = "0.2" }
 eyre = { workspace = true }
+frost-secp256k1-tr.workspace = true
 
 # reth deps
 reth-chainspec = { workspace = true }
