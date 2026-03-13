@@ -9,14 +9,15 @@ use crate::{
         GetPendingPegoutsResponse, GetPublicKeyRequest, GetPublicKeyResponse,
         GetSessionIdsRequest, GetSessionIdsResponse, GetSigningStatusRequest,
         GetSigningStatusResponse, GetSweepPsbtRequest, GetTrackedTxsResponse,
-        ListMultisigsResponse, MakeTxRequest, RecoverMissingUtxosRequest,
-        RecoverMissingUtxosResponse, ResetAllUtxosRequest,
-        ResetWalletStateRequest, SigningPackage, SigningPackageRequest,
-        SubscribeToDynafedNotificationsStream, ToSignRequest,
-        WalletStateResponse,
+        MakeTxRequest, RecoverMissingUtxosRequest, RecoverMissingUtxosResponse,
+        ResetAllUtxosRequest, ResetWalletStateRequest, SigningPackage,
+        SigningPackageRequest, SubscribeToDynafedNotificationsStream,
+        ToSignRequest, WalletStateResponse,
     },
     jwt::{Claims, JwtSecret},
-    BtcServerClient, StartNewDkgRequest,
+    BtcServerClient, ExpireMultisigRequest, ExpireMultisigResponse,
+    MultisigInfo, StartNewDkgRequest, SunsetMultisigRequest,
+    SunsetMultisigResponse,
 };
 use displaydoc::Display as DisplayDoc;
 use futures_util::future::BoxFuture;
@@ -74,6 +75,18 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: GetDkgPayloadsRequest,
     ) -> BoxFuture<'_, Result<DkgPayloads, GrpcClientError>>;
+    fn list_multisig_info(
+        &mut self,
+        request: Empty,
+    ) -> BoxFuture<'_, Result<MultisigInfo, GrpcClientError>>;
+    fn sunset_multisig(
+        &mut self,
+        request: SunsetMultisigRequest,
+    ) -> BoxFuture<'_, Result<SunsetMultisigResponse, GrpcClientError>>;
+    fn expire_multisig(
+        &mut self,
+        request: ExpireMultisigRequest,
+    ) -> BoxFuture<'_, Result<ExpireMultisigResponse, GrpcClientError>>;
     fn new_dkg_payload(
         &mut self,
         request: DkgPayload,
@@ -158,10 +171,6 @@ pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
         &mut self,
         request: Empty,
     ) -> BoxFuture<'_, Result<GetPendingPegoutsResponse, GrpcClientError>>;
-    fn list_multisigs(
-        &mut self,
-        request: Empty,
-    ) -> BoxFuture<'_, Result<ListMultisigsResponse, GrpcClientError>>;
     fn reset_wallet_state(
         &mut self,
         request: ResetWalletStateRequest,
@@ -322,7 +331,17 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     );
     generate_method!(get_public_key, GetPublicKeyRequest, GetPublicKeyResponse);
     generate_method!(get_dkg_payloads, GetDkgPayloadsRequest, DkgPayloads);
-    generate_method!(list_multisigs, Empty, ListMultisigsResponse);
+    generate_method!(list_multisig_info, Empty, MultisigInfo);
+    generate_method!(
+        sunset_multisig,
+        SunsetMultisigRequest,
+        SunsetMultisigResponse
+    );
+    generate_method!(
+        expire_multisig,
+        ExpireMultisigRequest,
+        ExpireMultisigResponse
+    );
     generate_method!(new_dkg_payload, DkgPayload, DkgPayloads);
     generate_method!(
         get_round1_signing_package,
