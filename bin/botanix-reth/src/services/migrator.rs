@@ -1,18 +1,9 @@
 use botanix_chainspec::BotanixChainSpec;
 use botanix_storage_migrate::{is_migration_needed, migrate_botanix_tables};
-use eyre::{Context, Ok};
-use reth::{
-    args::{DatabaseArgs, DatadirArgs},
-    prometheus_exporter::install_prometheus_recorder,
-};
-use reth_db::mdbx::tx::Tx;
-use reth_db::mdbx::RO;
+use eyre::Ok;
+use reth::args::{DatabaseArgs, DatadirArgs};
 use reth_db::DatabaseEnv;
-use reth_node_types::NodeTypesWithDBAdapter;
-use reth_provider::DatabaseProvider;
-use std::{fs, sync::Arc};
-
-use crate::node::BotanixNode;
+use std::sync::Arc;
 
 const BOTANIX_DB_PATH: &str = "botanix_db";
 
@@ -51,17 +42,19 @@ pub fn init_and_migrate_botanix_db(
 
     // Move botanix tables from reth to botanix database
     if is_migration_needed {
-        migrate_botanix_tables(&reth_database, &botanix_database).or_else(
-            |e| {
-                // If migration fails, we remove the botanix database directory to start from
-                // scratch on the next run.
-                fs::remove_dir_all(&botanix_db_path).wrap_err(format!(
-                    "Failed to remove botanix database directory {}",
-                    botanix_db_path.display()
-                ))?;
-                Err(e)
-            },
-        )?;
+        if let Err(e) =
+            migrate_botanix_tables(&reth_database, &botanix_database)
+        {
+            // Log the error before propagating so operators
+            // can diagnose without losing context.
+            tracing::error!(
+                target: "reth::cli",
+                err = %e,
+                path = ?botanix_db_path,
+                "Database migration failed"
+            );
+            return Err(e);
+        }
     }
     Ok(botanix_database)
 }
