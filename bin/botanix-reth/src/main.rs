@@ -46,6 +46,7 @@ use botanix_reth::{
     },
 };
 use botanix_storage::{tables::create_botanix_tables, BotanixProviderFactory};
+use botanix_types::FrostId;
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use reth::{
@@ -53,7 +54,6 @@ use reth::{
     providers::CanonStateSubscriptions,
 };
 use reth_db::DatabaseEnv;
-use reth_network::frost::manager::authority_index_to_frost_identifier;
 use reth_node_builder::RethTransactionPoolConfig;
 use reth_node_core::version::version_metadata;
 use reth_prune_types::PruneModes;
@@ -316,25 +316,13 @@ fn main() -> eyre::Result<()> {
             let (multisig_manager, multisig_handle) = MultisigManager::new_botanix(botanix_db_provider_factory.clone(), legacy_multisig)?;
 
             for m in frost_setup_result.multisigs.clone() {
-                // TODO: Create convenience method for this.
-                let authorities = m
-                    .authorities
-                    .into_iter()
-                    .enumerate()
-                    .map(|(idx, pubkey) | {
-                        let idx = authority_index_to_frost_identifier(idx as u16);
-
-                        (idx, pubkey)
-                    })
-                    .collect();
-
                 // TODO: This could be a problem for expired multisigs, since it
                 // might reinsert those on startup.
                 multisig_manager.guard_commit(|g| {
                     g.set_staging_multisig(
                         m.multisig_id,
-                        authority_index_to_frost_identifier(m.coordinator),
-                        authorities,
+                        m.coordinator,
+                        m.authorities,
                     )
                 })?;
             }
