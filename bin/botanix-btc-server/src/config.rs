@@ -165,14 +165,6 @@ pub struct CliConfig {
     /// The bitcoin network to operate on.
     #[arg(long)]
     btc_network: bitcoin::Network,
-    /// Frost participant identifier
-    #[arg(long)]
-    identifier: u16,
-    // The optional Frost coordinator identifier. If not set, the first member
-    // specified in `--federation-config-path` will be selected as the
-    // coordinator.
-    #[arg(long)]
-    coordinator: Option<u16>,
     /// The path to the configuration file for the federation setup.
     #[arg(long, value_name = "FEDERATION_CONFIG_FILE", verbatim_doc_comment)]
     federation_config_path: PathBuf,
@@ -219,13 +211,6 @@ pub struct Config {
     pub db: PathBuf,
     /// The bitcoin L1 network
     pub btc_network: bitcoin::Network,
-    /// Frost participant identifier. Should be your index into the chain.toml
-    /// federation pk list for example if you are the first signer in the
-    /// chain.toml you should use 0
-    pub identifier: u16,
-    // The optional Frost coordinator identifier. If not set, the Frost Id of 0
-    // will be used.
-    pub coordinator: Option<u16>,
     /// The path to the configuration file for the federation setup.
     pub federation_config_path: PathBuf,
     /// Expected SHA256 hash of the federation config contents.
@@ -246,8 +231,9 @@ pub struct Config {
     pub bitcoind_pass: String,
     /// metrics port
     pub metrics_port: Option<u16>,
-    /// acceptable fee rate difference percentage as an integer (ex. 2 = 2%, 20 = 20%)
-    /// signing will refuse to sign if the fee rate is more than this percentage off from the
+    /// acceptable fee rate difference percentage as an integer (ex. 2 = 2%, 20
+    /// = 20%) signing will refuse to sign if the fee rate is more than this
+    /// percentage off from the
     pub fee_rate_diff_percentage: u32,
     /// Fall back fee rate expressed in sat per vbyte
     pub fall_back_fee_rate_sat_per_vbyte: u64,
@@ -263,8 +249,6 @@ pub fn load_config() -> Result<Config, Error> {
         db: cli_config.db,
         toml: cli_config.toml,
         btc_network: cli_config.btc_network,
-        identifier: cli_config.identifier,
-        coordinator: cli_config.coordinator,
         federation_config_path: cli_config.federation_config_path,
         config_hash: cli_config.config_hash,
         p2p_secret_key: cli_config.p2p_secret_key,
