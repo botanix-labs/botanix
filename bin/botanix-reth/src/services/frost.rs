@@ -15,6 +15,8 @@ use reth_network_peers::pk2id;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use std::net::SocketAddr;
 
+const MIN_ALLOWED_FROST_SIGNERS: u16 = 2;
+
 use crate::{
     consensus::{
         wallet_state_sync::WalletStateSync, AuthorityConsensusBuilder,
@@ -60,6 +62,13 @@ pub fn setup_frost(
     {
         return Err(eyre::eyre!(
             "min_signers should be less than or equal to max_signers"
+        ));
+    }
+
+    if poa_cfg.federation_mode && frost_args.min_signers < MIN_ALLOWED_FROST_SIGNERS
+    {
+        return Err(eyre::eyre!(
+            "min_signers should be at least 2"
         ));
     }
 
