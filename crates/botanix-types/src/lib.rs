@@ -3,8 +3,10 @@
 //! This crate provides common types used across multiple Botanix crates,
 //! avoiding duplication and ensuring consistency.
 
+mod frost_id;
 mod multisig_id;
 
+pub use frost_id::FrostId;
 pub use multisig_id::{
     default_multisig_id, MultisigId, LEGACY_MULTISIG_ID,
     TEST_LEGACY_MULTISIG_ID,
