@@ -16,3 +16,14 @@ pub const VERGEN_GIT_SHA: &str =
 
 /// The build timestamp.
 pub const VERGEN_BUILD_TIMESTAMP: &str = env!("VERGEN_BUILD_TIMESTAMP");
+
+/// Cargo features enabled at build time.
+pub const VERGEN_CARGO_FEATURES: &str =
+    env!("VERGEN_CARGO_FEATURES");
+
+/// The target triple the binary was compiled for.
+pub const VERGEN_CARGO_TARGET_TRIPLE: &str =
+    env!("VERGEN_CARGO_TARGET_TRIPLE");
+
+/// The build profile (e.g. "release", "debug").
+pub const BUILD_PROFILE_NAME: &str = env!("BUILD_PROFILE_NAME");

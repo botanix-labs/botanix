@@ -1,6 +1,7 @@
 use botanix_chainspec::BotanixChainSpec;
 use btcserverlib::version::{
-    CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP, VERGEN_GIT_SHA,
+    BUILD_PROFILE_NAME, CARGO_PKG_VERSION, VERGEN_BUILD_TIMESTAMP,
+    VERGEN_CARGO_FEATURES, VERGEN_CARGO_TARGET_TRIPLE, VERGEN_GIT_SHA,
 };
 use std::{net::SocketAddr, sync::Arc};
 
@@ -33,10 +34,10 @@ pub async fn run_metrics_service(
             VersionInfo {
                 version: CARGO_PKG_VERSION,
                 build_timestamp: VERGEN_BUILD_TIMESTAMP,
-                cargo_features: "VERGEN_CARGO_FEATURES",
+                cargo_features: VERGEN_CARGO_FEATURES,
                 git_sha: VERGEN_GIT_SHA,
-                target_triple: "VERGEN_CARGO_TARGET_TRIPLE",
-                build_profile: "BUILD_PROFILE_NAME",
+                target_triple: VERGEN_CARGO_TARGET_TRIPLE,
+                build_profile: BUILD_PROFILE_NAME,
             },
             ChainSpecInfo { name: chain_spec.chain().id().to_string() },
             task_executor.clone(),

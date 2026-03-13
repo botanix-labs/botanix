@@ -37,6 +37,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .cargo_target_triple()
         .emit_and_set()?;
 
+    // Extract build profile from OUT_DIR path (matches reth's approach)
+    let out_dir = env::var("OUT_DIR")?;
+    let build_profile = out_dir
+        .rsplit(std::path::MAIN_SEPARATOR)
+        .nth(3)
+        .unwrap_or("unknown");
+    println!("cargo:rustc-env=BUILD_PROFILE_NAME={build_profile}");
+
     let sha = env::var("VERGEN_GIT_SHA")?;
     let sha_short = &sha[0..7];
 
