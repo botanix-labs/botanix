@@ -78,14 +78,6 @@ pub fn setup_frost(
     tracing::info!("Federation Member PubKey {:?}", authority_pk.to_string());
     tracing::info!("Federation Member Enode {:?}", pk2id(&authority_pk));
 
-    // add trusted nodes with --trusted-peers flag
-    tracing::info!(target: "reth::cli", "Adding trusted nodes");
-    if !network_args.trusted_peers.is_empty() {
-        network_args.trusted_peers.iter().for_each(|peer| {
-            reth_config.peers.trusted_nodes.push(peer.clone());
-        });
-    }
-
     let federation_config = load_federation_config_toml(
         &poa_cfg.federation_config_path,
     )
