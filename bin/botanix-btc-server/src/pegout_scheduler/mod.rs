@@ -19,6 +19,7 @@ use bitcoin::{
     Amount, Block, BlockHash, OutPoint, ScriptBuf, Transaction, TxOut, Txid,
 };
 use bitcoincore_rpc::RpcApi;
+use botanix_types::FrostId;
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -227,7 +228,7 @@ pub struct PegoutScheduler {
     /// Bitcoin network
     bitcoin_network: bitcoin::Network,
     /// Identifier
-    identifier: u16,
+    identifier: FrostId,
 }
 
 impl PegoutScheduler {
@@ -238,7 +239,7 @@ impl PegoutScheduler {
         db: database::Db,
         telemetry: Option<Arc<Telemetry>>,
         bitcoin_network: bitcoin::Network,
-        identifier: u16,
+        identifier: FrostId,
     ) -> PegoutScheduler {
         let mut ret = PegoutScheduler {
             conf_window,
@@ -745,7 +746,7 @@ impl PegoutScheduler {
         checkpoint: bitcoincore_rpc::json::GetBlockHeaderResult,
         telemetry: &Option<Arc<Telemetry>>,
         bitcoin_network: bitcoin::Network,
-        identifier: u16,
+        identifier: FrostId,
     ) -> Result<(), SyncError> {
         // Determine the timestamp of the checkpoint block
         let cp_time = checkpoint.block_time();
@@ -872,7 +873,7 @@ impl PegoutScheduler {
         checkpoint: BlockHash,
         telemetry: &Option<Arc<Telemetry>>,
         bitcoin_network: bitcoin::Network,
-        identifier: u16,
+        identifier: FrostId,
     ) -> Result<(), SyncError> {
         let block_header_info = measure_rpc_latency!(
             &telemetry,
@@ -1291,7 +1292,7 @@ pub fn is_syncing(
     bitcoind: &impl RpcApi,
     telemetry: &Option<Arc<Telemetry>>,
     bitcoin_network: bitcoin::Network,
-    identifier: u16,
+    identifier: FrostId,
 ) -> Result<bool, bitcoincore_rpc::Error> {
     // NB do a raw call with just the initialblockdownload field because this RPC
     // response is quite unstable between releases
@@ -1514,7 +1515,7 @@ mod tests {
             db,
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
 
         let mut pegouts = vec![];
@@ -1611,7 +1612,7 @@ mod tests {
             db,
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
 
         let sweep_metadata = database::SweepMetadata {
@@ -1671,7 +1672,7 @@ mod tests {
             db,
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let tx1 = create_tx(3, 3, None);
         let tx2 = create_tx(3, 3, None);
@@ -1730,7 +1731,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let tx1 = create_tx(3, 3, Some(change_output.clone()));
         let tx2 = create_tx(3, 3, Some(change_output));
@@ -1794,7 +1795,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let tx = create_tx(3, 1, Some(change_output));
         let pegouts = pegout_requests_from_tx(&tx, &[0]);
@@ -1840,7 +1841,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let tx = create_tx(3, 2, None);
         // Here we should be tracking indices 0 and 1.
@@ -1888,7 +1889,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
 
         let incorrect_change_spk = random_p2wpkh_script();
@@ -1946,7 +1947,7 @@ mod tests {
             db,
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let (last_tx_txid, last_tx) =
             pegout_scheduler.txs.clone().into_iter().next().unwrap();
@@ -1986,7 +1987,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let mut last_block_hash = bitcoin::BlockHash::all_zeros();
 
@@ -2031,7 +2032,7 @@ mod tests {
             db,
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         assert_eq!(pegout_scheduler.txs.len(), 1);
 
@@ -2067,7 +2068,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let tx = create_tx(1, 2, None);
         let pegouts = pegout_requests_from_tx(&tx, &[0]);
@@ -2115,7 +2116,7 @@ mod tests {
             db,
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let pegout_request_ids = pegout_scheduler.tracked_pegout_request_ids();
         assert_eq!(pegout_request_ids.len(), 1);
@@ -2141,7 +2142,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         let tx = create_tx(1, 2, None);
         let pegouts = pegout_requests_from_tx(&tx, &[0]);
@@ -2159,7 +2160,7 @@ mod tests {
             checkpoint,
             &None,
             bitcoin::Network::Regtest,
-            1,
+            1.into(),
         );
         assert!(result.is_ok());
 
@@ -2179,7 +2180,7 @@ mod tests {
             db.clone(),
             None,
             bitcoin::Network::Regtest,
-            0,
+            0.into(),
         );
         // mock bitcoind will trigger error path for `getmempoolentry` for a specific txid
         // so pass true to create_tx() to make it deterministic which is
@@ -2209,7 +2210,7 @@ mod tests {
             checkpoint,
             &None,
             bitcoin::Network::Regtest,
-            1,
+            1.into(),
         );
         assert!(result.is_ok());
 
