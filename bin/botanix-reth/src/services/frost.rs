@@ -1,12 +1,13 @@
 use botanix_chainspec::BotanixChainSpec;
 use botanix_configs::federation::FederationTomlConfig;
-use botanix_types::MultisigId;
+use botanix_types::{FrostId, MultisigId};
+use frost_secp256k1_tr as frost;
 use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
 use reth_discv4::NodeRecord;
 use reth_network_peers::pk2id;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
-use std::net::SocketAddr;
+use std::{collections::BTreeMap, net::SocketAddr};
 
 /// Configuration for a single federation multisig, representing one epoch in
 /// the dynafed lifecycle.
@@ -18,19 +19,19 @@ pub struct MultisigConfig {
     pub min_signers: u16,
     /// Total number of signers for this multisig (defaults to member count).
     pub max_signers: u16,
-    /// The coordinator index, usually zero.
-    pub coordinator: u16,
-    /// Index of the current node within the `authorities` list.
-    pub authority_index: Option<u16>,
-    /// Public keys of all members participating in this multisig.
-    pub authorities: Vec<secp256k1::PublicKey>,
+    /// The coordinator Id.
+    pub coordinator: frost::Identifier,
+    /// The local identifier in the authority list, if present.
+    pub local_identifier: Option<frost::Identifier>,
+    /// The Frost identifier and their corresponding public keys of all participants in this multisig.
+    pub authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
 }
 
 impl TryFrom<MultisigConfig> for AuthorityMultisigConfig {
     type Error = eyre::Error;
 
     fn try_from(m: MultisigConfig) -> Result<Self, Self::Error> {
-        let authority_index = m.authority_index.ok_or_else(|| {
+        let local_identifier = m.local_identifier.ok_or_else(|| {
             eyre::eyre!("node is not a member of multisig {}", m.multisig_id)
         })?;
 
@@ -39,7 +40,7 @@ impl TryFrom<MultisigConfig> for AuthorityMultisigConfig {
             min_signers: m.min_signers,
             max_signers: m.max_signers,
             coordinator: m.coordinator,
-            authority_index,
+            local_identifier,
             authorities: m.authorities,
         })
     }
@@ -53,11 +54,12 @@ pub struct AuthorityMultisigConfig {
     pub min_signers: u16,
     /// Total number of signers for this multisig (defaults to member count).
     pub max_signers: u16,
-    pub coordinator: u16,
-    /// Index of the current node within the `authorities` list.
-    pub authority_index: u16,
-    /// Public keys of all members participating in this multisig.
-    pub authorities: Vec<secp256k1::PublicKey>,
+    /// The coordinator Id.
+    pub coordinator: frost::Identifier,
+    /// The local identifier in the authority list.
+    pub local_identifier: frost::Identifier,
+    /// The Frost identifier and their corresponding public keys of all participants in this multisig.
+    pub authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
 }
 
 /// Result of setting up the Frost configuration for a node.
@@ -72,13 +74,24 @@ pub struct FrostConfigSetupResult {
 impl FrostConfigSetupResult {
     /// Returns the combined list of unique authority public keys across all multisig
     /// configurations.
-    pub fn authorities(&self) -> Vec<secp256k1::PublicKey> {
+    pub fn public_keys(&self) -> Vec<secp256k1::PublicKey> {
         let mut seen = std::collections::HashSet::new();
         self.multisigs
             .iter()
             .flat_map(|m| m.authorities.iter())
-            .filter(|pk| seen.insert(**pk))
-            .cloned()
+            .filter(|(_, pk)| seen.insert(**pk))
+            .map(|(_, pk)| *pk)
+            .collect()
+    }
+    pub fn frost_authorities(
+        &self,
+    ) -> BTreeMap<frost::Identifier, secp256k1::PublicKey> {
+        let mut seen = std::collections::HashSet::new();
+        self.multisigs
+            .iter()
+            .flat_map(|m| m.authorities.iter())
+            .filter(|(frost_id, _)| seen.insert(**frost_id))
+            .map(|(id, pk)| (*id, *pk))
             .collect()
     }
 }
@@ -129,23 +142,40 @@ pub fn setup_frost(
         reth_config,
     );
 
+    // TODO: Here we must handle legacy Frost Ids which are derived from
+    // indexes, not their public keys.
     let multisigs = federation_config
         .multisigs
         .into_iter()
         .map(|m| {
-            let authorities = m.get_federation_pub_keys()?;
-            let authority_index: Option<_> = authorities
-                .iter()
-                .position(|a| *a == authority_pk)
-                .map(|i| i as u16);
+            // Prepare the list of authorities with the computed Frost Id and
+            // their corresponding public keys.
+            let authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey> =
+                m.get_federation_pub_keys()?
+                    .into_iter()
+                    .map(|pk| (*FrostId::from(&pk), pk))
+                    .collect();
+
+            // Retrieve the Frost Id of the coordinator.
+            let coordinator = *FrostId::from(m.get_coordinator_pub_key()?);
+            debug_assert!(authorities.contains_key(&coordinator));
+
+            // Retrieve the Frost Id of the local node, assuming it's a
+            // federation member.
+            let my_frost_id = *FrostId::from(&authority_pk);
+            let local_identifier = if authorities.contains_key(&my_frost_id) {
+                Some(my_frost_id)
+            } else {
+                None
+            };
 
             // TODO: Do basic validation?
             Ok(MultisigConfig {
                 multisig_id: m.multisig_id,
                 min_signers: m.min_signers,
                 max_signers: authorities.len() as u16,
-                coordinator: m.coordinator,
-                authority_index,
+                coordinator,
+                local_identifier,
                 authorities,
             })
         })

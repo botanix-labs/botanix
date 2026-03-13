@@ -27,12 +27,11 @@ use reth_provider::{
 use reth_stages::StageId;
 use reth_tasks::TaskExecutor;
 use reth_transaction_pool::{
-    blobstore::{DiskFileBlobStore, InMemoryBlobStore},
-    CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator,
-    TransactionValidationTaskExecutor,
+    blobstore::InMemoryBlobStore, CoinbaseTipOrdering, EthPooledTransaction,
+    EthTransactionValidator, TransactionValidationTaskExecutor,
 };
 use secp256k1::SECP256K1;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio_stream::wrappers::ReceiverStream;
 
 pub type BotanixPool = reth::transaction_pool::Pool<
@@ -182,7 +181,8 @@ pub async fn setup_network_builder(
     let network_config =
         network_cfg_builder.build(reth_provider_factory.clone());
 
-    let frost_authorities = frost_setup_result.authorities();
+    let frost_authorities: HashMap<_, _> =
+        frost_setup_result.frost_authorities().into_iter().collect();
 
     if poa_cfg.federation_mode && frost_authorities.is_empty() {
         return Err(eyre::eyre!("authority list must not be empty"));
