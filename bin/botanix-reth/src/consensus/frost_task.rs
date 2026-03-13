@@ -48,10 +48,7 @@ use frost_secp256k1_tr as frost;
 use futures::{pin_mut, StreamExt};
 use reth_network::{
     frost::{
-        manager::{
-            authority_index_to_frost_identifier, FrostCommand, PeerData,
-            PeerMessageContext, ToFrostManager,
-        },
+        manager::{FrostCommand, PeerData, PeerMessageContext, ToFrostManager},
         DkgResponse, FrostPeerCommand, PeerMessageResponse,
         SigningEventResponseType, SigningResponse, WalletStateResponse,
     },
@@ -65,7 +62,7 @@ use reth_provider::{
 use reth_revm::primitives::FixedBytes;
 use reth_storage_api::NodePrimitivesProvider;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -160,13 +157,6 @@ where
         let multisigs = multisig_configs
             .into_iter()
             .map(|config| {
-                info!(
-                    target: "consensus::authority::frost_task::new",
-                    "Multisig Id {} with frost authority index: {}/{}",
-                    config.multisig_id, config.authority_index,
-                    config.authorities.len() - 1
-                );
-
                 // Setup the signing state machine.
                 let signing_sm = SigningStateMachine::new(
                     btc_server.clone(),
@@ -391,7 +381,7 @@ where
                 let handle = DkgRunnerTask::start(
                     self.frost_handle.clone(),
                     self.multisig_handle.clone(),
-                    &entry.config.authorities,
+                    entry.config.authorities.clone(),
                     self.btc_server.clone(),
                     *multisig_id,
                 );
@@ -511,7 +501,7 @@ where
         let handle = DkgRunnerTask::start(
             self.frost_handle.clone(),
             self.multisig_handle.clone(),
-            &multisig.config.authorities,
+            multisig.config.authorities.clone(),
             self.btc_server.clone(),
             multisig_id,
         );
@@ -1169,7 +1159,7 @@ struct DkgRunnerTask<ToFrostMan, BtcServerClient> {
     //
     multisig_handle: MultisigSubmitter,
     // Frost Id lookup table
-    frost_ids: HashMap<frost_secp256k1_tr::Identifier, secp256k1::PublicKey>,
+    authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
     // btc-server client
     btc_server: BtcServerClient,
     // Multisig ID for this DKG task
@@ -1185,27 +1175,17 @@ where
     fn start(
         frost_handle: ToFrostMan,
         multisig_handle: MultisigSubmitter,
-        authorities: &[secp256k1::PublicKey],
+        authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
         btc_server: BtcServerClient,
         multisig_id: MultisigId,
     ) -> mpsc::Sender<DkgResponse> {
         let (tx, rx) = mpsc::channel(100);
 
-        let frost_ids = authorities
-            .iter()
-            .enumerate()
-            .map(|(index, pk)| {
-                let frost_id =
-                    authority_index_to_frost_identifier(index as u16);
-                (frost_id, *pk)
-            })
-            .collect();
-
         let this = DkgRunnerTask {
             rx,
             frost_handle,
             multisig_handle,
-            frost_ids,
+            authorities,
             btc_server,
             multisig_id,
         };
@@ -1369,7 +1349,7 @@ where
                 .expect("valid frost id");
 
             // Lookup the public key of the recipient.
-            let Some(pk) = self.frost_ids.get(&recipient) else {
+            let Some(pk) = self.authorities.get(&recipient) else {
                 error!(
                     target: "consensus::authority::frost_task::DkgRunnerTask",
                     "No Frost Id lookup available for recipient {:?}, dropping DKG payload...",
