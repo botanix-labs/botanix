@@ -3028,7 +3028,7 @@ impl ABCIDriver {
                             .canonical_in_memory_state()
                             .remove_persisted_blocks(NumHash::new(
                                 block_height - 1,
-                                new_header.hash_slow(),
+                                new_header.parent_hash,
                             ));
 
                         debug!(
