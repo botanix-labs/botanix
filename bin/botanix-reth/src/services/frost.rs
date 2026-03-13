@@ -1,3 +1,5 @@
+use eyre::WrapErr;
+
 use botanix_chainspec::BotanixChainSpec;
 use botanix_cli_args::{
     frost_args::FrostArgs, poa_node::PoaNodeArgs, state_sync::StateSyncArgs,
@@ -84,15 +86,10 @@ pub fn setup_frost(
         });
     }
 
-    let federation_config = match load_federation_config_toml(
+    let federation_config = load_federation_config_toml(
         &poa_cfg.federation_config_path,
-    ) {
-        std::result::Result::Ok(federation_config) => federation_config,
-        Err(_) => {
-            tracing::error!(target: "reth::cli", "Failed to read federation config file");
-            return Err(eyre::eyre!("Failed to read federation config file"));
-        }
-    };
+    )
+    .wrap_err("Failed to read federation config file")?;
     let federation_authorities =
         federation_config.get_federation_pks_from_path()?;
     let genesis_authorities = federation_authorities
