@@ -1,6 +1,7 @@
 mod metrics;
 mod system;
 
+use botanix_types::FrostId;
 use log::error;
 use metrics::BtcServerMetrics;
 use parking_lot::RwLock;
@@ -36,7 +37,7 @@ impl Telemetry {
     pub fn record_bitcoind_rpc_latency(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         rpc_method: &str,
         latency_millis: u128,
     ) {
@@ -56,7 +57,7 @@ impl Telemetry {
     pub fn update_round1_signing_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         session_id: &[u8; 32],
         data_size: usize,
         latency_millis: u128,
@@ -104,7 +105,7 @@ impl Telemetry {
     pub fn update_round2_signing_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         session_id: &[u8; 32],
         data_size: usize,
         latency_millis: u128,
@@ -152,7 +153,7 @@ impl Telemetry {
     pub fn update_round1_dkg_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         data_size: usize,
         latency_millis: u128,
     ) {
@@ -198,7 +199,7 @@ impl Telemetry {
     pub fn update_round2_dkg_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         data_size: usize,
         latency_millis: u128,
     ) {
@@ -244,7 +245,7 @@ impl Telemetry {
     pub fn update_round3_dkg_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         latency_millis: u128,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -280,7 +281,7 @@ impl Telemetry {
     pub fn update_round4_dkg_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         latency_millis: u128,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -316,7 +317,7 @@ impl Telemetry {
     pub fn update_dkg_error_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         error: &str,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -334,7 +335,7 @@ impl Telemetry {
     pub fn update_signing_success_rate_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         session_id: [u8; 32],
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -352,7 +353,7 @@ impl Telemetry {
     pub fn update_signing_error_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         error: &str,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -370,7 +371,7 @@ impl Telemetry {
     pub fn update_pegout_scheduler_error_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         error: &str,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -388,7 +389,7 @@ impl Telemetry {
     pub fn record_aborted_signing_sessions(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             metrics
@@ -404,7 +405,7 @@ impl Telemetry {
     pub fn record_total_signing_sessions(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             metrics
@@ -420,7 +421,7 @@ impl Telemetry {
     pub fn record_finalized_signing_sessions(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             metrics
@@ -436,7 +437,7 @@ impl Telemetry {
     pub fn set_last_attempted_pegout_height(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegout_height: i64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -453,7 +454,7 @@ impl Telemetry {
     pub fn set_last_successful_pegout_height(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegout_height: i64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -470,7 +471,7 @@ impl Telemetry {
     pub fn set_last_pegin_height(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegin_height: i64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -487,7 +488,7 @@ impl Telemetry {
     pub fn update_utxos(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         utxos: i64,
         total_value: i64,
     ) {
@@ -513,7 +514,7 @@ impl Telemetry {
     pub fn increment_pegins_count(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegins_count: u64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -530,7 +531,7 @@ impl Telemetry {
     pub fn increment_pegouts_count(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegouts_count: u64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -547,7 +548,7 @@ impl Telemetry {
     pub fn increment_success_broadcasted_pegout_txs_count(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             metrics
@@ -563,7 +564,7 @@ impl Telemetry {
     pub fn increment_failed_broadcasted_pegout_txs_count(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             metrics
@@ -579,7 +580,7 @@ impl Telemetry {
     pub fn increment_started_round1_signings_count(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             metrics
@@ -595,7 +596,7 @@ impl Telemetry {
     pub fn increment_completed_round2_signings_count(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             metrics
@@ -611,7 +612,7 @@ impl Telemetry {
     pub fn update_health_check(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         upstream_time: u64,
         service_status: &[(&str, &str)],
     ) {
@@ -640,7 +641,7 @@ impl Telemetry {
     pub fn set_pending_pegouts(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegouts: i64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -657,7 +658,7 @@ impl Telemetry {
     pub fn update_finalized_pegout_ids(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegout_ids: i64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -674,7 +675,7 @@ impl Telemetry {
     pub fn update_pegin_confirmation_depth(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         pegin_confirmation_depth: u32,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -692,7 +693,7 @@ impl Telemetry {
     pub fn update_transaction_fee_rates(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         transaction_fee_rate: f64,
     ) {
         self.maybe_use_metrics(|metrics| {
@@ -710,7 +711,7 @@ impl Telemetry {
     pub fn update_fee_rate_abnormalities(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
     ) {
         self.maybe_use_metrics(|metrics| {
             // Set pegin confirmation depth
@@ -727,7 +728,7 @@ impl Telemetry {
     pub fn set_config_metrics(
         &self,
         btc_chain: bitcoin::Network,
-        self_id: u16,
+        self_id: FrostId,
         min_signers: u16,
         max_signers: u16,
     ) {

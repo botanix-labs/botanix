@@ -69,7 +69,7 @@ macro_rules! handle_signing_error {
                 if let Some(telemetry) = $self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         $self.btc_network,
-                        $self.config.identifier,
+                        $self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -84,7 +84,7 @@ macro_rules! handle_signing_error {
             if let Some(telemetry) = $self.telemetry.as_ref() {
                 telemetry.update_signing_error_metrics(
                     $self.btc_network,
-                    $self.config.identifier,
+                    $self.identifier,
                     &e.to_string(),
                 );
             }
