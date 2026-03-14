@@ -11,6 +11,9 @@ use std::sync::Arc;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<()> {
+    // Disable JWT auth for BTC server connections — child processes inherit this
+    std::env::set_var("BOTANIX_TEST_MODE", "1");
+
     // init config
     dotenv::dotenv().ok();
     let cli_args: CliArgs = argh::from_env();
