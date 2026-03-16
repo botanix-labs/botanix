@@ -15,10 +15,20 @@ pub async fn create_btc_server_client(
         true => {
             let jwt_secret = bitcoind_cfg.btc_signing_server_jwt_secret()
                 .map_err(|e| eyre::eyre!("Failed to load BTC server JWT secret: {}", e))?
-                .ok_or_else(|| eyre::eyre!("BTC server JWT secret path is required in federation mode"))?;
+                .ok_or_else(|| eyre::eyre!("BTC server JWT secret path is required in federation mode"));
+            let jwt_secret = match jwt_secret {
+                std::result::Result::Ok(secret) => Some(secret),
+                std::result::Result::Err(_)
+                    if std::env::var("BOTANIX_TEST_MODE").is_ok() =>
+                {
+                    tracing::warn!(target: "reth::cli", "BTC server JWT auth disabled (test mode)");
+                    None
+                }
+                std::result::Result::Err(e) => return Err(e),
+            };
             let btc_server_factory = GrpcClientFactory::new(
                 bitcoind_cfg.btc_server.clone().expect("btc_server exists"),
-                jwt_secret.into(),
+                jwt_secret,
             );
 
             let fut = || async { btc_server_factory.build_and_connect().await };
