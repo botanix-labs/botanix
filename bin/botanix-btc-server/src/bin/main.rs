@@ -699,6 +699,7 @@ where
         // TODO: The DKG state machine should be deleted once the attestations
         // are confirmed on-chain.
         let mut sessions = HashMap::new();
+        let is_current_node_coordinator = frost_identifier == coordinator;
 
         // Iterate through all multisig configurations
         for multisig_config in &federation.multisigs {
@@ -744,20 +745,33 @@ where
                             );
                         }
                     }
-                } else {
-                    // Multisig not yet processed, start DKG
+                } else if config.coordinator_manual_dkg_start
+                    && is_current_node_coordinator
+                {
                     info!(
-                        "Multisig {} not yet processed, starting DKG with {} members",
-                        multisig_id,
-                        multisig_config.members.len()
+                        "Multisig {} not yet processed: coordinator manual DKG start is enabled, deferring startup initialization until StartNewDkg is called",
+                        multisig_id
                     );
+                } else {
+                    if config.coordinator_manual_dkg_start {
+                        info!(
+                            "Multisig {} not yet processed: manual DKG mode enabled, non-coordinator continuing with startup DKG initialization",
+                            multisig_id
+                        );
+                    } else {
+                        info!(
+                            "Multisig {} not yet processed: auto-starting DKG with {} members",
+                            multisig_id,
+                            multisig_config.members.len()
+                        );
+                    }
 
                     let state = Self::new_dkg_state_machine(
                         frost_identifier,
                         p2p_secret_key,
                         coordinator,
                         multisig_config,
-                        frost_identifier == coordinator,
+                        is_current_node_coordinator,
                     )?;
 
                     sessions.insert(multisig_id, state);
@@ -3041,20 +3055,44 @@ where
         self.validate_jwt(&req)?;
 
         let multisig_id: MultisigId = req.into_inner().multisig_id.into();
+        let is_coordinator = self.is_coordinator();
+
+        info!(
+            "Received StartNewDkg for multisig_id {} (manual_mode: {}, is_coordinator: {})",
+            multisig_id, self.config.coordinator_manual_dkg_start, is_coordinator
+        );
 
         if self.db.get_key_package_by_id(multisig_id).to_status()?.is_some() {
+            warn!(
+                "Ignoring StartNewDkg for multisig_id {}: key package already persisted",
+                multisig_id
+            );
             return Err(already_exists!(
-                "key package already exists for multisig_id {}",
+                "DKG already finalized for multisig_id {}; key package exists. In coordinator-manual mode, StartNewDkg should be called once per new/unprocessed multisig",
                 multisig_id
             ));
         }
 
         let mut sessions = self.dkg_sessions.lock().await;
         if sessions.contains_key(&multisig_id) {
+            warn!(
+                "Duplicate StartNewDkg for multisig_id {}: DKG session is already running",
+                multisig_id
+            );
             return Err(already_exists!(
-                "DKG session already running for multisig_id {}",
+                "DKG session already running for multisig_id {}; duplicate StartNewDkg request. Wait for completion or abort the current session first",
                 multisig_id
             ));
+        }
+
+        if self.config.coordinator_manual_dkg_start && !is_coordinator {
+            warn!(
+                "Rejecting StartNewDkg for multisig_id {} on non-coordinator node while coordinator-manual mode is enabled",
+                multisig_id
+            );
+            return Err(tonic::Status::failed_precondition(format!(
+                "coordinator-manual DKG mode is enabled and this node is not coordinator; trigger StartNewDkg on the coordinator node"
+            )));
         }
 
         let coordinator = frost_id!(self
@@ -3073,7 +3111,7 @@ where
             self.p2p_secret_key,
             coordinator,
             multisig_conf,
-            self.is_coordinator(),
+            is_coordinator,
         )
         .map_err(|e| {
             tonic::Status::internal(format!(
@@ -3083,7 +3121,10 @@ where
         })?;
 
         sessions.insert(multisig_id, state);
-        info!("Started new DKG session for multisig_id {}", multisig_id);
+        info!(
+            "Started new DKG session for multisig_id {} via StartNewDkg (manual_mode: {}, is_coordinator: {})",
+            multisig_id, self.config.coordinator_manual_dkg_start, is_coordinator
+        );
 
         // send the notification async to the subscription method
         if let Err(e) =
@@ -3789,7 +3830,9 @@ mod tests {
         },
     };
 
-    async fn setup() -> App<MockBitcoind> {
+    async fn setup_with_manual_mode(
+        coordinator_manual_dkg_start: bool,
+    ) -> App<MockBitcoind> {
         let temp_db = TempDir::new().unwrap();
 
         // WARNING: This is a test federation config with exposed private keys,
@@ -3854,6 +3897,7 @@ mod tests {
             fee_rate_diff_percentage: 10,
             fall_back_fee_rate_sat_per_vbyte: 1000,
             excluded_eth_addresses: vec![],
+            coordinator_manual_dkg_start,
         };
 
         let app = App::new(config, bitcoind_client, None).expect("btc server");
@@ -3863,6 +3907,10 @@ mod tests {
         std::mem::forget(temp_secret_key);
 
         app
+    }
+
+    async fn setup() -> App<MockBitcoind> {
+        setup_with_manual_mode(false).await
     }
 
     #[tokio::test]
@@ -3942,6 +3990,34 @@ mod tests {
         let res = app.get_public_key(req).await.unwrap_err();
         assert_eq!(res.code(), tonic::Code::InvalidArgument);
         assert_eq!(res.message(), "Missing key package for multisig_id 0");
+    }
+
+    #[tokio::test]
+    async fn start_new_dkg_manual_mode_first_trigger_then_duplicate() {
+        let app = setup_with_manual_mode(true).await;
+
+        let first_req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        app.start_new_dkg(first_req)
+            .await
+            .expect("first StartNewDkg should initialize session");
+
+        let multisig_id = MultisigId::from(*LEGACY_MULTISIG_ID);
+        let sessions = app.dkg_sessions.lock().await;
+        assert!(sessions.contains_key(&multisig_id));
+        drop(sessions);
+
+        let duplicate_req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        let err = app.start_new_dkg(duplicate_req).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::AlreadyExists);
+        assert!(
+            err.message().contains("duplicate StartNewDkg request"),
+            "unexpected error message: {}",
+            err.message()
+        );
     }
 
     #[tokio::test]
