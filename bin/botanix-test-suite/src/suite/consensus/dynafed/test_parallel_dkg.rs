@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use botanix_btc_server_client::{
     BtcServerExtendedApi, BtcServerExtendedClient, GetPublicKeyRequest,
+    StartNewDkgRequest,
 };
 use botanix_chainspec::constants::BOTANIX_TESTNET;
 use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
@@ -38,6 +39,31 @@ pub async fn test_parallel_dkg(
     // Wait for DKG to complete for multisig ID 1 (the newly initialized federation)
     // Multisig ID 0 was pre-saved before nodes started, so it should be instantly available
     let target_multisig_id = MultisigId::new(LEGACY_MULTISIG_ID.as_u32() + 1);
+    let coordinator_member =
+        test_fed_members.get(&0).expect("coordinator member exists");
+    let mut coordinator_client = BtcServerExtendedClient::new(
+        format!("http://{}", coordinator_member.bitcoin_server_url),
+        None,
+    )
+    .await
+    .expect("Failed to create coordinator BTC server client");
+
+    coordinator_client
+        .start_new_dkg(StartNewDkgRequest {
+            multisig_id: target_multisig_id.as_u32(),
+        })
+        .await
+        .map_err(|e| {
+            super::error::Error::TestVectorExport(format!(
+                "failed to trigger StartNewDkg on coordinator: {e}"
+            ))
+        })?;
+
+    it_info_print!(format!(
+        "Triggered StartNewDkg from coordinator for multisig ID {}",
+        target_multisig_id.as_u32()
+    ));
+
     it_info_print!(
         "Waiting for DKG completion for multisig ID",
         target_multisig_id.as_u32()

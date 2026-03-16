@@ -415,6 +415,7 @@ pub struct CreateTestConfig {
     pub create_cometbft_nodes: bool,
     pub create_state_syncing_node: bool,
     pub num_multisigs: u16,
+    pub coordinator_manual_dkg_start: bool,
 }
 
 impl CreateTestConfig {
@@ -429,6 +430,7 @@ impl CreateTestConfig {
             create_cometbft_nodes: true,
             create_state_syncing_node: true,
             num_multisigs: 1,
+            coordinator_manual_dkg_start: false,
         }
     }
 }
@@ -444,6 +446,7 @@ impl Default for CreateTestConfig {
             create_cometbft_nodes: false,
             create_state_syncing_node: false,
             num_multisigs: 1,
+            coordinator_manual_dkg_start: false,
         }
     }
 }
@@ -763,6 +766,7 @@ impl Suite for ConsensusIntegrationTestSuite {
                         create_btc_servers: true,
                         create_cometbft_nodes: true,
                         num_multisigs: 2,
+                        coordinator_manual_dkg_start: true,
                         ..Default::default()
                     },
                     dynafed::test_parallel_dkg::test_parallel_dkg
@@ -1049,6 +1053,7 @@ impl Suite for ConsensusIntegrationTestSuite {
                     &members_keypairs,
                     create_test_config.num_multisigs,
                     &presave_multisigs,
+                    create_test_config.coordinator_manual_dkg_start,
                 )?);
             // let btc servers come up
             tokio::time::sleep(Duration::from_secs(5)).await;

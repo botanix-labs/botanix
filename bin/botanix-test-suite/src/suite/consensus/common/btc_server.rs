@@ -168,6 +168,7 @@ fn spawn_btc_server_process(
     btc_server_port: u16,
     db_path: PathBuf,
     multisig_configs: Vec<MultisigTomlConfig>,
+    coordinator_manual_dkg_start: bool,
 ) -> anyhow::Result<SpawnedBtcServerProcess> {
     let db_path_arg = db_path.display().to_string();
 
@@ -220,7 +221,7 @@ fn spawn_btc_server_process(
     let federation_path = temp_federation.path().to_str().unwrap().to_owned();
     let secret_key_path = temp_secret_key.path().to_str().unwrap().to_owned();
 
-    let args = vec![
+    let mut args = vec![
         "--btc-network",
         "regtest",
         "--db",
@@ -250,6 +251,9 @@ fn spawn_btc_server_process(
         "--fall-back-fee-rate-sat-per-vbyte",
         "5",
     ];
+    if coordinator_manual_dkg_start {
+        args.push("--coordinator-manual-dkg-start");
+    }
 
     // Keep the temp files alive for the duration of the test
     std::mem::forget(temp_federation);
@@ -277,6 +281,7 @@ pub fn spawn_n_btc_server_processes(
     )>,
     num_multisigs: u16,
     presave_multisigs: &[MultisigId],
+    coordinator_manual_dkg_start: bool,
 ) -> anyhow::Result<Vec<SpawnedBtcServerProcess>> {
     let mut processes = vec![];
 
@@ -351,6 +356,7 @@ pub fn spawn_n_btc_server_processes(
             btc_server_port,
             db_path.clone(),
             multisig_configs.clone(),
+            coordinator_manual_dkg_start,
         )?;
         processes.push(child_process);
     }
