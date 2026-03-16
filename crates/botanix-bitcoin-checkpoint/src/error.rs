@@ -54,6 +54,16 @@ pub enum BitcoinCheckpointError {
         height: u64,
     },
 
+    /// Bitcoin block height exceeds the u32 range.
+    #[error(
+        "Bitcoin block height {height} exceeds u32::MAX and cannot be \
+         safely represented"
+    )]
+    BlockHeightOverflow {
+        /// The height that could not be converted
+        height: u64,
+    },
+
     /// Chain configuration parameters would cause numeric overflow.
     #[error("Chain configuration values are too big: strong_confirmation_depth={strong_confirmation_depth}, historical_checkpoints_count={historical_checkpoints_count}, weak_checkpoints_count={weak_checkpoints_count}")]
     ChainParamsTooLarge {
