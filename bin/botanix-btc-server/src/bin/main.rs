@@ -3739,7 +3739,10 @@ mod tests {
     use botanix_configs::hash::compute_config_hash;
     use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
     use btcserverlib::{
-        dkg::DkgMessage, test_utils::pegout_requests_from_tx,
+        dkg::DkgMessage,
+        test_utils::{
+            pegout_requests_from_tx, trusted_dealer_setup_from_config,
+        },
         wallet::address::generate_taproot_change_scriptpubkey,
     };
     use frost_secp256k1_tr::keys::dkg::round1;
@@ -3975,7 +3978,7 @@ mod tests {
 
         for payload in inner.payloads {
             let frost_id = deserialize_frost_peer_id(payload.sender).unwrap();
-            assert_eq!(frost_id, frost_id!(0));
+            assert_eq!(frost_id, *app.identifier);
             let payload = payload.payload;
             let msg: DkgMessage =
                 ciborium::from_reader(payload.as_slice()).unwrap();
@@ -4009,7 +4012,7 @@ mod tests {
 
         // Wait until `get_dkg_payloads` should be called again.
         assert!(inner.timeout > 0);
-        let timeout = Duration::from_millis(inner.timeout);
+        let timeout = Duration::from_millis(inner.timeout + 10);
         tokio::time::sleep(timeout).await;
 
         // Two payloads to be (re-)sent.
@@ -4218,21 +4221,8 @@ mod tests {
 
     #[tokio::test]
     async fn new_consensus_checkpoint() {
-        let app = setup().await;
-        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let min_signers = app.get_min_signers(&multisig_id).unwrap();
-        let max_signers = app.get_max_signers(&multisig_id).unwrap();
-        let (shares, pk_package) =
-            trusted_dealer_setup(min_signers, max_signers);
-        let key_package =
-            frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
-                .expect("valid key package");
-
-        // Add the key packages
-        app.db
-            .set_pubkey_package(pk_package.clone())
-            .expect("set public key package");
-        app.db.set_key_package(key_package.clone()).expect("set key package");
+        let (app, _) = setup_app_with_keys().await;
+        let multisig_id = LEGACY_MULTISIG_ID;
 
         // Add some pegin utxos
         let mut pegins = vec![];
@@ -4337,21 +4327,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_consensus_checkpoint_no_finalized_pegouts_stored() {
-        let app = setup().await;
-        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let min_signers = app.get_min_signers(&multisig_id).unwrap();
-        let max_signers = app.get_max_signers(&multisig_id).unwrap();
-        let (shares, pk_package) =
-            trusted_dealer_setup(min_signers, max_signers);
-        let key_package =
-            frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
-                .expect("valid key package");
-
-        // Add the key packages
-        app.db
-            .set_pubkey_package(pk_package.clone())
-            .expect("set public key package");
-        app.db.set_key_package(key_package.clone()).expect("set key package");
+        let (app, _) = setup_app_with_keys().await;
+        let multisig_id = LEGACY_MULTISIG_ID;
 
         // Add some pegin utxos
         let mut pegins = vec![];
@@ -4724,15 +4701,18 @@ mod tests {
     ) -> (App<MockBitcoind>, frost::keys::KeyPackage) {
         let app = setup().await;
         let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let min_signers = app.get_min_signers(&multisig_id).unwrap();
-        let max_signers = app.get_max_signers(&multisig_id).unwrap();
+        let multisig_config = app.federation.get(&multisig_id).unwrap();
+
         let (shares, pk_package) =
-            trusted_dealer_setup(min_signers, max_signers);
+            trusted_dealer_setup_from_config(multisig_config);
+
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
+
         app.db.set_pubkey_package(pk_package).expect("set public key package");
         app.db.set_key_package(key_package.clone()).expect("set key package");
+
         (app, key_package)
     }
 
