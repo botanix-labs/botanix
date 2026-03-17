@@ -15,7 +15,9 @@ use botanix_cli_args::{
     chain::{get_botanix_chain_from_federation_config, BotanixNetwork},
     BotanixArgs,
 };
-use botanix_configs::federation::load_federation_config_toml;
+use botanix_configs::federation::{
+    load_federation_config_toml, AuthorityMultisigConfig,
+};
 use botanix_reth::{
     consensus::{
         comet_bft::abci::ABCIDriver,
@@ -35,7 +37,7 @@ use botanix_reth::{
         botanix_provider::create_botanix_provider,
         btc_server::create_btc_server_client,
         cometbft::create_cometbft_factory,
-        frost::{setup_frost, AuthorityMultisigConfig},
+        frost::setup_frost,
         metrics::run_metrics_service,
         migrator::init_and_migrate_botanix_db,
         network_builder::{lookup_head, setup_network_builder},
@@ -46,7 +48,6 @@ use botanix_reth::{
     },
 };
 use botanix_storage::{tables::create_botanix_tables, BotanixProviderFactory};
-use botanix_types::FrostId;
 use botanix_utils::panic_hook::set_panic_hook;
 use clap::Parser;
 use reth::{
@@ -375,10 +376,11 @@ fn main() -> eyre::Result<()> {
                     return Err(eyre::eyre!("btc-server mut be configured for authority"));
                 };
 
+                // TODO: Just filter non-membership configs?
                 let multisig_configs = frost_setup_result
                     .multisigs
                     .into_iter()
-                    .map(AuthorityMultisigConfig::try_from)
+                    .map(|m| AuthorityMultisigConfig::try_from(m).map_err(Into::into))
                     .collect::<eyre::Result<Vec<_>>>()?;
 
                 let operator = OperatorBuilder::new(

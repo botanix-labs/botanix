@@ -6,7 +6,6 @@ use crate::{
         Storage,
     },
     node::network::BotanixNetworkPrimitives,
-    services::frost::AuthorityMultisigConfig,
 };
 use botanix_authority_edh::header_ext::HeaderExt;
 use botanix_authority_metrics::AuthorityMetrics;
@@ -19,6 +18,7 @@ use botanix_btc_wallet::fallback::FallbackBitcoindClient;
 use botanix_comet_bft_rpc::{
     Client, CometBftRpcFactory, HttpCometBFTRpcClientFactory,
 };
+use botanix_configs::federation::AuthorityMultisigConfig;
 use botanix_data_parser::{DataParser, SerializationType};
 use botanix_storage::{
     MultisigManagerReader, StagedHeaderReader, StagedHeaderWriter,

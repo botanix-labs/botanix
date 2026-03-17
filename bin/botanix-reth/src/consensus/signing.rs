@@ -7,6 +7,7 @@ use botanix_btc_server_client::{
     BtcServerExtendedApi, Empty, FinalizeSigningResponse, GrpcClientError,
     SigningPackage, SigningPackageRequest,
 };
+use botanix_configs::federation::AuthorityMultisigConfig;
 use frost_secp256k1_tr as frost;
 
 use reth_network::frost::{

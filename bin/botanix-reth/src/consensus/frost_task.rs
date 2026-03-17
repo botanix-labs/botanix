@@ -12,7 +12,6 @@ use crate::{
         Storage,
     },
     node::network::BotanixNetworkPrimitives,
-    services::frost::AuthorityMultisigConfig,
 };
 use alloy_consensus::{BlockHeader, Sealable};
 use alloy_primitives::{Bytes, B256};
@@ -23,10 +22,11 @@ use botanix_authority_peg::peg_contract::{PeginMeta, PegoutWithId};
 use botanix_authority_rsp::RandomSource;
 use botanix_btc_server_client::{
     BtcServerExtendedApi, ConsensusCheckpointRequest, DkgPayloads,
-    GrpcClientError, MarkMultisigRequest, PendingPegout,
-    SubscribeToDynafedNotificationsStream, Utxo,
+    GrpcClientError, PendingPegout, SubscribeToDynafedNotificationsStream,
+    Utxo,
 };
 use botanix_comet_bft_rpc::{CometBftRpcFactory, HttpCometBFTRpcClientFactory};
+use botanix_configs::federation::AuthorityMultisigConfig;
 use botanix_data_parser::{
     prost_parser::{ProstError, ProstMessageSerdelizer},
     DataParser, Error as DataParserError,
@@ -35,7 +35,7 @@ use botanix_storage::models::MultisigStatus;
 use botanix_storage::{
     MultisigManagerReader, StagedHeaderReader, StagedHeaderWriter,
 };
-use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
+use botanix_types::MultisigId;
 use btcserverlib::{
     dkg::{
         DkgNotification, DynafedSubscriptionMessage, MultisigNotification,
@@ -156,7 +156,7 @@ where
         // TODO: Do basic validation on multisig_configs?
         let multisigs = multisig_configs
             .into_iter()
-            .map(|config| {
+            .map(|config: AuthorityMultisigConfig| {
                 // Setup the signing state machine.
                 let signing_sm = SigningStateMachine::new(
                     btc_server.clone(),
