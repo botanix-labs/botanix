@@ -176,8 +176,6 @@ fn spawn_btc_server_process(
         working_directory.pop();
     }
 
-    let identifier = id.to_string();
-    let coordinator = 0u16.to_string();
     let address = format!("0.0.0.0:{}", btc_server_port);
     let _http_port = (BTC_SERVER_HTTP_PORT + id).to_string();
 
@@ -225,10 +223,6 @@ fn spawn_btc_server_process(
         "regtest",
         "--db",
         db_path_arg.as_str(),
-        "--identifier",
-        identifier.as_str(),
-        "--coordinator",
-        coordinator.as_str(),
         "--federation-config-path",
         federation_path.as_str(),
         "--config-hash",
