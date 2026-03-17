@@ -1,5 +1,5 @@
 use botanix_chainspec::BotanixChainSpec;
-use botanix_configs::federation::FederationTomlConfig;
+use botanix_configs::federation::{FederationTomlConfig, MultisigConfig};
 use botanix_types::{FrostId, MultisigId};
 use frost_secp256k1_tr as frost;
 use reth::args::{DatadirArgs, NetworkArgs};
@@ -8,59 +8,6 @@ use reth_discv4::NodeRecord;
 use reth_network_peers::pk2id;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use std::{collections::BTreeMap, net::SocketAddr};
-
-/// Configuration for a single federation multisig, representing one epoch in
-/// the dynafed lifecycle.
-#[derive(Debug, Clone)]
-pub struct MultisigConfig {
-    /// Identifier for this multisig.
-    pub multisig_id: MultisigId,
-    /// Minimum number of signers required to produce a valid signature.
-    pub min_signers: u16,
-    /// Total number of signers for this multisig (defaults to member count).
-    pub max_signers: u16,
-    /// The coordinator Id.
-    pub coordinator: frost::Identifier,
-    /// The local identifier in the authority list, if present.
-    pub local_identifier: Option<frost::Identifier>,
-    /// The Frost identifier and their corresponding public keys of all participants in this multisig.
-    pub authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
-}
-
-impl TryFrom<MultisigConfig> for AuthorityMultisigConfig {
-    type Error = eyre::Error;
-
-    fn try_from(m: MultisigConfig) -> Result<Self, Self::Error> {
-        let local_identifier = m.local_identifier.ok_or_else(|| {
-            eyre::eyre!("node is not a member of multisig {}", m.multisig_id)
-        })?;
-
-        Ok(AuthorityMultisigConfig {
-            multisig_id: m.multisig_id,
-            min_signers: m.min_signers,
-            max_signers: m.max_signers,
-            coordinator: m.coordinator,
-            local_identifier,
-            authorities: m.authorities,
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AuthorityMultisigConfig {
-    /// Identifier for this multisig.
-    pub multisig_id: MultisigId,
-    /// Minimum number of signers required to produce a valid signature.
-    pub min_signers: u16,
-    /// Total number of signers for this multisig (defaults to member count).
-    pub max_signers: u16,
-    /// The coordinator Id.
-    pub coordinator: frost::Identifier,
-    /// The local identifier in the authority list.
-    pub local_identifier: frost::Identifier,
-    /// The Frost identifier and their corresponding public keys of all participants in this multisig.
-    pub authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
-}
 
 /// Result of setting up the Frost configuration for a node.
 #[derive(Debug, Clone)]
@@ -83,6 +30,8 @@ impl FrostConfigSetupResult {
             .map(|(_, pk)| *pk)
             .collect()
     }
+    /// Returns the combined list of unique authority Frost Ids across all
+    /// multisig configurations.
     pub fn frost_authorities(
         &self,
     ) -> BTreeMap<frost::Identifier, secp256k1::PublicKey> {
@@ -142,42 +91,12 @@ pub fn setup_frost(
         reth_config,
     );
 
-    // TODO: Here we must handle legacy Frost Ids which are derived from
-    // indexes, not their public keys.
     let multisigs = federation_config
         .multisigs
-        .into_iter()
+        .iter()
         .map(|m| {
-            // Prepare the list of authorities with the computed Frost Id and
-            // their corresponding public keys.
-            let authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey> =
-                m.get_federation_pub_keys()?
-                    .into_iter()
-                    .map(|pk| (*FrostId::from(&pk), pk))
-                    .collect();
-
-            // Retrieve the Frost Id of the coordinator.
-            let coordinator = *FrostId::from(m.get_coordinator_pub_key()?);
-            debug_assert!(authorities.contains_key(&coordinator));
-
-            // Retrieve the Frost Id of the local node, assuming it's a
-            // federation member.
-            let my_frost_id = *FrostId::from(&authority_pk);
-            let local_identifier = if authorities.contains_key(&my_frost_id) {
-                Some(my_frost_id)
-            } else {
-                None
-            };
-
-            // TODO: Do basic validation?
-            Ok(MultisigConfig {
-                multisig_id: m.multisig_id,
-                min_signers: m.min_signers,
-                max_signers: authorities.len() as u16,
-                coordinator,
-                local_identifier,
-                authorities,
-            })
+            MultisigConfig::from_toml_config(m, Some(&authority_pk))
+                .map_err(Into::into)
         })
         .collect::<eyre::Result<Vec<_>>>()?;
 
