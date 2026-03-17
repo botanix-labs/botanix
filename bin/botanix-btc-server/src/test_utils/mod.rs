@@ -22,6 +22,7 @@ use bitcoin::{
 use bitcoincore_rpc::json::{
     EstimateMode, EstimateSmartFeeResult, StringOrStringArray,
 };
+use botanix_configs::federation::AuthorityMultisigConfig;
 use botanix_types::MultisigId;
 use frost_secp256k1_tr as frost;
 use rand::{rngs::OsRng, thread_rng, RngCore};
@@ -347,6 +348,23 @@ pub fn random_p2wpkh_scriptpubkey() -> ScriptBuf {
     let sk = bitcoin::PrivateKey::generate(NETWORK);
     let wpk = sk.public_key(&secp).wpubkey_hash().unwrap();
     ScriptBuf::new_p2wpkh(&wpk)
+}
+
+pub fn trusted_dealer_setup_from_config(
+    config: &AuthorityMultisigConfig,
+) -> (
+    BTreeMap<frost::Identifier, frost::keys::SecretShare>,
+    frost::keys::PublicKeyPackage,
+) {
+    let rng: rand::prelude::ThreadRng = thread_rng();
+    let ids: Vec<_> = config.authorities.keys().copied().collect();
+    frost::keys::generate_with_dealer(
+        config.max_signers,
+        config.min_signers,
+        frost::keys::IdentifierList::Custom(&ids),
+        rng,
+    )
+    .expect("valid key package")
 }
 
 pub fn trusted_dealer_setup(
