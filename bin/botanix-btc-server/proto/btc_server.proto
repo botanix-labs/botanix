@@ -16,6 +16,8 @@ service BtcServer {
 
     rpc GetPublicKey(GetPublicKeyRequest) returns(GetPublicKeyResponse) {}
 
+    rpc GetFrostId(Empty) returns (GetFrostIdResponse) {}
+
     rpc GetDkgPayloads(GetDkgPayloadsRequest) returns(DkgPayloads) {}
 
     rpc NewDkgPayload(DkgPayload) returns(DkgPayloads) {}
@@ -316,6 +318,10 @@ message MultisigInfoEntry {
     bytes public_key_package = 2;
     optional DkgAttestation attestation = 3;
     bool is_final = 4;
+}
+
+message GetFrostIdResponse {
+    bytes frost_id = 1;
 }
 
 message DkgPayloads {

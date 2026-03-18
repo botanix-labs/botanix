@@ -2702,6 +2702,18 @@ where
         Ok(tonic::Response::new(resp))
     }
 
+    async fn get_frost_id(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<tonic::Response<rpc::GetFrostIdResponse>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let resp =
+            rpc::GetFrostIdResponse { frost_id: self.identifier.serialize() };
+
+        Ok(tonic::Response::new(resp))
+    }
+
     async fn new_dkg_payload(
         &self,
         req: tonic::Request<rpc::DkgPayload>,
