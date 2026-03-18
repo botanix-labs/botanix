@@ -284,7 +284,7 @@ pub struct AbortDkgRequest {
     pub multisig_id: u32,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct MarkMultisigRequest {
+pub struct MarkMultisigFinalizedRequest {
     #[prost(uint32, tag = "1")]
     pub multisig_id: u32,
 }
@@ -323,6 +323,11 @@ pub struct MultisigInfoEntry {
     pub attestation: ::core::option::Option<DkgAttestation>,
     #[prost(bool, tag = "4")]
     pub is_final: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetFrostIdResponse {
+    #[prost(bytes = "vec", tag = "1")]
+    pub frost_id: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DkgPayloads {
@@ -783,6 +788,28 @@ pub mod btc_server_client {
             ));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_frost_id(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetFrostIdResponse>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/GetFrostId",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("btc_server.BtcServer", "GetFrostId"));
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn get_dkg_payloads(
             &mut self,
             request: impl tonic::IntoRequest<super::GetDkgPayloadsRequest>,
@@ -869,6 +896,28 @@ pub mod btc_server_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("btc_server.BtcServer", "AbortDkg"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn mark_multisig_finalized(
+            &mut self,
+            request: impl tonic::IntoRequest<super::MarkMultisigFinalizedRequest>,
+        ) -> std::result::Result<tonic::Response<super::Empty>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!(
+                    "Service was not ready: {}",
+                    e.into()
+                ))
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/btc_server.BtcServer/MarkMultisigFinalized",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "btc_server.BtcServer",
+                "MarkMultisigFinalized",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn list_multisig_info(
