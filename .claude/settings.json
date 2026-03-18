@@ -3,6 +3,7 @@
         "claude-mem@thedotmack-claude-mem": true,
         "rust-analyzer-lsp@claude-plugins-official": true,
         "pr-review-toolkit@claude-plugins-official": true,
+        "ralph-wiggum@anthropics-claude-code": true,
         "typescript-lsp@claude-plugins-official": true,
         "security-guidance@claude-plugins-official": true,
         "feature-dev@claude-plugins-official": true

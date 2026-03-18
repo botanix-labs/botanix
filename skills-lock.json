@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "skills": {
+    "audit-reth": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "1919fa7fbc1083004b8cf97cca9412d3702d5ee0618e452b31b1cd6e26ccedb5"
+    },
+    "docker-local": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "1752a955721e32af9f17c127ae72fe50a11b5b178ace671f46f50e73a5cd54ba"
+    },
+    "monitoring-alerts": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "bc1de6f61a19fa7e499ddb7a5268583d5f87c923909ad72c3e7ff2b6004f6985"
+    },
+    "privy-wallet-reviewer": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "e710ecf35d2d4ee826d5d5971f5cae7cfdca94e58bb61a7462edc0158b6e8d54"
+    },
+    "sol-code-analyzer": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "f7972da0d3b8d9b5aee58b08bcd4f144c0f647f6aa6c9256d6191afe01d77bcc"
+    },
+    "sol-extended-security-check": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "16b689627273ece7dfbe144230f94785d229e89423845af881b5362332b71a83"
+    },
+    "sol-gas-opti": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "5e8e66a73e3dfdd83e1d2382a0387642ce43c71e51e584eaf443082275f2576d"
+    },
+    "solidity-code-reviewer": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "421e9953d25cbe8440d324a3aa5bde46baad78acb1da5e3059b93bdd9e305ae8"
+    },
+    "test-suite": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "125e37075994f8b1cb5d2bc8132c45b38b5aab3857fb93372824015ca80ecc03"
+    }
+  }
+}

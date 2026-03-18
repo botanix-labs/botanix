@@ -11,8 +11,8 @@ set -euo pipefail
 #    AGENTS="codex" ./scripts/update-agents.sh   # via env var
 # ──────────────────────────────────────────────────────────────
 
-SKILLS_REPO="botanix-labs/botanix-skills"
-SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.3.9}"
+SKILLS_REPO="botanix-labs/botanix-skills/skills/botanix"
+SKILLS_CLI_VERSION="${SKILLS_CLI_VERSION:-1.4.5}"
 
 # Default agents to install for (override via args or AGENTS env var)
 DEFAULT_AGENTS=("claude-code" "codex" "cursor" "droid" "opencode" "antigravity" "github-copilot")
@@ -34,9 +34,12 @@ echo "║  Agents: ${AGENTS[*]}"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
-# Ensure skills CLI is installed at the pinned version
-echo "→ Installing skills CLI v${SKILLS_CLI_VERSION}..."
-npm install --no-save "skills@${SKILLS_CLI_VERSION}" 2> /dev/null
+# Ensure skills CLI is available at the pinned version
+echo "→ Ensuring skills CLI v${SKILLS_CLI_VERSION}..."
+if ! npx skills@"${SKILLS_CLI_VERSION}" --version &> /dev/null; then
+    echo "  Installing skills CLI v${SKILLS_CLI_VERSION}..."
+    npm install -g "skills@${SKILLS_CLI_VERSION}" 2> /dev/null || true
+fi
 
 # Build the agent flags: -a claude-code -a codex ...
 AGENT_FLAGS=()
@@ -45,11 +48,13 @@ for agent in "${AGENTS[@]}"; do
 done
 
 # Install all skills from the repo, globally, non-interactively
-echo "→ Installing all skills for: ${AGENTS[*]}..."
-npx skills add "${SKILLS_REPO}" \
+echo "→ Installing botanix skills for: ${AGENTS[*]}..."
+if ! npx skills@"${SKILLS_CLI_VERSION}" add "${SKILLS_REPO}" \
     --skill '*' \
     "${AGENT_FLAGS[@]}" \
-    -y
+    -y; then
+    echo "⚠ No bink skills found yet — this is expected if none have been published"
+fi
 
 echo ""
 echo "✓ Agent skills updated successfully"

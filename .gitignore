@@ -114,6 +114,10 @@ botanix/
 docker-local/configs
 
 .agents/
+.skills-cache/
+.agent/skills/
+.cursor/skills/
+.factory/skills/
 .codex/
 .claude/skills/
-.claude/settings.json
+# .claude/settings.json
