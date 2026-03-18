@@ -24,7 +24,9 @@ service BtcServer {
 
     rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
 
-    rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
+    rpc AbortDkg(AbortDkgRequest) returns (Empty) {}
+
+    rpc MarkMultisigFinalized(MarkMultisigFinalizedRequest) returns (Empty) {}
 
     rpc ListMultisigInfo(Empty) returns (MultisigInfo) {}
 
@@ -289,7 +291,7 @@ message AbortDkgRequest {
     uint32 multisig_id = 1;
 }
 
-message MarkMultisigRequest {
+message MarkMultisigFinalizedRequest {
     uint32 multisig_id = 1;
 }
 

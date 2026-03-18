@@ -3094,6 +3094,18 @@ where
         Ok(tonic::Response::new(rpc::Empty {}))
     }
 
+    async fn mark_multisig_finalized(
+        &self,
+        req: tonic::Request<rpc::MarkMultisigFinalizedRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let multisig_id = MultisigId::from(req.into_inner().multisig_id);
+        self.mark_multisig_finalized(multisig_id).await.to_status()?;
+
+        Ok(tonic::Response::new(rpc::Empty {}))
+    }
+
     async fn list_multisig_info(
         &self,
         req: tonic::Request<rpc::Empty>,
