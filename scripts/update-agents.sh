@@ -38,7 +38,9 @@ echo ""
 echo "→ Ensuring skills CLI v${SKILLS_CLI_VERSION}..."
 if ! npx skills@"${SKILLS_CLI_VERSION}" --version &> /dev/null; then
     echo "  Installing skills CLI v${SKILLS_CLI_VERSION}..."
-    npm install -g "skills@${SKILLS_CLI_VERSION}" 2> /dev/null || true
+    if ! npm install -g "skills@${SKILLS_CLI_VERSION}"; then
+        echo "⚠ Failed to install skills CLI v${SKILLS_CLI_VERSION} globally; falling back to npx"
+    fi
 fi
 
 # Build the agent flags: -a claude-code -a codex ...
@@ -53,7 +55,7 @@ if ! npx skills@"${SKILLS_CLI_VERSION}" add "${SKILLS_REPO}" \
     --skill '*' \
     "${AGENT_FLAGS[@]}" \
     -y; then
-    echo "⚠ No bink skills found yet — this is expected if none have been published"
+    echo "⚠ No botanix skills found yet — this is expected if none have been published"
 fi
 
 echo ""

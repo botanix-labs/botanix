@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "audit-implementer": {
+      "source": "botanix-labs/botanix-skills",
+      "sourceType": "github",
+      "computedHash": "748d440a51ebac02a26fd498f865a39ed686dd93691688b5e1404d301ba9ac51"
+    },
     "audit-reth": {
       "source": "botanix-labs/botanix-skills",
       "sourceType": "github",
@@ -44,7 +49,7 @@
     "test-suite": {
       "source": "botanix-labs/botanix-skills",
       "sourceType": "github",
-      "computedHash": "125e37075994f8b1cb5d2bc8132c45b38b5aab3857fb93372824015ca80ecc03"
+      "computedHash": "33084ba0b86c11369b1444de67cd60b0be9b049311fedf66acc945b4ce8fd877"
     }
   }
 }
