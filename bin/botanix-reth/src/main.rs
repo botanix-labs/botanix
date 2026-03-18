@@ -15,7 +15,9 @@ use botanix_cli_args::{
     chain::{get_botanix_chain_from_federation_config, BotanixNetwork},
     BotanixArgs,
 };
-use botanix_configs::federation::load_federation_config_toml;
+use botanix_configs::federation::{
+    load_federation_config_toml, AuthorityMultisigConfig,
+};
 use botanix_reth::{
     consensus::{
         comet_bft::abci::ABCIDriver,
@@ -35,7 +37,7 @@ use botanix_reth::{
         botanix_provider::create_botanix_provider,
         btc_server::create_btc_server_client,
         cometbft::create_cometbft_factory,
-        frost::{setup_frost, AuthorityMultisigConfig},
+        frost::setup_frost,
         metrics::run_metrics_service,
         migrator::init_and_migrate_botanix_db,
         network_builder::{lookup_head, setup_network_builder},
@@ -53,7 +55,6 @@ use reth::{
     providers::CanonStateSubscriptions,
 };
 use reth_db::DatabaseEnv;
-use reth_network::frost::manager::authority_index_to_frost_identifier;
 use reth_node_builder::RethTransactionPoolConfig;
 use reth_node_core::version::version_metadata;
 use reth_prune_types::PruneModes;
@@ -316,25 +317,13 @@ fn main() -> eyre::Result<()> {
             let (multisig_manager, multisig_handle) = MultisigManager::new_botanix(botanix_db_provider_factory.clone(), legacy_multisig)?;
 
             for m in frost_setup_result.multisigs.clone() {
-                // TODO: Create convenience method for this.
-                let authorities = m
-                    .authorities
-                    .into_iter()
-                    .enumerate()
-                    .map(|(idx, pubkey) | {
-                        let idx = authority_index_to_frost_identifier(idx as u16);
-
-                        (idx, pubkey)
-                    })
-                    .collect();
-
                 // TODO: This could be a problem for expired multisigs, since it
                 // might reinsert those on startup.
                 multisig_manager.guard_commit(|g| {
                     g.set_staging_multisig(
                         m.multisig_id,
-                        authority_index_to_frost_identifier(m.coordinator),
-                        authorities,
+                        m.coordinator,
+                        m.authorities,
                     )
                 })?;
             }
@@ -387,10 +376,11 @@ fn main() -> eyre::Result<()> {
                     return Err(eyre::eyre!("btc-server mut be configured for authority"));
                 };
 
+                // TODO: Just filter non-membership configs?
                 let multisig_configs = frost_setup_result
                     .multisigs
                     .into_iter()
-                    .map(AuthorityMultisigConfig::try_from)
+                    .map(|m| AuthorityMultisigConfig::try_from(m).map_err(Into::into))
                     .collect::<eyre::Result<Vec<_>>>()?;
 
                 let operator = OperatorBuilder::new(

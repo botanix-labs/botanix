@@ -16,17 +16,23 @@ service BtcServer {
 
     rpc GetPublicKey(GetPublicKeyRequest) returns(GetPublicKeyResponse) {}
 
+    rpc GetFrostId(Empty) returns (GetFrostIdResponse) {}
+
     rpc GetDkgPayloads(GetDkgPayloadsRequest) returns(DkgPayloads) {}
 
     rpc NewDkgPayload(DkgPayload) returns(DkgPayloads) {}
 
     rpc StartNewDkg(StartNewDkgRequest) returns(Empty) {}
 
-    rpc AbortDkg(AbortDkgRequest) returns(Empty) {}
+    rpc AbortDkg(AbortDkgRequest) returns (Empty) {}
+
+    rpc MarkMultisigFinalized(MarkMultisigFinalizedRequest) returns (Empty) {}
+
+    rpc ListMultisigInfo(Empty) returns (MultisigInfo) {}
 
     rpc SunsetMultisig(SunsetMultisigRequest) returns(SunsetMultisigResponse) {}
 
-    rpc ExpireMultisig(SunsetMultisigRequest) returns(ExpireMultisigResponse) {}
+    rpc ExpireMultisig(ExpireMultisigRequest) returns(ExpireMultisigResponse) {}
 
     rpc SubscribeToDynafedNotifications(Empty) returns(stream SubscribeToDynafedNotificationsStream) {}
 
@@ -57,8 +63,6 @@ service BtcServer {
     rpc FinalizeSigning(FinalizeSigningRequest) returns (FinalizeSigningResponse) {}
 
     rpc GetAllUtxos(Empty) returns (GetAllUtxosResponse) {}
-
-    rpc ListMultisigs(Empty) returns (ListMultisigsResponse) {}
 
     rpc GetWalletState(Empty) returns (WalletStateResponse) {}
 
@@ -219,10 +223,6 @@ message GetAllUtxosResponse {
     repeated Utxo utxos = 1;
 }
 
-message ListMultisigsResponse {
-    repeated uint32 ids = 1;
-}
-
 message GetGatewayAddressRequest {
     // Eth address to tweak by
     string eth_address = 1;
@@ -291,7 +291,7 @@ message AbortDkgRequest {
     uint32 multisig_id = 1;
 }
 
-message MarkMultisigRequest {
+message MarkMultisigFinalizedRequest {
     uint32 multisig_id = 1;
 }
 
@@ -309,6 +309,21 @@ message SunsetMultisigResponse {
 
 message ExpireMultisigResponse {
     bytes signature = 1;
+}
+
+message MultisigInfo {
+    repeated MultisigInfoEntry entries = 1;
+}
+
+message MultisigInfoEntry {
+    uint32 multisig_id = 1;
+    bytes public_key_package = 2;
+    optional DkgAttestation attestation = 3;
+    bool is_final = 4;
+}
+
+message GetFrostIdResponse {
+    bytes frost_id = 1;
 }
 
 message DkgPayloads {

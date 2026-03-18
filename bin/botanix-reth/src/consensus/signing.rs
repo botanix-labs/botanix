@@ -1,8 +1,5 @@
-use crate::{
-    consensus::utils::{
-        parse_signing_session_id, retry_exec, retry_future, FrostParseError,
-    },
-    services::frost::AuthorityMultisigConfig,
+use crate::consensus::utils::{
+    parse_signing_session_id, retry_exec, retry_future, FrostParseError,
 };
 use botanix_authority_metrics::AuthorityMetrics;
 use botanix_authority_rsp::RandomSource;
@@ -10,16 +7,11 @@ use botanix_btc_server_client::{
     BtcServerExtendedApi, Empty, FinalizeSigningResponse, GrpcClientError,
     SigningPackage, SigningPackageRequest,
 };
+use botanix_configs::federation::AuthorityMultisigConfig;
 use frost_secp256k1_tr as frost;
 
-use botanix_consensus_common::utils::{
-    current_inturn_index, is_inturn, unix_timestamp,
-};
 use reth_network::frost::{
-    manager::{
-        authority_index_to_frost_identifier, FrostCommand, PeerData,
-        ToFrostManager,
-    },
+    manager::{FrostCommand, PeerData, ToFrostManager},
     FrostPeerCommand, PeerMessageResponse, SigningEventResponseType,
     SigningResponse,
 };
@@ -118,8 +110,8 @@ pub(crate) struct SigningSession {
     session_id: [u8; 32],
     /// The state of the session
     state: SigningState,
-    /// The index of the session coordinator
-    coordinator_index: u64,
+    /// The Frost Id of the session coordinator
+    coordinator: frost::Identifier,
     #[allow(dead_code)]
     /// The original session payload
     original_psbt: Option<Vec<u8>>,
@@ -131,7 +123,6 @@ pub(crate) struct SigningStateMachine<ToFrostMan, Source, BtcServerClient> {
     btc_client: BtcServerClient,
     frost_handle: ToFrostMan,
     signing_states: Arc<RwLock<HashMap<[u8; 32], SigningSession>>>,
-    personal_frost_identifier: frost::Identifier,
     multisig_config: AuthorityMultisigConfig,
     random_source_provider: Source,
     metrics: Arc<AuthorityMetrics>,
@@ -152,11 +143,6 @@ where
         random_source_provider: Source,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        let personal_frost_identifier: frost::Identifier =
-            authority_index_to_frost_identifier(
-                multisig_config.authority_index as u16,
-            );
-
         let signing_states: SigningStatesMap =
             Arc::new(RwLock::new(HashMap::default()));
 
@@ -164,7 +150,6 @@ where
             btc_client,
             frost_handle,
             signing_states,
-            personal_frost_identifier,
             multisig_config,
             random_source_provider,
             metrics,
@@ -199,7 +184,7 @@ where
     pub(crate) async fn insert_new_signing_session(
         &mut self,
         session_id: [u8; 32],
-        coordinator_index: u64,
+        coordinator: frost::Identifier,
         original_psbt: Option<Vec<u8>>,
         signing_state: SigningState,
     ) {
@@ -211,7 +196,7 @@ where
             SigningSession {
                 session_id,
                 state: signing_state,
-                coordinator_index,
+                coordinator,
                 original_psbt,
             },
         );
@@ -424,57 +409,35 @@ where
     /// Uses a random 32 byte source to determine the current inturn authority
     pub(crate) async fn get_coordinator_peer_data(
         &self,
-    ) -> Result<Option<(PeerData, u64)>, Error> {
+    ) -> Result<Option<(PeerData, frost::Identifier)>, Error> {
         // check if we are in turn
-        let is_inturn = is_inturn(
-            self.multisig_config.authorities.len() as u64,
-            self.multisig_config.authority_index as u64,
-            0, //TODO: Change to selection time range when we move to robin
-            self.random_source_provider.random_source(),
-        );
-        match is_inturn {
-            true => {
-                // if we are inturn, return None to avoid sending messages to ourselves.
-                Ok(None)
-            }
-            false => {
-                // if we are not inturn, find the coordinator in the list of peers
-                let all_connected_frost_peers =
-                    self.get_all_peers_handle().await?;
-                let current_inturn_authority_index = current_inturn_index(
-                    self.multisig_config.authorities.len() as u64,
-                    unix_timestamp(),
-                    0, //TODO: Change to selection time range when we move to robin
-                );
-                let current_inturn_authority_frost_identifier =
-                    authority_index_to_frost_identifier(
-                        current_inturn_authority_index as u16,
-                    );
-                let coord = all_connected_frost_peers.iter().find_map(
-                    |(_peer_id, peer_data)| {
-                        if peer_data.frost_identifier
-                            == current_inturn_authority_frost_identifier
-                        {
-                            Some(peer_data.clone())
-                        } else {
-                            None
-                        }
-                    },
-                );
-
-                Ok(coord.zip(Some(current_inturn_authority_index)))
-            }
+        if self.is_coordinator() {
+            // if we are inturn, return None to avoid sending messages to ourselves.
+            return Ok(None);
         }
+
+        // if we are not inturn, find the coordinator in the list of peers
+        let all_connected_frost_peers = self.get_all_peers_handle().await?;
+
+        let coord = all_connected_frost_peers.into_iter().find_map(
+            |(_peer_id, peer_data)| {
+                if peer_data.frost_identifier
+                    == self.multisig_config.coordinator
+                {
+                    Some(peer_data)
+                } else {
+                    None
+                }
+            },
+        );
+
+        Ok(coord.zip(Some(self.multisig_config.coordinator)))
     }
 
     /// Returns if we are a coordinator or not
     pub(crate) fn is_coordinator(&self) -> bool {
-        is_inturn(
-            self.multisig_config.authorities.len() as u64,
-            self.multisig_config.authority_index as u64,
-            0, //TODO: Change to selection time range when we move to robin
-            self.random_source_provider.random_source(),
-        )
+        self.multisig_config.local_identifier
+            == self.multisig_config.coordinator
     }
 
     pub(crate) async fn gossip_to_peers(
@@ -500,7 +463,7 @@ where
             // Broadcast signing round 2 package to all peers (excluding ourselves)
             for (_peer_id, connected_peer) in connected_peers.iter() {
                 if connected_peer.frost_identifier
-                    != self.personal_frost_identifier
+                    != self.multisig_config.local_identifier
                 {
                     let resp = PeerMessageResponse::Signing(SigningResponse {
                         response_type,
@@ -544,8 +507,8 @@ where
         match self.get_signing_session(session_id).await {
             Some(signing_session) => {
                 // a coordinator should never re-trigger an existing session
-                if signing_session.coordinator_index
-                    == self.multisig_config.authority_index as u64
+                if signing_session.coordinator
+                    == self.multisig_config.local_identifier
                 {
                     // clear session and lose ability to be coordinator
                     // this could happen if previous session failed but wasn't removed
@@ -562,7 +525,7 @@ where
                 self.abort_signing().await?;
                 self.insert_new_signing_session(
                     session_id,
-                    self.multisig_config.authority_index as u64,
+                    self.multisig_config.local_identifier,
                     Some(psbt.clone()),
                     SigningState::Initial,
                 )
@@ -577,7 +540,7 @@ where
         // then we send the psbt to other peers
         let signing_round1_package =
             self.get_round1_signing_package(signing_session_id, psbt).await?;
-        let my_frost_identifier = self.personal_frost_identifier;
+        let my_frost_identifier = self.multisig_config.local_identifier;
         self.new_round1_signing_package(
             &my_frost_identifier,
             signing_session_id,
@@ -673,7 +636,8 @@ where
         self.update_signing_state(session_id, SigningState::Round2).await;
 
         // Broadcast signing round 1 to the coordinator
-        if coordinator_frost_identifier != self.personal_frost_identifier {
+        if coordinator_frost_identifier != self.multisig_config.local_identifier
+        {
             let resp = PeerMessageResponse::Signing(SigningResponse {
                 response_type:
                     SigningEventResponseType::CoordinatorRound1SigningPackage,
@@ -722,7 +686,7 @@ where
             warn!(target: "consensus::authority::signing::coordinator_process_round1", "we are not the coordinator");
             return Ok(());
         }
-        let my_frost_identifier = self.personal_frost_identifier;
+        let my_frost_identifier = self.multisig_config.local_identifier;
 
         info!(
             target: "consensus::authority::signing::coordinator_process_round1",
@@ -903,12 +867,12 @@ where
         info!(
             target: "consensus::authority::signing::coordinator_process_round2",
             "My identifier {:?} and the peers identifier {:?}",
-            self.personal_frost_identifier,
+            self.multisig_config.local_identifier,
             frost_identifier
         );
 
         // return if the sending identifier is us
-        if self.personal_frost_identifier == *frost_identifier {
+        if self.multisig_config.local_identifier == *frost_identifier {
             info!(target: "consensus::authority::signing::coordinator_process_round2", "identifier is us, this should not happen");
             return Ok(());
         }

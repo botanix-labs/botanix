@@ -1,11 +1,10 @@
 use botanix_storage::{
     models::MultisigRecord, BotanixGuardedFactory, BotanixProviderFactory,
 };
-use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
+use botanix_types::{FrostId, MultisigId, LEGACY_MULTISIG_ID};
 use frost_secp256k1_tr::{self as frost, keys::PublicKeyPackage};
 use merlin::Transcript;
 use reth_db::Database;
-use reth_network::frost::manager::authority_index_to_frost_identifier;
 use reth_node_types::NodeTypes;
 use reth_provider::{
     providers::NodeTypesForProvider, ProviderError, ProviderResult,
@@ -24,8 +23,16 @@ pub use botanix_storage::{
     MultisigManagerReader, MultisigManagerWriter,
 };
 
-/// Type alias for [`MultisigManager`] backed by the concrete Botanix database.
-// TODO: Extend documentation and justify this.
+/// [`MultisigManager`] specialised for the concrete Botanix database stack.
+///
+/// [`MultisigManager`] is generic over any `DB` that implements
+/// [`MultisigManagerReader`] and [`MultisigManagerWriter`]. In production the
+/// implementation is [`BotanixGuardedFactoryExt`], which wraps a
+/// [`BotanixProviderFactory`] and handles transaction lifecycle (open, commit,
+/// rollback) internally.
+///
+/// This alias pins those two type parameters so callers that work exclusively
+/// with the Botanix stack don't have to repeat the full generic spelling.
 pub type BotanixMultisigManager<DB, N> =
     MultisigManager<BotanixGuardedFactoryExt<DB, N>>;
 
@@ -34,14 +41,8 @@ where
     DB: Database + Clone,
     N: NodeTypes + NodeTypesForProvider,
 {
-    /// Creates a new [`BotanixMultisigManager`] from a provider factory.
-    ///
-    /// This is a convenience constructor that wraps the factory in a
-    /// [`BotanixGuardedFactory`] for transaction lifecycle management, then
-    /// wraps that in [`BotanixGuardedFactoryExt`] to provide the
-    /// [`MultisigManagerReader`] and [`MultisigManagerWriter`] implementations.
-    ///
-    /// Returns the manager and its associated [`MultisigSubmitter`] handle.
+    /// Creates a new [`BotanixMultisigManager`] and its associated
+    /// [`MultisigSubmitter`] handle from a provider factory.
     pub fn new_botanix(
         factory: BotanixProviderFactory<DB, N>,
         legacy_preload: Option<AttestedMultisigEntry>,
@@ -173,6 +174,18 @@ pub enum Error {
     /// Participant is not a federation member.
     #[error("not a member of the federation")]
     NotAFedMember,
+    /// Attested Multisig Id not found.
+    #[error("multisig Id not found")]
+    AttestedMultisigIdNotFound,
+    /// Coordinator is not a federation member.
+    #[error("coordinator is not a member")]
+    CoordinatorNotAMember,
+    /// Staging Multisig Id not found.
+    #[error("multisig Id not found")]
+    StagingMultisigIdNotFound,
+    /// Preloaded legacy multisig must have funding status.
+    #[error("preloaded legacy multisig must have funding status")]
+    LegacyPreloadNotFunding,
     /// Signature verification failed.
     #[error("signature verification failed")]
     SignatureVerificationFailed,
@@ -200,9 +213,6 @@ pub enum Error {
     /// Multiple staging multisig are currently available, which is prohibited.
     #[error("multiple staging multisigs available (prohibited)")]
     MultipleStagingMultisigs,
-    /// No funding multisig is currently available.
-    #[error("no funding multisig available")]
-    NoFundingMultisig,
     /// Multiple funding multisig are currently available, which is prohibited.
     #[error("multiple funding multisigs available (prohibited)")]
     MultipleFundingMultisigs,
@@ -251,10 +261,16 @@ pub enum Message {
             (frost::round2::SignatureShare, secp256k1::ecdsa::Signature),
         >,
     },
+    /// Transitions a degrading multisig to the sunsetting state.
+    ///
+    /// Only the designated coordinator can authorize sunsetting by signing a
+    /// Merlin transcript commitment that binds the multisig ID and public key
+    /// package. The multisig MUST be in the [`MultisigStatus::Degrading`]
+    /// state.
     Sunsetting {
         /// The multisig to sunset.
         multisig_id: MultisigId,
-        /// Coordinator's signature over the expiration commitment.
+        /// Coordinator's signature over the sunsetting commitment.
         coordinator_signature: secp256k1::ecdsa::Signature,
     },
     /// Removes a sunset multisig from the manager.
@@ -358,11 +374,9 @@ impl std::future::Future for SubmissionCallback {
 
 /// Client handle for submitting messages to the multisig manager.
 ///
-/// Supports submitting attestations (to activate staging multisigs) and
-/// expirations (to remove sunset multisigs). Messages are validated before
-/// being proposed to consensus.
-// TODO: Update comment
-// TODO: Update methods
+/// Supports submitting attestations (to activate staging multisigs), sunsetting
+/// requests (to sunset degrading multisigs), and expirations (to remove sunset
+/// multisigs). Messages are validated before being proposed to consensus.
 #[derive(Debug, Clone)]
 pub struct MultisigSubmitter {
     queue: mpsc::Sender<ChannelPayload>,
@@ -474,19 +488,20 @@ pub struct MultisigManager<DB> {
     client: DB,
 }
 
-// TODO: Those `set_*` methods should only be available during building.
 impl<DB> MultisigManager<DB>
 where
     DB: MultisigManagerReader + MultisigManagerWriter,
 {
-    /// Creates a new manager and its associated [`MultisigSubmitter`] handle by
-    /// loading and validating existing multisig state from the database.
+    /// Creates a new manager and its associated [`MultisigSubmitter`] handle.
     ///
-    /// Scans all persisted multisig records to populate the in-memory cache of
-    /// the current `staging` and `funding` multisig IDs. Fails if the database
-    /// state is inconsistent (e.g. multiple staging or funding multisigs, or no
-    /// funding multisig at all).
-    // TODO: Update docs
+    /// Performs a startup integrity check by scanning all persisted multisig
+    /// records and rejecting inconsistent database state (e.g. more than one
+    /// staging multisig or more than one funding multisig).
+    ///
+    /// If no funding multisig is found and `legacy_preload` is provided, that
+    /// entry is written into the database as a migration step for nodes that
+    /// haven't yet persisted the legacy funding multisig to storage. Once all
+    /// nodes have migrated, the caller can stop supplying this argument.
     pub fn new(
         client: DB,
         legacy_preload: Option<AttestedMultisigEntry>,
@@ -496,12 +511,11 @@ where
         let mut staging: Option<MultisigId> = None;
         let mut funding: Option<MultisigId> = None;
 
-        // Preload staging/funding IDs from persisted state. This also acts as
-        // an integrity check: we reject startup if invariants are violated
+        // Do a state integrity check: reject startup if invariants are violated
         // (e.g. more than one staging or funding multisig).
         //
         // NOTE: Linear scan is acceptable here since the total number of
-        // multisig records is tiny in practice (one or two).
+        // multisig records is tiny in practice (a handful at most).
         for record in client.get_multisig_records()? {
             match record {
                 MultisigRecord::Staged { entry } => {
@@ -526,15 +540,15 @@ where
         }
 
         // Legacy migration: if no funding multisig was found in the database,
-        // bootstrap one from the preloaded legacy entry. Safe to remove once
-        // all nodes have migrated past the [`MultisigManager`] introduction.
+        // bootstrap one from the preloaded legacy entry if available. Safe to
+        // remove from the caller once all nodes have migrated past this point
+        // and the legacy multisig has been persisted in storage.
         match (legacy_preload, funding) {
             (Some(legacy), None) => {
                 let legacy_id = legacy.multisig_id;
 
                 if legacy.status != MultisigStatus::Funding {
-                    // TODO: Create distinct error type for legacy check
-                    return Err(Error::LifecycleMustBeFunded);
+                    return Err(Error::LegacyPreloadNotFunding);
                 }
 
                 client.insert_attested_multisig(legacy_id, legacy)?;
@@ -567,6 +581,10 @@ where
         // Check if the given multisig has already been attested.
         if self.client.get_attested_multisig(multisig_id)?.is_some() {
             return Ok(true);
+        }
+
+        if !fed_members.contains_key(&coordinator) {
+            return Err(Error::CoordinatorNotAMember);
         }
 
         let staging =
@@ -637,7 +655,10 @@ where
             Message::Sunsetting {
                 multisig_id, //
                 coordinator_signature,
-            } => todo!(),
+            } => self.validate_sunsetting_dry_run(
+                multisig_id,
+                coordinator_signature,
+            ),
             Message::Expiration {
                 multisig_id, //
                 coordinator_signature,
@@ -713,8 +734,7 @@ where
         let staging = self
             .client
             .get_staging_multisig(multisig_id)?
-            // TODO: This should distinguish between non-existing ID and non-Staged.
-            .ok_or(Error::LifecycleMustBeStaged)?;
+            .ok_or(Error::StagingMultisigIdNotFound)?;
 
         let coordinator = staging.coordinator;
         let fed_members = staging.fed_members;
@@ -765,7 +785,7 @@ where
         let staging = self
             .client
             .get_staging_multisig(multisig_id)?
-            .ok_or(Error::LifecycleMustBeStaged)?;
+            .ok_or(Error::StagingMultisigIdNotFound)?;
 
         // Demote the current funding multisig to the Degrading state, if one exists.
         if let Some(mut degrading) = self.get_funding_multisig()? {
@@ -776,6 +796,7 @@ where
 
             // Update status.
             degrading.status = MultisigStatus::Degrading;
+
             self.client
                 .insert_attested_multisig(degrading.multisig_id, degrading)?;
         }
@@ -792,6 +813,7 @@ where
 
             // Update status.
             self.client.insert_attested_multisig(multisig_id, funding)?;
+
             debug_assert!(self
                 .client
                 .get_staging_multisig(multisig_id)?
@@ -800,27 +822,49 @@ where
 
         Ok(())
     }
-
-    /// Verifies a coordinator's signature over a commitment built by the provided closure.
+    /// Validates a sunsetting request without modifying state.
     ///
-    /// The closure should build and return the 32-byte commitment to be signed.
-    // TODO: Deprecate this => should be embedded
-    fn verify_coordinator_signature<F>(
-        coord_pubkey: &secp256k1::PublicKey,
-        coordinator_signature: &secp256k1::ecdsa::Signature,
-        build_commitment: F,
-    ) -> Result<(), Error>
-    where
-        F: FnOnce() -> Result<[u8; 32], Error>,
-    {
-        let commit = build_commitment()?;
+    /// Verifies the coordinator's signature over a commitment binding the
+    /// multisig ID and public key package.
+    fn validate_sunsetting_dry_run(
+        &self,
+        multisig_id: MultisigId,
+        coordinator_signature: secp256k1::ecdsa::Signature,
+    ) -> Result<(), Error> {
+        // Only degrading multisigs can be sunset.
+        let degrading = self
+            .client
+            .get_attested_multisig(multisig_id)?
+            .ok_or(Error::AttestedMultisigIdNotFound)?;
 
-        let msg =
-            secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+        if degrading.status != MultisigStatus::Degrading {
+            return Err(Error::LifecycleMustBeDegraded);
+        }
 
+        let coord_pubkey = degrading
+            .fed_members
+            .get(&degrading.coordinator)
+            .ok_or(Error::CoordinatorNotAMember)?;
+
+        // Compute the expected signing payload.
+        let msg = {
+            let mut commit = [0; 32];
+
+            let mut t = Transcript::new(b"botanix/multisig-sunsetting/v1");
+            t.append_u64(b"multisig_id", multisig_id.as_u32() as u64);
+            t.append_message(
+                b"public_key_package",
+                &degrading.public_key_package.serialize()?,
+            );
+            t.challenge_bytes(b"sunsetting_commit", &mut commit);
+
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size")
+        };
+
+        // Validate the coordinators signature.
         let secp = secp256k1::Secp256k1::new();
         coord_pubkey
-            .verify(&secp, &msg, coordinator_signature)
+            .verify(&secp, &msg, &coordinator_signature)
             .map_err(|_| Error::SignatureVerificationFailed)?;
 
         Ok(())
@@ -830,38 +874,14 @@ where
         multisig_id: MultisigId,
         coordinator_signature: secp256k1::ecdsa::Signature,
     ) -> Result<(), Error> {
-        // Only degrading multisigs can be sunset.
-        let degrading = self
+        self.validate_sunsetting_dry_run(multisig_id, coordinator_signature)?;
+
+        let mut degrading = self
             .client
             .get_attested_multisig(multisig_id)?
-            .ok_or(Error::LifecycleMustBeDegraded)?;
+            .ok_or(Error::AttestedMultisigIdNotFound)?;
 
-        if degrading.status != MultisigStatus::Degrading {
-            return Err(Error::LifecycleMustBeDegraded);
-        }
-
-        let coord_pubkey = degrading
-            .fed_members
-            .get(&degrading.coordinator)
-            .expect("coordinator pubkey must exist");
-
-        Self::verify_coordinator_signature(
-            coord_pubkey,
-            &coordinator_signature,
-            || {
-                let mut commit = [0; 32];
-                let mut t = Transcript::new(b"botanix/multisig-sunsetting/v1");
-                t.append_u64(b"multisig_id", multisig_id.as_u32() as u64);
-                t.append_message(
-                    b"public_key_package",
-                    &degrading.public_key_package.serialize()?,
-                );
-                t.challenge_bytes(b"sunsetting_commit", &mut commit);
-                Ok(commit)
-            },
-        )?;
-
-        let mut degrading = degrading;
+        debug_assert_eq!(degrading.status, MultisigStatus::Degrading);
 
         degrading.status = MultisigStatus::Sunsetting;
         self.client.insert_attested_multisig(multisig_id, degrading)?;
@@ -881,7 +901,7 @@ where
         let sunset = self
             .client
             .get_attested_multisig(multisig_id)?
-            .ok_or(Error::LifecycleMustBeSunset)?;
+            .ok_or(Error::AttestedMultisigIdNotFound)?;
 
         if sunset.status != MultisigStatus::Sunsetting {
             return Err(Error::LifecycleMustBeSunset);
@@ -890,23 +910,30 @@ where
         let coord_pubkey = sunset
             .fed_members
             .get(&sunset.coordinator)
-            .expect("coordinator pubkey must exist");
+            .ok_or(Error::CoordinatorNotAMember)?;
 
-        Self::verify_coordinator_signature(
-            coord_pubkey,
-            &coordinator_signature,
-            || {
-                let mut commit = [0; 32];
-                let mut t = Transcript::new(b"botanix/multisig-expiration/v1");
-                t.append_u64(b"multisig_id", multisig_id.as_u32() as u64);
-                t.append_message(
-                    b"public_key_package",
-                    &sunset.public_key_package.serialize()?,
-                );
-                t.challenge_bytes(b"expiration_commit", &mut commit);
-                Ok(commit)
-            },
-        )
+        // Compute the expected signing payload.
+        let msg = {
+            let mut commit = [0; 32];
+
+            let mut t = Transcript::new(b"botanix/multisig-expiration/v1");
+            t.append_u64(b"multisig_id", multisig_id.as_u32() as u64);
+            t.append_message(
+                b"public_key_package",
+                &sunset.public_key_package.serialize()?,
+            );
+            t.challenge_bytes(b"expiration_commit", &mut commit);
+
+            secp256k1::Message::from_digest_slice(&commit).expect("valid size")
+        };
+
+        // Validate the coordinators signature.
+        let secp = secp256k1::Secp256k1::new();
+        coord_pubkey
+            .verify(&secp, &msg, &coordinator_signature)
+            .map_err(|_| Error::SignatureVerificationFailed)?;
+
+        Ok(())
     }
     /// Validates an expiration request and removes the multisig.
     ///
@@ -1001,6 +1028,7 @@ impl AttestationManager {
 
         let msg =
             secp256k1::Message::from_digest_slice(&commit).expect("valid size");
+
         fed.verify(&self.secp, &msg, &attestation_sig)
             .map_err(|_| Error::SignatureVerificationFailed)?;
 
@@ -1105,7 +1133,7 @@ pub fn attested_legacy_multisig() -> AttestedMultisigEntry {
         114,
     ];
 
-    let coordinator = authority_index_to_frost_identifier(0);
+    let coordinator = *FrostId::from(0);
 
     let fed_member_keys: &[&str] = &[
         "02d124f7dfd25575db9a41e658ef67e0e2f7ea65c5d21307fb0c8c56c64d2e88cc",
@@ -1131,10 +1159,10 @@ pub fn attested_legacy_multisig() -> AttestedMultisigEntry {
             .iter()
             .enumerate()
             .map(|(i, hex_key)| {
-                let id = authority_index_to_frost_identifier(i as u16);
+                let frost_id = *FrostId::from(i as u16);
                 let pubkey = secp256k1::PublicKey::from_str(hex_key)
                     .expect("valid public key");
-                (id, pubkey)
+                (frost_id, pubkey)
             })
             .collect();
 
@@ -1301,17 +1329,17 @@ pub mod test_data {
 
     /// Alice's FROST identifier (derived from `0u16`).
     pub fn alice_id() -> frost::Identifier {
-        authority_index_to_frost_identifier(0)
+        *FrostId::from(0)
     }
 
     /// Bob's FROST identifier (derived from `1u16`).
     pub fn bob_id() -> frost::Identifier {
-        authority_index_to_frost_identifier(1)
+        *FrostId::from(1)
     }
 
     /// Dave's FROST identifier (derived from `2u16`).
     pub fn dave_id() -> frost::Identifier {
-        authority_index_to_frost_identifier(2)
+        *FrostId::from(2)
     }
 
     /// Returns a legacy attested multisig in `Funding` status for migration tests.
@@ -1441,7 +1469,6 @@ pub mod test_data {
 
     /// Produces a coordinator signature over the sunsetting transcript
     /// commitment for the given multisig ID and public key package.
-    // TODO: This should be unified with `btc-server`
     pub fn sign_sunsetting(
         secret_key: &secp256k1::SecretKey,
         multisig_id: MultisigId,
@@ -1464,7 +1491,6 @@ pub mod test_data {
 
     /// Produces a coordinator signature over the expiration transcript
     /// commitment for the given multisig ID and public key package.
-    // TODO: This should be unified with `btc-server`
     pub fn sign_expiration(
         secret_key: &secp256k1::SecretKey,
         multisig_id: MultisigId,
@@ -1718,7 +1744,7 @@ mod tests {
 
         // No staging entry exists for UPGRADE_MULTISIG.
         let result = manager.recv(test_data::attestation_message());
-        assert!(matches!(result, Err(Error::LifecycleMustBeStaged)));
+        assert!(matches!(result, Err(Error::StagingMultisigIdNotFound)));
     }
 
     /// Attesting a multisig that is already funding (not staged) fails. The
@@ -1739,7 +1765,7 @@ mod tests {
         *multisig_id = test_data::LEGACY_MULTISIG;
 
         let result = manager.recv(msg);
-        assert!(matches!(result, Err(Error::LifecycleMustBeStaged)));
+        assert!(matches!(result, Err(Error::StagingMultisigIdNotFound)));
     }
 
     /// Attesting a sunsetting multisig fails -- only staged multisigs can be
@@ -1783,7 +1809,7 @@ mod tests {
         *multisig_id = legacy_id;
 
         let result = manager.recv(msg);
-        assert!(matches!(result, Err(Error::LifecycleMustBeStaged)));
+        assert!(matches!(result, Err(Error::StagingMultisigIdNotFound)));
     }
 
     /// Attestation with a mismatched multisig ID fails signature verification
@@ -1941,7 +1967,7 @@ mod tests {
         };
 
         let result = manager.recv(msg);
-        assert!(matches!(result, Err(Error::LifecycleMustBeDegraded)));
+        assert!(matches!(result, Err(Error::AttestedMultisigIdNotFound)));
     }
 
     /// Sunsetting a funding multisig fails -- only degrading multisigs
@@ -1987,7 +2013,7 @@ mod tests {
         };
 
         let result = manager.recv(msg);
-        assert!(matches!(result, Err(Error::LifecycleMustBeSunset)));
+        assert!(matches!(result, Err(Error::AttestedMultisigIdNotFound)));
     }
 
     /// Expiring a staged multisig fails -- only sunsetting multisigs can be
@@ -2020,7 +2046,7 @@ mod tests {
         };
 
         let result = manager.recv(msg);
-        assert!(matches!(result, Err(Error::LifecycleMustBeSunset)));
+        assert!(matches!(result, Err(Error::AttestedMultisigIdNotFound)));
     }
 
     /// Expiring a funding multisig fails -- it must be sunsetting first.

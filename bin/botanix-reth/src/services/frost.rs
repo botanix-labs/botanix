@@ -1,64 +1,13 @@
 use botanix_chainspec::BotanixChainSpec;
-use botanix_configs::federation::FederationTomlConfig;
-use botanix_types::MultisigId;
+use botanix_configs::federation::{FederationTomlConfig, MultisigConfig};
+use botanix_types::{FrostId, MultisigId};
+use frost_secp256k1_tr as frost;
 use reth::args::{DatadirArgs, NetworkArgs};
 use reth_cli_util::get_secret_key;
 use reth_discv4::NodeRecord;
 use reth_network_peers::pk2id;
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
-use std::net::SocketAddr;
-
-/// Configuration for a single federation multisig, representing one epoch in
-/// the dynafed lifecycle.
-#[derive(Debug, Clone)]
-pub struct MultisigConfig {
-    /// Identifier for this multisig.
-    pub multisig_id: MultisigId,
-    /// Minimum number of signers required to produce a valid signature.
-    pub min_signers: u16,
-    /// Total number of signers for this multisig (defaults to member count).
-    pub max_signers: u16,
-    /// The coordinator index, usually zero.
-    pub coordinator: u16,
-    /// Index of the current node within the `authorities` list.
-    pub authority_index: Option<u16>,
-    /// Public keys of all members participating in this multisig.
-    pub authorities: Vec<secp256k1::PublicKey>,
-}
-
-impl TryFrom<MultisigConfig> for AuthorityMultisigConfig {
-    type Error = eyre::Error;
-
-    fn try_from(m: MultisigConfig) -> Result<Self, Self::Error> {
-        let authority_index = m.authority_index.ok_or_else(|| {
-            eyre::eyre!("node is not a member of multisig {}", m.multisig_id)
-        })?;
-
-        Ok(AuthorityMultisigConfig {
-            multisig_id: m.multisig_id,
-            min_signers: m.min_signers,
-            max_signers: m.max_signers,
-            coordinator: m.coordinator,
-            authority_index,
-            authorities: m.authorities,
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AuthorityMultisigConfig {
-    /// Identifier for this multisig.
-    pub multisig_id: MultisigId,
-    /// Minimum number of signers required to produce a valid signature.
-    pub min_signers: u16,
-    /// Total number of signers for this multisig (defaults to member count).
-    pub max_signers: u16,
-    pub coordinator: u16,
-    /// Index of the current node within the `authorities` list.
-    pub authority_index: u16,
-    /// Public keys of all members participating in this multisig.
-    pub authorities: Vec<secp256k1::PublicKey>,
-}
+use std::{collections::BTreeMap, net::SocketAddr};
 
 /// Result of setting up the Frost configuration for a node.
 #[derive(Debug, Clone)]
@@ -72,13 +21,26 @@ pub struct FrostConfigSetupResult {
 impl FrostConfigSetupResult {
     /// Returns the combined list of unique authority public keys across all multisig
     /// configurations.
-    pub fn authorities(&self) -> Vec<secp256k1::PublicKey> {
+    pub fn public_keys(&self) -> Vec<secp256k1::PublicKey> {
         let mut seen = std::collections::HashSet::new();
         self.multisigs
             .iter()
             .flat_map(|m| m.authorities.iter())
-            .filter(|pk| seen.insert(**pk))
-            .cloned()
+            .filter(|(_, pk)| seen.insert(**pk))
+            .map(|(_, pk)| *pk)
+            .collect()
+    }
+    /// Returns the combined list of unique authority Frost Ids across all
+    /// multisig configurations.
+    pub fn frost_authorities(
+        &self,
+    ) -> BTreeMap<frost::Identifier, secp256k1::PublicKey> {
+        let mut seen = std::collections::HashSet::new();
+        self.multisigs
+            .iter()
+            .flat_map(|m| m.authorities.iter())
+            .filter(|(frost_id, _)| seen.insert(**frost_id))
+            .map(|(id, pk)| (*id, *pk))
             .collect()
     }
 }
@@ -131,23 +93,10 @@ pub fn setup_frost(
 
     let multisigs = federation_config
         .multisigs
-        .into_iter()
+        .iter()
         .map(|m| {
-            let authorities = m.get_federation_pub_keys()?;
-            let authority_index: Option<_> = authorities
-                .iter()
-                .position(|a| *a == authority_pk)
-                .map(|i| i as u16);
-
-            // TODO: Do basic validation?
-            Ok(MultisigConfig {
-                multisig_id: m.multisig_id,
-                min_signers: m.min_signers,
-                max_signers: authorities.len() as u16,
-                coordinator: m.coordinator,
-                authority_index,
-                authorities,
-            })
+            MultisigConfig::from_toml_config(m, Some(&authority_pk))
+                .map_err(Into::into)
         })
         .collect::<eyre::Result<Vec<_>>>()?;
 

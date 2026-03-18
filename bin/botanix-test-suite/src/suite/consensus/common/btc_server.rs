@@ -176,8 +176,6 @@ fn spawn_btc_server_process(
         working_directory.pop();
     }
 
-    let identifier = id.to_string();
-    let coordinator = 0u16.to_string();
     let address = format!("0.0.0.0:{}", btc_server_port);
     let _http_port = (BTC_SERVER_HTTP_PORT + id).to_string();
 
@@ -225,10 +223,6 @@ fn spawn_btc_server_process(
         "regtest",
         "--db",
         db_path_arg.as_str(),
-        "--identifier",
-        identifier.as_str(),
-        "--coordinator",
-        coordinator.as_str(),
         "--federation-config-path",
         federation_path.as_str(),
         "--config-hash",
@@ -309,6 +303,9 @@ pub fn spawn_n_btc_server_processes(
 
     // Generate FROST identifiers once for all federation members.
     // These must match what BtcServer uses at runtime (derived via frost_id! macro).
+    //
+    // TODO (lamafab): Frost Ids are now generated the federation member public
+    // keys and not indices; what are the implications of this here?
     let frost_identifiers: Vec<frost::Identifier> =
         (0..global_context.max_signers).map(|i| frost_id!(i)).collect();
 

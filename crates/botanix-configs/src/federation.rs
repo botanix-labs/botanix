@@ -1,8 +1,10 @@
 use bitcoin::secp256k1::hashes::{sha256, Hash};
 use botanix_types::MultisigId;
 use displaydoc::Display as DisplayDoc;
+use frost_secp256k1_tr as frost;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     fs::{self, File},
     io::{Read, Write},
     net::{SocketAddr, ToSocketAddrs},
@@ -36,6 +38,10 @@ pub enum Error {
     InvalidConfig(String),
     /// Missing multisig configuration entry
     MissingMultisig,
+    /// Bad coordinator index
+    BadCoordinatorIndex,
+    /// TODO
+    LocalIdentifierMissing,
 }
 /// Federation member public key and socket address
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -79,7 +85,7 @@ pub struct MultisigTomlConfig {
     pub multisig_id: MultisigId,
     /// Threshold for this multisig
     pub min_signers: u16,
-    /// The coordinator identifier.
+    /// The coordinator index in the `members` list.
     #[serde(default)]
     pub coordinator: u16,
     /// Members participating in this multisig
@@ -127,12 +133,22 @@ impl MultisigTomlConfig {
             .collect()
     }
 
+    /// Returns the coordinator public key.
+    pub fn get_coordinator_pub_key(
+        &self,
+    ) -> Result<secp256k1::PublicKey, Error> {
+        self.members
+            .get(self.coordinator as usize)
+            .ok_or(Error::BadCoordinatorIndex)
+            .map(|m| m.public_key())?
+    }
+
     /// Convert the config to a string
     pub fn to_string(&self) -> Result<String, Error> {
         toml::to_string(self).map_err(Error::ParseSerializeConfig)
     }
 
-    /// Compute a SHA-256 checksum of the serialized TOML config.
+    /// Compute the SHA-256 checksum of the serialized TOML config.
     pub fn checksum(&self) -> Result<[u8; 32], Error> {
         let s = self.to_string()?;
         let h = sha256::Hash::hash(s.as_bytes()).to_byte_array();
@@ -205,7 +221,7 @@ impl FederationTomlConfig {
 
     /// Extracts federation public keys and socket addresses for a specific
     /// multisig id.
-    pub fn get_federation_addr_for_multisig(
+    pub fn get_federation_addr_by_multisig(
         &self,
         multisig_id: &MultisigId,
     ) -> Result<Vec<(secp256k1::PublicKey, SocketAddr)>, Error> {
@@ -222,14 +238,15 @@ impl FederationTomlConfig {
 
     pub fn get_config_by_multisig_id(
         &self,
-        multisig_id: &MultisigId,
+        multisig_id: MultisigId,
     ) -> Result<&MultisigTomlConfig, Error> {
         self.multisigs
             .iter()
-            .find(|m| &m.multisig_id == multisig_id)
+            .find(|m| m.multisig_id == multisig_id)
             .ok_or(Error::MissingMultisig)
     }
 }
+
 impl FromStr for FederationTomlConfig {
     type Err = Error;
 
@@ -265,6 +282,146 @@ pub fn load_federation_config_toml<P: AsRef<Path>>(
     let raw = fs::read_to_string(path)?;
     let genesis_toml_config = FederationTomlConfig::from_str(&raw)?;
     Ok(genesis_toml_config)
+}
+
+/// Configuration for a single federation multisig, representing one epoch in
+/// the dynafed lifecycle.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct MultisigConfig {
+    /// Identifier for this multisig.
+    pub multisig_id: MultisigId,
+    /// Minimum number of signers required to produce a valid signature.
+    pub min_signers: u16,
+    /// Total number of signers for this multisig (defaults to member count).
+    pub max_signers: u16,
+    /// The coordinator Id.
+    pub coordinator: frost::Identifier,
+    /// The local identifier in the authority list, if present.
+    pub local_identifier: Option<frost::Identifier>,
+    /// The Frost identifier and their corresponding public keys of all participants in this multisig.
+    pub authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
+}
+
+impl MultisigConfig {
+    pub fn is_local_identifier_present(&self) -> bool {
+        let Some(local_id) = self.local_identifier else {
+            return false;
+        };
+
+        self.authorities.contains_key(&local_id)
+    }
+    pub fn from_toml_config(
+        m: &MultisigTomlConfig,
+        local_pk: Option<&secp256k1::PublicKey>,
+    ) -> Result<Self, Error> {
+        let multisig_id = m.multisig_id;
+        let min_signers = m.min_signers;
+        let max_signers = m.members.len() as u16;
+
+        // Deserialize the public keys of the authorities and compute their
+        // corresponding Frost Ids.
+        let authorities: Vec<(frost::Identifier, secp256k1::PublicKey)> = m
+            .members
+            .iter()
+            .map(|m| {
+                let pubkey = secp256k1::PublicKey::from_str(&m.key)?;
+                let frost_id = frost::Identifier::derive(&pubkey.serialize())
+                    .expect("frost id must be valid");
+
+                Ok((frost_id, pubkey))
+            })
+            .collect::<Result<_, Error>>()?;
+
+        // Retrieve the coordinator Frost Id.
+        let coordinator = authorities
+            .get(m.coordinator as usize)
+            .ok_or(Error::BadCoordinatorIndex)?
+            .0;
+
+        // Compute the local Frost Id, if set.
+        let local_identifier = local_pk.map(|pk| {
+            frost::Identifier::derive(&pk.serialize())
+                .expect("frost id must be valid")
+        });
+
+        let authorities: BTreeMap<_, _> = authorities.into_iter().collect();
+
+        Ok(MultisigConfig {
+            multisig_id,
+            min_signers,
+            max_signers,
+            coordinator,
+            local_identifier,
+            authorities,
+        })
+    }
+}
+
+/// Multisig configuration for a node that is a participant in the multisig.
+/// Guarantees that `local_identifier` is present, meaning the local node's
+/// public key was found among the authorities.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AuthorityMultisigConfig {
+    /// Identifier for this multisig.
+    pub multisig_id: MultisigId,
+    /// Minimum number of signers required to produce a valid signature.
+    pub min_signers: u16,
+    /// Total number of signers for this multisig (defaults to member count).
+    pub max_signers: u16,
+    /// The coordinator Id.
+    pub coordinator: frost::Identifier,
+    /// The local identifier in the authority list.
+    pub local_identifier: frost::Identifier,
+    /// The Frost identifier and their corresponding public keys of all participants in this multisig.
+    pub authorities: BTreeMap<frost::Identifier, secp256k1::PublicKey>,
+}
+
+impl AuthorityMultisigConfig {
+    pub fn from_toml_config(
+        m: &MultisigTomlConfig,
+        local_pk: Option<&secp256k1::PublicKey>,
+    ) -> Result<Self, Error> {
+        let config = MultisigConfig::from_toml_config(m, local_pk)?;
+        Self::try_from(config)
+    }
+    /// Compute the SHA-256 checksum of the shared multisig config.
+    ///
+    /// Only covers fields common to all participants (excludes
+    /// `local_identifier`) so every node produces the same digest.
+    pub fn checksum(&self) -> [u8; 32] {
+        // TODO (lamafab): there's probably a more elegant way to do this(?)
+        let shared = MultisigConfig {
+            multisig_id: self.multisig_id,
+            min_signers: self.min_signers,
+            max_signers: self.max_signers,
+            coordinator: self.coordinator,
+            local_identifier: None,
+            authorities: self.authorities.clone(),
+        };
+
+        let s =
+            toml::to_string(&shared).expect("toml serialization must be valid");
+
+        sha256::Hash::hash(s.as_bytes()).to_byte_array()
+    }
+}
+
+impl TryFrom<MultisigConfig> for AuthorityMultisigConfig {
+    type Error = Error;
+
+    fn try_from(m: MultisigConfig) -> Result<Self, Self::Error> {
+        let local_identifier =
+            m.local_identifier.ok_or_else(|| Error::LocalIdentifierMissing)?;
+
+        Ok(AuthorityMultisigConfig {
+            multisig_id: m.multisig_id,
+            min_signers: m.min_signers,
+            max_signers: m.max_signers,
+            coordinator: m.coordinator,
+            local_identifier,
+            authorities: m.authorities,
+        })
+    }
 }
 
 #[cfg(test)]

@@ -29,12 +29,14 @@ pub async fn dkg_flow(
                     .map(|val| val.btc_server_port)
             })
             .ok_or_else(|| Error::InvalidBtcServerPort)?;
+
         let c = botanix_btc_server_client::BtcServerClient::connect(format!(
             "http://localhost:{}",
             port
         ))
         .await
         .map_err(Error::ServerConnect)?;
+
         clients.push(c);
     }
 
@@ -68,9 +70,11 @@ pub async fn dkg_flow(
             .await
             .map_err(Error::Request)?
             .into_inner();
+
         // Ensure all pks can be serialized as secp public keys
         let _ = bitcoin::secp256k1::PublicKey::from_str(&pk.publickey)
             .map_err(Error::PubKeyParse)?;
+
         pkeys.push(pk.publickey);
     }
 
@@ -86,17 +90,29 @@ pub async fn dkg_flow(
 pub async fn do_dkg(
     clients: &mut [botanix_btc_server_client::BtcServerClient<Channel>],
 ) -> Result<(), Error> {
-    // creating a mapping of client index to fronst identifier
+    // Create a mapping of client index to frost identifier
     let mut frost_id_map = BTreeMap::new();
-    for (i, _) in clients.iter().enumerate() {
-        let frost_id = frost_id!(i as u16);
-        frost_id_map.insert(frost_id, i);
+
+    for (idx, client) in clients.iter_mut().enumerate() {
+        // Retrieve the Frost Id directly from the btc-server
+        let resp = client
+            .get_frost_id(tonic::Request::new(
+                botanix_btc_server_client::Empty {},
+            ))
+            .await
+            .map_err(Error::Request)?
+            .into_inner();
+
+        let frost_id = frost::Identifier::deserialize(&resp.frost_id)
+            .expect("frost Id returned from btc-server must be valid");
+
+        frost_id_map.insert(frost_id, idx);
     }
 
     let mut queue: VecDeque<botanix_btc_server_client::DkgPayload> =
         VecDeque::new();
 
-    // Kick-off the initial DKG payloads; only the coordinator will have a
+    // Kick-off the initial DKG payloads; only the coordinator will have
     // payloads to send.
     for client in clients.iter_mut() {
         let p = client
@@ -113,6 +129,8 @@ pub async fn do_dkg(
             queue.push_back(p);
         }
     }
+
+    let mut attestations = Vec::new();
 
     // Forward each payload to the correct client, and push the resulting
     // payloads back into the queue.
@@ -131,10 +149,31 @@ pub async fn do_dkg(
         for p in p.payloads {
             queue.push_back(p);
         }
+
+        // Track any resulting Dkg attestation.
+        if let Some(att) = p.attestation {
+            attestations.push(att);
+        }
     }
 
-    // At this point, the DKG should be complete, and all clients should have
-    // the same public key.
+    // Validate that the DKG attestations are equal for all participants.
+    attestations.dedup();
+    if attestations.len() != 1 {
+        return Err(Error::DkgAttestationMismatch);
+    }
+
+    let att = attestations.into_iter().next().unwrap();
+    let multisig_id = att.multisig_id;
+
+    // Explicitly mark the multisig as finalized for each client. Normally this
+    // is done directly via the [`NewConsensusCheckpoint`] endpoint.
+    for client in clients.iter_mut() {
+        let req = botanix_btc_server_client::MarkMultisigFinalizedRequest {
+            multisig_id,
+        };
+
+        client.mark_multisig_finalized(req).await.map_err(Error::Request)?;
+    }
 
     Ok(())
 }

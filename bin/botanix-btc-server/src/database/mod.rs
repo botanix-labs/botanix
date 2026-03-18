@@ -161,12 +161,19 @@ pub struct ExportedKeyPackage {
     pub enc_pk_package: Vec<u8>,
 }
 
+// TODO: Temporary structure, remove
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct MultisigInfo {
+    pub multisig_id: MultisigId,
+    pub public_key_package: frost::keys::PublicKeyPackage,
+    pub attestation_entry: Option<AttestionEntry>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct AttestionEntry {
     pub attestation: dkg::Attestation,
     pub marked_finalized: bool,
 }
-
 #[derive(Clone)]
 pub struct Db {
     /// NB a db is also a "default tree" so maybe here we could store some
@@ -539,7 +546,8 @@ impl Db {
     /// Returns `Err(NoFinalizedMultisigFound)` if neither the last nor
     /// second-to-last multisig is finalized.
     pub fn get_funding_multisig_id(&self) -> Result<MultisigId, Error> {
-        let ids = self.list_multisig_ids()?;
+        let ids: Vec<MultisigId> = self.list_multisig_ids()?;
+
         let candidates: Vec<_> = ids.into_iter().rev().take(2).collect();
         for id in candidates {
             if let Some(entry) = self.get_multisig_attestation(id)? {
@@ -548,6 +556,7 @@ impl Db {
                 }
             }
         }
+
         Err(Error::NoFinalizedMultisigFound)
     }
 
@@ -631,7 +640,8 @@ impl Db {
         &self,
         script_pubkey: &ScriptBuf,
     ) -> Result<Option<MultisigId>, ChangeOutputError> {
-        let ids = self.list_multisig_ids()?;
+        let ids: Vec<MultisigId> = self.list_multisig_ids()?;
+
         let candidates: Vec<_> = ids.into_iter().rev().take(2).collect();
 
         for id in candidates {
@@ -713,6 +723,35 @@ impl Db {
         }
         ids.sort();
         Ok(ids)
+    }
+
+    /// Lists the [`MultisigInfo`]'s of all multisigs.
+    pub fn list_multisig_info(&self) -> Result<Vec<MultisigInfo>, Error> {
+        let mut list = vec![];
+
+        for res in self.pubkey_packages.iter() {
+            let (key, val) = res?;
+
+            let multisig_id: MultisigId =
+                u32::from_le_bytes(key.as_ref().try_into()?).into();
+
+            let public_key_package: frost::keys::PublicKeyPackage =
+                ciborium::from_reader(val.as_ref())?;
+
+            let attestation_entry: Option<AttestionEntry> = self
+                .attestations
+                .get(key)?
+                .map(|att| ciborium::from_reader(att.as_ref()))
+                .transpose()?;
+
+            list.push(MultisigInfo {
+                multisig_id,
+                public_key_package,
+                attestation_entry,
+            });
+        }
+
+        Ok(list)
     }
 
     /// Migrates legacy single-key storage to new multi-key storage format.

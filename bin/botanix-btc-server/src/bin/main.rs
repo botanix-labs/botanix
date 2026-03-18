@@ -2,7 +2,7 @@
 extern crate log;
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt::Debug,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::Path,
@@ -19,9 +19,12 @@ use bitcoin::{
 use bitcoincore_rpc::{Auth, RpcApi};
 use botanix_btc_server_client::jwt::{JwtError, JwtSecret};
 use botanix_configs::{
-    federation::MultisigTomlConfig, hash::verify_config_hash,
+    federation::{
+        self, AuthorityMultisigConfig, MultisigConfig, MultisigTomlConfig,
+    },
+    hash::verify_config_hash,
 };
-use botanix_types::MultisigId;
+use botanix_types::{FrostId, MultisigId};
 use btc_server::btc_server_server::{BtcServer, BtcServerServer};
 use btcserverlib::{
     badarg,
@@ -33,7 +36,7 @@ use btcserverlib::{
         MultisigNotification, SweepNotification,
     },
     federation_args::FederationTomlConfig,
-    frost_id, handle_signing_error,
+    handle_signing_error,
     http::{create_web_server, state::ServerState},
     measure_rpc_latency,
     merkle::get_wallet_state_commitment,
@@ -74,7 +77,6 @@ use tonic::{
 };
 
 const JWT_HEADER_KEY: &str = "trace-proto-bin";
-const DEFAULT_COORDINATOR_ID: u16 = 0;
 /// Maximum number of UTXOs allowed for source multisig before migration can end.
 /// This limit ensures the sweep transaction fits within Bitcoin network size limits.
 // TODO: Use this in the sweep endpoint?
@@ -106,6 +108,8 @@ pub enum Error {
     Signing(#[from] SigningError),
     #[error("Coordination error")]
     Coordination(#[from] coordinator::error::CoordinatorError),
+    #[error("Federation config error: {0}")]
+    FederationConfig(#[from] federation::Error),
     #[error("Parsing error")]
     Parsing(#[from] ParsingError),
     #[error("io error: {0}")]
@@ -128,10 +132,8 @@ pub enum Error {
     DkgStateMachine(#[from] dkg::Error),
     #[error("Dkg deserialization error: {0}")]
     DkgDeserialization(#[from] ciborium::de::Error<std::io::Error>),
-    #[error("Multisig not found: {0}")]
-    MultisigNotFound(MultisigId),
-    #[error("Bad public key")]
-    BadPublicKey,
+    #[error("Multisig Id not present in federation config")]
+    MissingMultisigId,
 }
 
 // To status util to convert Results with top level errors to tonic::Status
@@ -146,10 +148,15 @@ impl<T, S: Into<Error> + Debug> ToStatus<T> for Result<T, S> {
                 Error::Signing(signing) => {
                     Err(internal!("Signing error: {}", signing))
                 }
-                Error::Config(internal) => Err(internal!("{:?}", internal)),
+                Error::Config(internal) => {
+                    Err(internal!("Config error: {:?}", internal))
+                }
                 Error::Frost(frost) => Err(internal!("Frost error: {}", frost)),
                 Error::Coordination(coordination) => {
                     Err(internal!("Coordination error: {}", coordination))
+                }
+                Error::FederationConfig(federation) => {
+                    Err(internal!("Federation config error:{:?}", federation))
                 }
                 Error::Parsing(parsing) => {
                     Err(internal!("Parsing error: {}", parsing))
@@ -179,10 +186,9 @@ impl<T, S: Into<Error> + Debug> ToStatus<T> for Result<T, S> {
                 Error::DkgDeserialization(de) => {
                     Err(internal!("Dkg deserialization error: {}", de))
                 }
-                Error::MultisigNotFound(multisig_id) => {
-                    Err(internal!("Multisig not found: {}", multisig_id))
-                }
-                Error::BadPublicKey => Err(internal!("Bad public key")),
+                Error::MissingMultisigId => Err(internal!(
+                    "Multisig Id not present in federation config"
+                )),
             },
         }
     }
@@ -282,11 +288,11 @@ struct App<BitcoinRpcApi> {
     /// This lock is taken when we're making a tx so that we don't accidentally
     /// spend the same operations twice.
     tx_lock: Arc<Mutex<()>>,
-    identifier: frost::Identifier,
+    identifier: FrostId,
     /// Secret key for P2P communication during DKG
     p2p_secret_key: secp256k1::SecretKey,
     /// Federation config for DKG
-    federation: FederationTomlConfig,
+    federation: HashMap<MultisigId, AuthorityMultisigConfig>,
     /// Map of multisig_id to DKG state machines
     dkg_sessions: Arc<Mutex<HashMap<MultisigId, DkgState>>>,
     /// The signing nonces for the current signing session
@@ -377,20 +383,30 @@ where
     }
 
     /// Get the minimum number of signers required for the given multisig.
-    fn get_min_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
+    fn get_min_signers(&self, multisig_id: &MultisigId) -> Result<u16, Error> {
         self.federation
-            .get_config_by_multisig_id(&multisig_id)
+            .get(multisig_id)
             .map(|c| c.min_signers)
-            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .ok_or(Error::MissingMultisigId)
     }
 
     /// Get the maximum number of signers required for the given multisig, which
     /// is always equal to the member size.
-    fn get_max_signers(&self, multisig_id: MultisigId) -> Result<u16, Error> {
+    fn get_max_signers(&self, multisig_id: &MultisigId) -> Result<u16, Error> {
         self.federation
-            .get_config_by_multisig_id(&multisig_id)
-            .map(|c| c.members.len() as u16)
-            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .get(multisig_id)
+            .map(|c| c.max_signers)
+            .ok_or(Error::MissingMultisigId)
+    }
+
+    fn is_coordinator_by_id(
+        &self,
+        multisig_id: &MultisigId,
+    ) -> Result<bool, Error> {
+        self.federation
+            .get(multisig_id)
+            .map(|c| c.coordinator == *self.identifier)
+            .ok_or(Error::MissingMultisigId)
     }
 
     fn load_pegout_scheduler(
@@ -399,7 +415,7 @@ where
         pegin_conf_depth: u32,
         telemetry: Option<Arc<Telemetry>>,
         btc_network: bitcoin::Network,
-        identifier: u16,
+        identifier: FrostId,
     ) -> Result<PegoutScheduler, database::Error> {
         if let Some(latest) = db.get_pegout_mgr_finalized_block()? {
             let txs = db.get_tracked_txs()?;
@@ -442,14 +458,12 @@ where
 
     /// Creates a new DKG state machine for the given multisig_id.
     fn new_dkg_state_machine(
-        frost_identifier: frost::Identifier,
+        frost_identifier: FrostId,
         p2p_secret_key: secp256k1::SecretKey,
-        coordinator: frost::Identifier,
-        multisig_conf: &MultisigTomlConfig,
-        is_coordinator: bool,
+        multisig_conf: AuthorityMultisigConfig,
     ) -> Result<DkgState, Error> {
         let min_signers = multisig_conf.min_signers;
-        let max_signers = multisig_conf.members.len() as u16;
+        let max_signers = multisig_conf.max_signers;
 
         let dkg_config = dkg::Config {
             max_signers,
@@ -463,22 +477,11 @@ where
             round3_package_timeout: Duration::from_secs(3),
             round4_package_timeout: Duration::from_secs(3),
             // Start a new DKG session if not completed in 5 minutes.
+            // TODO: This is no longer used => remove.
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
 
-        let members: BTreeMap<frost::Identifier, secp256k1::PublicKey> =
-            multisig_conf
-                .members
-                .iter()
-                .enumerate()
-                .map(|(idx, m)| {
-                    let id = frost_id!(idx as u16);
-                    let pub_key = secp256k1::PublicKey::from_str(&m.key)
-                        .map_err(|_| Error::BadPublicKey)?;
-
-                    Ok((id, pub_key))
-                })
-                .collect::<Result<BTreeMap<_, _>, Error>>()?;
+        let is_coordinator = *frost_identifier == multisig_conf.coordinator;
 
         // As the coordinator, we simply use the system time as the session
         // nonce. This value doesn't need to be precisely synchronized - it
@@ -505,17 +508,14 @@ where
 
         // Use the reproducible config checksum as the session context. This
         // must be equal for all members.
-        let session_context = multisig_conf
-            .checksum()
-            .expect("failed to serialize multisig config")
-            .to_vec();
+        let session_context = multisig_conf.checksum().to_vec();
 
         let machine = dkg::DkgStateMachine::new(
-            frost_identifier,
+            *frost_identifier,
             p2p_secret_key,
             multisig_conf.multisig_id,
-            coordinator,
-            members,
+            multisig_conf.coordinator,
+            multisig_conf.authorities,
             dkg_config,
             session_context,
             session_nonce,
@@ -538,30 +538,24 @@ where
             warn!("Failed to migrate legacy key packages: {}", e);
         }
 
+        // Prepare our secret key.
+        let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
+        let sanitized_key =
+            raw.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>();
+        let p2p_secret_key =
+            sanitized_key.as_str().parse::<secp256k1::SecretKey>().map_err(
+                |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
+            )?;
+
+        // Get the current node's public key to check membership
+        let secp = secp256k1::Secp256k1::new();
+        let node_public_key =
+            secp256k1::PublicKey::from_secret_key(&secp, &p2p_secret_key);
+
         // Prepare our Frost Id.
-        let frost_identifier = frost::Identifier::derive(
-            config.identifier.to_le_bytes().as_slice(),
-        )
-        .expect("valid identifier");
+        let frost_identifier = FrostId::from(&node_public_key);
 
-        info!(
-            "Local Frost identifier: {:?} - {:?}",
-            config.identifier, frost_identifier
-        );
-
-        // Prepare coordinator Frost Id.
-        let coordinator = if let Some(id) = config.coordinator {
-            let i = frost_id!(id);
-            info!("Specified Frost coordinator: {:?} - {:?}", id, i);
-            i
-        } else {
-            let i = frost_id!(DEFAULT_COORDINATOR_ID);
-            info!(
-                "Default Frost coordinator: {:?} - {:?}",
-                DEFAULT_COORDINATOR_ID, i
-            );
-            i
-        };
+        info!("Local Frost identifier: {frost_identifier}");
 
         // Prepare the federation config.
         // TODO: Handle error
@@ -576,14 +570,20 @@ where
             ))
         })?;
 
-        // Prepare our secret key.
-        let raw = std::fs::read_to_string(&config.p2p_secret_key)?;
-        let sanitized_key =
-            raw.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>();
-        let p2p_secret_key =
-            sanitized_key.as_str().parse::<secp256k1::SecretKey>().map_err(
-                |_| dkg::Error::BadConfig("invalid p2p secret key".to_string()),
-            )?;
+        // Convert the Toml structure into a properly serialized config structure.
+        let federation: HashMap<MultisigId, MultisigConfig> = federation
+            .multisigs
+            .into_iter()
+            .map(|m| {
+                Ok((
+                    m.multisig_id,
+                    MultisigConfig::from_toml_config(
+                        &m,
+                        Some(&node_public_key),
+                    )?,
+                ))
+            })
+            .collect::<Result<_, Error>>()?;
 
         info!(
             "excluded eth addresses len = {:?}",
@@ -610,7 +610,7 @@ where
         if let Some(telemetry) = telemetry.as_ref() {
             telemetry.update_transaction_fee_rates(
                 config.btc_network,
-                config.identifier,
+                frost_identifier,
                 fall_back_fee_rate.to_sat_per_kwu() as f64,
             );
 
@@ -621,7 +621,7 @@ where
                 );
                 telemetry.update_fee_rate_abnormalities(
                     config.btc_network,
-                    config.identifier,
+                    frost_identifier,
                 )
             }
 
@@ -632,7 +632,7 @@ where
                 );
                 telemetry.update_fee_rate_abnormalities(
                     config.btc_network,
-                    config.identifier,
+                    frost_identifier,
                 )
             }
         }
@@ -644,7 +644,7 @@ where
         if let Some(telemetry) = telemetry.as_ref() {
             telemetry.update_pegin_confirmation_depth(
                 config.btc_network,
-                config.identifier,
+                frost_identifier,
                 pegin_confirmation_depth,
             );
         }
@@ -653,7 +653,7 @@ where
             let tip_height = measure_rpc_latency!(
                 &telemetry,
                 config.btc_network,
-                config.identifier,
+                frost_identifier,
                 "get_block_count",
                 bitcoind_client.get_block_count()
             )
@@ -662,7 +662,7 @@ where
             measure_rpc_latency!(
                 &telemetry,
                 config.btc_network,
-                config.identifier,
+                frost_identifier,
                 "get_block_hash",
                 bitcoind_client.get_block_hash(
                     tip_height.saturating_sub(pegin_confirmation_depth as u64)
@@ -677,105 +677,63 @@ where
             pegin_confirmation_depth,
             telemetry.clone(),
             config.btc_network,
-            config.identifier,
+            frost_identifier,
         )?);
 
-        // get all persisted multisig ids
-        let persisted_multisig_ids = match db.list_multisig_ids() {
-            Ok(multisig_ids) => {
-                info!(target: "reth::authority", "Found {} multisig ids", multisig_ids.len());
-                multisig_ids
-            }
-            Err(e) => {
-                panic!("reth::authority: Error getting multisig ids: {}", e);
-            }
-        };
-
-        // Get the current node's public key to check membership
-        let secp = secp256k1::Secp256k1::new();
-        let node_public_key =
-            secp256k1::PublicKey::from_secret_key(&secp, &p2p_secret_key);
-
-        // TODO: The DKG state machine should be deleted once the attestations
-        // are confirmed on-chain.
         let mut sessions = HashMap::new();
+        let mut authority_federation = HashMap::new();
 
         // Iterate through all multisig configurations
-        for multisig_config in &federation.multisigs {
-            let multisig_id = multisig_config.multisig_id;
-
+        for (multisig_id, multisig_config) in federation.into_iter() {
             // Check if this node is a member of this multisig
-            let is_member = multisig_config
-                .members
-                .iter()
-                .any(|member| member.key == node_public_key.to_string());
-
-            if is_member {
-                info!(
-                    "Node is a member of multisig {}, checking status",
-                    multisig_id
-                );
-
-                // Check if this multisig has already been processed
-                if persisted_multisig_ids.contains(&multisig_id) {
-                    info!(
-                        "Multisig {} was found and is already processed",
-                        multisig_id
-                    );
-
-                    // Verify that the key share exists
-                    match db.get_public_key_package_by_id(multisig_id) {
-                        Ok(Some(_key_package)) => {
-                            info!(
-                                "Key share for multisig {} exists in database",
-                                multisig_id
-                            );
-                        }
-                        Ok(None) => {
-                            panic!(
-                                "Public Key for already processed multisig id {} is missing in the db",
-                                multisig_id
-                            );
-                        }
-                        Err(e) => {
-                            panic!(
-                                "Failed to check key share for multisig {}: {}",
-                                multisig_id, e
-                            );
-                        }
-                    }
-                } else {
-                    // Multisig not yet processed, start DKG
-                    info!(
-                        "Multisig {} not yet processed, starting DKG with {} members",
-                        multisig_id,
-                        multisig_config.members.len()
-                    );
-
-                    let state = Self::new_dkg_state_machine(
-                        frost_identifier,
-                        p2p_secret_key,
-                        coordinator,
-                        multisig_config,
-                        frost_identifier == coordinator,
-                    )?;
-
-                    sessions.insert(multisig_id, state);
-                }
-            } else {
+            if !multisig_config.is_local_identifier_present() {
                 info!(
                     "Node is not a member of multisig {}, skipping",
                     multisig_id
                 );
+
                 continue;
             }
-        }
 
-        let dkg_sessions = Arc::new(Mutex::new(sessions));
+            info!(
+                "Node is a member of multisig {}, checking status",
+                multisig_id
+            );
+
+            // TODO: Document, and add more conditions? Specifically, we need to determine
+            // when (public) key packages can be overwritten by the Dkg state machine.
+            if let Some(att) = db.get_multisig_attestation(multisig_id)? {
+                if att.marked_finalized {
+                    continue;
+                }
+            }
+
+            // Convert the multisig config into a structure where the local
+            // identifier is validated. Must be valid at this point as the
+            // nodes' inclusion was checked at the beginning of the loop.
+            let multisig_config =
+                AuthorityMultisigConfig::try_from(multisig_config)
+                    .expect("authority multisig config must be valid");
+
+            // Multisig not yet processed, start DKG
+            info!(
+                "Multisig {} not yet processed, starting DKG with {} members",
+                multisig_id, multisig_config.max_signers,
+            );
+
+            let state = Self::new_dkg_state_machine(
+                frost_identifier,
+                p2p_secret_key,
+                multisig_config.clone(),
+            )?;
+
+            sessions.insert(multisig_id, state);
+            authority_federation.insert(multisig_id, multisig_config);
+        }
 
         let (dynafed_notifications_tx, _dynafed_notifications_rx) =
             tokio::sync::broadcast::channel::<DynafedSubscriptionMessage>(
-                10000,
+                1_000,
             );
 
         Ok(Self {
@@ -786,8 +744,8 @@ where
             tx_lock: Arc::new(Mutex::new(())),
             identifier: frost_identifier,
             p2p_secret_key,
-            federation,
-            dkg_sessions,
+            federation: authority_federation,
+            dkg_sessions: Arc::new(Mutex::new(sessions)),
             frost_round1_nonces: Arc::new(Mutex::new(None)),
             config,
             btc_signing_server_jwt_secret,
@@ -903,7 +861,7 @@ where
             checkpoint,
             &self.telemetry,
             self.btc_network,
-            self.config.identifier,
+            self.identifier,
         )?;
         self.db.store_pegout_mgr_finalized_block(lock.last_finalized())?;
         self.db.update_utxo_merkle_root()?;
@@ -938,13 +896,6 @@ where
         self.db.store_tracked_tx(tx)?;
         self.db.flush()?;
         Ok(())
-    }
-
-    // TODO: This needs updating => there's no global coordinator now.
-    pub fn is_coordinator(&self) -> bool {
-        let coordinator_id =
-            self.config.coordinator.unwrap_or(DEFAULT_COORDINATOR_ID);
-        self.config.identifier == coordinator_id
     }
 
     /// Marks the given multisig attestation as finalized, according to
@@ -1007,13 +958,13 @@ where
                 &self.bitcoind_client,
                 &self.telemetry,
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
             )
             .ok()
             .unwrap_or(true);
             telemetry.update_health_check(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 self.start_time.elapsed().as_secs(),
                 &[(
                     "bitcoind",
@@ -1033,6 +984,12 @@ where
     ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
         self.validate_jwt(&request)?;
         let req = request.into_inner();
+
+        // Mark any multisig attestation as finalized, if available.
+        for id in req.active_multisigs {
+            let multisig_id = MultisigId::from(id);
+            self.mark_multisig_finalized(multisig_id).await.to_status()?;
+        }
 
         // sync the pegout scheduler to the given checkpoint
         let reader = &mut req.checkpoint_block_hash.as_slice();
@@ -1064,7 +1021,7 @@ where
             // seet attempted pegin height
             telemetry.update_utxos(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 total_utxos.len() as i64,
                 total_utxos_amount.to_sat() as i64,
             );
@@ -1077,13 +1034,13 @@ where
                 })?;
             telemetry.set_last_pegin_height(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 block_result.height as i64,
             );
             // increase pegin counter metric
             telemetry.increment_pegins_count(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 pegins_count as u64,
             );
         }
@@ -1159,19 +1116,13 @@ where
         self.db.store_pending_pegouts(&pegouts_refs).to_status()?;
         self.db.flush().to_status()?;
 
-        // Mark any multisig attestation as finalized, if available.
-        for id in req.active_multisigs {
-            let multisig_id = MultisigId::from(id);
-            self.mark_multisig_finalized(multisig_id).await.to_status()?;
-        }
-
         info!("stored pegouts.len(): {:?}", pegouts.len());
         if let Some(telemetry) = self.telemetry.as_ref() {
             let current_pending_pegouts =
                 self.db.get_pending_pegouts().to_status()?;
             telemetry.set_pending_pegouts(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 current_pending_pegouts.len() as i64,
             );
         }
@@ -1420,7 +1371,6 @@ where
                             };
                             tx.send(Ok(payload)).await
                         }
-                        // TODO: Consider making Sweep part of Multisig?
                         DynafedSubscriptionMessage::Sweep(sweep) => {
                             let SweepNotification {
                                 multisig_id_from,
@@ -1492,20 +1442,6 @@ where
             .collect::<Result<Vec<rpc::Utxo>, _>>()
             .map_err(|e| internal!("Failed to get utxos: {}", e))?;
         let res = rpc::GetAllUtxosResponse { utxos };
-
-        Ok(tonic::Response::new(res))
-    }
-
-    async fn list_multisigs(
-        &self,
-        req: tonic::Request<rpc::Empty>,
-    ) -> Result<tonic::Response<rpc::ListMultisigsResponse>, tonic::Status>
-    {
-        self.validate_jwt(&req)?;
-        let multisig_ids = self.db.list_multisig_ids().to_status()?;
-        let multisig_ids =
-            multisig_ids.into_iter().map(|id| *id).collect::<Vec<u32>>();
-        let res = rpc::ListMultisigsResponse { ids: multisig_ids };
 
         Ok(tonic::Response::new(res))
     }
@@ -1594,7 +1530,7 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.record_aborted_signing_sessions(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
             );
         }
 
@@ -1623,7 +1559,7 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.increment_started_round1_signings_count(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
             );
         }
 
@@ -1633,7 +1569,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_signing_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     &SigningRound1Error::AlreadyInSigningSession.to_string(),
                 );
             }
@@ -1647,7 +1583,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -1656,7 +1592,7 @@ where
         };
 
         let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
-        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+        let min_signers = self.get_min_signers(&multisig_id).to_status()?;
 
         let nonces = signer::get_round1_signing_package(
             &mut psbt,
@@ -1716,7 +1652,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -1725,7 +1661,10 @@ where
         };
 
         let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
-        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+
+        let min_signers = self.get_min_signers(&multisig_id).to_status()?;
+        let is_coordinator =
+            self.is_coordinator_by_id(&multisig_id).to_status()?;
 
         signer::get_round2_signing_package(
             &mut psbt,
@@ -1738,7 +1677,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_signing_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     &e.to_string(),
                 );
             }
@@ -1750,6 +1689,7 @@ where
         // We are done signing, remove the nonces
         nonces_lock.take();
         drop(nonces_lock);
+
         let psbt_bytes = hex::decode(psbt.serialize_hex())
             .map_err(|e| internal!("Failed to serialize psbt: {}", e))?;
 
@@ -1770,12 +1710,15 @@ where
             // +1 for the change output
             return Err(badarg!("Too many pegouts in the psbt"));
         }
+
         let mut psbt_pegout_ids: Vec<PegoutId> =
             Vec::with_capacity(psbt.outputs.len());
+
         info!(
             "[get_round2_signing_package] Found {} outputs in the psbt",
             psbt.outputs.len()
         );
+
         for output in psbt.outputs.iter() {
             if let Some(pegout_id) = output.pegout_id() {
                 let pegout_id = PegoutId::from_bytes(&pegout_id)
@@ -1788,6 +1731,7 @@ where
                 psbt_pegout_ids.push(pegout_id);
             }
         }
+
         info!(
             "[get_round2_signing_package] Found {} pegout ids in the psbt",
             psbt_pegout_ids.len()
@@ -1800,7 +1744,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -1843,7 +1787,7 @@ where
                         signed_tx.compute_txid()
                     );
                 }
-                None if self.is_coordinator() => {
+                None if is_coordinator => {
                     return Err(tonic::Status::failed_precondition(
                         "Missing pending sweep metadata for signing session",
                     ));
@@ -1871,7 +1815,7 @@ where
             .to_status()?;
         }
 
-        if !self.is_coordinator() {
+        if !is_coordinator {
             // the coordinator will remove the pegout during finalize_signing
             self.db.reset_pending_pegouts(&[]).to_status()?;
             info!("[get_round2_signing_package] Pending pegouts removed and DB flushed.");
@@ -1885,7 +1829,7 @@ where
                 self.db.get_pending_pegouts().to_status()?;
             telemetry.set_pending_pegouts(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 current_pending_pegouts.len() as i64,
             );
         }
@@ -1894,7 +1838,7 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.increment_completed_round2_signings_count(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
             );
         }
 
@@ -1942,7 +1886,7 @@ where
         let tx_id = match measure_rpc_latency!(
             &self.telemetry,
             self.btc_network,
-            self.config.identifier,
+            self.identifier,
             "send_raw_transaction",
             self.bitcoind_client.send_raw_transaction(&tx)
         ) {
@@ -1950,7 +1894,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.increment_success_broadcasted_pegout_txs_count(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                     );
                 }
                 Some(tx_id)
@@ -1966,14 +1910,14 @@ where
             let tip_height = measure_rpc_latency!(
                 &self.telemetry,
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 "get_block_count",
                 self.bitcoind_client.get_block_count()
             )
             .map_err(|e| internal!("Failed to get btc tip height: {}", e))?;
             telemetry.set_last_attempted_pegout_height(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 tip_height as i64,
             );
         }
@@ -2005,14 +1949,14 @@ where
             // increase metric counter for pegouts
             telemetry.increment_pegouts_count(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 pegout_ids.len() as u64,
             );
             let current_pending_pegouts =
                 self.db.get_pending_pegouts().to_status()?;
             telemetry.set_pending_pegouts(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 current_pending_pegouts.len() as i64,
             );
         }
@@ -2031,11 +1975,11 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.record_finalized_signing_sessions(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
             );
             telemetry.update_signing_success_rate_metrics(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 signing_session_id,
             )
         }
@@ -2066,7 +2010,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2093,7 +2037,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2104,7 +2048,7 @@ where
         let fee_res = measure_rpc_latency!(
             &self.telemetry,
             self.btc_network,
-            self.config.identifier,
+            self.identifier,
             "estimate_smart_fee",
             self.bitcoind_client.estimate_smart_fee(
                 1,
@@ -2122,7 +2066,7 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.update_transaction_fee_rates(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 fee_rate.to_sat_per_kwu() as f64,
             );
 
@@ -2130,7 +2074,7 @@ where
                 warn!("Fee rate is below the minimum: {}", fee_rate);
                 telemetry.update_fee_rate_abnormalities(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                 )
             }
 
@@ -2138,7 +2082,7 @@ where
                 warn!("Fee rate is above the maximum: {}", fee_rate);
                 telemetry.update_fee_rate_abnormalities(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                 )
             }
         }
@@ -2159,7 +2103,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2177,7 +2121,7 @@ where
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_signing_error_metrics(
                             self.btc_network,
-                            self.config.identifier,
+                            self.identifier,
                             &e.to_string(),
                         );
                     }
@@ -2219,7 +2163,7 @@ where
             fee_rate,
             change_script,
             &self.db,
-            self.get_min_signers(utxo_source_multisig_id).to_status()?,
+            self.get_min_signers(&utxo_source_multisig_id).to_status()?,
             tracked_txs,
             &self.config,
             utxo_source_multisig_id,
@@ -2231,7 +2175,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2275,7 +2219,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2294,7 +2238,7 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.record_total_signing_sessions(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
             );
         }
 
@@ -2338,7 +2282,7 @@ where
         let fee_res = measure_rpc_latency!(
             &self.telemetry,
             self.btc_network,
-            self.config.identifier,
+            self.identifier,
             "estimate_smart_fee",
             self.bitcoind_client.estimate_smart_fee(
                 1,
@@ -2380,7 +2324,7 @@ where
             fee_rate,
             output_script,
             &self.db,
-            self.get_min_signers(source_multisig_id).to_status()?,
+            self.get_min_signers(&source_multisig_id).to_status()?,
             source_multisig_id,
         )
         .to_status()?;
@@ -2437,9 +2381,10 @@ where
             self.db.get_psbt(&signing_session_id).to_status()?.ok_or_else(
                 || internal!("PSBT not found for signing session"),
             )?;
+
         let multisig_id =
             stored_psbt.multisig_id().map_err(|e| internal!("{}", e))?;
-        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+        let min_signers = self.get_min_signers(&multisig_id).to_status()?;
 
         let psbt = match coordinator::get_to_sign(
             &signing_session_id,
@@ -2453,7 +2398,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2467,7 +2412,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2498,7 +2443,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_signing_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     &e.to_string(),
                 );
             }
@@ -2525,7 +2470,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2534,7 +2479,7 @@ where
         };
 
         let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
-        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+        let min_signers = self.get_min_signers(&multisig_id).to_status()?;
 
         if let Err(e) = coordinator::add_round1_signing(
             &signing_session_id,
@@ -2548,7 +2493,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_signing_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     &e.to_string(),
                 );
             }
@@ -2558,7 +2503,7 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.update_round1_signing_metrics(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 &signing_session_id,
                 req.psbt.as_slice().len(),
                 start.elapsed().as_millis(),
@@ -2581,7 +2526,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_signing_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     &e.to_string(),
                 );
             }
@@ -2605,7 +2550,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_signing_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2614,7 +2559,7 @@ where
         };
 
         let multisig_id = psbt.multisig_id().map_err(|e| internal!("{}", e))?;
-        let min_signers = self.get_min_signers(multisig_id).to_status()?;
+        let min_signers = self.get_min_signers(&multisig_id).to_status()?;
 
         if let Err(e) = coordinator::add_round2_signing(
             &signing_session_id,
@@ -2628,7 +2573,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_signing_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     &e.to_string(),
                 );
             }
@@ -2638,7 +2583,7 @@ where
         if let Some(telemetry) = self.telemetry.as_ref() {
             telemetry.update_round2_signing_metrics(
                 self.btc_network,
-                self.config.identifier,
+                self.identifier,
                 &signing_session_id,
                 req.psbt.as_slice().len(),
                 start.elapsed().as_millis(),
@@ -2757,6 +2702,18 @@ where
         Ok(tonic::Response::new(resp))
     }
 
+    async fn get_frost_id(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<tonic::Response<rpc::GetFrostIdResponse>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let resp =
+            rpc::GetFrostIdResponse { frost_id: self.identifier.serialize() };
+
+        Ok(tonic::Response::new(resp))
+    }
+
     async fn new_dkg_payload(
         &self,
         req: tonic::Request<rpc::DkgPayload>,
@@ -2777,7 +2734,7 @@ where
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
                             self.btc_network,
-                            self.config.identifier,
+                            self.identifier,
                             &e.to_string(),
                         );
                     }
@@ -2793,7 +2750,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_dkg_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2812,7 +2769,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_dkg_error_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         &e.to_string(),
                     );
                 }
@@ -2830,7 +2787,7 @@ where
                         .expect("failed to encode Dkg payload");
                     telemetry.update_round1_dkg_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         bytes.len(),
                         start.elapsed().as_millis(),
                     );
@@ -2843,7 +2800,7 @@ where
                         .expect("failed to encode Dkg payload");
                     telemetry.update_round2_dkg_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         bytes.len(),
                         start.elapsed().as_millis(),
                     );
@@ -2853,7 +2810,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_round3_dkg_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         start.elapsed().as_millis(),
                     );
                 }
@@ -2862,7 +2819,7 @@ where
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.update_round4_dkg_metrics(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                         start.elapsed().as_millis(),
                     );
                 }
@@ -2876,7 +2833,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_dkg_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     "dkg not initialized",
                 );
             }
@@ -2891,7 +2848,7 @@ where
             if let Some(telemetry) = self.telemetry.as_ref() {
                 telemetry.update_dkg_error_metrics(
                     self.btc_network,
-                    self.config.identifier,
+                    self.identifier,
                     &e.to_string(),
                 );
             }
@@ -2937,7 +2894,7 @@ where
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
                             self.btc_network,
-                            self.config.identifier,
+                            self.identifier,
                             &e.to_string(),
                         );
                     }
@@ -2952,7 +2909,7 @@ where
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
                             self.btc_network,
-                            self.config.identifier,
+                            self.identifier,
                             &e.to_string(),
                         );
                     }
@@ -2963,7 +2920,7 @@ where
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
                             self.btc_network,
-                            self.config.identifier,
+                            self.identifier,
                             &e.to_string(),
                         );
                     }
@@ -2998,7 +2955,7 @@ where
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
                             self.btc_network,
-                            self.config.identifier,
+                            self.identifier,
                             &e.to_string(),
                         );
                     }
@@ -3009,7 +2966,7 @@ where
                     if let Some(telemetry) = self.telemetry.as_ref() {
                         telemetry.update_dkg_error_metrics(
                             self.btc_network,
-                            self.config.identifier,
+                            self.identifier,
                             &e.to_string(),
                         );
                     }
@@ -3057,23 +3014,16 @@ where
             ));
         }
 
-        let coordinator = frost_id!(self
-            .config
-            .coordinator
-            .unwrap_or(DEFAULT_COORDINATOR_ID));
-
         let multisig_conf = self
             .federation
-            .get_config_by_multisig_id(&multisig_id)
-            .map_err(|_| Error::MultisigNotFound(multisig_id))
+            .get(&multisig_id)
+            .ok_or(Error::MissingMultisigId)
             .to_status()?;
 
         let state = Self::new_dkg_state_machine(
             self.identifier,
             self.p2p_secret_key,
-            coordinator,
-            multisig_conf,
-            self.is_coordinator(),
+            multisig_conf.clone(),
         )
         .map_err(|e| {
             tonic::Status::internal(format!(
@@ -3144,6 +3094,59 @@ where
         Ok(tonic::Response::new(rpc::Empty {}))
     }
 
+    async fn mark_multisig_finalized(
+        &self,
+        req: tonic::Request<rpc::MarkMultisigFinalizedRequest>,
+    ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let multisig_id = MultisigId::from(req.into_inner().multisig_id);
+        self.mark_multisig_finalized(multisig_id).await.to_status()?;
+
+        Ok(tonic::Response::new(rpc::Empty {}))
+    }
+
+    async fn list_multisig_info(
+        &self,
+        req: tonic::Request<rpc::Empty>,
+    ) -> Result<tonic::Response<rpc::MultisigInfo>, tonic::Status> {
+        self.validate_jwt(&req)?;
+
+        let entries: Vec<rpc::MultisigInfoEntry> = self
+            .db
+            .list_multisig_info()
+            .to_status()?
+            .into_iter()
+            .map(|m| {
+                let (attestation, is_final) = m
+                    .attestation_entry
+                    .map(|e| {
+                        (
+                            Some(
+                                e.attestation
+                                    .try_into()
+                                    .expect("attestation must be valid"),
+                            ),
+                            e.marked_finalized,
+                        )
+                    })
+                    .unwrap_or((None, false));
+
+                rpc::MultisigInfoEntry {
+                    multisig_id: m.multisig_id.as_u32(),
+                    public_key_package: m
+                        .public_key_package
+                        .serialize()
+                        .expect("public key package must be valid"),
+                    attestation,
+                    is_final,
+                }
+            })
+            .collect();
+
+        Ok(tonic::Response::new(rpc::MultisigInfo { entries }))
+    }
+
     async fn sunset_multisig(
         &self,
         req: tonic::Request<rpc::SunsetMultisigRequest>,
@@ -3154,17 +3157,11 @@ where
         let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
         // Multisig config must exist.
-        let multisig_conf = self
-            .federation
-            .get_config_by_multisig_id(&multisig_id)
-            .map_err(|_| Error::MultisigNotFound(multisig_id))
-            .to_status()?;
-
-        // TODO
-        let my_frost_id = 0;
+        let is_coordinator =
+            self.is_coordinator_by_id(&multisig_id).to_status()?;
 
         // Must be the coordinator for the multisig.
-        if my_frost_id != multisig_conf.coordinator {
+        if !is_coordinator {
             return Err(tonic::Status::failed_precondition(format!(
                 "Not the coordinator for multisig_id {}",
                 multisig_id
@@ -3208,7 +3205,7 @@ where
 
     async fn expire_multisig(
         &self,
-        req: tonic::Request<rpc::SunsetMultisigRequest>,
+        req: tonic::Request<rpc::ExpireMultisigRequest>,
     ) -> Result<tonic::Response<rpc::ExpireMultisigResponse>, tonic::Status>
     {
         self.validate_jwt(&req)?;
@@ -3216,17 +3213,11 @@ where
         let multisig_id: MultisigId = req.into_inner().multisig_id.into();
 
         // Multisig config must exist.
-        let multisig_conf = self
-            .federation
-            .get_config_by_multisig_id(&multisig_id)
-            .map_err(|_| Error::MultisigNotFound(multisig_id))
-            .to_status()?;
-
-        // TODO
-        let my_frost_id = 0;
+        let is_coordinator =
+            self.is_coordinator_by_id(&multisig_id).to_status()?;
 
         // Must be the coordinator for the multisig.
-        if my_frost_id != multisig_conf.coordinator {
+        if !is_coordinator {
             return Err(tonic::Status::failed_precondition(format!(
                 "Not the coordinator for multisig_id {}",
                 multisig_id
@@ -3273,6 +3264,7 @@ where
         req: tonic::Request<rpc::InitiateSweepRequest>,
     ) -> Result<tonic::Response<rpc::Empty>, tonic::Status> {
         self.validate_jwt(&req)?;
+
         let req = req.into_inner();
 
         let multisig_id_from = MultisigId::from(req.multisig_id_from);
@@ -3591,7 +3583,7 @@ impl<BitcoindClient: bitcoincore_rpc::RpcApi> App<BitcoindClient> {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.increment_failed_broadcasted_pegout_txs_count(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                     );
                 }
                 return Err(tonic::Status::internal("Failed to broadcast tx"));
@@ -3607,7 +3599,7 @@ impl<BitcoindClient: bitcoincore_rpc::RpcApi> App<BitcoindClient> {
                 if let Some(telemetry) = self.telemetry.as_ref() {
                     telemetry.increment_failed_broadcasted_pegout_txs_count(
                         self.btc_network,
-                        self.config.identifier,
+                        self.identifier,
                     );
                 }
                 return Err(tonic::Status::internal("Failed to broadcast tx"));
@@ -3666,7 +3658,7 @@ async fn main() -> anyhow::Result<(), Box<dyn std::error::Error>> {
         // https://github.com/botanix-labs/botanix-issues/issues/1146
         metrics.set_config_metrics(
             btc_server.btc_network,
-            btc_server.config.identifier,
+            btc_server.identifier,
             0, // placeholder until per-multisig metrics implemented
             0, // placeholder until per-multisig metrics implemented
         );
@@ -3771,7 +3763,10 @@ mod tests {
     use botanix_configs::hash::compute_config_hash;
     use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
     use btcserverlib::{
-        dkg::DkgMessage, test_utils::pegout_requests_from_tx,
+        dkg::DkgMessage,
+        test_utils::{
+            pegout_requests_from_tx, trusted_dealer_setup_from_config,
+        },
         wallet::address::generate_taproot_change_scriptpubkey,
     };
     use frost_secp256k1_tr::keys::dkg::round1;
@@ -3839,8 +3834,6 @@ mod tests {
         let config = Config {
             db: temp_db.keep(),
             btc_network: bitcoin::Network::Regtest,
-            identifier: 0,
-            coordinator: Some(0),
             federation_config_path: temp_federation.path().to_owned(),
             config_hash,
             p2p_secret_key: temp_secret_key.path().to_owned(),
@@ -4009,7 +4002,7 @@ mod tests {
 
         for payload in inner.payloads {
             let frost_id = deserialize_frost_peer_id(payload.sender).unwrap();
-            assert_eq!(frost_id, frost_id!(0));
+            assert_eq!(frost_id, *app.identifier);
             let payload = payload.payload;
             let msg: DkgMessage =
                 ciborium::from_reader(payload.as_slice()).unwrap();
@@ -4043,7 +4036,7 @@ mod tests {
 
         // Wait until `get_dkg_payloads` should be called again.
         assert!(inner.timeout > 0);
-        let timeout = Duration::from_millis(inner.timeout);
+        let timeout = Duration::from_millis(inner.timeout + 10);
         tokio::time::sleep(timeout).await;
 
         // Two payloads to be (re-)sent.
@@ -4053,160 +4046,6 @@ mod tests {
         let payloads = app.get_dkg_payloads(req).await.unwrap();
         let inner = payloads.into_inner();
         assert_eq!(inner.payloads.len(), 2);
-    }
-
-    /// Test the basic DKG interface. More comprehensive tests are covered
-    /// separately.
-    #[tokio::test]
-    async fn basic_dkg_interface() {
-        const SESSION_CONTEXT: &[u8] = &[
-            45, 149, 144, 139, 60, 249, 107, 180, 91, 208, 53, 95, 17, 11, 125,
-            0, 84, 140, 144, 117, 192, 17, 40, 33, 254, 36, 108, 141, 102, 130,
-            100, 159,
-        ];
-
-        const SAMPLE_ROUND_PKG: &[u8] = &[
-            0, 35, 15, 138, 179, 2, 3, 167, 73, 139, 150, 33, 198, 92, 67, 245,
-            190, 12, 2, 30, 222, 218, 112, 69, 142, 150, 82, 126, 171, 239, 91,
-            123, 219, 115, 71, 95, 147, 125, 49, 3, 232, 24, 61, 2, 81, 111,
-            211, 227, 97, 95, 11, 127, 197, 215, 68, 97, 235, 240, 81, 239, 85,
-            206, 31, 3, 201, 103, 219, 155, 119, 219, 191, 32, 64, 207, 154,
-            46, 112, 186, 5, 184, 138, 24, 251, 246, 216, 51, 79, 208, 19, 136,
-            253, 227, 116, 218, 93, 250, 6, 110, 78, 16, 50, 134, 84, 78, 142,
-            60, 188, 68, 87, 210, 232, 12, 77, 184, 80, 208, 225, 183, 101,
-            121, 57, 249, 51, 45, 109, 1, 41, 217, 129, 198, 229, 234, 142, 98,
-            99, 76, 57,
-        ];
-
-        const SAMPLE_EPH_PUB: &[u8] = &[
-            3, 155, 57, 155, 77, 21, 38, 166, 112, 241, 120, 87, 180, 249, 39,
-            223, 172, 103, 189, 60, 129, 202, 5, 50, 1, 73, 235, 90, 160, 133,
-            154, 235, 83,
-        ];
-
-        // Sample signature generated with private key:
-        // 27eeb2264674f15f2bac84d84b5e8f0c40722f8327fe7354bf14c84e248f8838
-        //
-        // Corresponding public key:
-        // 038df7fcb0e1cdd68741ca85184e046a42c914e0c3ffcb2464d46be3d8b4a5b140
-        //
-        // Respectively, the second entry (Frost Id `1`) in the temporary
-        // federation config as defined in [`setup`].
-        const SAMPLE_SIG: &[u8] = &[
-            47, 71, 206, 104, 24, 152, 252, 103, 98, 151, 101, 177, 185, 139,
-            251, 187, 145, 81, 101, 99, 8, 0, 172, 202, 2, 48, 25, 23, 175,
-            192, 190, 220, 111, 200, 99, 29, 247, 196, 228, 50, 27, 80, 230,
-            76, 58, 26, 110, 207, 74, 4, 125, 147, 113, 207, 137, 213, 227,
-            164, 177, 145, 59, 79, 182, 102,
-        ];
-
-        // Setup Alice (coordinator), Bob, and Eve.
-        let app = setup().await;
-
-        let round1_pkg =
-            round1::Package::deserialize(SAMPLE_ROUND_PKG).unwrap();
-        let ephemeral_pub =
-            secp256k1::PublicKey::from_slice(SAMPLE_EPH_PUB).unwrap();
-        let signature =
-            secp256k1::ecdsa::Signature::from_compact(SAMPLE_SIG).unwrap();
-
-        // Alice generates two packages, one for Bob and one for Eve.
-        {
-            let req = tonic::Request::new(rpc::GetDkgPayloadsRequest {
-                multisig_id: *LEGACY_MULTISIG_ID,
-            });
-            let payloads = app.get_dkg_payloads(req).await.unwrap();
-            let inner = payloads.into_inner();
-            assert_eq!(inner.payloads.len(), 2);
-
-            let p1 = &inner.payloads[0];
-            let msg: DkgMessage =
-                ciborium::from_reader(p1.payload.as_slice()).unwrap();
-            let DkgMessage::Round1 { context, nonce, .. } = msg else {
-                panic!("Expected Round1 message");
-            };
-
-            assert_eq!(context, SESSION_CONTEXT);
-            assert_eq!(nonce, 0);
-            //
-            assert_eq!(p1.sender, frost_id!(0).serialize());
-            assert_eq!(p1.recipient, frost_id!(2).serialize());
-
-            let p2 = &inner.payloads[1];
-            let msg: DkgMessage =
-                ciborium::from_reader(p2.payload.as_slice()).unwrap();
-            let DkgMessage::Round1 { context, nonce, .. } = msg else {
-                panic!("Expected Round1 message");
-            };
-
-            assert_eq!(context, SESSION_CONTEXT);
-            assert_eq!(nonce, 0);
-            //
-            assert_eq!(p2.sender, frost_id!(0).serialize());
-            assert_eq!(p2.recipient, frost_id!(1).serialize());
-        };
-
-        // Bob sends his round1 package to Alice.
-        {
-            // We use a temporary structure that that not contain the _Sealed_
-            // newtype for `round1::Package`, as seen in `DkgMessage`.
-            #[derive(serde::Serialize, serde::Deserialize)]
-            enum Embedded {
-                Round1 {
-                    context: Vec<u8>,
-                    nonce: u64,
-                    initiator: frost::Identifier,
-                    ephemeral_pub: secp256k1::PublicKey,
-                    signature: secp256k1::ecdsa::Signature,
-                    package: round1::Package,
-                },
-            }
-
-            let msg = Embedded::Round1 {
-                context: SESSION_CONTEXT.to_vec(),
-                nonce: 0,
-                initiator: frost_id!(1),
-                ephemeral_pub,
-                signature,
-                package: round1_pkg,
-            };
-
-            let mut payload = vec![];
-            ciborium::into_writer(&msg, &mut payload).unwrap();
-
-            let req = tonic::Request::new(rpc::DkgPayload {
-                sender: frost_id!(1).serialize().to_vec(),
-                recipient: frost_id!(0).serialize().to_vec(),
-                payload,
-                multisig_id: *LEGACY_MULTISIG_ID,
-            });
-
-            let resp = app.new_dkg_payload(req).await.unwrap();
-            let inner = resp.into_inner();
-
-            // Alice responds with Ack to Bob and forwards Bob's package to Eve.
-            assert_eq!(inner.payloads.len(), 2);
-
-            let p1 = &inner.payloads[0];
-            let msg: DkgMessage =
-                ciborium::from_reader(p1.payload.as_slice()).unwrap();
-            let DkgMessage::AckRound1 { .. } = msg else {
-                panic!("Expected AckRound1 message");
-            };
-
-            assert_eq!(p1.sender, frost_id!(0).serialize());
-            assert_eq!(p1.recipient, frost_id!(1).serialize());
-
-            let p2 = &inner.payloads[1];
-            let msg: DkgMessage =
-                ciborium::from_reader(p2.payload.as_slice()).unwrap();
-            let DkgMessage::Round1 { .. } = msg else {
-                panic!("Expected Round1 message");
-            };
-
-            assert_eq!(p2.sender, frost_id!(0).serialize());
-            assert_eq!(p2.recipient, frost_id!(2).serialize());
-        }
     }
 
     #[tokio::test]
@@ -4252,21 +4091,8 @@ mod tests {
 
     #[tokio::test]
     async fn new_consensus_checkpoint() {
-        let app = setup().await;
-        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let min_signers = app.get_min_signers(multisig_id).unwrap();
-        let max_signers = app.get_max_signers(multisig_id).unwrap();
-        let (shares, pk_package) =
-            trusted_dealer_setup(min_signers, max_signers);
-        let key_package =
-            frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
-                .expect("valid key package");
-
-        // Add the key packages
-        app.db
-            .set_pubkey_package(pk_package.clone())
-            .expect("set public key package");
-        app.db.set_key_package(key_package.clone()).expect("set key package");
+        let (app, _) = setup_app_with_keys().await;
+        let multisig_id = LEGACY_MULTISIG_ID;
 
         // Add some pegin utxos
         let mut pegins = vec![];
@@ -4371,21 +4197,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_consensus_checkpoint_no_finalized_pegouts_stored() {
-        let app = setup().await;
-        let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let min_signers = app.get_min_signers(multisig_id).unwrap();
-        let max_signers = app.get_max_signers(multisig_id).unwrap();
-        let (shares, pk_package) =
-            trusted_dealer_setup(min_signers, max_signers);
-        let key_package =
-            frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
-                .expect("valid key package");
-
-        // Add the key packages
-        app.db
-            .set_pubkey_package(pk_package.clone())
-            .expect("set public key package");
-        app.db.set_key_package(key_package.clone()).expect("set key package");
+        let (app, _) = setup_app_with_keys().await;
+        let multisig_id = LEGACY_MULTISIG_ID;
 
         // Add some pegin utxos
         let mut pegins = vec![];
@@ -4758,15 +4571,18 @@ mod tests {
     ) -> (App<MockBitcoind>, frost::keys::KeyPackage) {
         let app = setup().await;
         let multisig_id = botanix_types::LEGACY_MULTISIG_ID;
-        let min_signers = app.get_min_signers(multisig_id).unwrap();
-        let max_signers = app.get_max_signers(multisig_id).unwrap();
+        let multisig_config = app.federation.get(&multisig_id).unwrap();
+
         let (shares, pk_package) =
-            trusted_dealer_setup(min_signers, max_signers);
+            trusted_dealer_setup_from_config(multisig_config);
+
         let key_package =
             frost::keys::KeyPackage::try_from(shares[&app.identifier].clone())
                 .expect("valid key package");
+
         app.db.set_pubkey_package(pk_package).expect("set public key package");
         app.db.set_key_package(key_package.clone()).expect("set key package");
+
         (app, key_package)
     }
 

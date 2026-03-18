@@ -1638,6 +1638,8 @@ where
             .guard_rollback(|m| {
                 // Pickup locally produced multisig proposal..
                 let multisig_msg = if let Some(msg) = m.send() {
+                    info!("Including multisig message in proposal NDD");
+
                     // ..and process it immediately.
                     m.recv(msg.clone())
                         .expect("local proposal is always valid");
@@ -2145,6 +2147,8 @@ where
             self.multisig_manager.guard_rollback(|m| {
                 // Retrieve NDD payload and process it, if available.
                 if let Some(msg) = non_deterministic_data.multisig_message() {
+                    info!("Processing multisig message from NDD");
+
                     m.recv(msg.clone())?;
                 }
 
@@ -2576,6 +2580,8 @@ where
                         if let Some(msg) =
                             non_deterministic_data.multisig_message()
                         {
+                            info!("Finalizing multisig message from NDD");
+
                             m.recv(msg.clone())
                                 .expect("NDD multisig payload must be valid");
                         }
