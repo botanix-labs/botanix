@@ -303,6 +303,9 @@ pub fn spawn_n_btc_server_processes(
 
     // Generate FROST identifiers once for all federation members.
     // These must match what BtcServer uses at runtime (derived via frost_id! macro).
+    //
+    // TODO (lamafab): Frost Ids are now generated the federation member public
+    // keys and not indices; what are the implications of this here?
     let frost_identifiers: Vec<frost::Identifier> =
         (0..global_context.max_signers).map(|i| frost_id!(i)).collect();
 
