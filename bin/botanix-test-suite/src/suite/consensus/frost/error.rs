@@ -14,6 +14,8 @@ pub enum Error {
     PubKeyParse(bitcoin::secp256k1::Error),
     /// Public Key Mismatch
     PublicKeyMismatch,
+    /// Dkg Attestations Mismatch
+    DkgAttestationMismatch,
     /// Round 1 Packages Expected Length Mismatch
     Round1PackagesLengthMismatch,
     /// Round 2 Packages Expected Length Mismatch
