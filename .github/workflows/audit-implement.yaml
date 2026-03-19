@@ -166,6 +166,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Discard any changes created by earlier setup steps
+          git reset --hard
+          git clean -fdx
+
           git fetch origin "$BASE_BRANCH" "$BRANCH_NAME" || true
 
           if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
