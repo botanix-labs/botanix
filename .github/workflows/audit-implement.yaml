@@ -146,7 +146,18 @@ jobs:
       - name: Install repository dependencies
         run: npm ci --ignore-scripts 2>/dev/null || npm install
 
+      - name: Create GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: botanix-labs
+          repositories: botanix-skills
+
       - name: Install AI agent skills
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: ./scripts/update-agents.sh || echo "::warning::Some skill repos failed to install — continuing
           with available skills"
 

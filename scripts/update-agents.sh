@@ -49,6 +49,11 @@ for agent in "${AGENTS[@]}"; do
     AGENT_FLAGS+=("-a" "$agent")
 done
 
+if [[ -n "${GITHUB_APP_TOKEN:-}" ]]; then
+    echo "→ Configuring authenticated GitHub access via GitHub App token..."
+    git config --global url."https://x-access-token:${GITHUB_APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+fi
+
 # Install all skills from the repo, globally, non-interactively
 echo "→ Installing botanix skills for: ${AGENTS[*]}..."
 if ! npx skills@"${SKILLS_CLI_VERSION}" add "${SKILLS_REPO}" \
