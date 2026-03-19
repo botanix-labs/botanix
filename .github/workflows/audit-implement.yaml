@@ -1,0 +1,317 @@
+name: Audit Finding Implement
+
+on:
+  workflow_dispatch:
+    inputs:
+      audit_finding_number:
+        description: "Audit finding number (e.g., ABCI-011)"
+        required: true
+        type: string
+      llm:
+        description: "LLM provider"
+        required: true
+        type: choice
+        options:
+          - claude
+          - codex
+        default: claude
+      model:
+        description: "Model (Claude: opus-4.6, sonnet-4.6 | Codex: codex-5.3, gpt-5.4)"
+        required: true
+        type: choice
+        options:
+          - claude-opus-4-6
+          - claude-sonnet-4-6
+          - codex-5.3
+          - gpt-5.4
+        default: claude-opus-4-6
+      max_turns:
+        description: "Maximum agent turns"
+        required: false
+        type: number
+        default: 100
+      agent_timeout_seconds:
+        description: "Per-step timeout for the AI agent execution"
+        required: false
+        type: number
+        default: 5400
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: audit-implement-${{ github.event.inputs.audit_finding_number }}
+  cancel-in-progress: false
+
+env:
+  AUDIT_FINDING_NUMBER: ${{ github.event.inputs.audit_finding_number }}
+  LLM: ${{ github.event.inputs.llm }}
+  MODEL: ${{ github.event.inputs.model }}
+  MAX_TURNS: ${{ github.event.inputs.max_turns }}
+  AGENT_TIMEOUT_SECONDS: ${{ github.event.inputs.agent_timeout_seconds }}
+  BASE_BRANCH: audit/report-fixes
+  BRANCH_NAME: audit-implement/${{ github.event.inputs.audit_finding_number }}
+
+jobs:
+  validate:
+    name: Validate inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required inputs
+        run: |
+          if [[ -z "$AUDIT_FINDING_NUMBER" ]]; then
+            echo "::error::audit_finding_number is required. Use workflow_dispatch to run this workflow."
+            exit 1
+          fi
+          if [[ -z "$LLM" || -z "$MODEL" ]]; then
+            echo "::error::llm and model are required."
+            exit 1
+          fi
+          if [[ ! "$MAX_TURNS" =~ ^[0-9]+$ || "$MAX_TURNS" -le 0 ]]; then
+            echo "::error::max_turns must be a positive integer."
+            exit 1
+          fi
+          if [[ ! "$AGENT_TIMEOUT_SECONDS" =~ ^[0-9]+$ || "$AGENT_TIMEOUT_SECONDS" -le 0 ]]; then
+            echo "::error::agent_timeout_seconds must be a positive integer."
+            exit 1
+          fi
+
+      - name: Check model matches LLM provider
+        run: |
+          if [[ "$LLM" == "claude" && "$MODEL" != claude-* ]]; then
+            echo "::error::Model '$MODEL' is not a Claude model. Use claude-opus-4-6 or claude-sonnet-4-6."
+            exit 1
+          fi
+          if [[ "$LLM" == "codex" && ! "$MODEL" =~ ^(codex-|gpt-) ]]; then
+            echo "::error::Model '$MODEL' is not a Codex model. Use codex-5.3 or gpt-5.4."
+            exit 1
+          fi
+          echo "Provider: $LLM, Model: $MODEL, Finding: $AUDIT_FINDING_NUMBER"
+
+      - name: Check API key secrets
+        env:
+          HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_OPENAI: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: |
+          if [[ "$LLM" == "claude" && "$HAS_ANTHROPIC" != "true" ]]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
+            exit 1
+          fi
+          if [[ "$LLM" == "codex" && "$HAS_OPENAI" != "true" ]]; then
+            echo "::error::OPENAI_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
+            exit 1
+          fi
+
+  implement:
+    name: "Implement ${{ github.event.inputs.audit_finding_number }}"
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      RUST_BACKTRACE: 1
+      CARGO_TERM_COLOR: always
+      SEED: rustethereumethereumrust
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Rust dependencies
+        run: bash .github/scripts/deps.sh
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts 2>/dev/null || npm install
+
+      - name: Install AI agent skills
+        run: ./scripts/update-agents.sh || echo "::warning::Some skill repos failed to install — continuing
+          with available skills"
+
+      - name: Create implementation branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code origin "$BRANCH_NAME" &>/dev/null; then
+            git fetch origin "$BRANCH_NAME"
+            git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
+          else
+            git checkout -b "$BRANCH_NAME"
+          fi
+
+      - name: Generate local test environment
+        env:
+          SECRET_BITCOIND_PWD: ${{ secrets.BITCOIND_PWD }}
+        run: |
+          BITCOIND_NETWORK_VALUE="regtest"
+          BITCOIND_URL_VALUE="http://127.0.0.1:18443"
+          BITCOIND_USER_VALUE="foo"
+          BITCOIND_PWD_VALUE="${SECRET_BITCOIND_PWD:-bar}"
+
+          printf '%s\n' \
+            "BITCOIND_NETWORK=${BITCOIND_NETWORK_VALUE}" \
+            "BITCOIND_URL=${BITCOIND_URL_VALUE}" \
+            "BITCOIND_USER=${BITCOIND_USER_VALUE}" \
+            "BITCOIND_PWD=${BITCOIND_PWD_VALUE}" > .env
+
+          {
+            echo "BITCOIND_NETWORK=${BITCOIND_NETWORK_VALUE}"
+            echo "BITCOIND_URL=${BITCOIND_URL_VALUE}"
+            echo "BITCOIND_USER=${BITCOIND_USER_VALUE}"
+            echo "BITCOIND_PWD=${BITCOIND_PWD_VALUE}"
+          } >> "$GITHUB_ENV"
+
+          echo "Generated repo-root .env for skill-driven local verification."
+          sed 's/=.*/=***/' .env
+
+      - name: Run audit implementation with Claude
+        if: env.LLM == 'claude'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mkdir -p reviews/audit-implement
+          PROMPT="Implement audit finding ${AUDIT_FINDING_NUMBER}. Use the audit-implementer skill and the test-suite skill. Resolve the finding from the audit reports under audit/, confirm it still applies to current code, implement the remediation or a better fix if needed, and then run verification through test-suite exactly once per command with no retries. The repo-root .env file has already been created for skill-driven local verification. Ensure reviews/results.md is updated and write a concise implementation summary to reviews/audit-implement/${AUDIT_FINDING_NUMBER}.md. Work autonomously to completion and do not ask questions."
+          tmp_output="$(mktemp)"
+          set +e
+          printf '%s\n' "$PROMPT" | timeout "$AGENT_TIMEOUT_SECONDS" npx --yes @anthropic-ai/claude-code@latest \
+            --print \
+            --output-format stream-json \
+            --verbose \
+            --model "$MODEL" \
+            --max-turns "$MAX_TURNS" \
+            --mcp-config /dev/null \
+            --allowedTools "Skill,Read,Write,Edit,Glob,Grep,Bash(*),WebFetch,WebSearch,Agent" \
+            > "$tmp_output" 2>&1
+          status=$?
+          set -e
+
+          if ! jq -Rr 'fromjson? // .' < "$tmp_output"; then
+            cat "$tmp_output"
+          fi
+          rm -f "$tmp_output"
+
+          if [[ $status -eq 124 ]]; then
+            echo "::error::Claude timed out after ${AGENT_TIMEOUT_SECONDS}s"
+            exit 1
+          fi
+          if [[ $status -ne 0 ]]; then
+            exit "$status"
+          fi
+
+      - name: Run audit implementation with Codex
+        if: env.LLM == 'codex'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          mkdir -p reviews/audit-implement
+          PROMPT="Implement audit finding ${AUDIT_FINDING_NUMBER}. Use the audit-implementer skill and the test-suite skill. Resolve the finding from the audit reports under audit/, confirm it still applies to current code, implement the remediation or a better fix if needed, and then run verification through test-suite exactly once per command with no retries. The repo-root .env file has already been created for skill-driven local verification. Ensure reviews/results.md is updated and write a concise implementation summary to reviews/audit-implement/${AUDIT_FINDING_NUMBER}.md. Work autonomously to completion and do not ask questions."
+          set +e
+          timeout "$AGENT_TIMEOUT_SECONDS" npx --yes @openai/codex@latest \
+            --model "$MODEL" \
+            --full-auto \
+            "$PROMPT"
+          status=$?
+          set -e
+          if [[ $status -eq 124 ]]; then
+            echo "::error::Codex timed out after ${AGENT_TIMEOUT_SECONDS}s"
+            exit 1
+          fi
+          if [[ $status -ne 0 ]]; then
+            exit "$status"
+          fi
+
+      - name: Check for generated changes
+        id: changes
+        run: |
+          git add -A
+          git restore --staged .github/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No changes were generated"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Files staged for commit:"
+            git diff --cached --name-only
+          fi
+
+      - name: Commit results
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git commit -F- <<EOF
+          audit: implement ${AUDIT_FINDING_NUMBER} (${LLM}/${MODEL})
+
+          Automated audit finding implementation.
+
+          - Finding: ${AUDIT_FINDING_NUMBER}
+          - Provider: ${LLM}
+          - Model: ${MODEL}
+          EOF
+
+      - name: Push branch
+        if: steps.changes.outputs.has_changes == 'true'
+        run: git push origin "$BRANCH_NAME" --force-with-lease
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has_changes == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing_pr_url="$(gh pr list --head "$BRANCH_NAME" --json url --jq '.[0].url' 2>/dev/null || true)"
+          if [[ -n "$existing_pr_url" && "$existing_pr_url" != "null" ]]; then
+            echo "url=${existing_pr_url}" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR already exists: ${existing_pr_url}"
+          else
+            pr_url="$(gh pr create \
+              --base "$BASE_BRANCH" \
+              --head "$BRANCH_NAME" \
+              --title "audit: implement ${AUDIT_FINDING_NUMBER}" \
+              --body "Automated implementation for audit finding ${AUDIT_FINDING_NUMBER} (${LLM}/${MODEL}). See reviews/audit-implement/${AUDIT_FINDING_NUMBER}.md for the implementation summary and reviews/results.md for verification results.")"
+            echo "url=${pr_url}" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR created: ${pr_url}"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |-
+          {
+            echo "## Audit Finding Implement Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Finding | ${AUDIT_FINDING_NUMBER} |"
+            echo "| Provider | ${LLM} |"
+            echo "| Model | \`${MODEL}\` |"
+            echo "| Changes | ${{ steps.changes.outputs.has_changes || 'unknown' }} |"
+            echo "| PR | ${{ steps.pr.outputs.url || 'not created' }} |"
+            echo ""
+            if [[ -f "reviews/audit-implement/${AUDIT_FINDING_NUMBER}.md" ]]; then
+              echo "### Implementation summary preview"
+              head -50 "reviews/audit-implement/${AUDIT_FINDING_NUMBER}.md"
+            elif [[ -f "reviews/results.md" ]]; then
+              echo "### Verification summary preview"
+              head -50 "reviews/results.md"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
