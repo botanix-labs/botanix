@@ -165,11 +165,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code origin "$BRANCH_NAME" &>/dev/null; then
-            git fetch origin "$BRANCH_NAME"
+
+          git fetch origin "$BASE_BRANCH" "$BRANCH_NAME" || true
+
+          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
             git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
           else
-            git checkout -b "$BRANCH_NAME"
+            git checkout -B "$BRANCH_NAME" "origin/$BASE_BRANCH"
           fi
 
       - name: Generate local test environment
