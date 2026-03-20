@@ -12,6 +12,7 @@ use botanix_types::TEST_LEGACY_MULTISIG_ID;
 use btcserverlib;
 use ethers::{prelude::Provider, providers::Http};
 use frost_secp256k1_tr as frost;
+use secp256k1::SECP256K1;
 use std::{fs, path::Path, process::Command, str::FromStr, time::Duration};
 
 pub async fn test_pegin_recovery(
@@ -175,10 +176,19 @@ pub async fn test_pegin_recovery(
         .await
         .map_err(Error::ServerConnect)?;
 
-    //import keyshare packcage for each exported federation member key package
+    // Import each key share using the member's pubkey-derived FROST identifier.
+    // This must match runtime identifier derivation in btc-server/config.
     for (index, db_path) in fed_key_package_paths.iter().enumerate() {
+        let member_index = index as u16;
+        let member = test_fed_members.get(&member_index).ok_or_else(|| {
+            Error::TestVectorExport(format!(
+                "Missing federation member configuration for index {}",
+                member_index
+            ))
+        })?;
+        let member_pubkey = member.secret_key.public_key(SECP256K1);
         let frost_identifier =
-            frost::Identifier::derive((index as u16).to_le_bytes().as_slice())
+            frost::Identifier::derive(&member_pubkey.serialize())
                 .expect("valid frost identifier")
                 .serialize();
         let key_package_data = std::fs::read(db_path).map_err(|e| {
