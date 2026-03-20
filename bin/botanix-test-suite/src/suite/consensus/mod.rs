@@ -17,7 +17,7 @@ use botanix_btc_server_client::BtcServerClient;
 use botanix_comet_bft_rpc::{CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_reth::node::BotanixNode;
 use botanix_storage::BotanixProviderFactory;
-use botanix_types::LEGACY_MULTISIG_ID;
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use common::{
     bitcoind_node::{
         create_bitcoind_node, BitcoindNodeConfig,
@@ -556,8 +556,9 @@ impl Suite for ConsensusIntegrationTestSuite {
                         create_cometbft_nodes: true,
                         num_multisigs: 2,
                         multisig_member_indices: Some(vec![
-                            vec![0, 1, 2, 3],
-                            vec![0, 1, 2, 3, 4],
+                            (0..self.global_context.fed_instances.saturating_sub(1))
+                                .collect(),
+                            (0..self.global_context.fed_instances).collect(),
                         ]),
                         ..Default::default()
                     },
@@ -1259,6 +1260,12 @@ impl Suite for ConsensusIntegrationTestSuite {
 
             // loop over the poa nodes and wait until they become initialized so the eth clients can
             // connect with them
+            let dkg_readiness_multisig_id = MultisigId::new(
+                LEGACY_MULTISIG_ID.as_u32()
+                    + u32::from(
+                        create_test_config.num_multisigs.saturating_sub(1),
+                    ),
+            );
             for (index, poa_node) in poa_nodes.iter_mut() {
                 // create botanix client and await initialization
                 let botanix_eth_client = loop {
@@ -1292,13 +1299,14 @@ impl Suite for ConsensusIntegrationTestSuite {
                 );
 
                 // await initialization
-                poa_node.await_initialization()?;
+                poa_node.await_initialization(dkg_readiness_multisig_id)?;
             }
 
             // run the dkg
             await_dkg(&mut poa_nodes, &mut rx).await;
 
-            // At this point all the btc servers should have the same aggregate key
+            // At this point all the btc servers should have the same aggregate
+            // key for the multisig used for DKG readiness.
             let (btc_server_clients, _btc_server_clients_syncing) =
                 btc_server_clients
                     .split_at(self.global_context.fed_instances as usize);
@@ -1307,7 +1315,7 @@ impl Suite for ConsensusIntegrationTestSuite {
                 let key = client
                     .get_public_key(
                         botanix_btc_server_client::GetPublicKeyRequest {
-                            multisig_id: *LEGACY_MULTISIG_ID,
+                            multisig_id: dkg_readiness_multisig_id.as_u32(),
                         },
                     )
                     .await
