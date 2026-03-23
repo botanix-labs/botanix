@@ -98,7 +98,11 @@ impl Decompress for RuntimeVersion {
         value: &[u8],
     ) -> Result<Self, reth_storage_errors::db::DatabaseError> {
         if value.len() < 4 {
-            unreachable!("passed on wrong value to decompress");
+            return Err(
+                reth_storage_errors::db::DatabaseError::Other(
+                    "RuntimeVersion value too short".into(),
+                ),
+            );
         }
 
         let major = u16::from_le_bytes(
@@ -180,4 +184,17 @@ fn test_runtime_version_compress_decompress() {
 
     let decompressed = RuntimeVersion::decompress(&buf).unwrap();
     assert_eq!(original, decompressed);
+}
+
+#[test]
+fn test_runtime_version_decompress_too_short() {
+    let short_values: &[&[u8]] = &[&[], &[0], &[0, 1], &[0, 1, 2]];
+    for value in short_values {
+        let result = RuntimeVersion::decompress(value);
+        assert!(
+            result.is_err(),
+            "expected error for {}-byte input",
+            value.len()
+        );
+    }
 }
