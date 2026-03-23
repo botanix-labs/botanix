@@ -146,6 +146,13 @@ jobs:
       - name: Install repository dependencies
         run: npm ci --ignore-scripts 2>/dev/null || npm install
 
+      - name: Create GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
       - name: Install AI agent skills
         run: ./scripts/update-agents.sh || echo "::warning::Some skill repos failed to install — continuing
           with available skills"
@@ -154,6 +161,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clean up artifacts from earlier setup steps (npm, deps, etc.)
+          git reset --hard
+          git clean -fdx
+
           if git ls-remote --exit-code origin "$BRANCH_NAME" &>/dev/null; then
             git fetch origin "$BRANCH_NAME"
             git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
@@ -201,7 +213,7 @@ jobs:
             --verbose \
             --model "$MODEL" \
             --max-turns "$MAX_TURNS" \
-            --mcp-config /dev/null \
+            --mcp-config '{"mcpServers":{}}' \
             --allowedTools "Skill,Read,Write,Edit,Glob,Grep,Bash(*),WebFetch,WebSearch,Agent" \
             > "$tmp_output" 2>&1
           status=$?
@@ -277,7 +289,7 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         id: pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           existing_pr_url="$(gh pr list --head "$BRANCH_NAME" --json url --jq '.[0].url' 2>/dev/null || true)"
           if [[ -n "$existing_pr_url" && "$existing_pr_url" != "null" ]]; then
