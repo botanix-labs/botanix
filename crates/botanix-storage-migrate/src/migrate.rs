@@ -40,13 +40,23 @@ pub fn is_migration_needed(
 }
 
 fn path_has_content(path: &Path) -> eyre::Result<bool> {
-    if !path.exists() {
-        return Ok(false);
+    let entries = match path.read_dir() {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(false);
+        }
+        Err(e) => {
+            return Err(e).wrap_err("Failed to read directory");
+        }
+    };
+
+    for entry in entries {
+        // Propagate per-entry errors instead of silently skipping
+        let _entry = entry.wrap_err("Failed to read directory entry")?;
+        return Ok(true);
     }
 
-    let entries = path.read_dir().wrap_err("Failed to read directory")?;
-
-    Ok(entries.count() > 0)
+    Ok(false)
 }
 
 /// Migrates botanix-storage tables from a reth database to a botanix database.
