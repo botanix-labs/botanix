@@ -161,6 +161,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clean up artifacts from earlier setup steps (npm, deps, etc.)
+          git reset --hard
+          git clean -fdx
+
           if git ls-remote --exit-code origin "$BRANCH_NAME" &>/dev/null; then
             git fetch origin "$BRANCH_NAME"
             git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
