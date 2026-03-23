@@ -201,7 +201,7 @@ jobs:
             --verbose \
             --model "$MODEL" \
             --max-turns "$MAX_TURNS" \
-            --mcp-config /dev/null \
+            --mcp-config '{"mcpServers":{}}' \
             --allowedTools "Skill,Read,Write,Edit,Glob,Grep,Bash(*),WebFetch,WebSearch,Agent" \
             > "$tmp_output" 2>&1
           status=$?
