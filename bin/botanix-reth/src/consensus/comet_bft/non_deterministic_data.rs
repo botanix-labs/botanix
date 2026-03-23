@@ -197,7 +197,15 @@ impl NonDeterministicData {
 
                 upgrade.is_compliant.consensus_encode(&mut writer)?;
             }
-            _ => unreachable!("invalid NDD version: {}", self.version),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "unsupported NDD version: {}",
+                        self.version
+                    ),
+                ))
+            }
         }
 
         Ok(writer)
@@ -606,5 +614,28 @@ mod tests {
         });
 
         assert_ndd(payload);
+    }
+
+    #[test]
+    fn test_serialize_unknown_version_returns_error() {
+        let ndd = NonDeterministicData {
+            version: 99,
+            bitcoin_block_hash: BlockHash::all_zeros(),
+            aggregated_public_key: secp256k1::PublicKey::from_slice(
+                hex::decode("039bef292b80427d355cecb89eda8a50a7d2196a93d73dade5a0c4a07cd334815d")
+                    .unwrap()
+                    .as_slice(),
+            )
+            .unwrap(),
+            block_fee_recipient_address: None,
+            runtime_version: RUNTIME_VERSION_GENESIS,
+            network_upgrade_payload: None,
+        };
+
+        let err = ndd.serialize().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(
+            err.to_string().contains("unsupported NDD version: 99")
+        );
     }
 }
