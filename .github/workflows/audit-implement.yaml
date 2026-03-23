@@ -289,7 +289,7 @@ jobs:
         if: steps.changes.outputs.has_changes == 'true'
         id: pr
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           existing_pr_url="$(gh pr list --head "$BRANCH_NAME" --json url --jq '.[0].url' 2>/dev/null || true)"
           if [[ -n "$existing_pr_url" && "$existing_pr_url" != "null" ]]; then
