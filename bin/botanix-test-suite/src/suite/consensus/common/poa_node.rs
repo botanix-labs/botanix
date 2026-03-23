@@ -496,7 +496,10 @@ impl FederationMemberTestConfig {
         })
     }
 
-    pub fn await_initialization(&self) -> anyhow::Result<()> {
+    pub fn await_initialization(
+        &self,
+        dkg_readiness_multisig_id: botanix_types::MultisigId,
+    ) -> anyhow::Result<()> {
         it_info_print!("Engine started task with index: ", self.index);
         let engine_index = self.index;
         let rx_sender = self.sender.clone();
@@ -562,19 +565,24 @@ impl FederationMemberTestConfig {
             let pub_key = loop {
                 match btc_server_client
                     .get_public_key(GetPublicKeyRequest {
-                        multisig_id: *LEGACY_MULTISIG_ID,
+                        multisig_id: dkg_readiness_multisig_id.as_u32(),
                     })
                     .await
                 {
                     Ok(pub_key) => {
-                        it_info_print!("Dkg Finished for index", engine_index);
+                        it_info_print!(format!(
+                            "Dkg Finished for index {} multisig_id {}",
+                            engine_index,
+                            dkg_readiness_multisig_id.as_u32()
+                        ));
                         break pub_key;
                     }
                     Err(_) => {
-                        it_warn_print!(
-                            "Dkg Pending for engine index",
-                            engine_index
-                        );
+                        it_warn_print!(format!(
+                            "Dkg Pending for engine index {} multisig_id {}",
+                            engine_index,
+                            dkg_readiness_multisig_id.as_u32()
+                        ));
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }

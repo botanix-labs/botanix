@@ -17,7 +17,7 @@ use botanix_btc_server_client::BtcServerClient;
 use botanix_comet_bft_rpc::{CometBftRpcFactory, HttpCometBFTRpcClientFactory};
 use botanix_reth::node::BotanixNode;
 use botanix_storage::BotanixProviderFactory;
-use botanix_types::LEGACY_MULTISIG_ID;
+use botanix_types::{MultisigId, LEGACY_MULTISIG_ID};
 use common::{
     bitcoind_node::{
         create_bitcoind_node, BitcoindNodeConfig,
@@ -415,6 +415,7 @@ pub struct CreateTestConfig {
     pub create_cometbft_nodes: bool,
     pub create_state_syncing_node: bool,
     pub num_multisigs: u16,
+    pub multisig_member_indices: Option<Vec<Vec<u16>>>,
 }
 
 impl CreateTestConfig {
@@ -429,6 +430,7 @@ impl CreateTestConfig {
             create_cometbft_nodes: true,
             create_state_syncing_node: true,
             num_multisigs: 1,
+            multisig_member_indices: None,
         }
     }
 }
@@ -444,6 +446,7 @@ impl Default for CreateTestConfig {
             create_cometbft_nodes: false,
             create_state_syncing_node: false,
             num_multisigs: 1,
+            multisig_member_indices: None,
         }
     }
 }
@@ -541,6 +544,25 @@ impl Suite for ConsensusIntegrationTestSuite {
                         ..Default::default()
                     },
                     dynafed::test_dynafed_batch_pegin::dynafed_batch_pegin
+                )
+            }
+            "dynafed_new_member" => {
+                run_test!(
+                    self,
+                    CreateTestConfig {
+                        create_bitcoind_node: true,
+                        create_poa_nodes: true,
+                        create_btc_servers: true,
+                        create_cometbft_nodes: true,
+                        num_multisigs: 2,
+                        multisig_member_indices: Some(vec![
+                            (0..self.global_context.fed_instances.saturating_sub(1))
+                                .collect(),
+                            (0..self.global_context.fed_instances).collect(),
+                        ]),
+                        ..Default::default()
+                    },
+                    dynafed::test_dynafed_new_member::test_dynafed_new_member
                 )
             }
             "utxo_sync" => {
@@ -1028,26 +1050,42 @@ impl Suite for ConsensusIntegrationTestSuite {
         if create_test_config.create_btc_servers {
             it_info_print!("Starting btc servers ...");
 
-            // Determine which multisigs to pre-save
-            // Pre-save all except the last one, which will undergo DKG
+            // Build per-multisig membership: which member indices participate in each multisig.
+            let all_members: Vec<u16> =
+                (0..self.global_context.fed_instances).collect();
+            let multisig_memberships: Vec<(
+                botanix_types::MultisigId,
+                Vec<u16>,
+            )> = (0..create_test_config.num_multisigs)
+                .map(|offset| {
+                    let multisig_id = botanix_types::MultisigId::new(
+                        botanix_types::LEGACY_MULTISIG_ID.as_u32()
+                            + offset as u32,
+                    );
+                    let members = create_test_config
+                        .multisig_member_indices
+                        .as_ref()
+                        .and_then(|v| v.get(offset as usize).cloned())
+                        .unwrap_or_else(|| all_members.clone());
+                    (multisig_id, members)
+                })
+                .collect();
+
+            // Pre-save all multisigs except the last one, which will undergo DKG
             let presave_multisigs = if create_test_config.num_multisigs > 1 {
-                (0..create_test_config.num_multisigs - 1)
-                    .map(|offset| {
-                        botanix_types::MultisigId::new(
-                            botanix_types::LEGACY_MULTISIG_ID.as_u32()
-                                + offset as u32,
-                        )
-                    })
+                multisig_memberships[..multisig_memberships.len() - 1]
+                    .iter()
+                    .map(|(id, _)| *id)
                     .collect::<Vec<_>>()
             } else {
-                vec![] // No pre-saving for single multisig
+                vec![]
             };
 
             self.local_context.btc_processes =
                 Some(spawn_n_btc_server_processes(
                     self.global_context.clone(),
                     &members_keypairs,
-                    create_test_config.num_multisigs,
+                    &multisig_memberships,
                     &presave_multisigs,
                 )?);
             // let btc servers come up
@@ -1222,6 +1260,12 @@ impl Suite for ConsensusIntegrationTestSuite {
 
             // loop over the poa nodes and wait until they become initialized so the eth clients can
             // connect with them
+            let dkg_readiness_multisig_id = MultisigId::new(
+                LEGACY_MULTISIG_ID.as_u32()
+                    + u32::from(
+                        create_test_config.num_multisigs.saturating_sub(1),
+                    ),
+            );
             for (index, poa_node) in poa_nodes.iter_mut() {
                 // create botanix client and await initialization
                 let botanix_eth_client = loop {
@@ -1255,13 +1299,14 @@ impl Suite for ConsensusIntegrationTestSuite {
                 );
 
                 // await initialization
-                poa_node.await_initialization()?;
+                poa_node.await_initialization(dkg_readiness_multisig_id)?;
             }
 
             // run the dkg
             await_dkg(&mut poa_nodes, &mut rx).await;
 
-            // At this point all the btc servers should have the same aggregate key
+            // At this point all the btc servers should have the same aggregate
+            // key for the multisig used for DKG readiness.
             let (btc_server_clients, _btc_server_clients_syncing) =
                 btc_server_clients
                     .split_at(self.global_context.fed_instances as usize);
@@ -1270,7 +1315,7 @@ impl Suite for ConsensusIntegrationTestSuite {
                 let key = client
                     .get_public_key(
                         botanix_btc_server_client::GetPublicKeyRequest {
-                            multisig_id: *LEGACY_MULTISIG_ID,
+                            multisig_id: dkg_readiness_multisig_id.as_u32(),
                         },
                     )
                     .await
