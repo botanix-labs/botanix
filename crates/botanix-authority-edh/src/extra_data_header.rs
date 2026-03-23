@@ -103,7 +103,7 @@ impl ExtraDataHeader {
         self.aggregated_public_key.serialize().consensus_encode(writer)?;
         let block_producer_address_bytes =
             self.block_fee_recipient_address.0 .0;
-        let _ = writer.write(&block_producer_address_bytes)?;
+        writer.write_all(&block_producer_address_bytes)?;
 
         Ok(())
     }
