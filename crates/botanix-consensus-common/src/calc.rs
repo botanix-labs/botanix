@@ -118,8 +118,14 @@ pub const fn ommer_reward(
     base_block_reward: u128,
     block_number: BlockNumber,
     ommer_block_number: BlockNumber,
-) -> u128 {
-    ((8 + ommer_block_number - block_number) as u128 * base_block_reward) >> 3
+) -> Option<u128> {
+    // Per the Yellow Paper, ommers must be within 6 blocks of the
+    // including block. Guard against underflow when
+    // block_number > ommer_block_number + 8.
+    match (8 + ommer_block_number).checked_sub(block_number) {
+        Some(numerator) => Some((numerator as u128 * base_block_reward) >> 3),
+        None => None,
+    }
 }
 
 #[cfg(test)]
@@ -147,6 +153,28 @@ mod tests {
                 expected_reward
             );
         }
+    }
+
+    #[test]
+    fn calc_ommer_reward() {
+        let base = ETH_TO_WEI * 5;
+
+        // Valid: ommer is the same block number offset
+        // numerator = 8 + 100 - 105 = 3, reward = 3/8 * base
+        assert_eq!(ommer_reward(base, 105, 100), Some((3u128 * base) >> 3));
+
+        // Valid: ommer_block_number == block_number (numerator = 8)
+        assert_eq!(
+            ommer_reward(base, 100, 100),
+            Some(base) // 8/8 * base
+        );
+
+        // Invalid: block_number > ommer_block_number + 8 would
+        // underflow — must return None
+        assert_eq!(ommer_reward(base, 200, 100), None);
+
+        // Edge: numerator is exactly 0 → reward is 0
+        assert_eq!(ommer_reward(base, 108, 100), Some(0));
     }
 
     #[test]
