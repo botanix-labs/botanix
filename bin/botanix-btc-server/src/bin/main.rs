@@ -399,13 +399,20 @@ where
             .ok_or(Error::MissingMultisigId)
     }
 
+    fn is_coordinator(
+        identifier: FrostId,
+        multisig_conf: &AuthorityMultisigConfig,
+    ) -> bool {
+        *identifier == multisig_conf.coordinator
+    }
+
     fn is_coordinator_by_id(
         &self,
         multisig_id: &MultisigId,
     ) -> Result<bool, Error> {
         self.federation
             .get(multisig_id)
-            .map(|c| c.coordinator == *self.identifier)
+            .map(|c| Self::is_coordinator(self.identifier, c))
             .ok_or(Error::MissingMultisigId)
     }
 
@@ -481,7 +488,8 @@ where
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
 
-        let is_coordinator = *frost_identifier == multisig_conf.coordinator;
+        let is_coordinator =
+            Self::is_coordinator(frost_identifier, &multisig_conf);
 
         // As the coordinator, we simply use the system time as the session
         // nonce. This value doesn't need to be precisely synchronized - it
@@ -715,6 +723,28 @@ where
                 AuthorityMultisigConfig::try_from(multisig_config)
                     .expect("authority multisig config must be valid");
 
+            let is_local_coordinator =
+                Self::is_coordinator(frost_identifier, &multisig_config);
+            if config.coordinator_manual_dkg_start && !is_local_coordinator {
+                return Err(dkg::Error::BadConfig(format!(
+                    "coordinator-manual-dkg-start requires coordinator role for all local multisigs; multisig {} coordinator is {:?} but local identifier is {}",
+                    multisig_id,
+                    multisig_config.coordinator,
+                    frost_identifier
+                ))
+                .into());
+            }
+
+            authority_federation.insert(multisig_id, multisig_config.clone());
+
+            if config.coordinator_manual_dkg_start {
+                info!(
+                    "Multisig {} not yet processed, deferring DKG start until StartNewDkg RPC because coordinator-manual-dkg-start is enabled",
+                    multisig_id
+                );
+                continue;
+            }
+
             // Multisig not yet processed, start DKG
             info!(
                 "Multisig {} not yet processed, starting DKG with {} members",
@@ -724,11 +754,10 @@ where
             let state = Self::new_dkg_state_machine(
                 frost_identifier,
                 p2p_secret_key,
-                multisig_config.clone(),
+                multisig_config,
             )?;
 
             sessions.insert(multisig_id, state);
-            authority_federation.insert(multisig_id, multisig_config);
         }
 
         let (dynafed_notifications_tx, _dynafed_notifications_rx) =
@@ -3847,6 +3876,7 @@ mod tests {
             fee_rate_diff_percentage: 10,
             fall_back_fee_rate_sat_per_vbyte: 1000,
             excluded_eth_addresses: vec![],
+            coordinator_manual_dkg_start: false,
         };
 
         let app = App::new(config, bitcoind_client, None).expect("btc server");
