@@ -5,6 +5,7 @@ use crate::{
     StagedHeaderWriter,
 };
 use alloy_primitives::B256;
+use reth_db::DatabaseError;
 use reth_db_api::{
     cursor::DbCursorRO,
     transaction::{DbTx, DbTxMut},
@@ -56,7 +57,7 @@ impl<DB: Database, N: NodeTypes> StagedHeaderWriter
         match res {
             0 => Ok(false),
             1 => Ok(true),
-            _ => unreachable!(),
+            _ => Err(ProviderError::Database(DatabaseError::Other(format!("Unexpected count {} removing staged header", res)))),
         }
     }
 }
