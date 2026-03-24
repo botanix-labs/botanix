@@ -136,7 +136,7 @@ impl ExtraDataHeader {
         let pk_bytes = <[u8; 33]>::consensus_decode(reader)?;
         let aggregated_public_key = secp256k1::PublicKey::from_slice(&pk_bytes)
             .map_err(|e| {
-                println!("Error: {:?}", e);
+                tracing::error!("malformed aggregate public key: {:?}", e);
                 encode::Error::ParseFailed("malformed aggregate public key")
             })?;
         let mut block_fee_recipient_address_bytes: [u8; 20] = [0; 20];
