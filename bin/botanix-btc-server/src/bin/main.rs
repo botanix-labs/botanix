@@ -399,13 +399,20 @@ where
             .ok_or(Error::MissingMultisigId)
     }
 
+    fn is_coordinator(
+        identifier: FrostId,
+        multisig_conf: &AuthorityMultisigConfig,
+    ) -> bool {
+        *identifier == multisig_conf.coordinator
+    }
+
     fn is_coordinator_by_id(
         &self,
         multisig_id: &MultisigId,
     ) -> Result<bool, Error> {
         self.federation
             .get(multisig_id)
-            .map(|c| c.coordinator == *self.identifier)
+            .map(|c| Self::is_coordinator(self.identifier, c))
             .ok_or(Error::MissingMultisigId)
     }
 
@@ -481,7 +488,8 @@ where
             pending_session_timeout: Some(Duration::from_secs(60 * 5)),
         };
 
-        let is_coordinator = *frost_identifier == multisig_conf.coordinator;
+        let is_coordinator =
+            Self::is_coordinator(frost_identifier, &multisig_conf);
 
         // As the coordinator, we simply use the system time as the session
         // nonce. This value doesn't need to be precisely synchronized - it
@@ -715,6 +723,28 @@ where
                 AuthorityMultisigConfig::try_from(multisig_config)
                     .expect("authority multisig config must be valid");
 
+            let is_local_coordinator =
+                Self::is_coordinator(frost_identifier, &multisig_config);
+            if config.coordinator_manual_dkg_start && !is_local_coordinator {
+                return Err(dkg::Error::BadConfig(format!(
+                    "coordinator-manual-dkg-start requires coordinator role for all local multisigs; multisig {} coordinator is {:?} but local identifier is {}",
+                    multisig_id,
+                    multisig_config.coordinator,
+                    frost_identifier
+                ))
+                .into());
+            }
+
+            authority_federation.insert(multisig_id, multisig_config.clone());
+
+            if config.coordinator_manual_dkg_start {
+                info!(
+                    "Multisig {} not yet processed, deferring DKG start until StartNewDkg RPC because coordinator-manual-dkg-start is enabled",
+                    multisig_id
+                );
+                continue;
+            }
+
             // Multisig not yet processed, start DKG
             info!(
                 "Multisig {} not yet processed, starting DKG with {} members",
@@ -724,11 +754,10 @@ where
             let state = Self::new_dkg_state_machine(
                 frost_identifier,
                 p2p_secret_key,
-                multisig_config.clone(),
+                multisig_config,
             )?;
 
             sessions.insert(multisig_id, state);
-            authority_federation.insert(multisig_id, multisig_config);
         }
 
         let (dynafed_notifications_tx, _dynafed_notifications_rx) =
@@ -3020,6 +3049,15 @@ where
             .ok_or(Error::MissingMultisigId)
             .to_status()?;
 
+        if self.config.coordinator_manual_dkg_start
+            && !Self::is_coordinator(self.identifier, multisig_conf)
+        {
+            return Err(tonic::Status::failed_precondition(format!(
+                "StartNewDkg requires coordinator role when coordinator-manual-dkg-start is enabled for multisig_id {}",
+                multisig_id
+            )));
+        }
+
         let state = Self::new_dkg_state_machine(
             self.identifier,
             self.p2p_secret_key,
@@ -3784,7 +3822,9 @@ mod tests {
         },
     };
 
-    async fn setup() -> App<MockBitcoind> {
+    async fn setup_with_manual_dkg_start(
+        coordinator_manual_dkg_start: bool,
+    ) -> App<MockBitcoind> {
         let temp_db = TempDir::new().unwrap();
 
         // WARNING: This is a test federation config with exposed private keys,
@@ -3847,6 +3887,7 @@ mod tests {
             fee_rate_diff_percentage: 10,
             fall_back_fee_rate_sat_per_vbyte: 1000,
             excluded_eth_addresses: vec![],
+            coordinator_manual_dkg_start,
         };
 
         let app = App::new(config, bitcoind_client, None).expect("btc server");
@@ -3856,6 +3897,87 @@ mod tests {
         std::mem::forget(temp_secret_key);
 
         app
+    }
+
+    async fn setup() -> App<MockBitcoind> {
+        setup_with_manual_dkg_start(false).await
+    }
+
+    #[tokio::test]
+    async fn start_new_dkg_fails_precondition_for_non_coordinator_in_manual_mode(
+    ) {
+        let mut app = setup_with_manual_dkg_start(true).await;
+        let multisig_id: MultisigId = (*LEGACY_MULTISIG_ID).into();
+        app.federation.get_mut(&multisig_id).unwrap().coordinator =
+            frost_id!(1);
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        let err = app.start_new_dkg(req).await.unwrap_err();
+
+        assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+        assert_eq!(
+            err.message(),
+            format!(
+                "StartNewDkg requires coordinator role when coordinator-manual-dkg-start is enabled for multisig_id {}",
+                multisig_id
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn start_new_dkg_manual_mode_first_call_succeeds_then_already_exists()
+    {
+        let app = setup_with_manual_dkg_start(true).await;
+        let multisig_id: MultisigId = (*LEGACY_MULTISIG_ID).into();
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        app.start_new_dkg(req).await.expect("first call should succeed");
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        let err = app.start_new_dkg(req).await.unwrap_err();
+
+        assert_eq!(err.code(), tonic::Code::AlreadyExists);
+        assert_eq!(
+            err.message(),
+            format!(
+                "DKG session already running for multisig_id {}",
+                multisig_id
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn start_new_dkg_returns_already_exists_when_key_package_exists() {
+        let app = setup_with_manual_dkg_start(true).await;
+        let multisig_id: MultisigId = (*LEGACY_MULTISIG_ID).into();
+
+        let (shares, _) = trusted_dealer_setup(2, 3);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(0)].clone())
+                .expect("valid key package");
+        app.db
+            .set_key_package_by_id(multisig_id, key_package)
+            .expect("store key package");
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        let err = app.start_new_dkg(req).await.unwrap_err();
+
+        assert_eq!(err.code(), tonic::Code::AlreadyExists);
+        assert_eq!(
+            err.message(),
+            format!(
+                "key package already exists for multisig_id {}",
+                multisig_id
+            )
+        );
     }
 
     #[tokio::test]

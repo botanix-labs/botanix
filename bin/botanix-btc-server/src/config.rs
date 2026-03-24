@@ -203,6 +203,9 @@ pub struct CliConfig {
     /// Comma-separated list of Ethereum addresses to exclude from coin selection
     #[arg(long, value_delimiter = ',', value_parser = parse_ethereum_address_for_clap)]
     excluded_eth_addresses: Vec<[u8; 20]>,
+    /// If set, coordinator-owned multisigs won't auto-start DKG on boot.
+    #[arg(long)]
+    coordinator_manual_dkg_start: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -239,6 +242,8 @@ pub struct Config {
     pub fall_back_fee_rate_sat_per_vbyte: u64,
     /// Ethereum addresses to exclude from coin selection
     pub excluded_eth_addresses: Vec<[u8; 20]>,
+    /// If true, coordinator-owned multisigs require explicit StartNewDkg RPC.
+    pub coordinator_manual_dkg_start: bool,
 }
 
 pub fn load_config() -> Result<Config, Error> {
@@ -265,6 +270,7 @@ pub fn load_config() -> Result<Config, Error> {
             .fall_back_fee_rate_sat_per_vbyte
             .unwrap_or(10),
         excluded_eth_addresses: cli_config.excluded_eth_addresses,
+        coordinator_manual_dkg_start: cli_config.coordinator_manual_dkg_start,
     };
     Ok(config)
 }
