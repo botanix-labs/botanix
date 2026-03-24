@@ -3049,6 +3049,15 @@ where
             .ok_or(Error::MissingMultisigId)
             .to_status()?;
 
+        if self.config.coordinator_manual_dkg_start
+            && !Self::is_coordinator(self.identifier, multisig_conf)
+        {
+            return Err(tonic::Status::failed_precondition(format!(
+                "StartNewDkg requires coordinator role when coordinator-manual-dkg-start is enabled for multisig_id {}",
+                multisig_id
+            )));
+        }
+
         let state = Self::new_dkg_state_machine(
             self.identifier,
             self.p2p_secret_key,
@@ -3813,7 +3822,9 @@ mod tests {
         },
     };
 
-    async fn setup() -> App<MockBitcoind> {
+    async fn setup_with_manual_dkg_start(
+        coordinator_manual_dkg_start: bool,
+    ) -> App<MockBitcoind> {
         let temp_db = TempDir::new().unwrap();
 
         // WARNING: This is a test federation config with exposed private keys,
@@ -3876,7 +3887,7 @@ mod tests {
             fee_rate_diff_percentage: 10,
             fall_back_fee_rate_sat_per_vbyte: 1000,
             excluded_eth_addresses: vec![],
-            coordinator_manual_dkg_start: false,
+            coordinator_manual_dkg_start,
         };
 
         let app = App::new(config, bitcoind_client, None).expect("btc server");
@@ -3886,6 +3897,87 @@ mod tests {
         std::mem::forget(temp_secret_key);
 
         app
+    }
+
+    async fn setup() -> App<MockBitcoind> {
+        setup_with_manual_dkg_start(false).await
+    }
+
+    #[tokio::test]
+    async fn start_new_dkg_fails_precondition_for_non_coordinator_in_manual_mode(
+    ) {
+        let mut app = setup_with_manual_dkg_start(true).await;
+        let multisig_id: MultisigId = (*LEGACY_MULTISIG_ID).into();
+        app.federation.get_mut(&multisig_id).unwrap().coordinator =
+            frost_id!(1);
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        let err = app.start_new_dkg(req).await.unwrap_err();
+
+        assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+        assert_eq!(
+            err.message(),
+            format!(
+                "StartNewDkg requires coordinator role when coordinator-manual-dkg-start is enabled for multisig_id {}",
+                multisig_id
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn start_new_dkg_manual_mode_first_call_succeeds_then_already_exists()
+    {
+        let app = setup_with_manual_dkg_start(true).await;
+        let multisig_id: MultisigId = (*LEGACY_MULTISIG_ID).into();
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        app.start_new_dkg(req).await.expect("first call should succeed");
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        let err = app.start_new_dkg(req).await.unwrap_err();
+
+        assert_eq!(err.code(), tonic::Code::AlreadyExists);
+        assert_eq!(
+            err.message(),
+            format!(
+                "DKG session already running for multisig_id {}",
+                multisig_id
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn start_new_dkg_returns_already_exists_when_key_package_exists() {
+        let app = setup_with_manual_dkg_start(true).await;
+        let multisig_id: MultisigId = (*LEGACY_MULTISIG_ID).into();
+
+        let (shares, _) = trusted_dealer_setup(2, 3);
+        let key_package =
+            frost::keys::KeyPackage::try_from(shares[&frost_id!(0)].clone())
+                .expect("valid key package");
+        app.db
+            .set_key_package_by_id(multisig_id, key_package)
+            .expect("store key package");
+
+        let req = tonic::Request::new(rpc::StartNewDkgRequest {
+            multisig_id: *LEGACY_MULTISIG_ID,
+        });
+        let err = app.start_new_dkg(req).await.unwrap_err();
+
+        assert_eq!(err.code(), tonic::Code::AlreadyExists);
+        assert_eq!(
+            err.message(),
+            format!(
+                "key package already exists for multisig_id {}",
+                multisig_id
+            )
+        );
     }
 
     #[tokio::test]
