@@ -73,6 +73,13 @@ pub enum BotanixConsensusPackageError {
     #[error("Failed to retrieve the bitcoin checkpoint height: {0}")]
     /// Failed to retrieve the bitcoin checkpoint height
     FailedToRetrieveBitcoinCheckpointHeight(BitcoindAdapterError),
+
+    #[error(
+        "Bitcoin checkpoint height {0} exceeds u32::MAX and cannot be \
+         safely represented"
+    )]
+    /// Bitcoin checkpoint height overflows u32
+    CheckpointHeightOverflow(usize),
 }
 
 impl Clone for BotanixConsensusPackageError {
@@ -168,8 +175,15 @@ impl HeaderExt for Header {
             }
         };
 
+        let bitcoin_checkpoint_height_u32 =
+            u32::try_from(bitcoin_checkpoint_height).map_err(|_| {
+                BotanixConsensusPackageError::CheckpointHeightOverflow(
+                    bitcoin_checkpoint_height,
+                )
+            })?;
+
         let bitcoin_checkpoint: RecentHeader =
-            (bitcoin_checkpoint_header, bitcoin_checkpoint_height as u32);
+            (bitcoin_checkpoint_header, bitcoin_checkpoint_height_u32);
 
         Ok(BotanixConsensusPackage {
             bitcoin_checkpoint,

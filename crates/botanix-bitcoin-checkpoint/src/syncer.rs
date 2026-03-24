@@ -225,8 +225,12 @@ impl BitcoinCheckpointsChainSynchronizer {
             }
 
             // Create, report and push the checkpoint
+            let checkpoint_height =
+                u32::try_from(height).map_err(|_| {
+                    BitcoinCheckpointError::BlockHeightOverflow { height }
+                })?;
             let bitcoin_checkpoint =
-                BitcoinCheckpoint::new(header, height as u32);
+                BitcoinCheckpoint::new(header, checkpoint_height);
 
             synced_checkpoints
                 .push(SyncedCheckpointInfo::from(&bitcoin_checkpoint));
