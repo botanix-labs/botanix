@@ -44,6 +44,8 @@ pub enum GrpcClientError {
     Call(tonic::Status),
     /// invalid uri error: `{0}`
     InvalidUri(String),
+    /// jwt error: `{0}`
+    JwtError(String),
 }
 
 impl GrpcClientError {
@@ -53,13 +55,15 @@ impl GrpcClientError {
             Self::Transport(e) => tonic::Status::internal(e.to_string()),
             Self::Call(e) => e,
             Self::InvalidUri(e) => tonic::Status::internal(e),
+            Self::JwtError(e) => tonic::Status::unauthenticated(e),
         }
     }
 }
 
 pub trait BtcServerExtendedApi: Clone + Send + Sync + 'static {
     fn update_jwt_secret(&mut self, jwt_secret: JwtSecret);
-    fn generate_jwt_token(&mut self) -> Option<String>;
+    fn generate_jwt_token(&mut self)
+        -> Result<Option<String>, GrpcClientError>;
 
     fn get_gateway_address(
         &mut self,
@@ -206,7 +210,7 @@ macro_rules! generate_method {
             Box::pin(async move {
                 let mut req = tonic::Request::new(request);
 
-                if let Some(jwt_auth_token) = self.generate_jwt_token() {
+                if let Some(jwt_auth_token) = self.generate_jwt_token()? {
                     let jwt_auth_token =
                         MetadataValue::from_bytes(jwt_auth_token.as_bytes());
                     let key = BinaryMetadataKey::from_static(JWT_HEADER_KEY);
@@ -240,7 +244,7 @@ macro_rules! generate_stream_method {
             Box::pin(async move {
                 let mut req = tonic::Request::new(request);
 
-                if let Some(jwt_auth_token) = self.generate_jwt_token() {
+                if let Some(jwt_auth_token) = self.generate_jwt_token()? {
                     let jwt_auth_token =
                         MetadataValue::from_bytes(jwt_auth_token.as_bytes());
                     let key = BinaryMetadataKey::from_static(JWT_HEADER_KEY);
@@ -293,17 +297,25 @@ impl BtcServerExtendedApi for BtcServerExtendedClient {
     }
 
     /// Generate a new jwt token from secret and claims
-    /// TODO: fix unwraps
-    fn generate_jwt_token(&mut self) -> Option<String> {
-        self.jwt_secret.as_ref().map(|jwt_secret| {
-            let claims = Claims {
-                iat: to_u64(SystemTime::now()),
-                exp: Some(10000000000),
-            };
-            let jwt_token = jwt_secret.encode(&claims).unwrap();
-            jwt_secret.validate(&jwt_token.clone()).unwrap();
-            jwt_token
-        })
+    fn generate_jwt_token(
+        &mut self,
+    ) -> Result<Option<String>, GrpcClientError> {
+        self.jwt_secret
+            .as_ref()
+            .map(|jwt_secret| {
+                let claims = Claims {
+                    iat: to_u64(SystemTime::now()),
+                    exp: Some(10000000000),
+                };
+                let jwt_token = jwt_secret
+                    .encode(&claims)
+                    .map_err(|e| GrpcClientError::JwtError(e.to_string()))?;
+                jwt_secret
+                    .validate(&jwt_token)
+                    .map_err(|e| GrpcClientError::JwtError(e.to_string()))?;
+                Ok(jwt_token)
+            })
+            .transpose()
     }
 
     generate_method!(
