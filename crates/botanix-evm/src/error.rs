@@ -559,17 +559,202 @@ pub enum InvalidAggregatedPublicKeyError {
 }
 
 /// Convert from Reth ConsensusError to Botanix ConsensusError
-/// TODO: match on each variant
 impl From<reth_consensus::ConsensusError> for ConsensusError {
     fn from(err: reth_consensus::ConsensusError) -> Self {
-        Self::Other(err.to_string())
+        use reth_consensus::ConsensusError as R;
+        match err {
+            R::HeaderGasUsedExceedsGasLimit { gas_used, gas_limit } =>
+                Self::HeaderGasUsedExceedsGasLimit { gas_used, gas_limit },
+            R::MissingQuorumOfAuthoritySignatures { expected, actual } =>
+                Self::MissingQuorumOfAuthoritySignatures { expected, actual },
+            R::MissingAuthorityList => Self::MissingAuthorityList,
+            R::InvalidAuthorityList => Self::InvalidAuthorityList,
+            R::InvalidAuthoritySignature => Self::InvalidAuthoritySignature,
+            R::ExtraDataInvalid => Self::ExtraDataInvalid,
+            R::FailedToRecoverAuthority => Self::FailedToRecoverAuthority,
+            R::SignerLimitExceeded => Self::SignerLimitExceeded,
+            R::AuthorityNotInTurn => Self::AuthorityNotInTurn,
+            R::BlockBeneficiaryIsNotAuthority => Self::BlockBeneficiaryIsNotAuthority,
+            R::BlockBeneficiaryIsNotBurnAddress => Self::BlockBeneficiaryIsNotBurnAddress,
+            R::BlockGasUsed { gas, gas_spent_by_tx } =>
+                Self::BlockGasUsed { gas, gas_spent_by_tx },
+            R::BodyOmmersHashDiff(v) => Self::BodyOmmersHashDiff(v),
+            R::BodyStateRootDiff(v) => Self::BodyStateRootDiff(v),
+            R::BodyTransactionRootDiff(v) => Self::BodyTransactionRootDiff(v),
+            R::BodyReceiptRootDiff(v) => Self::BodyReceiptRootDiff(v),
+            R::BodyBloomLogDiff(v) => Self::BodyBloomLogDiff(v),
+            R::BodyWithdrawalsRootDiff(v) => Self::BodyWithdrawalsRootDiff(v),
+            // Reth calls it RequestsHash, Botanix calls it RequestsRoot
+            R::BodyRequestsHashDiff(v) => Self::BodyRequestsRootDiff(v),
+            R::BlockKnown { hash, number } => Self::BlockKnown { hash, number },
+            R::ParentUnknown { hash } => Self::ParentUnknown { hash },
+            R::ParentBlockNumberMismatch { parent_block_number, block_number } =>
+                Self::ParentBlockNumberMismatch { parent_block_number, block_number },
+            R::ParentHashMismatch(v) => Self::ParentHashMismatch(v),
+            R::TimestampIsInFuture { timestamp, present_timestamp } =>
+                Self::TimestampIsInFuture { timestamp, present_timestamp },
+            // Reth compares against parent block timestamp, Botanix against current clock.
+            // Field is mapped by position, the second timestamp value.
+            R::TimestampIsInPast { timestamp, parent_timestamp } =>
+                Self::TimestampIsInPast { timestamp, present_timestamp: parent_timestamp },
+            R::BaseFeeMissing => Self::BaseFeeMissing,
+            R::TransactionSignerRecoveryError => Self::TransactionSignerRecoveryError,
+            R::ExtraDataExceedsMax { len } => Self::ExtraDataExceedsMax { len },
+            R::ExtraDataHeaderExceedsMax { len } => Self::ExtraDataHeaderExceedsMax { len },
+            R::PBFTConsensusError => Self::PBFTConsensusError,
+            R::TheMergeDifficultyIsNotZero => Self::TheMergeDifficultyIsNotZero,
+            R::TheMergeNonceIsNotZero => Self::TheMergeNonceIsNotZero,
+            R::TheMergeOmmerRootIsNotEmpty => Self::TheMergeOmmerRootIsNotEmpty,
+            R::WithdrawalsRootMissing => Self::WithdrawalsRootMissing,
+            R::RequestsHashMissing => Self::RequestsRootMissing,
+            R::WithdrawalsRootUnexpected => Self::WithdrawalsRootUnexpected,
+            R::RequestsHashUnexpected => Self::RequestsRootUnexpected,
+            R::BodyWithdrawalsMissing => Self::BodyWithdrawalsMissing,
+            R::BodyRequestsMissing => Self::BodyRequestsMissing,
+            R::BlobGasUsedMissing => Self::BlobGasUsedMissing,
+            R::BlobGasUsedUnexpected => Self::BlobGasUsedUnexpected,
+            R::ExcessBlobGasMissing => Self::ExcessBlobGasMissing,
+            R::ExcessBlobGasUnexpected => Self::ExcessBlobGasUnexpected,
+            R::ParentBeaconBlockRootMissing => Self::ParentBeaconBlockRootMissing,
+            R::ParentBeaconBlockRootUnexpected => Self::ParentBeaconBlockRootUnexpected,
+            R::BlobGasUsedExceedsMaxBlobGasPerBlock { blob_gas_used, max_blob_gas_per_block } =>
+                Self::BlobGasUsedExceedsMaxBlobGasPerBlock { blob_gas_used, max_blob_gas_per_block },
+            R::BlobGasUsedNotMultipleOfBlobGasPerBlob { blob_gas_used, blob_gas_per_blob } =>
+                Self::BlobGasUsedNotMultipleOfBlobGasPerBlob { blob_gas_used, blob_gas_per_blob },
+            R::BlobGasUsedDiff(v) => Self::BlobGasUsedDiff(v),
+            R::InvalidTransaction(v) => Self::InvalidTransaction(v),
+            R::ValidateInturnError => Self::ValidateInturnError,
+            R::InvalidAggregatedPublicKey(v) => Self::InvalidAggregatedPublicKey(match v {
+                reth_consensus::InvalidAggregatedPublicKeyError::InvalidAggregatedPublicKey =>
+                    InvalidAggregatedPublicKeyError::InvalidAggregatedPublicKey,
+                reth_consensus::InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey =>
+                    InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+                reth_consensus::InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis =>
+                    InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis,
+            }),
+            R::InvalidChainVersion => Self::InvalidChainVersion,
+            R::BaseFeeDiff(v) => Self::BaseFeeDiff(v),
+            R::ExcessBlobGasDiff { diff, parent_excess_blob_gas, parent_blob_gas_used } =>
+                Self::ExcessBlobGasDiff { diff, parent_excess_blob_gas, parent_blob_gas_used },
+            R::GasLimitInvalidIncrease { parent_gas_limit, child_gas_limit } =>
+                Self::GasLimitInvalidIncrease { parent_gas_limit, child_gas_limit },
+            R::GasLimitInvalidMinimum { child_gas_limit } =>
+                Self::GasLimitInvalidMinimum { child_gas_limit },
+            R::GasLimitInvalidDecrease { parent_gas_limit, child_gas_limit } =>
+                Self::GasLimitInvalidDecrease { parent_gas_limit, child_gas_limit },
+            R::CannotAddExistingFederationMember => Self::CannotAddExistingFederationMember,
+            R::NonDeterministicDataDeserialize => Self::NonDeterministicDataDeserialize,
+            R::LatestHeaderMissing => Self::LatestHeaderMissing,
+            R::MissingBitcoinCheckpoint => Self::MissingBitcoinCheckpoint,
+            R::MissingBlockFeeRecipientAddress => Self::MissingBlockFeeRecipientAddress,
+            // Reth-only variants with no direct Botanix equivalent
+            R::HeaderGasLimitExceedsMax { gas_limit } =>
+                Self::Other(format!("header gas limit {gas_limit} exceeds max")),
+            R::GasLimitInvalidBlockMaximum { block_gas_limit } =>
+                Self::Other(format!("invalid block gas limit: {block_gas_limit}")),
+            R::Other(s) => Self::Other(s),
+        }
     }
 }
 
 /// Convert from Botanix ConsensusError to Reth ConsensusError
-/// TODO: match on each variant
 impl From<ConsensusError> for reth_consensus::ConsensusError {
     fn from(err: ConsensusError) -> Self {
-        Self::Other(err.to_string())
+        use reth_consensus::ConsensusError as R;
+        match err {
+            ConsensusError::HeaderGasUsedExceedsGasLimit { gas_used, gas_limit } =>
+                R::HeaderGasUsedExceedsGasLimit { gas_used, gas_limit },
+            ConsensusError::MissingQuorumOfAuthoritySignatures { expected, actual } =>
+                R::MissingQuorumOfAuthoritySignatures { expected, actual },
+            ConsensusError::MissingAuthorityList => R::MissingAuthorityList,
+            ConsensusError::InvalidAuthorityList => R::InvalidAuthorityList,
+            ConsensusError::InvalidAuthoritySignature => R::InvalidAuthoritySignature,
+            ConsensusError::ExtraDataInvalid => R::ExtraDataInvalid,
+            ConsensusError::FailedToRecoverAuthority => R::FailedToRecoverAuthority,
+            ConsensusError::SignerLimitExceeded => R::SignerLimitExceeded,
+            ConsensusError::AuthorityNotInTurn => R::AuthorityNotInTurn,
+            ConsensusError::BlockBeneficiaryIsNotAuthority => R::BlockBeneficiaryIsNotAuthority,
+            ConsensusError::BlockBeneficiaryIsNotBurnAddress => R::BlockBeneficiaryIsNotBurnAddress,
+            ConsensusError::BlockGasUsed { gas, gas_spent_by_tx } =>
+                R::BlockGasUsed { gas, gas_spent_by_tx },
+            ConsensusError::BodyOmmersHashDiff(v) => R::BodyOmmersHashDiff(v),
+            ConsensusError::BodyStateRootDiff(v) => R::BodyStateRootDiff(v),
+            ConsensusError::BodyTransactionRootDiff(v) => R::BodyTransactionRootDiff(v),
+            ConsensusError::BodyReceiptRootDiff(v) => R::BodyReceiptRootDiff(v),
+            ConsensusError::BodyBloomLogDiff(v) => R::BodyBloomLogDiff(v),
+            ConsensusError::BodyWithdrawalsRootDiff(v) => R::BodyWithdrawalsRootDiff(v),
+            // Botanix calls it RequestsRoot, Reth calls it RequestsHash — same concept
+            ConsensusError::BodyRequestsRootDiff(v) => R::BodyRequestsHashDiff(v),
+            ConsensusError::BlockKnown { hash, number } => R::BlockKnown { hash, number },
+            ConsensusError::ParentUnknown { hash } => R::ParentUnknown { hash },
+            ConsensusError::ParentBlockNumberMismatch { parent_block_number, block_number } =>
+                R::ParentBlockNumberMismatch { parent_block_number, block_number },
+            ConsensusError::ParentHashMismatch(v) => R::ParentHashMismatch(v),
+            ConsensusError::TimestampIsInFuture { timestamp, present_timestamp } =>
+                R::TimestampIsInFuture { timestamp, present_timestamp },
+            // Botanix uses present_timestamp (clock), Reth uses parent_timestamp (parent block).
+            // Field is mapped by position, the second timestamp value.
+            ConsensusError::TimestampIsInPast { timestamp, present_timestamp } =>
+                R::TimestampIsInPast { timestamp, parent_timestamp: present_timestamp },
+            ConsensusError::BaseFeeMissing => R::BaseFeeMissing,
+            ConsensusError::TransactionSignerRecoveryError => R::TransactionSignerRecoveryError,
+            ConsensusError::ExtraDataExceedsMax { len } => R::ExtraDataExceedsMax { len },
+            ConsensusError::ExtraDataHeaderExceedsMax { len } => R::ExtraDataHeaderExceedsMax { len },
+            ConsensusError::PBFTConsensusError => R::PBFTConsensusError,
+            ConsensusError::TheMergeDifficultyIsNotZero => R::TheMergeDifficultyIsNotZero,
+            ConsensusError::TheMergeNonceIsNotZero => R::TheMergeNonceIsNotZero,
+            ConsensusError::TheMergeOmmerRootIsNotEmpty => R::TheMergeOmmerRootIsNotEmpty,
+            ConsensusError::WithdrawalsRootMissing => R::WithdrawalsRootMissing,
+            ConsensusError::RequestsRootMissing => R::RequestsHashMissing,
+            ConsensusError::WithdrawalsRootUnexpected => R::WithdrawalsRootUnexpected,
+            ConsensusError::RequestsRootUnexpected => R::RequestsHashUnexpected,
+            ConsensusError::BodyWithdrawalsMissing => R::BodyWithdrawalsMissing,
+            ConsensusError::BodyRequestsMissing => R::BodyRequestsMissing,
+            ConsensusError::BlobGasUsedMissing => R::BlobGasUsedMissing,
+            ConsensusError::BlobGasUsedUnexpected => R::BlobGasUsedUnexpected,
+            ConsensusError::ExcessBlobGasMissing => R::ExcessBlobGasMissing,
+            ConsensusError::ExcessBlobGasUnexpected => R::ExcessBlobGasUnexpected,
+            ConsensusError::ParentBeaconBlockRootMissing => R::ParentBeaconBlockRootMissing,
+            ConsensusError::ParentBeaconBlockRootUnexpected => R::ParentBeaconBlockRootUnexpected,
+            ConsensusError::BlobGasUsedExceedsMaxBlobGasPerBlock { blob_gas_used, max_blob_gas_per_block } =>
+                R::BlobGasUsedExceedsMaxBlobGasPerBlock { blob_gas_used, max_blob_gas_per_block },
+            ConsensusError::BlobGasUsedNotMultipleOfBlobGasPerBlob { blob_gas_used, blob_gas_per_blob } =>
+                R::BlobGasUsedNotMultipleOfBlobGasPerBlob { blob_gas_used, blob_gas_per_blob },
+            ConsensusError::BlobGasUsedDiff(v) => R::BlobGasUsedDiff(v),
+            ConsensusError::InvalidTransaction(v) => R::InvalidTransaction(v),
+            ConsensusError::ValidateInturnError => R::ValidateInturnError,
+            ConsensusError::InvalidAggregatedPublicKey(v) => R::InvalidAggregatedPublicKey(match v {
+                InvalidAggregatedPublicKeyError::InvalidAggregatedPublicKey =>
+                    reth_consensus::InvalidAggregatedPublicKeyError::InvalidAggregatedPublicKey,
+                InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey =>
+                    reth_consensus::InvalidAggregatedPublicKeyError::MissingAggregatedPublicKey,
+                InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis =>
+                    reth_consensus::InvalidAggregatedPublicKeyError::NumsAggregatePublicKeyPastGenesis,
+            }),
+            ConsensusError::InvalidChainVersion => R::InvalidChainVersion,
+            ConsensusError::BaseFeeDiff(v) => R::BaseFeeDiff(v),
+            ConsensusError::ExcessBlobGasDiff { diff, parent_excess_blob_gas, parent_blob_gas_used } =>
+                R::ExcessBlobGasDiff { diff, parent_excess_blob_gas, parent_blob_gas_used },
+            ConsensusError::GasLimitInvalidIncrease { parent_gas_limit, child_gas_limit } =>
+                R::GasLimitInvalidIncrease { parent_gas_limit, child_gas_limit },
+            ConsensusError::GasLimitInvalidMinimum { child_gas_limit } =>
+                R::GasLimitInvalidMinimum { child_gas_limit },
+            ConsensusError::GasLimitInvalidDecrease { parent_gas_limit, child_gas_limit } =>
+                R::GasLimitInvalidDecrease { parent_gas_limit, child_gas_limit },
+            ConsensusError::CannotAddExistingFederationMember => R::CannotAddExistingFederationMember,
+            ConsensusError::NonDeterministicDataDeserialize => R::NonDeterministicDataDeserialize,
+            ConsensusError::LatestHeaderMissing => R::LatestHeaderMissing,
+            ConsensusError::MissingBitcoinCheckpoint => R::MissingBitcoinCheckpoint,
+            ConsensusError::MissingBlockFeeRecipientAddress => R::MissingBlockFeeRecipientAddress,
+            // Botanix-only variants with no direct Reth equivalent
+            ConsensusError::ExcessBlobGasNotMultipleOfBlobGasPerBlob {
+                excess_blob_gas,
+                blob_gas_per_blob,
+            } => R::Other(format!(
+                "excess blob gas {excess_blob_gas} is not a multiple of blob gas per blob {blob_gas_per_blob}"
+            )),
+            ConsensusError::Provider(e) => R::Other(e.to_string()),
+            ConsensusError::Other(s) => R::Other(s),
+        }
     }
 }
